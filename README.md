@@ -1,73 +1,35 @@
-# React + TypeScript + Vite
+# Technetium
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A custom [Matrix](https://matrix.org) client for the 41chan community.
 
-Currently, two official plugins are available:
+Technetium is a from-scratch web client built directly on the Matrix
+Client-Server API. Its goal is a more compact, familiar chat experience than
+existing Matrix clients tend to offer — closer to the everyday tools people are
+already used to — while remaining a standard Matrix client that works against
+any conformant homeserver.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Status
 
-## React Compiler
+**Massive work in progress. Not usable yet.**
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+This is early-stage, single-developer software under active construction. Right
+now it can authenticate and list rooms, and not much else. Expect it to be
+incomplete, broken in places, and changing constantly — there is no release, no
+stable version, and no support. If you need a working Matrix client today, use
+[Element](https://element.io) or another mature client.
 
-## Expanding the ESLint configuration
+## Built with
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- [matrix-js-sdk](https://github.com/matrix-org/matrix-js-sdk) — the Matrix protocol engine
+- Vite + React + TypeScript
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+Authentication is OIDC-native, delegated to
+[matrix-authentication-service (MAS)](https://github.com/element-hq/matrix-authentication-service).
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## License
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). See
+[LICENSE](LICENSE).
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+If you run a modified version of this software as a network service, the AGPL
+requires you to make your modified source available to its users.
