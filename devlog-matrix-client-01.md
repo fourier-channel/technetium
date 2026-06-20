@@ -174,14 +174,16 @@ App ~230 lines -> ~80. Foundation ready for the nav tree.
 
 Step 2.2 COMPLETE.
 
+**fourier-signature note (2026-06-20):** fourier-signature is the renamed fourier-passport — the identity-assertion layer of the Fourier suite, distinct from fourier-auth (the runtime broker / media gate). Spectral signature (identifies a signal) + cryptographic signature (asserts identity). Technetium's browser-side auth primitives are an identity-assertion concern, so fourier-signature is their natural extraction home.
+
 **FOURIER EXTRACTION FLAG:** the auth primitives — `session.ts`, `tokenRefresher.ts`,
 and the login/discovery/exchange logic — together form a complete "authenticate a
 browser app against MAS + hold a Matrix-capable session + silent refresh" library,
 with zero Technetium-specific logic. This is the client-side counterpart to the planned
-**fourier-passport** ("unified MAS-backed identity"). Every future Fourier web frontend
+**fourier-signature** ("unified MAS-backed identity"). Every future Fourier web frontend
 (booru login, tooling) needs the same capability. DECISION: keep building it inside
 Technetium for now (prove it in one consumer first), but keep these modules free of
-client-specific deps so a later lift into a `fourier-passport-web` package is a move,
+client-specific deps so a later lift into a `fourier-signature-web` package is a move,
 not a rewrite. `ClientContext.tsx` itself stays in the client (React glue); the
 primitives beneath it are the reusable surface.
 

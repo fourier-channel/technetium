@@ -71,7 +71,7 @@ graph TD
 
 The flagged modules (`session.ts`, `tokenRefresher.ts`) plus the login flow are a
 reusable browser-side MAS-auth library — the client-side counterpart to the planned
-**fourier-passport**. Kept inside Technetium for now; deliberately free of
+**fourier-signature**. Kept inside Technetium for now; deliberately free of
 client-specific deps so a later extraction is a move, not a rewrite.
 
 ---

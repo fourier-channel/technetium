@@ -176,7 +176,7 @@ root commit `352e50b`). Project renamed `matrix-client` -> `technetium`.
 
 **FOURIER EXTRACTION FLAG:** `session.ts` + `tokenRefresher.ts` + the login flow
 form a reusable browser-side "auth against MAS + hold a Matrix session + silent
-refresh" library — the client-side counterpart to planned **fourier-passport**.
+refresh" library — the client-side counterpart to planned **fourier-signature**.
 Kept inside Technetium for now; modules deliberately free of client-specific deps
 so a later lift is a move, not a rewrite.
 
