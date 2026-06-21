@@ -3,6 +3,7 @@ import type { Room } from 'matrix-js-sdk'
 import { useClient } from './client/ClientContext'
 import { NavTree } from './ui/NavTree'
 import { Timeline } from './ui/Timeline'
+import { Composer } from './ui/Composer'
 
 // Thin shell: render purely by client lifecycle status. All auth/client logic
 // lives in ClientProvider; App reflects the current phase and, when ready,
@@ -77,6 +78,7 @@ function App() {
             <div style={{ flex: 1, minHeight: 0 }}>
               <Timeline room={selectedRoom} />
             </div>
+            <Composer room={selectedRoom} />
           </>
         ) : (
           <div style={{ padding: 24, opacity: 0.6 }}>Select a room from the left.</div>

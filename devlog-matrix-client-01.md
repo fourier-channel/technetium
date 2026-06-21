@@ -262,3 +262,19 @@ rendering (message/encrypted/redacted/other), sanitized rich text. New files:
 `src/client/useTimeline.ts`, `src/client/messageBody.ts`, `src/ui/Timeline.tsx`.
 
 2.4d (deferred/optional): polish — sender grouping, avatars, day separators.
+
+### Step 2.5 — composer (sending messages)
+(status: done)
+
+`src/ui/Composer.tsx` — plain-text composer pinned below the timeline. `client.sendTextMessage(roomId, body)` on Enter (Shift+Enter = newline); optimistic clear with restore-on-failure so a failed send doesn't lose text; Send button disabled when empty/sending; auto-refocus after send. Sent messages appear via the existing live `RoomEvent.Timeline` subscription — no manual insertion. `App.tsx` room view now: header / Timeline / Composer.
+
+Verified: type + Enter sends and the message appears in the timeline; Shift+Enter newlines; Send button works and greys when empty. Plain text only for now (markdown/HTML send is a later enhancement via sendHtmlMessage).
+
+**Technetium is now a usable client** — login, navigate spaces>rooms, read formatted history, and send messages. The core chat loop is closed.
+
+Next candidates:
+- 2.6 formatted send (markdown -> sendHtmlMessage), 
+- room header polish (topic, member count),
+- read receipts / unread markers,
+- image upload + the planned client-side md5 dedup (ties into the booru pipeline),
+- encryption phase (for encrypted-room support).
