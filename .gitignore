@@ -26,3 +26,8 @@ dist-ssr
 # Secrets — never commit
 .env
 .env.*
+
+# Guard: brain/ops docs belong in fourier-basis (private), never in this public repo
+41CHAN_MASTER_REFERENCE.md
+CLAUDE.md
+devlog-fourier-*.md
