@@ -16,7 +16,7 @@ const HONOR_COLOR: Record<string, string> = {
 export function MemberList({ room }: { room: Room | null }) {
   const { client } = useClient()
   const members = useMembers(client)
-  const [mode, setMode] = useState<Mode>('room')
+  const [mode, setMode] = useState<Mode>('all-highlight')
 
   const inRoom = (m: MergedMember) =>
     room ? room.roomId in m.powerByRoom : false
@@ -46,7 +46,7 @@ export function MemberList({ room }: { room: Room | null }) {
       <div style={{ display: 'flex', gap: 2, padding: 6 }}>
         <ModeBtn active={mode === 'room'} onClick={() => setMode('room')}>Room</ModeBtn>
         <ModeBtn active={mode === 'all'} onClick={() => setMode('all')}>All</ModeBtn>
-        <ModeBtn active={mode === 'all-highlight'} onClick={() => setMode('all-highlight')}>All ·</ModeBtn>
+        <ModeBtn active={mode === 'all-highlight'} onClick={() => setMode('all-highlight')}>Nearby</ModeBtn>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '2px 4px' }}>
@@ -70,33 +70,38 @@ function MemberRow({
   room: Room | null
   mode: Mode
 }) {
-  // Honorific IDENTITY = highest power anywhere in the space.
+  // Honorific IDENTITY = highest power the member holds anywhere in the space.
   const identityHonor = honorificFor(maxPower(member))
 
-  // Visual STRENGTH depends on the viewing context:
-  //  - room mode: full if they hold power IN this room, dimmed if elsewhere.
-  //  - all-highlight: emphasize members also in the current room.
-  //  - all: everyone full-strength (whole-space context).
+  // Two INDEPENDENT visual signals — kept decoupled on purpose:
+  //   presentHere   -> NAME strength: white when in the viewed room, grey when not.
+  //   authorityHere -> BADGE color:   tier color when their rank is backed in THIS
+  //                    room, grey when their rank lives in another room.
+  // A member can be present here (white name) yet hold authority elsewhere (grey
+  // badge). The prior single-flag version chained these together, so fixing the
+  // badge dragged the name grey too — that's the regression this undoes.
+  const presentHere = !!room && room.roomId in member.powerByRoom
   const plHere = room ? (member.powerByRoom[room.roomId] ?? 0) : 0
-  const presentHere = room ? room.roomId in member.powerByRoom : false
+  const authorityHere =
+    identityHonor !== null && honorificFor(plHere) === identityHonor
 
-  let dimmed = false
-  if (mode === 'room') {
-    // Authority "here" = their honorific tier is actually backed by power here.
-    dimmed = honorificFor(plHere) !== identityHonor
-  } else if (mode === 'all-highlight') {
-    dimmed = !presentHere
-  }
+  // Does this view honor the current room's context?
+  //   'room' / 'all-highlight' -> yes (Server Defaults, honor room-specific).
+  //   'all'                    -> no  (Server Defaults, override room-specific):
+  //                               everyone full strength regardless of room.
+  const honorsRoom = mode === 'room' || mode === 'all-highlight'
 
-  // Honorific color responds to dim state: vivid tier color when the authority
-  // is "here", muted grey when "elsewhere" — so the badge recedes consistently
-  // with the dimmed name (a saturated glyph survives parent opacity too well to
-  // read as dimmed on its own).
+  // NAME greys only when honoring the room AND the member isn't in it. Room mode
+  // is filtered to present members, so its names are always full strength.
+  const nameDimmed = honorsRoom && !presentHere
+
+  // BADGE shows tier color when the room context is overridden ('all') or when
+  // the member's authority is backed here; grey otherwise.
   const honorColor = !identityHonor
     ? undefined
-    : dimmed
-    ? 'var(--cpd-color-text-secondary)'
-    : HONOR_COLOR[identityHonor]
+    : !honorsRoom || authorityHere
+    ? HONOR_COLOR[identityHonor]
+    : 'var(--cpd-color-text-secondary)'
 
   return (
     <div
@@ -107,10 +112,10 @@ function MemberRow({
         height: 26,
         padding: '0 8px',
         borderRadius: 6,
-        color: dimmed
+        color: nameDimmed
           ? 'var(--cpd-color-text-secondary)'
           : 'var(--cpd-color-text-primary)',
-        opacity: dimmed ? 0.6 : 1,
+        opacity: nameDimmed ? 0.6 : 1,
       }}
       title={member.id}
     >
