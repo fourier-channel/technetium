@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ThreadEvent } from 'matrix-js-sdk'
+import { EventTimeline, ThreadEvent } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
 import { toItems } from '../client/useTimeline'
 import { Row } from './Timeline'
@@ -37,6 +37,32 @@ export function ThreadPanel({
       thread.off(ThreadEvent.NewReply, refresh)
     }
   }, [thread])
+
+  // Load the whole thread, not just the slice already aggregated into the live
+  // timeline: paginate backwards to exhaustion so every reply (and every gallery
+  // member) is present, not just the ones inside the initial window.
+  useEffect(() => {
+    if (!client || !thread) return
+    let cancelled = false
+    const live = thread.timelineSet.getLiveTimeline()
+    const loadAll = async () => {
+      let guard = 0
+      while (!cancelled && live.getPaginationToken(EventTimeline.BACKWARDS) !== null && guard < 40) {
+        guard += 1
+        try {
+          await client.paginateEventTimeline(live, { backwards: true, limit: 50 })
+        } catch (err) {
+          console.error('Thread pagination failed:', err)
+          break
+        }
+        if (!cancelled) forceRefresh((n) => n + 1)
+      }
+    }
+    void loadAll()
+    return () => {
+      cancelled = true
+    }
+  }, [client, thread])
 
   // Root + replies, de-duped (the thread timeline usually already includes root).
   const rootEv = thread?.rootEvent ?? room?.findEventById(rootId) ?? null
