@@ -445,3 +445,67 @@ Auth: media is fetched through fourier-auth in **bearer mode** at mxc.41chan.net
 (fourier-auth DEVLOG §9), NOT the client's raw Synapse token — keeping fourier-auth
 the single authorization gateway. Verified end-to-end: post from Technetium ->
 renders inline -> lands in the booru via bmb.
+
+---
+
+## Session 2026-06-30 -- media viewer (lightbox): enlarge, save, in-gallery nav
+
+NOTE: this public devlog was last updated at Step 2.9 (2026-06-26). Intervening
+sessions (thread view, multi-image galleries + resizable panels, per-room media
+authorization, nav-tree hybrid + access model, 41chan opened) live in the
+canonical fourier-basis devlog and are NOT backfilled here.
+
+### Media viewer -- click-to-enlarge + save
+
+A full-screen image viewer built on top of the inline image rendering from Step 2.9.
+
+- `src/ui/Lightbox.tsx` (new) -- `LightboxProvider` + `useLightbox()`. Mounted
+  ONCE at App root (`src/App.tsx`) so any descendant opens it via the hook with
+  no prop-drilling. This matters because `Row` is shared by the timeline AND the
+  thread panel (`ThreadPanel` imports `Row`), so one provider covers both
+  surfaces automatically.
+- Shows the image FULL-RES: reuses `fetchMediaObjectUrl(client, mxc)` from
+  media.ts with NO width param (the inline path passes width=320/360 for a
+  thumbnail; the viewer omits it for the full download). Same authed gateway /
+  bearer path -- no new fetch machinery.
+- Object-URL lifecycle owned by the provider: fetch on open/navigate, revoke the
+  prior blob on change and on close. The fetched blob is RETAINED so Save reuses
+  it -- no second network round-trip.
+- Save = synthetic `<a download=filename>` pointed at the already-fetched object
+  URL. Filename precedence: `content.filename` (MSC2530 caption case) -> `body`
+  -> mxc mediaId, with an extension derived from `info.mimetype` when the name
+  lacks one (`imageMeta()` helper in Timeline.tsx).
+- Dismiss: backdrop click, Close button, or Escape. Clicks on the image / toolbar
+  stopPropagation so they do not close the viewer.
+- Wiring: `AuthedImage` already exposed `onClick` (+ pointer cursor); wired at the
+  single-image `m.image` branch in `Row` and in `GalleryCell`.
+
+### In-gallery prev/next
+
+Deferred at first (single-image viewer shipped, cross-gallery nav punted), then
+added the same session before commit -- scoped to WITHIN the clicked gallery only
+(cross-timeline nav still deferred: it would mean feeding timeline state into the
+viewer).
+
+- Viewer now holds an ordered SET + current index instead of one item:
+  `open(items: LightboxItem[], startIndex)`. A single image is just a
+  one-element set -- no arrows rendered (`hasNav = items.length > 1`).
+- `GalleryBody` (which owns `cells`) builds the nav set: `present` = the non-null,
+  valid-mxc cells in order, plus a `presentIndexByCell` map. Each cell gets an
+  `onOpen` that opens the whole batch at that cell's position -- so clicking the
+  3rd image opens ON the 3rd, and prev/next walk only REAL images (pending/failed
+  slots are skipped, not shown as blanks in the viewer).
+- `GalleryCell` decoupled from the lightbox: it no longer calls `useLightbox()`,
+  it just takes an `onOpen?` callback (same spirit as the member-source decouple
+  -- the component that owns the data owns the open call).
+- Controls: prev/next buttons + an `n / N` counter (shown only when >1),
+  ArrowLeft/ArrowRight keys, clamp at the ends (buttons disable + dim, no wrap).
+
+**Files:** new `src/ui/Lightbox.tsx`; edits to `src/App.tsx` (provider mount) and
+`src/ui/Timeline.tsx` (Row single-image onClick, `GalleryCell` / `GalleryBody`
+nav wiring, `imageMeta()` helper). Typecheck `tsc -b` clean. Feature commit
+`8e38f6e`.
+
+**Deferred:** cross-timeline nav (viewer walks a single gallery only); save
+directly from an inline thumbnail via right-click (save currently lives inside
+the viewer).
