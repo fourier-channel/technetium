@@ -751,3 +751,41 @@ Scoped to WITHIN the clicked gallery (cross-timeline nav deferred).
 
 **Deferred:** cross-timeline nav; save directly from an inline thumbnail (save
 currently lives inside the viewer).
+
+---
+
+## 2026-07-02 -- Media direct-from-storage, timeline UX, thread list rebuild
+
+**Media.** fetchMediaSrc (client/media.ts): full-size images resolve
+through the media gateway to a short-lived direct download URL returned as
+JSON, assigned straight to <img src> -- no blob, no CORS on the byte leg
+(a 302 approach failed: browsers taint Origin to "null" following
+cross-origin redirects inside fetch). Thumbnails keep the authed blob
+path. Unified { src, revoke } contract; AuthedImage AND Lightbox
+converted -- the lightbox was the missed second caller (JSON blobbed into
+an <img> renders only alt text). Per-mxc in-memory URL memo (reuse while
+>60s TTL remains) so gallery prev/next and scrollback re-views hit the
+browser cache instead of re-downloading full originals.
+
+**Timeline.** Initial back-fill to 60 events on room open. Follow-mode
+scrolling: pinned to bottom through late layout shifts (async image
+paints, back-fill landing) via scroll listener + ResizeObserver;
+disengages when the user scrolls up; load-older preserves position via
+prepend anchoring. A one-shot initial-scroll flag was insufficient -- the
+back-fill prepend raced it; follow-mode makes the whole class moot.
+
+**Room header into Timeline.** Room name + Load older + Threads toggle now
+render inside Timeline; the app-level header was removed. Rationale: a
+self-contained room view is the unit for future multi-window / popped-out
+rooms.
+
+**Thread list rebuild.** Normalized ThreadListItem model; scope (this room
+/ all rooms, per-room default) and sort (latest / created / replies) as
+pure functions. Stats dropdown replaced by an inline cluster (posts /
+media / posters) with hover-or-tap per-user breakdown. SDK gotcha:
+room.fetchRoomThreads() silently no-ops unless
+room.createThreadsTimelineSets() has run first (the deposit is
+null-chained) -- threads beyond the sync horizon never appeared, and an
+empty catch hid it. Initialize-then-fetch; backfill failures now warn.
+
+Next: favorites, user-default prefs, favorites filter.
