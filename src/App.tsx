@@ -8,6 +8,7 @@ import { MemberList } from './ui/MemberList'
 import { ThreadPanel } from './ui/ThreadPanel'
 import { ThreadList } from './ui/ThreadList'
 import { LightboxProvider } from './ui/Lightbox'
+import { RoomListSettingsProvider } from './ui/RoomListSettingsProvider'
 
 // Thin shell: render purely by client lifecycle status. All auth/client logic
 // lives in ClientProvider; App reflects the current phase and, when ready,
@@ -48,6 +49,7 @@ function App() {
   // status === 'ready' -- three-pane layout.
   return (
     <LightboxProvider>
+    <RoomListSettingsProvider>
     <div style={{ display: 'flex', height: '100vh', fontFamily: 'sans-serif' }}>
       <aside
         style={{
@@ -111,6 +113,7 @@ function App() {
 
       <MemberList room={selectedRoom} />
     </div>
+    </RoomListSettingsProvider>
     </LightboxProvider>
   )
 }
