@@ -30,7 +30,7 @@ export function NavTree({
   const { client } = useClient()
   const { tree, loading } = useNavTree(client)
   const notifs = useRoomNotifications(client)
-  const { animationsEnabled } = useRoomListSettings()
+  const { animationsEnabled, setAnimationsEnabled } = useRoomListSettings()
   const reduced = useReducedMotion()
   const animate = animationsEnabled && !reduced
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
@@ -84,6 +84,37 @@ export function NavTree({
         }
         .room-pulse-letter { animation: roomLetterPulse 1600ms linear infinite; }
       `}</style>
+      {/* Master animations toggle (seed for the future settings UI). */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '2px 10px 6px',
+          fontSize: 11,
+          color: 'var(--cpd-color-text-secondary)',
+        }}
+      >
+        <span>Animations</span>
+        <button
+          type="button"
+          onClick={() => setAnimationsEnabled(!animationsEnabled)}
+          title="Toggle room-list animations (pulses, glows, collapse)"
+          style={{
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: 0.3,
+            padding: '2px 8px',
+            borderRadius: 10,
+            cursor: 'pointer',
+            border: '1px solid rgba(128,128,128,0.35)',
+            color: animationsEnabled ? '#1b1300' : 'var(--cpd-color-text-secondary)',
+            background: animationsEnabled ? 'var(--tc-unread)' : 'transparent',
+          }}
+        >
+          {animationsEnabled ? 'ON' : 'OFF'}
+        </button>
+      </div>
       {tree.spaces.map((node) => (
         <TreeRow
           key={node.roomId}
@@ -250,7 +281,7 @@ function TreeRow({
         onClick={onClick}
         onContextMenu={(e) => onContext(node, e)}
         title={knocked ? `${label} (request sent)` : label}
-        className={ripple ? 'nav-join-ripple' : undefined}
+        className={ripple && animate ? 'nav-join-ripple' : undefined}
         style={{
           display: 'flex',
           alignItems: 'center',
