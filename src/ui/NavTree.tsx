@@ -3,7 +3,9 @@ import type { Room } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
 import { type TreeNode } from '../client/spaces'
 import { useNavTree } from '../client/useNavTree'
+import { useRoomNotifications, type NotifMap, type NotifCounts } from '../client/useRoomNotifications'
 import { useRoomListSettings } from './roomListSettings'
+import { useReducedMotion } from './reducedMotion'
 import { AuthedImage } from './AuthedImage'
 
 // Membership/join classification for a node's visual + click behavior.
@@ -26,6 +28,10 @@ export function NavTree({
 }) {
   const { client } = useClient()
   const { tree, loading } = useNavTree(client)
+  const notifs = useRoomNotifications(client)
+  const { animationsEnabled } = useRoomListSettings()
+  const reduced = useReducedMotion()
+  const animate = animationsEnabled && !reduced
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
   const toggle = (roomId: string) =>
@@ -60,6 +66,17 @@ export function NavTree({
           100% { background: transparent; }
         }
         .nav-join-ripple { animation: navJoinRipple 900ms ease-out 1; }
+        @keyframes roomLetterPulse {
+          0%, 40%, 60%, 100% {
+            color: var(--tc-unread-base);
+            text-shadow: 0 0 2px rgba(255,150,40,0.30);
+          }
+          50% {
+            color: var(--tc-unread-bright);
+            text-shadow: 0 0 11px rgba(255,175,80,0.98);
+          }
+        }
+        .room-pulse-letter { animation: roomLetterPulse 1600ms linear infinite; }
       `}</style>
       {tree.spaces.map((node) => (
         <TreeRow
@@ -70,6 +87,8 @@ export function NavTree({
           onToggle={toggle}
           selectedRoomId={selectedRoomId}
           onSelectRoom={onSelectRoom}
+          notifs={notifs}
+          animate={animate}
         />
       ))}
       {tree.orphanRooms.length > 0 && (
@@ -96,6 +115,8 @@ export function NavTree({
               onToggle={toggle}
               selectedRoomId={selectedRoomId}
               onSelectRoom={onSelectRoom}
+              notifs={notifs}
+              animate={animate}
             />
           ))}
         </>
@@ -111,6 +132,8 @@ function TreeRow({
   onToggle,
   selectedRoomId,
   onSelectRoom,
+  notifs,
+  animate,
 }: {
   node: TreeNode
   depth: number
@@ -118,6 +141,8 @@ function TreeRow({
   onToggle: (roomId: string) => void
   selectedRoomId?: string
   onSelectRoom?: (room: Room) => void
+  notifs: NotifMap
+  animate: boolean
 }) {
   const { client } = useClient()
   const label = node.name || node.roomId
@@ -226,15 +251,15 @@ function TreeRow({
           {node.isSpace ? (isCollapsed ? '\u25B8' : '\u25BE') : ''}
         </span>
         <RoomIcon node={node} />
-        <span
-          style={{
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {label}
-        </span>
+        {node.isSpace ? (
+          <span
+            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          >
+            {label}
+          </span>
+        ) : (
+          <RoomName label={label} counts={notifs.get(node.roomId)} roomId={node.roomId} animate={animate} />
+        )}
         {knocked && (
           <span style={{ marginLeft: 'auto', fontSize: 10, opacity: 0.8 }}>requested</span>
         )}
@@ -249,9 +274,80 @@ function TreeRow({
             onToggle={onToggle}
             selectedRoomId={selectedRoomId}
             onSelectRoom={onSelectRoom}
+            notifs={notifs}
+            animate={animate}
           />
         ))}
     </>
+  )
+}
+
+// Room name with unread treatment. Muted rooms render plain. Unread (total > 0)
+// gets an orange glow + a "(N)" count. A ping (highlight > 0) additionally shows
+// an orange "@" and, when animations are enabled, a pulse that travels through
+// the name letter by letter. When animations are off / reduced-motion, the ping
+// shows the static @ + glow with no travelling pulse.
+function RoomName({
+  label,
+  counts,
+  roomId,
+  animate,
+}: {
+  label: string
+  counts: NotifCounts | undefined
+  roomId: string
+  animate: boolean
+}) {
+  const { isMutedNow } = useRoomListSettings()
+  const muted = isMutedNow(roomId)
+  const total = muted ? 0 : (counts?.total ?? 0)
+  const highlight = muted ? 0 : (counts?.highlight ?? 0)
+  const unread = total > 0
+  const ping = highlight > 0
+
+  const ell = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as const
+
+  if (!unread && !ping) {
+    return <span style={ell}>{label}</span>
+  }
+
+  const glow: React.CSSProperties = {
+    color: 'var(--tc-unread-base)',
+    textShadow: '0 0 6px rgba(255,150,40,0.55)',
+    fontWeight: 600,
+  }
+  const at = ping ? (
+    <span style={{ color: 'var(--tc-unread)', fontWeight: 700, marginRight: 2 }}>@</span>
+  ) : null
+  const count = <span style={{ opacity: 0.85, marginLeft: 4 }}>({total})</span>
+
+  if (ping && animate) {
+    // Letter-by-letter traveling pulse: each glyph shares one keyframe, staggered
+    // by its index so a bright band walks across the name at a moderate pace.
+    const chars = [...label]
+    return (
+      <span style={{ ...ell, fontWeight: 600 }}>
+        {at}
+        {chars.map((ch, i) => (
+          <span
+            key={i}
+            className="room-pulse-letter"
+            style={{ animationDelay: `${i * 90}ms` }}
+          >
+            {ch === ' ' ? ' ' : ch}
+          </span>
+        ))}
+        {count}
+      </span>
+    )
+  }
+
+  return (
+    <span style={{ ...ell, ...glow }}>
+      {at}
+      {label}
+      {count}
+    </span>
   )
 }
 

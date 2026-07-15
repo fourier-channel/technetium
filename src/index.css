@@ -20,6 +20,11 @@
      Falls back through Inter to the system sans if the font fails to load. */
   --tc-ui-font: 'Space Grotesk', 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
 
+  /* Unread / ping accent (orange). Bright = pulse peak, base = steady unread. */
+  --tc-unread: #ff9a3c;
+  --tc-unread-base: #e8913f;
+  --tc-unread-bright: #ffe6c2;
+
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
   color-scheme: light dark;
