@@ -7,6 +7,7 @@ import { useRoomNotifications, type NotifMap, type NotifCounts } from '../client
 import { useRoomListSettings } from './roomListSettings'
 import { useReducedMotion } from './reducedMotion'
 import { AuthedImage } from './AuthedImage'
+import { RoomContextMenu } from './RoomContextMenu'
 
 // Membership/join classification for a node's visual + click behavior.
 type Mode = 'joined' | 'joinable' | 'knock'
@@ -33,6 +34,11 @@ export function NavTree({
   const reduced = useReducedMotion()
   const animate = animationsEnabled && !reduced
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [menu, setMenu] = useState<{ node: TreeNode; x: number; y: number } | null>(null)
+  const onContext = (node: TreeNode, e: React.MouseEvent) => {
+    e.preventDefault()
+    setMenu({ node, x: e.clientX, y: e.clientY })
+  }
 
   const toggle = (roomId: string) =>
     setCollapsed((prev) => {
@@ -89,6 +95,7 @@ export function NavTree({
           onSelectRoom={onSelectRoom}
           notifs={notifs}
           animate={animate}
+          onContext={onContext}
         />
       ))}
       {tree.orphanRooms.length > 0 && (
@@ -117,9 +124,18 @@ export function NavTree({
               onSelectRoom={onSelectRoom}
               notifs={notifs}
               animate={animate}
+              onContext={onContext}
             />
           ))}
         </>
+      )}
+      {menu && (
+        <RoomContextMenu
+          node={menu.node}
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+        />
       )}
     </nav>
   )
@@ -134,6 +150,7 @@ function TreeRow({
   onSelectRoom,
   notifs,
   animate,
+  onContext,
 }: {
   node: TreeNode
   depth: number
@@ -143,6 +160,7 @@ function TreeRow({
   onSelectRoom?: (room: Room) => void
   notifs: NotifMap
   animate: boolean
+  onContext: (node: TreeNode, e: React.MouseEvent) => void
 }) {
   const { client } = useClient()
   const { isFavorite, isMutedNow } = useRoomListSettings()
@@ -230,6 +248,7 @@ function TreeRow({
     <>
       <div
         onClick={onClick}
+        onContextMenu={(e) => onContext(node, e)}
         title={knocked ? `${label} (request sent)` : label}
         className={ripple ? 'nav-join-ripple' : undefined}
         style={{
@@ -336,6 +355,7 @@ function TreeRow({
                 onSelectRoom={onSelectRoom}
                 notifs={notifs}
                 animate={animate}
+                onContext={onContext}
               />
             ))}
           </div>
@@ -353,6 +373,7 @@ function TreeRow({
           onSelectRoom={onSelectRoom}
           notifs={notifs}
           animate={animate}
+          onContext={onContext}
         />
       ))}
     </>
