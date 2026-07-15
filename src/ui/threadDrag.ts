@@ -212,6 +212,15 @@ export function useThreadDrag(opts: ThreadDragOptions): {
       s.reduced = prefersReducedMotion()
       s.engaged = true
 
+      // Capture the pointer now that a real drag has started, so subsequent
+      // moves/up route here even if the pointer leaves the card. (Deliberately
+      // not done on pointerdown -- see onPointerDown.)
+      try {
+        s.cardEl.setPointerCapture(s.pointerId)
+      } catch {
+        // capture unavailable; drag still works while the pointer stays over the list
+      }
+
       // Freeze FLIP for the gesture; the drag owns transforms now.
       flipControlRef.current?.setDragging(true)
       document.body.style.userSelect = 'none'
@@ -394,12 +403,10 @@ export function useThreadDrag(opts: ThreadDragOptions): {
     if (e.button !== 0) return
     if (sessionRef.current) return
     const cardEl = e.currentTarget as HTMLElement
-    try {
-      cardEl.setPointerCapture(e.pointerId)
-    } catch {
-      // capture unavailable; drag simply won't engage
-      return
-    }
+    // NOTE: do NOT setPointerCapture here. Capturing on pointerdown suppresses the
+    // subsequent `click` in Chromium, which made tiles un-openable. Capture only
+    // when the drag actually engages (past the threshold), so a plain click never
+    // captures and its click event fires normally.
     sessionRef.current = {
       pointerId: e.pointerId,
       id,
