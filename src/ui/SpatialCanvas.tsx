@@ -1,6 +1,7 @@
 import { useRef, type CSSProperties } from 'react'
 import type { MatrixClient, Room } from 'matrix-js-sdk'
 import { useSpatialPositions, type SpatialPos } from '../client/useSpatialPositions'
+import { useSpatialBubbles, type Bubble } from '../client/useSpatialBubbles'
 import { AuthedImage } from './AuthedImage'
 
 // ---------------------------------------------------------------------------
@@ -36,6 +37,7 @@ function initialsFor(name: string): string {
 
 export function SpatialCanvas({ client, room }: { client: MatrixClient; room: Room }) {
   const { positions, myUserId, setMyPosition } = useSpatialPositions(client, room)
+  const bubbles = useSpatialBubbles(client, room)
   const ref = useRef<HTMLDivElement>(null)
   const placedSelf = myUserId != null && positions.has(myUserId)
 
@@ -64,6 +66,12 @@ export function SpatialCanvas({ client, room }: { client: MatrixClient; room: Ro
         backgroundSize: '32px 32px, 32px 32px',
       }}
     >
+      <style>{`
+        @keyframes spatialBubbleIn {
+          from { opacity: 0; transform: translate(-50%, 4px); }
+          to   { opacity: 1; transform: translate(-50%, 0); }
+        }
+      `}</style>
       {!placedSelf && (
         <div
           style={{
@@ -87,6 +95,7 @@ export function SpatialCanvas({ client, room }: { client: MatrixClient; room: Ro
           userId={userId}
           pos={pos}
           isSelf={userId === myUserId}
+          bubble={bubbles.get(userId)}
         />
       ))}
     </div>
@@ -98,11 +107,13 @@ function SpatialAvatar({
   userId,
   pos,
   isSelf,
+  bubble,
 }: {
   room: Room
   userId: string
   pos: SpatialPos
   isSelf: boolean
+  bubble?: Bubble
 }) {
   const member = room.getMember(userId)
   const name = member?.name || userId
@@ -140,6 +151,34 @@ function SpatialAvatar({
 
   return (
     <div style={puck}>
+      {bubble && (
+        <div
+          key={bubble.id}
+          style={{
+            position: 'absolute',
+            bottom: '100%',
+            left: '50%',
+            marginBottom: 6,
+            transform: 'translateX(-50%)',
+            maxWidth: 220,
+            width: 'max-content',
+            padding: '6px 10px',
+            borderRadius: 12,
+            fontFamily: 'var(--tc-ui-font, inherit)',
+            fontSize: 12,
+            lineHeight: 1.35,
+            color: 'var(--cpd-color-text-primary)',
+            background: 'var(--cpd-color-bg-canvas-default)',
+            border: '1px solid rgba(128,128,128,0.35)',
+            boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
+            whiteSpace: 'normal',
+            wordBreak: 'break-word',
+            animation: 'spatialBubbleIn 200ms ease-out',
+          }}
+        >
+          {bubble.text}
+        </div>
+      )}
       <div style={disc}>
         {avatarMxc ? (
           <AuthedImage mxc={avatarMxc} width={180} fill transparentLoading alt="" />
