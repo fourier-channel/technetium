@@ -104,8 +104,10 @@ export function useSpatialPositions(
     pendingRef.current = null
     lastSentRef.current = Date.now()
     // Custom event type: the SDK's sendEvent is typed to known event names, so
-    // reach it through a loosely-typed alias (runtime accepts any string).
-    const send = client.sendEvent as unknown as (
+    // reach it through a loosely-typed alias. MUST bind to the client -- sendEvent
+    // uses `this` internally (this.addThreadRelationIfNeeded), so a detached
+    // reference throws.
+    const send = client.sendEvent.bind(client) as unknown as (
       roomId: string,
       eventType: string,
       content: Record<string, unknown>,
