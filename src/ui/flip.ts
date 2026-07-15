@@ -95,9 +95,14 @@ export function playFLIP(
     moved.push({ el, dx, dy })
   }
   if (moved.length === 0) return
-  // Reduced motion: honor the preference by skipping the transform shuffle
-  // (the list still reorders instantly). Crossfade is step-7 polish.
-  if (prefersReducedMotion()) return
+  // Reduced motion: no positional sliding. Moved cards appear in their new slots
+  // with a brief opacity crossfade instead (feel spec).
+  if (prefersReducedMotion()) {
+    for (const { el } of moved) {
+      el.animate([{ opacity: 0.35 }, { opacity: 1 }], { duration: 200, easing: 'ease-out' })
+    }
+    return
+  }
 
   // WRITE pass 1 (First+Invert): translate every moved node back to where it
   // was, with transitions disabled so the jump is instant/invisible.

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, RefObject } from 'react'
-import type { FlipControl } from './flip'
+import { prefersReducedMotion, type FlipControl } from './flip'
 
 // ---------------------------------------------------------------------------
 // Hand-rolled pointer-capture drag-to-reorder for the thread list (D4 -- no
@@ -62,6 +62,7 @@ interface DragSession {
   draggedHeight: number
   followY: number
   startScrollTop: number
+  reduced: boolean
   raf: number
 }
 
@@ -69,6 +70,7 @@ interface PendingSettle {
   id: string
   followY: number
   origTop: number
+  reduced: boolean
 }
 
 export interface ThreadDragOptions {
@@ -182,8 +184,10 @@ export function useThreadDrag(opts: ThreadDragOptions): {
       // scroll-independent; the visual translate is dPointer + dScroll).
       const scrollDelta = container ? container.scrollTop - s.startScrollTop : 0
       const targetY = s.pointerY - s.pointerStartY + scrollDelta
-      s.followY += (targetY - s.followY) * LERP
-      s.cardEl.style.transform = `translateY(${s.followY}px) scale(${LIFT_SCALE}) rotate(${TILT_DEG}deg)`
+      // Reduced motion: no weight lag (follow directly) and no tilt.
+      s.followY += (targetY - s.followY) * (s.reduced ? 1 : LERP)
+      const tilt = s.reduced ? 0 : TILT_DEG
+      s.cardEl.style.transform = `translateY(${s.followY}px) scale(${LIFT_SCALE}) rotate(${tilt}deg)`
       const draggedCenter = s.cards[s.dragIndex].center + s.followY
       applySiblingShifts(s, draggedCenter)
       // Self-reference by the function-expression name (not the outer const) so
@@ -205,6 +209,7 @@ export function useThreadDrag(opts: ThreadDragOptions): {
       s.draggedHeight = cards[dragIndex].height
       s.followY = 0
       s.startScrollTop = container.scrollTop
+      s.reduced = prefersReducedMotion()
       s.engaged = true
 
       // Freeze FLIP for the gesture; the drag owns transforms now.
@@ -252,6 +257,7 @@ export function useThreadDrag(opts: ThreadDragOptions): {
         id: s.id,
         followY: s.followY,
         origTop: s.cards[s.dragIndex].top,
+        reduced: s.reduced,
       }
 
       document.body.style.userSelect = ''
@@ -282,16 +288,6 @@ export function useThreadDrag(opts: ThreadDragOptions): {
 
       const el = s.cardEl
       const fromY = s.followY
-      el.style.transition = 'none'
-      el.style.transform = ''
-      const anim = el.animate(
-        [
-          { transform: `translateY(${fromY}px) scale(${LIFT_SCALE}) rotate(${TILT_DEG}deg)`, boxShadow: LIFT_SHADOW },
-          { transform: 'translateY(0) scale(1) rotate(0deg)', boxShadow: '0 0 0 0 rgba(0,0,0,0)' },
-        ],
-        { duration: CANCEL_MS, easing: 'cubic-bezier(0.34, 1.4, 0.64, 1)' },
-      )
-      // Siblings spring closed via the transition set at engage.
       for (const c of s.cards) if (c.el !== el) c.el.style.transform = ''
 
       let done = false
@@ -303,9 +299,25 @@ export function useThreadDrag(opts: ThreadDragOptions): {
         flipControlRef.current?.setDragging(false)
         flipControlRef.current?.recapture()
       }
-      anim.onfinish = finish
-      anim.oncancel = finish
-      window.setTimeout(finish, CANCEL_MS + 80)
+
+      if (s.reduced) {
+        // No spring-back animation under reduced motion; snap to origin.
+        el.style.transform = ''
+        finish()
+      } else {
+        el.style.transition = 'none'
+        el.style.transform = ''
+        const anim = el.animate(
+          [
+            { transform: `translateY(${fromY}px) scale(${LIFT_SCALE}) rotate(${TILT_DEG}deg)`, boxShadow: LIFT_SHADOW },
+            { transform: 'translateY(0) scale(1) rotate(0deg)', boxShadow: '0 0 0 0 rgba(0,0,0,0)' },
+          ],
+          { duration: CANCEL_MS, easing: 'cubic-bezier(0.34, 1.4, 0.64, 1)' },
+        )
+        anim.onfinish = finish
+        anim.oncancel = finish
+        window.setTimeout(finish, CANCEL_MS + 80)
+      }
 
       document.body.style.userSelect = ''
       try {
@@ -342,7 +354,9 @@ export function useThreadDrag(opts: ThreadDragOptions): {
       flipControlRef.current?.setDragging(false)
       flipControlRef.current?.recapture()
     }
-    if (!dragged) {
+    // Reduced motion: the card is already at its slot (transforms cleared) --
+    // no settle animation.
+    if (!dragged || p.reduced) {
       finish()
       return
     }
@@ -398,6 +412,7 @@ export function useThreadDrag(opts: ThreadDragOptions): {
       draggedHeight: 0,
       followY: 0,
       startScrollTop: 0,
+      reduced: false,
       raf: 0,
     }
   }, [])
