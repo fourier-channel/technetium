@@ -15,6 +15,11 @@
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
+  /* Techy-but-readable UI face for the room list (and future chrome). A single
+     swappable variable so the upcoming settings UI can change it in one place.
+     Falls back through Inter to the system sans if the font fails to load. */
+  --tc-ui-font: 'Space Grotesk', 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
   color-scheme: light dark;

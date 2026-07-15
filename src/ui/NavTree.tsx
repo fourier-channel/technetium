@@ -29,7 +29,8 @@ export function NavTree({
   const toggle = (roomId: string) =>
     setCollapsed((prev) => {
       const next = new Set(prev)
-      next.has(roomId) ? next.delete(roomId) : next.add(roomId)
+      if (next.has(roomId)) next.delete(roomId)
+      else next.add(roomId)
       return next
     })
 
@@ -44,6 +45,7 @@ export function NavTree({
   return (
     <nav
       style={{
+        fontFamily: 'var(--tc-ui-font)',
         fontSize: 13,
         lineHeight: 1.3,
         color: 'var(--cpd-color-text-primary)',

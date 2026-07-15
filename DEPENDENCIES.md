@@ -87,6 +87,7 @@ client-specific deps so a later extraction is a move, not a rewrite.
 | `@vector-im/compound-design-tokens` | `^10.2.2` | Theme CSS vars (`--cpd-*`); light/dark via prefers-color-scheme. |
 | `@fontsource/inter` | `^5.2.8` | UI font. Weights 400/500/600/700 imported. |
 | `@fontsource/inconsolata` | `^5.2.8` | Mono font. Weight 400 imported. |
+| `@fontsource/space-grotesk` | `^5.2.10` | Techy-but-readable room-list face. Weights 400/500/600/700 imported; surfaced as CSS var `--tc-ui-font` (user-swappable via settings UI). OFL. |
 | `vite` | `8.0.14` | Dev server + build. |
 | `typescript` | (scaffold) | — |
 
