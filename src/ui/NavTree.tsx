@@ -535,6 +535,9 @@ function RoomIcon({ node, size = 20 }: { node: TreeNode; size?: number }) {
     color: 'var(--cpd-color-text-secondary)',
   }
 
+  const initial =
+    (node.name || node.roomId).replace(/^[#!@]/, '').charAt(0).toUpperCase() || '#'
+
   if (override)
     return (
       <span style={frame} aria-hidden>
@@ -544,11 +547,11 @@ function RoomIcon({ node, size = 20 }: { node: TreeNode; size?: number }) {
   if (avatarMxc)
     return (
       <span style={frame} aria-hidden>
-        <AuthedImage mxc={avatarMxc} width={180} fill transparentLoading alt="" />
+        {/* If the gateway can't serve the avatar, degrade to the initial rather
+            than a broken "[image unavailable]". */}
+        <AuthedImage mxc={avatarMxc} width={180} fill transparentLoading alt="" fallback={initial} />
       </span>
     )
-  const initial =
-    (node.name || node.roomId).replace(/^[#!@]/, '').charAt(0).toUpperCase() || '#'
   return (
     <span style={frame} aria-hidden>
       {initial}

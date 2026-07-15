@@ -9,17 +9,21 @@ import { ThreadPanel } from './ui/ThreadPanel'
 import { ThreadList } from './ui/ThreadList'
 import { LightboxProvider } from './ui/Lightbox'
 import { RoomListSettingsProvider } from './ui/RoomListSettingsProvider'
+import { useReadMarker } from './client/useReadMarker'
 
 // Thin shell: render purely by client lifecycle status. All auth/client logic
 // lives in ClientProvider; App reflects the current phase and, when ready,
 // mounts the three-pane layout (nav tree | timeline+composer | member list).
 function App() {
-  const { status, error, userId, login, logout } = useClient()
+  const { client, status, error, userId, login, logout } = useClient()
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   const [openThread, setOpenThread] = useState<{ roomId: string; rootId: string } | null>(null)
   const [threadListOpen, setThreadListOpen] = useState(false)
   const [threadListWidth, setThreadListWidth] = useState(190)
   const [threadPanelWidth, setThreadPanelWidth] = useState(380)
+  // Mark the viewed room read so its unread glow/ping clears (base client sent
+  // no read receipts). Called before any early return to keep hook order stable.
+  useReadMarker(client, selectedRoom)
 
   if (status === 'starting') return <Centered>Starting{'\u2026'}</Centered>
 
