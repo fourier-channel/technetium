@@ -376,7 +376,8 @@ function SpatialAvatar({
         {override ? (
           <span>{override}</span>
         ) : avatarMxc ? (
-          <AuthedImage mxc={avatarMxc} width={180} fill transparentLoading alt="" />
+          // Degrade to initials if the gateway can't serve the avatar.
+          <AuthedImage mxc={avatarMxc} width={180} fill transparentLoading alt="" fallback={initialsFor(name)} />
         ) : (
           initialsFor(name)
         )}
