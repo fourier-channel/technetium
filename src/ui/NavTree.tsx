@@ -145,6 +145,7 @@ function TreeRow({
   animate: boolean
 }) {
   const { client } = useClient()
+  const { isFavorite, isMutedNow } = useRoomListSettings()
   const label = node.name || node.roomId
   const isCollapsed = collapsed.has(node.roomId)
   const isSelected = !node.isSpace && node.roomId === selectedRoomId
@@ -216,6 +217,15 @@ function TreeRow({
           ? 'var(--cpd-color-text-secondary)'
           : 'var(--cpd-color-text-primary)'
 
+  const isFav = !node.isSpace && isFavorite(node.roomId)
+  // Aggregate descendant unread onto a collapsed space header (excludes muted).
+  const agg = node.isSpace
+    ? aggregateNotif(node, notifs, isMutedNow)
+    : { total: 0, highlight: 0 }
+  const spaceUnread = node.isSpace && isCollapsed && agg.total > 0
+  // Favorited descendant rooms stay visible when the space is collapsed.
+  const favChildren = node.isSpace && isCollapsed ? collectFavoriteRooms(node, isFavorite) : []
+
   return (
     <>
       <div
@@ -253,33 +263,133 @@ function TreeRow({
         <RoomIcon node={node} />
         {node.isSpace ? (
           <span
-            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            style={{
+              flex: '1 1 auto',
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              color: spaceUnread ? 'var(--tc-unread-base)' : undefined,
+              textShadow: spaceUnread ? '0 0 6px rgba(255,150,40,0.5)' : undefined,
+            }}
           >
             {label}
           </span>
         ) : (
           <RoomName label={label} counts={notifs.get(node.roomId)} roomId={node.roomId} animate={animate} />
         )}
-        {knocked && (
-          <span style={{ marginLeft: 'auto', fontSize: 10, opacity: 0.8 }}>requested</span>
-        )}
+        <span
+          style={{
+            marginLeft: 'auto',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 5,
+            flexShrink: 0,
+            paddingLeft: 4,
+          }}
+        >
+          {isFav && (
+            <span style={{ fontSize: 11, color: 'var(--tc-unread)' }} title="Favorite">
+              {'★'}
+            </span>
+          )}
+          {spaceUnread && (
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                lineHeight: 1,
+                padding: '2px 6px',
+                borderRadius: 9,
+                color: '#1b1300',
+                background: 'var(--tc-unread)',
+                boxShadow: '0 0 8px rgba(255,150,40,0.55)',
+              }}
+              title={`${agg.total} unread${agg.highlight > 0 ? `, ${agg.highlight} ping` : ''}`}
+            >
+              {agg.highlight > 0 ? '@' : ''}
+              {agg.total}
+            </span>
+          )}
+          {knocked && <span style={{ fontSize: 10, opacity: 0.8 }}>requested</span>}
+        </span>
       </div>
-      {node.isSpace && !isCollapsed &&
-        node.children.map((child) => (
-          <TreeRow
-            key={child.roomId}
-            node={child}
-            depth={depth + 1}
-            collapsed={collapsed}
-            onToggle={onToggle}
-            selectedRoomId={selectedRoomId}
-            onSelectRoom={onSelectRoom}
-            notifs={notifs}
-            animate={animate}
-          />
-        ))}
+      {node.isSpace && (
+        // Fluid collapse via grid-template-rows 1fr <-> 0fr (animates to auto
+        // height with no fixed-height measurement). Inner wrapper clips content.
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateRows: isCollapsed ? '0fr' : '1fr',
+            transition: animate ? 'grid-template-rows 240ms ease' : undefined,
+          }}
+        >
+          <div style={{ overflow: 'hidden', minHeight: 0 }}>
+            {node.children.map((child) => (
+              <TreeRow
+                key={child.roomId}
+                node={child}
+                depth={depth + 1}
+                collapsed={collapsed}
+                onToggle={onToggle}
+                selectedRoomId={selectedRoomId}
+                onSelectRoom={onSelectRoom}
+                notifs={notifs}
+                animate={animate}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      {/* Favorited descendant rooms stay pinned/visible while collapsed. */}
+      {favChildren.map((fav) => (
+        <TreeRow
+          key={`fav:${fav.roomId}`}
+          node={fav}
+          depth={depth + 1}
+          collapsed={collapsed}
+          onToggle={onToggle}
+          selectedRoomId={selectedRoomId}
+          onSelectRoom={onSelectRoom}
+          notifs={notifs}
+          animate={animate}
+        />
+      ))}
     </>
   )
+}
+
+// Sum descendant (non-space) unread onto a space, skipping muted rooms.
+function aggregateNotif(
+  node: TreeNode,
+  notifs: NotifMap,
+  isMutedNow: (roomId: string) => boolean,
+): NotifCounts {
+  let total = 0
+  let highlight = 0
+  const walk = (n: TreeNode) => {
+    if (!n.isSpace && !isMutedNow(n.roomId)) {
+      const c = notifs.get(n.roomId)
+      if (c) {
+        total += c.total
+        highlight += c.highlight
+      }
+    }
+    for (const ch of n.children) walk(ch)
+  }
+  for (const ch of node.children) walk(ch)
+  return { total, highlight }
+}
+
+// Gather favorited (non-space) rooms anywhere under a space, flattened.
+function collectFavoriteRooms(node: TreeNode, isFavorite: (roomId: string) => boolean): TreeNode[] {
+  const out: TreeNode[] = []
+  const walk = (n: TreeNode) => {
+    if (!n.isSpace && isFavorite(n.roomId)) out.push(n)
+    for (const ch of n.children) walk(ch)
+  }
+  for (const ch of node.children) walk(ch)
+  return out
 }
 
 // Room name with unread treatment. Muted rooms render plain. Unread (total > 0)
