@@ -3,6 +3,8 @@ import type { Room } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
 import { type TreeNode } from '../client/spaces'
 import { useNavTree } from '../client/useNavTree'
+import { useRoomListSettings } from './roomListSettings'
+import { AuthedImage } from './AuthedImage'
 
 // Membership/join classification for a node's visual + click behavior.
 type Mode = 'joined' | 'joinable' | 'knock'
@@ -198,13 +200,13 @@ function TreeRow({
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 4,
+          gap: 6,
           paddingLeft: indent,
           paddingRight: 6,
-          height: 24,
+          height: 28,
           cursor: 'pointer',
           borderRadius: 6,
-          margin: '1px 4px',
+          margin: '2px 4px',
           opacity: busy ? 0.6 : 1,
           fontWeight: mode === 'joinable' ? 700 : node.isSpace ? 600 : 400,
           color,
@@ -220,9 +222,10 @@ function TreeRow({
           if (!isSelected) e.currentTarget.style.background = 'transparent'
         }}
       >
-        <span style={{ width: 12, textAlign: 'center', fontSize: 10, opacity: 0.7 }}>
+        <span style={{ width: 10, flexShrink: 0, textAlign: 'center', fontSize: 10, opacity: 0.7 }}>
           {node.isSpace ? (isCollapsed ? '\u25B8' : '\u25BE') : ''}
         </span>
+        <RoomIcon node={node} />
         <span
           style={{
             overflow: 'hidden',
@@ -249,5 +252,48 @@ function TreeRow({
           />
         ))}
     </>
+  )
+}
+
+// Icon to the left of a room/space name: a user-set emoji/glyph override
+// (right-click -> Set icon), else the room/space avatar, else a generated
+// initial. Spaces get a rounded-square frame, rooms a circle.
+function RoomIcon({ node, size = 20 }: { node: TreeNode; size?: number }) {
+  const { getIcon } = useRoomListSettings()
+  const override = getIcon(node.roomId)
+  const avatarMxc = node.room?.getMxcAvatarUrl() ?? null
+
+  const frame: React.CSSProperties = {
+    width: size,
+    height: size,
+    flexShrink: 0,
+    borderRadius: node.isSpace ? 6 : '50%',
+    overflow: 'hidden',
+    display: 'grid',
+    placeItems: 'center',
+    fontSize: Math.round(size * 0.62),
+    lineHeight: 1,
+    background: 'var(--cpd-color-bg-subtle-primary)',
+    color: 'var(--cpd-color-text-secondary)',
+  }
+
+  if (override)
+    return (
+      <span style={frame} aria-hidden>
+        {override}
+      </span>
+    )
+  if (avatarMxc)
+    return (
+      <span style={frame} aria-hidden>
+        <AuthedImage mxc={avatarMxc} width={180} fill transparentLoading alt="" />
+      </span>
+    )
+  const initial =
+    (node.name || node.roomId).replace(/^[#!@]/, '').charAt(0).toUpperCase() || '#'
+  return (
+    <span style={frame} aria-hidden>
+      {initial}
+    </span>
   )
 }
