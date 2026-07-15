@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 
 // ---------------------------------------------------------------------------
 // FLIP (First, Last, Invert, Play) -- the ONE shared reorder-animation system
@@ -126,6 +126,15 @@ export function playFLIP(
   })
 }
 
+// Imperative handle for consumers that own the visuals of a specific reorder
+// (the drag layer): while `setDragging(true)` is in effect the FLIP layer keeps
+// hands off (no animation, no rebaseline), and `recapture()` re-snapshots the
+// settled positions as the new baseline once the drag's own settle finishes.
+export interface FlipControl {
+  setDragging: (dragging: boolean) => void
+  recapture: () => void
+}
+
 // React glue: run a FLIP whenever `orderKey` changes. Captures the settled
 // positions after each order change so the NEXT change inverts from them. The
 // first run only snapshots (nothing to animate from). Stat-only re-renders that
@@ -133,10 +142,28 @@ export function playFLIP(
 export function useFlipList(
   containerRef: RefObject<HTMLElement | null>,
   orderKey: string,
+  controlRef?: RefObject<FlipControl | null>,
   opts?: PlayFlipOptions,
 ): void {
   const prevRef = useRef<FlipRects>(new Map())
   const primedRef = useRef(false)
+  const draggingRef = useRef(false)
+
+  useEffect(() => {
+    if (!controlRef) return
+    controlRef.current = {
+      setDragging: (d: boolean) => {
+        draggingRef.current = d
+      },
+      recapture: () => {
+        const c = containerRef.current
+        if (c) prevRef.current = captureRects(c)
+      },
+    }
+    return () => {
+      if (controlRef) controlRef.current = null
+    }
+  }, [controlRef, containerRef])
 
   useLayoutEffect(() => {
     const container = containerRef.current
@@ -146,6 +173,10 @@ export function useFlipList(
       prevRef.current = captureRects(container)
       return
     }
+    // During a drag the drag layer owns every transform; skipping both the
+    // animation and the rebaseline avoids capturing transformed (mid-drag)
+    // positions. The drag calls recapture() after its settle completes.
+    if (draggingRef.current) return
     playFLIP(container, prevRef.current, opts)
     prevRef.current = captureRects(container)
     // opts is a plain literal from the caller; intentionally not a dep -- order

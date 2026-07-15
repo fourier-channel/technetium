@@ -112,6 +112,29 @@ function applyFrozenOrder(items: ThreadListItem[], frozen: string[]): ThreadList
   return result
 }
 
+// Arrange items by a user-defined custom order (drag-to-reorder). Ids in
+// `order` keep their arranged position; items not in `order` (newly-arrived
+// threads) are appended at the end for now -- step 6 moves them to the top and
+// marks them "new" (O3).
+export function arrangeByCustom(items: ThreadListItem[], order: string[]): ThreadListItem[] {
+  const byId = new Map<string, ThreadListItem>()
+  for (const it of items) byId.set(flipIdOf(it.roomId, it.rootId), it)
+
+  const result: ThreadListItem[] = []
+  const placed = new Set<string>()
+  for (const id of order) {
+    const it = byId.get(id)
+    if (it) {
+      result.push(it)
+      placed.add(id)
+    }
+  }
+  for (const it of items) {
+    if (!placed.has(flipIdOf(it.roomId, it.rootId))) result.push(it)
+  }
+  return result
+}
+
 // Public hook: takes the live (data-order) items and returns the items to
 // render plus the handlers to spread on the scroll container. Freezes order
 // while interacting, releases (adopts live order) on idle.

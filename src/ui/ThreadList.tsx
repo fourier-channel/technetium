@@ -1,8 +1,9 @@
-import { memo, useRef, useState } from 'react'
+import { memo, useCallback, useRef, useState } from 'react'
 import { useClient } from '../client/ClientContext'
-import { useFlipList, flipIdOf } from './flip'
+import { useFlipList, flipIdOf, type FlipControl } from './flip'
 import { usePopOnIncrease } from './pop'
-import { useDeferredThreadOrder } from './threadOrder'
+import { useDeferredThreadOrder, arrangeByCustom } from './threadOrder'
+import { useThreadDrag } from './threadDrag'
 import {
   useThreadList,
   threadListDefaults,
@@ -12,6 +13,11 @@ import {
 } from '../client/useThreadList'
 import { AuthedImage } from './AuthedImage'
 import { parseMxc } from '../client/media'
+
+// UI-level order mode: the three data sorts plus a user-arranged 'custom' order.
+// 'custom' is a presentation concern (persisted order + new-thread placement),
+// so it lives here, not in useThreadList's data-sort union.
+type SortMode = ThreadSort | 'custom'
 
 // Thread inbox strip. Scoped to the current room by default (user-changeable
 // default eventually via account-data prefs); toggleable to all joined rooms.
@@ -31,20 +37,54 @@ export function ThreadList({
   const { client } = useClient()
   const defaults = threadListDefaults()
   const [scope, setScope] = useState<ThreadScope>(roomId ? defaults.scope : 'all')
-  const [sort, setSort] = useState<ThreadSort>(defaults.sort)
-  const dataEntries = useThreadList(client, { roomId, scope, sort })
+  const [sort, setSort] = useState<SortMode>(defaults.sort)
+  // Custom (drag-arranged) order as an ordered list of flip ids. Null until the
+  // user first drags (O1: dragging silently switches the list to custom mode).
+  const [customOrder, setCustomOrder] = useState<string[] | null>(null)
+  // 'custom' isn't a data sort; feed useThreadList a stable base order under it.
+  const baseSort: ThreadSort = sort === 'custom' ? 'latest-activity' : sort
+  const dataEntries = useThreadList(client, { roomId, scope, sort: baseSort })
 
   // D3 auto-resort etiquette: while the pointer is over the list (or scrolling),
   // hold the on-screen order; adopt the live data order on idle. Stats/pops
   // still update in place during the hold -- only POSITION is deferred.
-  const { entries, handlers } = useDeferredThreadOrder(dataEntries)
+  const { entries: frozenEntries, handlers } = useDeferredThreadOrder(dataEntries)
 
-  // FLIP: any change to the ordered id list (sort switch, scope switch, or an
-  // idle-released activity resort) shuffles the surviving cards through one
-  // animation.
+  // In custom mode the user's arrangement wins (auto-resort/freeze is moot);
+  // otherwise the sort+freeze pipeline drives order.
+  const isCustom = sort === 'custom' && customOrder !== null
+  const entries = isCustom ? arrangeByCustom(dataEntries, customOrder) : frozenEntries
+
+  // FLIP: any change to the ordered id list (sort switch, scope switch, an
+  // idle-released activity resort, or a drag commit) shuffles the surviving
+  // cards through one animation. The drag layer suppresses FLIP for its own
+  // gesture via flipControlRef.
   const listRef = useRef<HTMLDivElement>(null)
+  const flipControlRef = useRef<FlipControl | null>(null)
   const orderKey = entries.map((e) => flipIdOf(e.roomId, e.rootId)).join(',')
-  useFlipList(listRef, orderKey)
+  useFlipList(listRef, orderKey, flipControlRef)
+
+  // Drag-to-reorder (D4). Committing an order switches the list to custom mode.
+  const onReorder = useCallback((finalIds: string[]) => {
+    setCustomOrder(finalIds)
+    setSort('custom')
+  }, [])
+  const orderedIds = entries.map((e) => flipIdOf(e.roomId, e.rootId))
+  const { getCardHandlers, consumeClickSuppressed } = useThreadDrag({
+    containerRef: listRef,
+    orderedIds,
+    onReorder,
+    flipControlRef,
+  })
+
+  // A click that concludes an engaged drag must not also open the thread.
+  const handleSelect = useCallback(
+    (rid: string, rootId: string) => {
+      if (consumeClickSuppressed(flipIdOf(rid, rootId))) return
+      onSelect(rid, rootId)
+    },
+    [consumeClickSuppressed, onSelect],
+  )
 
   const chip = (active: boolean): React.CSSProperties => ({
     fontSize: 11,
@@ -86,7 +126,7 @@ export function ThreadList({
           </button>
           <select
             value={sort}
-            onChange={(e) => setSort(e.target.value as ThreadSort)}
+            onChange={(e) => setSort(e.target.value as SortMode)}
             style={{
               fontSize: 11,
               background: 'transparent',
@@ -99,6 +139,8 @@ export function ThreadList({
             <option value="latest-activity">Latest</option>
             <option value="created">Created</option>
             <option value="reply-count">Replies</option>
+            {/* Custom appears once the user has drag-arranged an order (O1). */}
+            {customOrder !== null && <option value="custom">Custom</option>}
           </select>
         </div>
       </div>
@@ -112,7 +154,8 @@ export function ThreadList({
               item={e}
               active={e.rootId === activeRootId}
               showRoom={scope === 'all'}
-              onSelect={onSelect}
+              onSelect={handleSelect}
+              getCardHandlers={getCardHandlers}
             />
           ))
         )}
@@ -126,7 +169,12 @@ export function ThreadList({
 // actually changed. Without this the parent's new object refs would re-render
 // every sibling on any thread's update.
 function threadTileEqual(a: ThreadTileProps, b: ThreadTileProps): boolean {
-  if (a.active !== b.active || a.showRoom !== b.showRoom || a.onSelect !== b.onSelect)
+  if (
+    a.active !== b.active ||
+    a.showRoom !== b.showRoom ||
+    a.onSelect !== b.onSelect ||
+    a.getCardHandlers !== b.getCardHandlers
+  )
     return false
   const x = a.item
   const y = b.item
@@ -145,11 +193,19 @@ function threadTileEqual(a: ThreadTileProps, b: ThreadTileProps): boolean {
   )
 }
 
+interface CardHandlers {
+  onPointerDown: (e: React.PointerEvent) => void
+  onPointerMove: (e: React.PointerEvent) => void
+  onPointerUp: (e: React.PointerEvent) => void
+  onPointerCancel: (e: React.PointerEvent) => void
+}
+
 interface ThreadTileProps {
   item: ThreadListItem
   active: boolean
   showRoom: boolean
   onSelect: (roomId: string, rootId: string) => void
+  getCardHandlers: (id: string) => CardHandlers
 }
 
 const ThreadTile = memo(function ThreadTile({
@@ -157,6 +213,7 @@ const ThreadTile = memo(function ThreadTile({
   active,
   showRoom,
   onSelect,
+  getCardHandlers,
 }: ThreadTileProps) {
   const { thread, roomName, roomId, rootId, lastTs, createdTs, author } = item
   // Pop on last-activity increase, rate-limited, on the inner content element
@@ -185,6 +242,7 @@ const ThreadTile = memo(function ThreadTile({
   return (
     <div
       data-flip-id={flipIdOf(roomId, rootId)}
+      {...getCardHandlers(flipIdOf(roomId, rootId))}
       style={{
         borderBottom: '1px solid rgba(128,128,128,0.15)',
         background: active ? 'var(--cpd-color-bg-subtle-secondary)' : 'transparent',
