@@ -68,6 +68,9 @@ export function toItems(events: MatrixEvent[]): TimelineItem[] {
     const ev = events[i]
     const evId = ev.getId() ?? ''
     if (!evId || consumed.has(evId)) continue
+    // Spatial-mode presence/position events ride the timeline (so they work at
+    // PL0) but are never chat -- keep them out of every message log.
+    if (ev.getType().startsWith('net.41chan.spatial.')) continue
 
     const tag = galleryTag(ev)
     if (tag) {
