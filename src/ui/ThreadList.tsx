@@ -4,6 +4,7 @@ import { useFlipList, flipIdOf, type FlipControl } from './flip'
 import { usePopOnIncrease } from './pop'
 import { useDeferredThreadOrder, arrangeByCustom } from './threadOrder'
 import { useThreadDrag } from './threadDrag'
+import { orderScopeKey, loadCustomOrder, saveCustomOrder } from './threadOrderStore'
 import {
   useThreadList,
   threadListDefaults,
@@ -18,6 +19,9 @@ import { parseMxc } from '../client/media'
 // 'custom' is a presentation concern (persisted order + new-thread placement),
 // so it lives here, not in useThreadList's data-sort union.
 type SortMode = ThreadSort | 'custom'
+
+// Stable empty set so non-custom renders don't churn the memoized tiles.
+const EMPTY_NEW_IDS: ReadonlySet<string> = new Set()
 
 // Thread inbox strip. Scoped to the current room by default (user-changeable
 // default eventually via account-data prefs); toggleable to all joined rooms.
@@ -36,11 +40,19 @@ export function ThreadList({
 }) {
   const { client } = useClient()
   const defaults = threadListDefaults()
-  const [scope, setScope] = useState<ThreadScope>(roomId ? defaults.scope : 'all')
-  const [sort, setSort] = useState<SortMode>(defaults.sort)
-  // Custom (drag-arranged) order as an ordered list of flip ids. Null until the
-  // user first drags (O1: dragging silently switches the list to custom mode).
-  const [customOrder, setCustomOrder] = useState<string[] | null>(null)
+  const initialScope: ThreadScope = roomId ? defaults.scope : 'all'
+  const [scope, setScope] = useState<ThreadScope>(initialScope)
+  // Custom (drag-arranged) order as an ordered list of flip ids. Lazily loaded
+  // from localStorage for the initial scope so a reload restores the arrangement
+  // (O2: per-scope; D5: persisted order).
+  const [customOrder, setCustomOrder] = useState<string[] | null>(() =>
+    loadCustomOrder(orderScopeKey(initialScope, roomId)),
+  )
+  // If a saved custom order exists at mount, open in custom mode (order survives
+  // reload); otherwise the default sort.
+  const [sort, setSort] = useState<SortMode>(() =>
+    loadCustomOrder(orderScopeKey(initialScope, roomId)) ? 'custom' : defaults.sort,
+  )
   // 'custom' isn't a data sort; feed useThreadList a stable base order under it.
   const baseSort: ThreadSort = sort === 'custom' ? 'latest-activity' : sort
   const dataEntries = useThreadList(client, { roomId, scope, sort: baseSort })
@@ -51,9 +63,21 @@ export function ThreadList({
   const { entries: frozenEntries, handlers } = useDeferredThreadOrder(dataEntries)
 
   // In custom mode the user's arrangement wins (auto-resort/freeze is moot);
-  // otherwise the sort+freeze pipeline drives order.
+  // otherwise the sort+freeze pipeline drives order. New (unsaved) threads sort
+  // to the top and are marked "new" (O3).
   const isCustom = sort === 'custom' && customOrder !== null
-  const entries = isCustom ? arrangeByCustom(dataEntries, customOrder) : frozenEntries
+  const arranged = isCustom ? arrangeByCustom(dataEntries, customOrder) : null
+  const entries = arranged ? arranged.items : frozenEntries
+  const newIds = arranged ? arranged.newIds : EMPTY_NEW_IDS
+
+  // Switching scope loads that scope's saved order (O2). If the new scope has no
+  // saved custom order while in custom mode, fall back to the default sort.
+  const handleScope = (next: ThreadScope) => {
+    setScope(next)
+    const loaded = loadCustomOrder(orderScopeKey(next, roomId))
+    setCustomOrder(loaded)
+    if (sort === 'custom' && !loaded) setSort(defaults.sort)
+  }
 
   // FLIP: any change to the ordered id list (sort switch, scope switch, an
   // idle-released activity resort, or a drag commit) shuffles the surviving
@@ -64,11 +88,16 @@ export function ThreadList({
   const orderKey = entries.map((e) => flipIdOf(e.roomId, e.rootId)).join(',')
   useFlipList(listRef, orderKey, flipControlRef)
 
-  // Drag-to-reorder (D4). Committing an order switches the list to custom mode.
-  const onReorder = useCallback((finalIds: string[]) => {
-    setCustomOrder(finalIds)
-    setSort('custom')
-  }, [])
+  // Drag-to-reorder (D4). Committing an order switches the list to custom mode
+  // (O1) and persists it for the current scope (O2).
+  const onReorder = useCallback(
+    (finalIds: string[]) => {
+      setCustomOrder(finalIds)
+      setSort('custom')
+      saveCustomOrder(orderScopeKey(scope, roomId), finalIds)
+    },
+    [scope, roomId],
+  )
   const orderedIds = entries.map((e) => flipIdOf(e.roomId, e.rootId))
   const { getCardHandlers, consumeClickSuppressed } = useThreadDrag({
     containerRef: listRef,
@@ -117,11 +146,11 @@ export function ThreadList({
         <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>Threads</div>
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', paddingBottom: 6 }}>
           {roomId && (
-            <button type="button" style={chip(scope === 'room')} onClick={() => setScope('room')}>
+            <button type="button" style={chip(scope === 'room')} onClick={() => handleScope('room')}>
               This room
             </button>
           )}
-          <button type="button" style={chip(scope === 'all')} onClick={() => setScope('all')}>
+          <button type="button" style={chip(scope === 'all')} onClick={() => handleScope('all')}>
             All rooms
           </button>
           <select
@@ -154,6 +183,7 @@ export function ThreadList({
               item={e}
               active={e.rootId === activeRootId}
               showRoom={scope === 'all'}
+              isNew={newIds.has(flipIdOf(e.roomId, e.rootId))}
               onSelect={handleSelect}
               getCardHandlers={getCardHandlers}
             />
@@ -172,6 +202,7 @@ function threadTileEqual(a: ThreadTileProps, b: ThreadTileProps): boolean {
   if (
     a.active !== b.active ||
     a.showRoom !== b.showRoom ||
+    a.isNew !== b.isNew ||
     a.onSelect !== b.onSelect ||
     a.getCardHandlers !== b.getCardHandlers
   )
@@ -204,6 +235,7 @@ interface ThreadTileProps {
   item: ThreadListItem
   active: boolean
   showRoom: boolean
+  isNew: boolean
   onSelect: (roomId: string, rootId: string) => void
   getCardHandlers: (id: string) => CardHandlers
 }
@@ -212,6 +244,7 @@ const ThreadTile = memo(function ThreadTile({
   item,
   active,
   showRoom,
+  isNew,
   onSelect,
   getCardHandlers,
 }: ThreadTileProps) {
@@ -256,7 +289,26 @@ const ThreadTile = memo(function ThreadTile({
         {showRoom && (
           <div style={{ fontSize: 11, color: 'var(--cpd-color-text-secondary)', ...ell }}>{roomName}</div>
         )}
-        <div style={{ fontSize: 12, fontWeight: 600, ...ell }}>{author}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+          {isNew && (
+            <span
+              style={{
+                flexShrink: 0,
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: 0.3,
+                textTransform: 'uppercase',
+                padding: '1px 5px',
+                borderRadius: 8,
+                color: 'var(--cpd-color-text-on-solid-primary)',
+                background: 'var(--cpd-color-bg-action-primary-rest)',
+              }}
+            >
+              new
+            </span>
+          )}
+          <span style={{ fontSize: 12, fontWeight: 600, ...ell }}>{author}</span>
+        </div>
         {/* Placeholder for a future thread title (not yet a feature). */}
         <div
           style={{
