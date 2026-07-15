@@ -29,10 +29,17 @@ const THRESHOLD_PX = 5
 const LERP = 0.25
 const LIFT_SCALE = 1.03
 const TILT_DEG = 1
-const SETTLE_MS = 180
+const SETTLE_MS = 240
+const CANCEL_MS = 220
 const SIBLING_MS = 180
 const LIFT_SHADOW = '0 8px 20px rgba(0,0,0,0.45)'
 const CLICK_SUPPRESS_MS = 400
+// Autoscroll when the pointer nears a list edge during a drag.
+const EDGE_PX = 44
+const MAX_SCROLL_SPEED = 14
+// Horizontal slack past the list edge before a release counts as "drop outside"
+// (spring back, no reorder).
+const OUTSIDE_SLACK_PX = 60
 
 interface CardGeom {
   id: string
@@ -54,6 +61,7 @@ interface DragSession {
   dragIndex: number
   draggedHeight: number
   followY: number
+  startScrollTop: number
   raf: number
 }
 
@@ -152,7 +160,28 @@ export function useThreadDrag(opts: ThreadDragOptions): {
     function tickLoop() {
       const s = sessionRef.current
       if (!s || !s.engaged) return
-      const targetY = s.pointerY - s.pointerStartY
+      const container = containerRef.current
+
+      // Autoscroll when the pointer is near a list edge.
+      if (container) {
+        const rect = container.getBoundingClientRect()
+        let d = 0
+        if (s.pointerY < rect.top + EDGE_PX) {
+          d = -MAX_SCROLL_SPEED * Math.min(1, (rect.top + EDGE_PX - s.pointerY) / EDGE_PX)
+        } else if (s.pointerY > rect.bottom - EDGE_PX) {
+          d = MAX_SCROLL_SPEED * Math.min(1, (s.pointerY - (rect.bottom - EDGE_PX)) / EDGE_PX)
+        }
+        if (d !== 0) {
+          const maxScroll = container.scrollHeight - container.clientHeight
+          container.scrollTop = Math.max(0, Math.min(maxScroll, container.scrollTop + d))
+        }
+      }
+
+      // Follow target folds in the scroll delta so the projected index stays
+      // consistent in content space as the list autoscrolls (content coords are
+      // scroll-independent; the visual translate is dPointer + dScroll).
+      const scrollDelta = container ? container.scrollTop - s.startScrollTop : 0
+      const targetY = s.pointerY - s.pointerStartY + scrollDelta
       s.followY += (targetY - s.followY) * LERP
       s.cardEl.style.transform = `translateY(${s.followY}px) scale(${LIFT_SCALE}) rotate(${TILT_DEG}deg)`
       const draggedCenter = s.cards[s.dragIndex].center + s.followY
@@ -161,7 +190,7 @@ export function useThreadDrag(opts: ThreadDragOptions): {
       // the loop reschedules without a use-before-declaration.
       s.raf = requestAnimationFrame(tickLoop)
     },
-    [applySiblingShifts],
+    [applySiblingShifts, containerRef],
   )
 
   const engage = useCallback(
@@ -175,6 +204,7 @@ export function useThreadDrag(opts: ThreadDragOptions): {
       s.dragIndex = dragIndex
       s.draggedHeight = cards[dragIndex].height
       s.followY = 0
+      s.startScrollTop = container.scrollTop
       s.engaged = true
 
       // Freeze FLIP for the gesture; the drag owns transforms now.
@@ -241,6 +271,53 @@ export function useThreadDrag(opts: ThreadDragOptions): {
     [],
   )
 
+  // Cancel: spring the card back to its origin with NO reorder (Escape, or a
+  // release well outside the list).
+  const cancelDrag = useCallback(
+    (s: DragSession) => {
+      cancelAnimationFrame(s.raf)
+      suppressedClicksRef.current.add(s.id)
+      const sid = s.id
+      window.setTimeout(() => suppressedClicksRef.current.delete(sid), CLICK_SUPPRESS_MS)
+
+      const el = s.cardEl
+      const fromY = s.followY
+      el.style.transition = 'none'
+      el.style.transform = ''
+      const anim = el.animate(
+        [
+          { transform: `translateY(${fromY}px) scale(${LIFT_SCALE}) rotate(${TILT_DEG}deg)`, boxShadow: LIFT_SHADOW },
+          { transform: 'translateY(0) scale(1) rotate(0deg)', boxShadow: '0 0 0 0 rgba(0,0,0,0)' },
+        ],
+        { duration: CANCEL_MS, easing: 'cubic-bezier(0.34, 1.4, 0.64, 1)' },
+      )
+      // Siblings spring closed via the transition set at engage.
+      for (const c of s.cards) if (c.el !== el) c.el.style.transform = ''
+
+      let done = false
+      const finish = () => {
+        if (done) return
+        done = true
+        for (const c of s.cards) clearCardStyles(c.el)
+        clearCardStyles(el)
+        flipControlRef.current?.setDragging(false)
+        flipControlRef.current?.recapture()
+      }
+      anim.onfinish = finish
+      anim.oncancel = finish
+      window.setTimeout(finish, CANCEL_MS + 80)
+
+      document.body.style.userSelect = ''
+      try {
+        if (el.hasPointerCapture(s.pointerId)) el.releasePointerCapture(s.pointerId)
+      } catch {
+        // already released
+      }
+      sessionRef.current = null
+    },
+    [flipControlRef],
+  )
+
   // Post-commit settle: runs after onReorder re-rendered the list into the new
   // order. Clears all imperative transforms, then animates the dragged card from
   // where the finger left it to its committed slot.
@@ -271,10 +348,18 @@ export function useThreadDrag(opts: ThreadDragOptions): {
     }
     // Where the finger released the card, relative to its new resting slot.
     const startY = p.origTop + p.followY - dragged.top
+    // Overshoot settle (feel spec): slide to the slot, land at scale 1, then a
+    // subtle scale bounce to ~1.015 and back to 1.0 as the shadow relaxes.
     const anim = dragged.el.animate(
       [
-        { transform: `translateY(${startY}px) scale(${LIFT_SCALE}) rotate(${TILT_DEG}deg)`, boxShadow: LIFT_SHADOW },
-        { transform: 'translateY(0) scale(1) rotate(0deg)', boxShadow: '0 0 0 0 rgba(0,0,0,0)' },
+        {
+          transform: `translateY(${startY}px) scale(${LIFT_SCALE}) rotate(${TILT_DEG}deg)`,
+          boxShadow: LIFT_SHADOW,
+          offset: 0,
+        },
+        { transform: 'translateY(0) scale(1) rotate(0deg)', boxShadow: '0 3px 10px rgba(0,0,0,0.28)', offset: 0.6 },
+        { transform: 'translateY(0) scale(1.015) rotate(0deg)', boxShadow: '0 1px 5px rgba(0,0,0,0.18)', offset: 0.8 },
+        { transform: 'translateY(0) scale(1) rotate(0deg)', boxShadow: '0 0 0 0 rgba(0,0,0,0)', offset: 1 },
       ],
       { duration: SETTLE_MS, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' },
     )
@@ -312,6 +397,7 @@ export function useThreadDrag(opts: ThreadDragOptions): {
       dragIndex: -1,
       draggedHeight: 0,
       followY: 0,
+      startScrollTop: 0,
       raf: 0,
     }
   }, [])
@@ -335,13 +421,21 @@ export function useThreadDrag(opts: ThreadDragOptions): {
       const s = sessionRef.current
       if (!s || e.pointerId !== s.pointerId) return
       if (s.engaged) {
-        drop(s)
+        // Release well outside the list -> cancel (spring back, no reorder).
+        const container = containerRef.current
+        let outside = false
+        if (container) {
+          const r = container.getBoundingClientRect()
+          outside = e.clientX < r.left - OUTSIDE_SLACK_PX || e.clientX > r.right + OUTSIDE_SLACK_PX
+        }
+        if (outside) cancelDrag(s)
+        else drop(s)
       } else {
         // A plain click: release capture, let the click open the thread.
         endGesture()
       }
     },
-    [drop, endGesture],
+    [drop, cancelDrag, endGesture, containerRef],
   )
 
   const onPointerCancel = useCallback(
@@ -377,6 +471,20 @@ export function useThreadDrag(opts: ThreadDragOptions): {
     }
     return false
   }, [])
+
+  // Escape cancels an engaged drag.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      const s = sessionRef.current
+      if (s?.engaged) {
+        e.preventDefault()
+        cancelDrag(s)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [cancelDrag])
 
   useEffect(() => endGesture, [endGesture])
 
