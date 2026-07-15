@@ -170,6 +170,11 @@ root commit `352e50b`). Project renamed `matrix-client` -> `technetium`.
 - `@vector-im/compound-web@^9.4.1`
 - `@vector-im/compound-design-tokens@^10.2.2`
 - `@fontsource/inter@^5.2.8`, `@fontsource/inconsolata@^5.2.8`
+- `@fontsource/space-grotesk@^5.2.10` (added 2026-07-15, room-list enrichment):
+  techy-but-readable room-list face. Rationale: the room list wanted a distinct
+  "techy, high-readability" type face; Space Grotesk fits and is OFL. Exposed as
+  the swappable CSS var `--tc-ui-font` so the future settings UI changes it in
+  one place rather than hard-coding a family across components.
 - (`matrix-js-sdk@41.6.0` already present; crypto-wasm rides along, not pinned)
 
 `dompurify` / `@matrix-org/matrix-wysiwyg` still deferred to later phases.

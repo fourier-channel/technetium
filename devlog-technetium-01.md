@@ -899,3 +899,99 @@ Each needs eyes (and a 2nd Multi-Account-Container identity where noted):
 - **Keyboard-accessible reorder** -- deferred per the feel spec.
 - **v2 portable order** -- `net.41chan.thread_order` account-data (the localStorage
   key is namespaced to match, so it's a move not a rename).
+
+---
+
+## 2026-07-15 -- Room-list enrichment (overnight auto run, branch room-list-enrichment)
+
+Enriched the left nav (`NavTree`) into a live, iconified, notification-aware room
+list with per-room right-click controls. Run UNATTENDED with per-step
+self-verification (tsc + eslint + build) gating each commit; visual/interactive
+checks are logged PENDING below. Branched from main (independent of the parallel
+thread-cards-v1 branch).
+
+New files: `src/client/useRoomNotifications.ts`, `src/ui/roomListSettings.ts`,
+`src/ui/RoomListSettingsProvider.tsx`, `src/ui/reducedMotion.ts`,
+`src/ui/RoomContextMenu.tsx`. Edited: `NavTree.tsx`, `App.tsx`, `main.tsx`,
+`index.css`, dependency manifests. New dep: `@fontsource/space-grotesk`.
+
+### Per-step summary
+- **P1.1 -- techy font.** Space Grotesk (techy + high readability), imported in
+  `main.tsx`, surfaced as the swappable CSS var `--tc-ui-font` (applied to the
+  nav; the future settings UI changes it in one place). Recorded in
+  CLIENT_MANIFEST.md + DEPENDENCIES.md.
+- **P1.2 -- settings store.** `net.41chan.room_list_settings` in localStorage via
+  a context/provider: animationsEnabled, favorites, per-room icon overrides,
+  per-room mutes. Context+hook in a `.ts`, provider in a `.tsx` (fast-refresh
+  split, see G-rl01).
+- **P1.3 -- notification data.** `useRoomNotifications` -> Map roomId ->
+  {total, highlight} from `room.getUnreadNotificationCount(...)`, refreshed
+  (debounced) on sync / timeline / receipt / unread-notifications events.
+- **P1.4 -- icons + spacing.** A `RoomIcon` left of each name: user override
+  emoji -> room/space avatar (via AuthedImage) -> generated initial. Rows given
+  roomier height (28px) and gap while staying compact.
+- **P1.5 -- unread treatment.** Unread rooms get an orange glow + "(N)"; a ping
+  (highlight>0) adds an orange "@" and a pulse that travels the name letter by
+  letter (staggered per-glyph CSS animation, ~moderate). Muted rooms render
+  plain. Orange lives in CSS vars (--tc-unread*).
+- **P1.6 -- fluid collapse.** Space children collapse/expand by animating
+  `grid-template-rows: 1fr <-> 0fr` (fluid to auto-height, no measurement).
+  Favorited descendant rooms stay pinned/visible while a space is collapsed, and
+  the collapsed space header inherits an aggregated unread badge (sum of
+  descendant rooms, muted excluded).
+- **P1.7 -- right-click menu.** `RoomContextMenu` (portal, closes on
+  outside-click/Escape): favorite/unfavorite, notification Mute + Snooze
+  1h/8h/24h + Unmute, icon picker (preset emoji + custom input) + clear, and
+  Leave room/space (two-click confirm).
+- **P1.8 -- master toggle + reduced-motion.** A room-list Animations ON/OFF
+  toggle (seed for the settings UI) gates every pulse/glow-motion/collapse
+  animation; `prefers-reduced-motion` is also honored (both fold into one
+  `animate` flag). Static unread indicators (glow, count, @, badge) remain when
+  animation is off so information is never lost.
+
+### Open-question resolutions / Claudecisions
+- Favorites and mutes are LOCAL (localStorage) for v1. Portable lifts deferred:
+  favorites -> `m.favourite` room tag; mute -> server push rules. Mute currently
+  suppresses THIS client's visual treatment (glow/count/pulse and parent
+  aggregation); it does not yet silence server-side pushes. FLAGGED.
+- Icons are a LOCAL per-room visual override (does not change the room's real
+  avatar for others) -- matches the devlog's "customize name" future-idea intent.
+
+### DRAFT fourier-phase nodes
+- **D-rl01 (decision).** Room-list client-preferences (animations toggle,
+  favorites, icon overrides, mutes) live in ONE localStorage-backed context
+  (`net.41chan.room_list_settings`), the same local-first -> portable path as
+  thread order. Keeps all row-level UI state reactive from a single source.
+- **D-rl02 (decision).** Fluid collapse uses the CSS `grid-template-rows`
+  0fr<->1fr transition rather than JS height measurement -- animates to auto
+  height with no ResizeObserver and no fixed-height assumptions.
+- **G-rl01 (gotcha).** A React context module that exports BOTH a hook and its
+  Provider component trips `react-refresh/only-export-components`. Split it: put
+  the context object + hook + types in a `.ts` (no component export -> rule
+  inactive) and the Provider in its own `.tsx`. (The old `ClientContext.tsx`
+  predates this lint and carries the violation; do not copy it as a template.)
+- **G-rl02 (gotcha).** Reading notification counts in a `useState`-map hook must
+  not seed state with a synchronous setState in the effect body
+  (`react-hooks/set-state-in-effect`). Seed via a lazy useState initializer and
+  do the first compute through the same debounce timer as updates (setState in a
+  timer callback is allowed).
+
+### PENDING OPERATOR VERIFICATION (visual/interactive)
+- Icons render left of names (override emoji / avatar / initial); rows readable
+  and compact; Space Grotesk visibly applied.
+- Unread: orange glow + (N); ping shows @ + a pulse traveling letter-by-letter at
+  a moderate pace; muted room shows nothing.
+- Collapse/expand animates fluidly (not instant); favorited rooms stay visible
+  under a collapsed space; collapsed space header shows the aggregated badge.
+- Right-click menu: favorite toggles (★ + stays-visible-when-collapsed), mute /
+  snooze suppress the treatment, snooze auto-expires, set/clear icon works, Leave
+  (two-click) removes the room.
+- Animations OFF toggle + reduced-motion: no pulse/collapse animation, but static
+  unread indicators remain.
+
+### Deferred / flagged
+- Server-side mute (push rules) and portable favorites (`m.favourite` tag) -- v2.
+- Snooze expiry refresh is best-effort (re-evaluated on the next notif event /
+  interaction; no dedicated timer) -- a visual could linger briefly past expiry.
+- Avatars fetch per-row through the media gateway; fine at current room counts,
+  may want batching at scale.

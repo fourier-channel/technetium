@@ -3,6 +3,11 @@ import type { Room } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
 import { type TreeNode } from '../client/spaces'
 import { useNavTree } from '../client/useNavTree'
+import { useRoomNotifications, type NotifMap, type NotifCounts } from '../client/useRoomNotifications'
+import { useRoomListSettings } from './roomListSettings'
+import { useReducedMotion } from './reducedMotion'
+import { AuthedImage } from './AuthedImage'
+import { RoomContextMenu } from './RoomContextMenu'
 
 // Membership/join classification for a node's visual + click behavior.
 type Mode = 'joined' | 'joinable' | 'knock'
@@ -24,12 +29,22 @@ export function NavTree({
 }) {
   const { client } = useClient()
   const { tree, loading } = useNavTree(client)
+  const notifs = useRoomNotifications(client)
+  const { animationsEnabled, setAnimationsEnabled } = useRoomListSettings()
+  const reduced = useReducedMotion()
+  const animate = animationsEnabled && !reduced
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [menu, setMenu] = useState<{ node: TreeNode; x: number; y: number } | null>(null)
+  const onContext = (node: TreeNode, e: React.MouseEvent) => {
+    e.preventDefault()
+    setMenu({ node, x: e.clientX, y: e.clientY })
+  }
 
   const toggle = (roomId: string) =>
     setCollapsed((prev) => {
       const next = new Set(prev)
-      next.has(roomId) ? next.delete(roomId) : next.add(roomId)
+      if (next.has(roomId)) next.delete(roomId)
+      else next.add(roomId)
       return next
     })
 
@@ -44,6 +59,7 @@ export function NavTree({
   return (
     <nav
       style={{
+        fontFamily: 'var(--tc-ui-font)',
         fontSize: 13,
         lineHeight: 1.3,
         color: 'var(--cpd-color-text-primary)',
@@ -56,7 +72,49 @@ export function NavTree({
           100% { background: transparent; }
         }
         .nav-join-ripple { animation: navJoinRipple 900ms ease-out 1; }
+        @keyframes roomLetterPulse {
+          0%, 40%, 60%, 100% {
+            color: var(--tc-unread-base);
+            text-shadow: 0 0 2px rgba(255,150,40,0.30);
+          }
+          50% {
+            color: var(--tc-unread-bright);
+            text-shadow: 0 0 11px rgba(255,175,80,0.98);
+          }
+        }
+        .room-pulse-letter { animation: roomLetterPulse 1600ms linear infinite; }
       `}</style>
+      {/* Master animations toggle (seed for the future settings UI). */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '2px 10px 6px',
+          fontSize: 11,
+          color: 'var(--cpd-color-text-secondary)',
+        }}
+      >
+        <span>Animations</span>
+        <button
+          type="button"
+          onClick={() => setAnimationsEnabled(!animationsEnabled)}
+          title="Toggle room-list animations (pulses, glows, collapse)"
+          style={{
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: 0.3,
+            padding: '2px 8px',
+            borderRadius: 10,
+            cursor: 'pointer',
+            border: '1px solid rgba(128,128,128,0.35)',
+            color: animationsEnabled ? '#1b1300' : 'var(--cpd-color-text-secondary)',
+            background: animationsEnabled ? 'var(--tc-unread)' : 'transparent',
+          }}
+        >
+          {animationsEnabled ? 'ON' : 'OFF'}
+        </button>
+      </div>
       {tree.spaces.map((node) => (
         <TreeRow
           key={node.roomId}
@@ -66,6 +124,9 @@ export function NavTree({
           onToggle={toggle}
           selectedRoomId={selectedRoomId}
           onSelectRoom={onSelectRoom}
+          notifs={notifs}
+          animate={animate}
+          onContext={onContext}
         />
       ))}
       {tree.orphanRooms.length > 0 && (
@@ -92,9 +153,20 @@ export function NavTree({
               onToggle={toggle}
               selectedRoomId={selectedRoomId}
               onSelectRoom={onSelectRoom}
+              notifs={notifs}
+              animate={animate}
+              onContext={onContext}
             />
           ))}
         </>
+      )}
+      {menu && (
+        <RoomContextMenu
+          node={menu.node}
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+        />
       )}
     </nav>
   )
@@ -107,6 +179,9 @@ function TreeRow({
   onToggle,
   selectedRoomId,
   onSelectRoom,
+  notifs,
+  animate,
+  onContext,
 }: {
   node: TreeNode
   depth: number
@@ -114,8 +189,12 @@ function TreeRow({
   onToggle: (roomId: string) => void
   selectedRoomId?: string
   onSelectRoom?: (room: Room) => void
+  notifs: NotifMap
+  animate: boolean
+  onContext: (node: TreeNode, e: React.MouseEvent) => void
 }) {
   const { client } = useClient()
+  const { isFavorite, isMutedNow } = useRoomListSettings()
   const label = node.name || node.roomId
   const isCollapsed = collapsed.has(node.roomId)
   const isSelected = !node.isSpace && node.roomId === selectedRoomId
@@ -187,22 +266,32 @@ function TreeRow({
           ? 'var(--cpd-color-text-secondary)'
           : 'var(--cpd-color-text-primary)'
 
+  const isFav = !node.isSpace && isFavorite(node.roomId)
+  // Aggregate descendant unread onto a collapsed space header (excludes muted).
+  const agg = node.isSpace
+    ? aggregateNotif(node, notifs, isMutedNow)
+    : { total: 0, highlight: 0 }
+  const spaceUnread = node.isSpace && isCollapsed && agg.total > 0
+  // Favorited descendant rooms stay visible when the space is collapsed.
+  const favChildren = node.isSpace && isCollapsed ? collectFavoriteRooms(node, isFavorite) : []
+
   return (
     <>
       <div
         onClick={onClick}
+        onContextMenu={(e) => onContext(node, e)}
         title={knocked ? `${label} (request sent)` : label}
-        className={ripple ? 'nav-join-ripple' : undefined}
+        className={ripple && animate ? 'nav-join-ripple' : undefined}
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 4,
+          gap: 6,
           paddingLeft: indent,
           paddingRight: 6,
-          height: 24,
+          height: 28,
           cursor: 'pointer',
           borderRadius: 6,
-          margin: '1px 4px',
+          margin: '2px 4px',
           opacity: busy ? 0.6 : 1,
           fontWeight: mode === 'joinable' ? 700 : node.isSpace ? 600 : 400,
           color,
@@ -218,34 +307,254 @@ function TreeRow({
           if (!isSelected) e.currentTarget.style.background = 'transparent'
         }}
       >
-        <span style={{ width: 12, textAlign: 'center', fontSize: 10, opacity: 0.7 }}>
+        <span style={{ width: 10, flexShrink: 0, textAlign: 'center', fontSize: 10, opacity: 0.7 }}>
           {node.isSpace ? (isCollapsed ? '\u25B8' : '\u25BE') : ''}
         </span>
+        <RoomIcon node={node} />
+        {node.isSpace ? (
+          <span
+            style={{
+              flex: '1 1 auto',
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              color: spaceUnread ? 'var(--tc-unread-base)' : undefined,
+              textShadow: spaceUnread ? '0 0 6px rgba(255,150,40,0.5)' : undefined,
+            }}
+          >
+            {label}
+          </span>
+        ) : (
+          <RoomName label={label} counts={notifs.get(node.roomId)} roomId={node.roomId} animate={animate} />
+        )}
         <span
           style={{
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
+            marginLeft: 'auto',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 5,
+            flexShrink: 0,
+            paddingLeft: 4,
           }}
         >
-          {label}
+          {isFav && (
+            <span style={{ fontSize: 11, color: 'var(--tc-unread)' }} title="Favorite">
+              {'★'}
+            </span>
+          )}
+          {spaceUnread && (
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                lineHeight: 1,
+                padding: '2px 6px',
+                borderRadius: 9,
+                color: '#1b1300',
+                background: 'var(--tc-unread)',
+                boxShadow: '0 0 8px rgba(255,150,40,0.55)',
+              }}
+              title={`${agg.total} unread${agg.highlight > 0 ? `, ${agg.highlight} ping` : ''}`}
+            >
+              {agg.highlight > 0 ? '@' : ''}
+              {agg.total}
+            </span>
+          )}
+          {knocked && <span style={{ fontSize: 10, opacity: 0.8 }}>requested</span>}
         </span>
-        {knocked && (
-          <span style={{ marginLeft: 'auto', fontSize: 10, opacity: 0.8 }}>requested</span>
-        )}
       </div>
-      {node.isSpace && !isCollapsed &&
-        node.children.map((child) => (
-          <TreeRow
-            key={child.roomId}
-            node={child}
-            depth={depth + 1}
-            collapsed={collapsed}
-            onToggle={onToggle}
-            selectedRoomId={selectedRoomId}
-            onSelectRoom={onSelectRoom}
-          />
-        ))}
+      {node.isSpace && (
+        // Fluid collapse via grid-template-rows 1fr <-> 0fr (animates to auto
+        // height with no fixed-height measurement). Inner wrapper clips content.
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateRows: isCollapsed ? '0fr' : '1fr',
+            transition: animate ? 'grid-template-rows 240ms ease' : undefined,
+          }}
+        >
+          <div style={{ overflow: 'hidden', minHeight: 0 }}>
+            {node.children.map((child) => (
+              <TreeRow
+                key={child.roomId}
+                node={child}
+                depth={depth + 1}
+                collapsed={collapsed}
+                onToggle={onToggle}
+                selectedRoomId={selectedRoomId}
+                onSelectRoom={onSelectRoom}
+                notifs={notifs}
+                animate={animate}
+                onContext={onContext}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      {/* Favorited descendant rooms stay pinned/visible while collapsed. */}
+      {favChildren.map((fav) => (
+        <TreeRow
+          key={`fav:${fav.roomId}`}
+          node={fav}
+          depth={depth + 1}
+          collapsed={collapsed}
+          onToggle={onToggle}
+          selectedRoomId={selectedRoomId}
+          onSelectRoom={onSelectRoom}
+          notifs={notifs}
+          animate={animate}
+          onContext={onContext}
+        />
+      ))}
     </>
+  )
+}
+
+// Sum descendant (non-space) unread onto a space, skipping muted rooms.
+function aggregateNotif(
+  node: TreeNode,
+  notifs: NotifMap,
+  isMutedNow: (roomId: string) => boolean,
+): NotifCounts {
+  let total = 0
+  let highlight = 0
+  const walk = (n: TreeNode) => {
+    if (!n.isSpace && !isMutedNow(n.roomId)) {
+      const c = notifs.get(n.roomId)
+      if (c) {
+        total += c.total
+        highlight += c.highlight
+      }
+    }
+    for (const ch of n.children) walk(ch)
+  }
+  for (const ch of node.children) walk(ch)
+  return { total, highlight }
+}
+
+// Gather favorited (non-space) rooms anywhere under a space, flattened.
+function collectFavoriteRooms(node: TreeNode, isFavorite: (roomId: string) => boolean): TreeNode[] {
+  const out: TreeNode[] = []
+  const walk = (n: TreeNode) => {
+    if (!n.isSpace && isFavorite(n.roomId)) out.push(n)
+    for (const ch of n.children) walk(ch)
+  }
+  for (const ch of node.children) walk(ch)
+  return out
+}
+
+// Room name with unread treatment. Muted rooms render plain. Unread (total > 0)
+// gets an orange glow + a "(N)" count. A ping (highlight > 0) additionally shows
+// an orange "@" and, when animations are enabled, a pulse that travels through
+// the name letter by letter. When animations are off / reduced-motion, the ping
+// shows the static @ + glow with no travelling pulse.
+function RoomName({
+  label,
+  counts,
+  roomId,
+  animate,
+}: {
+  label: string
+  counts: NotifCounts | undefined
+  roomId: string
+  animate: boolean
+}) {
+  const { isMutedNow } = useRoomListSettings()
+  const muted = isMutedNow(roomId)
+  const total = muted ? 0 : (counts?.total ?? 0)
+  const highlight = muted ? 0 : (counts?.highlight ?? 0)
+  const unread = total > 0
+  const ping = highlight > 0
+
+  const ell = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as const
+
+  if (!unread && !ping) {
+    return <span style={ell}>{label}</span>
+  }
+
+  const glow: React.CSSProperties = {
+    color: 'var(--tc-unread-base)',
+    textShadow: '0 0 6px rgba(255,150,40,0.55)',
+    fontWeight: 600,
+  }
+  const at = ping ? (
+    <span style={{ color: 'var(--tc-unread)', fontWeight: 700, marginRight: 2 }}>@</span>
+  ) : null
+  const count = <span style={{ opacity: 0.85, marginLeft: 4 }}>({total})</span>
+
+  if (ping && animate) {
+    // Letter-by-letter traveling pulse: each glyph shares one keyframe, staggered
+    // by its index so a bright band walks across the name at a moderate pace.
+    const chars = [...label]
+    return (
+      <span style={{ ...ell, fontWeight: 600 }}>
+        {at}
+        {chars.map((ch, i) => (
+          <span
+            key={i}
+            className="room-pulse-letter"
+            style={{ animationDelay: `${i * 90}ms` }}
+          >
+            {ch === ' ' ? ' ' : ch}
+          </span>
+        ))}
+        {count}
+      </span>
+    )
+  }
+
+  return (
+    <span style={{ ...ell, ...glow }}>
+      {at}
+      {label}
+      {count}
+    </span>
+  )
+}
+
+// Icon to the left of a room/space name: a user-set emoji/glyph override
+// (right-click -> Set icon), else the room/space avatar, else a generated
+// initial. Spaces get a rounded-square frame, rooms a circle.
+function RoomIcon({ node, size = 20 }: { node: TreeNode; size?: number }) {
+  const { getIcon } = useRoomListSettings()
+  const override = getIcon(node.roomId)
+  const avatarMxc = node.room?.getMxcAvatarUrl() ?? null
+
+  const frame: React.CSSProperties = {
+    width: size,
+    height: size,
+    flexShrink: 0,
+    borderRadius: node.isSpace ? 6 : '50%',
+    overflow: 'hidden',
+    display: 'grid',
+    placeItems: 'center',
+    fontSize: Math.round(size * 0.62),
+    lineHeight: 1,
+    background: 'var(--cpd-color-bg-subtle-primary)',
+    color: 'var(--cpd-color-text-secondary)',
+  }
+
+  const initial =
+    (node.name || node.roomId).replace(/^[#!@]/, '').charAt(0).toUpperCase() || '#'
+
+  if (override)
+    return (
+      <span style={frame} aria-hidden>
+        {override}
+      </span>
+    )
+  if (avatarMxc)
+    return (
+      <span style={frame} aria-hidden>
+        {/* Avatars come from the homeserver's authenticated media (the fourier-auth
+            content gate 403s them); degrade to the initial if even that fails. */}
+        <AuthedImage mxc={avatarMxc} width={180} fill transparentLoading alt="" fallback={initial} viaHomeserver />
+      </span>
+    )
+  return (
+    <span style={frame} aria-hidden>
+      {initial}
+    </span>
   )
 }
