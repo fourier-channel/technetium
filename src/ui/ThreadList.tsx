@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useClient } from '../client/ClientContext'
+import { useFlipList, flipIdOf } from './flip'
 import {
   useThreadList,
   threadListDefaults,
@@ -30,6 +31,12 @@ export function ThreadList({
   const [scope, setScope] = useState<ThreadScope>(roomId ? defaults.scope : 'all')
   const [sort, setSort] = useState<ThreadSort>(defaults.sort)
   const entries = useThreadList(client, { roomId, scope, sort })
+
+  // FLIP: any change to the ordered id list (sort switch, scope switch, or an
+  // activity-driven resort) shuffles the surviving cards through one animation.
+  const listRef = useRef<HTMLDivElement>(null)
+  const orderKey = entries.map((e) => flipIdOf(e.roomId, e.rootId)).join(',')
+  useFlipList(listRef, orderKey)
 
   const chip = (active: boolean): React.CSSProperties => ({
     fontSize: 11,
@@ -87,7 +94,7 @@ export function ThreadList({
           </select>
         </div>
       </div>
-      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+      <div ref={listRef} style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
         {entries.length === 0 ? (
           <div style={{ padding: 12, fontSize: 12, opacity: 0.6 }}>No threads yet.</div>
         ) : (
@@ -139,6 +146,7 @@ function ThreadTile({
 
   return (
     <div
+      data-flip-id={flipIdOf(roomId, rootId)}
       style={{
         borderBottom: '1px solid rgba(128,128,128,0.15)',
         background: active ? 'var(--cpd-color-bg-subtle-secondary)' : 'transparent',
