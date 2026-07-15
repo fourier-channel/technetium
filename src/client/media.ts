@@ -128,3 +128,33 @@ export async function fetchMediaSrc(
   originalUrlCache.set(mxc, { url: data.url, expiresAt: Date.now() + ttlMs })
   return { src: data.url, revoke: () => {} }
 }
+
+// Fetch a thumbnail via the HOMESERVER's Matrix authenticated-media endpoint
+// (spec v1.11, /_matrix/client/v1/media/thumbnail) with the client's access
+// token, returning a blob src. This deliberately BYPASSES the fourier-auth
+// content gate: that gate authorizes booru content (message media) and returns
+// 403 "not authorized for this media" for avatars, which aren't booru content.
+// Avatars/chrome are standard Matrix media, so they come straight from the
+// homeserver. The caller MUST revoke() the object URL on cleanup.
+export async function fetchHomeserverThumb(
+  client: MatrixClient,
+  mxc: string,
+  size = 96,
+): Promise<{ src: string; revoke: () => void }> {
+  const parsed = parseMxc(mxc)
+  if (!parsed) throw new Error(`invalid mxc URI: ${mxc}`)
+
+  const token = client.getAccessToken()
+  if (!token) throw new Error('no access token available for media fetch')
+
+  const base = client.getHomeserverUrl().replace(/\/+$/, '')
+  const url =
+    `${base}/_matrix/client/v1/media/thumbnail/` +
+    `${encodeURIComponent(parsed.serverName)}/${encodeURIComponent(parsed.mediaId)}` +
+    `?width=${size}&height=${size}&method=scale`
+
+  const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  if (!resp.ok) throw new Error(`homeserver media fetch failed (${resp.status}) for ${mxc}`)
+  const objUrl = URL.createObjectURL(await resp.blob())
+  return { src: objUrl, revoke: () => URL.revokeObjectURL(objUrl) }
+}

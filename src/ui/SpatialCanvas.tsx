@@ -376,8 +376,9 @@ function SpatialAvatar({
         {override ? (
           <span>{override}</span>
         ) : avatarMxc ? (
-          // Degrade to initials if the gateway can't serve the avatar.
-          <AuthedImage mxc={avatarMxc} width={180} fill transparentLoading alt="" fallback={initialsFor(name)} />
+          // Avatars come from homeserver authenticated media (the content gate
+          // 403s them); degrade to initials if even that fails.
+          <AuthedImage mxc={avatarMxc} width={180} fill transparentLoading alt="" fallback={initialsFor(name)} viaHomeserver />
         ) : (
           initialsFor(name)
         )}
