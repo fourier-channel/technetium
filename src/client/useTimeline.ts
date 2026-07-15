@@ -68,6 +68,9 @@ export function toItems(events: MatrixEvent[]): TimelineItem[] {
     const ev = events[i]
     const evId = ev.getId() ?? ''
     if (!evId || consumed.has(evId)) continue
+    // Spatial-mode presence/position events ride the timeline (so they work at
+    // PL0) but are never chat -- keep them out of every message log.
+    if (ev.getType().startsWith('net.41chan.spatial.')) continue
 
     const tag = galleryTag(ev)
     if (tag) {
@@ -129,10 +132,15 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
 
   useEffect(() => {
     roomRef.current = room
-    refresh()
-    setAtStart(false)
-    if (!client || !room) return
     let cancelled = false
+    // Reset the view for the new room off the effect body (a microtask, so it's
+    // not a synchronous setState-in-effect but still lands the same frame).
+    queueMicrotask(() => {
+      if (cancelled) return
+      refresh()
+      setAtStart(false)
+    })
+    if (!client || !room) return
 
     // Deepen a shallow initial view once per room open, so a fresh room
     // shows real history without the user clicking for it.

@@ -995,3 +995,77 @@ New files: `src/client/useRoomNotifications.ts`, `src/ui/roomListSettings.ts`,
   interaction; no dedicated timer) -- a visual could linger briefly past expiry.
 - Avatars fetch per-row through the media gateway; fine at current room counts,
   may want batching at scale.
+
+---
+
+## 2026-07-15 -- Spatial mode (overnight auto run, branch spatial-mode)
+
+A visual "canvas" mode for a room: participants pick a position, their
+avatar/name travels there, speech shows as bubbles attached to avatars, and the
+normal chat log + composer stay below. Run UNATTENDED, self-verified per step
+(tsc/eslint/build); the canvas visuals and multi-user behavior need eyes / a
+second live client (flagged PENDING). Branched from main (independent of the
+parallel thread-cards-v1 and room-list-enrichment branches).
+
+New files: `src/client/useSpatialPositions.ts`, `src/client/useSpatialBubbles.ts`,
+`src/ui/SpatialCanvas.tsx`, `src/ui/spatialSettings.ts`, `src/ui/SpatialView.tsx`.
+Edited: `src/client/useTimeline.ts` (filter + incidental fix), `src/App.tsx`.
+
+### Per-step summary
+- **S2.1 -- position transport.** `useSpatialPositions`: each participant's
+  position is a normalized (x,y) broadcast as a custom TIMELINE event
+  (`net.41chan.spatial.position`). Chosen over state events because custom
+  timeline events are allowed at PL0, while state events usually need PL50 --
+  regular users must be able to move. Own position is also persisted locally per
+  room (renders immediately, survives re-entry). Sends are throttled (trailing).
+  `useTimeline.toItems` filters `net.41chan.spatial.*` out of every chat log.
+- **S2.2 -- canvas.** `SpatialCanvas`: techy grid background, click anywhere to
+  place yourself, avatar "pucks" (image / initial / color) that travel to their
+  position with a CSS transition (reduced-motion disables the travel). Names
+  under each puck; the self puck is ringed.
+- **S2.3 -- bubbles.** `useSpatialBubbles`: a live message pops a speech bubble
+  on the sender's avatar, auto-expiring on a readability-scaled timer (longer
+  text lingers). Backfill/scrollback events are ignored so entering a room
+  doesn't burst stale bubbles.
+- **S2.4 -- backdrop + avatar.** `spatialSettings` (local): per-room backdrop
+  image (rendered beneath the grid) and per-user avatar override (an emoji on
+  the puck). Right-click your own puck -> avatar picker.
+- **S2.5 -- integration.** `SpatialView` = header (room name; right-click ->
+  change backdrop; + Exit) / canvas / the unchanged chat log as a sizeable panel
+  / composer. `App` gains a per-session "Spatial mode" toggle on the room view.
+
+### Claudecisions / flags
+- Transport is timeline events (PL0-safe) filtered from logs; a state-event or
+  EDU transport is a v2 refinement. Multi-user rendering is wired but UNVERIFIED
+  (needs a second live client) -- FLAGGED.
+- Backdrop + avatar overrides + own position are LOCAL (localStorage). Sharing a
+  backdrop as room state, or the avatar as the real Matrix avatar, is deferred.
+- **Incidental fix:** `useTimeline` had a pre-existing
+  `react-hooks/set-state-in-effect` violation (`refresh()` in the effect body);
+  since this step edits the file for the log filter, the reset was moved into a
+  `queueMicrotask` (same frame, lint-clean) with a cancellation guard. Behavior
+  unchanged; the file is now lint-clean.
+
+### DRAFT fourier-phase nodes
+- **D-sp01 (decision).** Ephemeral per-user spatial data (position) rides the
+  TIMELINE as a custom event, not room state -- the only transport a PL0 user can
+  actually write. Consumers filter `net.41chan.spatial.*` from message logs.
+- **G-sp01 (gotcha).** `client.sendEvent` is typed to known event names, so a
+  custom event type must be sent through a loosely-typed alias
+  (`as unknown as (roomId, type, content) => Promise<...>`), not a bare string.
+
+### PENDING OPERATOR VERIFICATION
+- Toggle Spatial mode: canvas with grid renders; click places your avatar; it
+  travels smoothly; name shows; chat log + composer usable below.
+- Send a message: a bubble appears on your avatar and fades after a few seconds.
+- Right-click room name -> set a backdrop URL: image shows beneath the grid;
+  Remove clears it.
+- Right-click your avatar -> pick an emoji: puck shows it; Reset restores.
+- Multi-user (NEEDS 2ND CLIENT): a second identity's position + bubbles appear
+  and their avatar travels. UNVERIFIED this session.
+- Reduced motion: no travel transition.
+
+### Deferred / flagged
+- Multi-user verification; state-event/EDU transport; shared backdrop; drag-to-
+  move (currently click-to-place); presence/idle fade of absent users; avatar
+  images (only emoji override in v1, plus the real Matrix avatar when set).
