@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react'
+import { memo, useRef, useState } from 'react'
 import { useClient } from '../client/ClientContext'
 import { useFlipList, flipIdOf } from './flip'
+import { usePopOnIncrease } from './pop'
 import {
   useThreadList,
   threadListDefaults,
@@ -113,18 +114,48 @@ export function ThreadList({
   )
 }
 
-function ThreadTile({
-  item,
-  active,
-  showRoom,
-  onSelect,
-}: {
+// Field-level equality so a rebuild of the WHOLE item list (every ThreadEvent
+// produces fresh item objects) re-renders only the cards whose rendered values
+// actually changed. Without this the parent's new object refs would re-render
+// every sibling on any thread's update.
+function threadTileEqual(a: ThreadTileProps, b: ThreadTileProps): boolean {
+  if (a.active !== b.active || a.showRoom !== b.showRoom || a.onSelect !== b.onSelect)
+    return false
+  const x = a.item
+  const y = b.item
+  return (
+    x.roomId === y.roomId &&
+    x.rootId === y.rootId &&
+    x.roomName === y.roomName &&
+    x.author === y.author &&
+    x.createdTs === y.createdTs &&
+    x.lastTs === y.lastTs &&
+    x.replyCount === y.replyCount &&
+    x.postCount === y.postCount &&
+    x.mediaCount === y.mediaCount &&
+    x.posterCount === y.posterCount &&
+    x.favorite === y.favorite
+  )
+}
+
+interface ThreadTileProps {
   item: ThreadListItem
   active: boolean
   showRoom: boolean
   onSelect: (roomId: string, rootId: string) => void
-}) {
+}
+
+const ThreadTile = memo(function ThreadTile({
+  item,
+  active,
+  showRoom,
+  onSelect,
+}: ThreadTileProps) {
   const { thread, roomName, roomId, rootId, lastTs, createdTs, author } = item
+  // Pop on last-activity increase, rate-limited, on the inner content element
+  // so it never collides with the FLIP translate on the outer card.
+  const popRef = useRef<HTMLDivElement>(null)
+  usePopOnIncrease(popRef, lastTs)
   const root = thread.rootEvent
   const content = root?.getContent()
   const bodyRaw = typeof content?.body === 'string' ? content.body : ''
@@ -153,6 +184,7 @@ function ThreadTile({
       }}
     >
       <div
+        ref={popRef}
         onClick={() => onSelect(roomId, rootId)}
         style={{ padding: '8px 10px', cursor: 'pointer', color: 'var(--cpd-color-text-primary)' }}
       >
@@ -195,7 +227,7 @@ function ThreadTile({
       </div>
     </div>
   )
-}
+}, threadTileEqual)
 
 // Inline stat cluster: posts / media posts / unique posters. Hovering (or, on
 // touch, tapping) shows the per-user breakdown: "@user: 15(p) 10(m)".
