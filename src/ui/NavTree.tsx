@@ -547,9 +547,9 @@ function RoomIcon({ node, size = 20 }: { node: TreeNode; size?: number }) {
   if (avatarMxc)
     return (
       <span style={frame} aria-hidden>
-        {/* If the gateway can't serve the avatar, degrade to the initial rather
-            than a broken "[image unavailable]". */}
-        <AuthedImage mxc={avatarMxc} width={180} fill transparentLoading alt="" fallback={initial} />
+        {/* Avatars come from the homeserver's authenticated media (the fourier-auth
+            content gate 403s them); degrade to the initial if even that fails. */}
+        <AuthedImage mxc={avatarMxc} width={180} fill transparentLoading alt="" fallback={initial} viaHomeserver />
       </span>
     )
   return (

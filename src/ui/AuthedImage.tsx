@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useClient } from '../client/ClientContext'
-import { fetchMediaSrc, type ThumbSize } from '../client/media'
+import { fetchMediaSrc, fetchHomeserverThumb, type ThumbSize } from '../client/media'
 
 // Renders an mxc:// image by fetching it through the media gateway with the
 // client's bearer token and showing the resulting blob. Owns the object-URL
@@ -15,6 +15,7 @@ export function AuthedImage({
   fill = false,
   transparentLoading = false,
   fallback,
+  viaHomeserver = false,
 }: {
   mxc: string
   width?: ThumbSize
@@ -26,6 +27,9 @@ export function AuthedImage({
   // Rendered instead of the "[image unavailable]" text when the fetch fails
   // (e.g. a room avatar the media gateway can't serve -> fall back to an initial).
   fallback?: ReactNode
+  // Fetch via the homeserver's authenticated-media endpoint instead of the
+  // fourier-auth gateway. Used for avatars/chrome, which the content gate 403s.
+  viaHomeserver?: boolean
 }) {
   const { client } = useClient()
   const [src, setSrc] = useState<string | null>(null)
@@ -46,7 +50,10 @@ export function AuthedImage({
       }
     })
 
-    fetchMediaSrc(client, mxc, width)
+    const fetcher = viaHomeserver
+      ? fetchHomeserverThumb(client, mxc, width ?? 96)
+      : fetchMediaSrc(client, mxc, width)
+    fetcher
       .then(({ src: resolved, revoke }) => {
         if (cancelled) {
           // Component moved on before the fetch resolved — clean up immediately.
@@ -67,7 +74,7 @@ export function AuthedImage({
         revokeRef.current = null
       }
     }
-  }, [client, mxc, width])
+  }, [client, mxc, width, viaHomeserver])
 
   if (error) {
     if (fallback !== undefined) return <>{fallback}</>
