@@ -2,6 +2,7 @@ import { memo, useRef, useState } from 'react'
 import { useClient } from '../client/ClientContext'
 import { useFlipList, flipIdOf } from './flip'
 import { usePopOnIncrease } from './pop'
+import { useDeferredThreadOrder } from './threadOrder'
 import {
   useThreadList,
   threadListDefaults,
@@ -31,10 +32,16 @@ export function ThreadList({
   const defaults = threadListDefaults()
   const [scope, setScope] = useState<ThreadScope>(roomId ? defaults.scope : 'all')
   const [sort, setSort] = useState<ThreadSort>(defaults.sort)
-  const entries = useThreadList(client, { roomId, scope, sort })
+  const dataEntries = useThreadList(client, { roomId, scope, sort })
+
+  // D3 auto-resort etiquette: while the pointer is over the list (or scrolling),
+  // hold the on-screen order; adopt the live data order on idle. Stats/pops
+  // still update in place during the hold -- only POSITION is deferred.
+  const { entries, handlers } = useDeferredThreadOrder(dataEntries)
 
   // FLIP: any change to the ordered id list (sort switch, scope switch, or an
-  // activity-driven resort) shuffles the surviving cards through one animation.
+  // idle-released activity resort) shuffles the surviving cards through one
+  // animation.
   const listRef = useRef<HTMLDivElement>(null)
   const orderKey = entries.map((e) => flipIdOf(e.roomId, e.rootId)).join(',')
   useFlipList(listRef, orderKey)
@@ -95,7 +102,7 @@ export function ThreadList({
           </select>
         </div>
       </div>
-      <div ref={listRef} style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+      <div ref={listRef} {...handlers} style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
         {entries.length === 0 ? (
           <div style={{ padding: 12, fontSize: 12, opacity: 0.6 }}>No threads yet.</div>
         ) : (
