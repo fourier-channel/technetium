@@ -789,3 +789,113 @@ null-chained) -- threads beyond the sync horizon never appeared, and an
 empty catch hid it. Initialize-then-fetch; backfill failures now warn.
 
 Next: favorites, user-default prefs, favorites filter.
+
+---
+
+## 2026-07-15 -- Thread Cards v1: draggable, live, animated thread list (overnight auto run)
+
+Turned the thread-list rows into physical-feeling **cards**: one shared FLIP
+reorder system, live per-card stats with rate-limited "pop", auto-resort
+etiquette, and hand-rolled drag-to-reorder with a persisted custom order. Run
+UNATTENDED with per-step self-verification (typecheck + eslint + `tsc -b` build)
+gating each commit; visual/interactive checks are logged as PENDING OPERATOR
+VERIFICATION below (never claimed as passing without eyes). No new dependencies
+(D4 honored -- no dnd-kit).
+
+New files: `src/ui/flip.ts`, `src/ui/pop.ts`, `src/ui/threadOrder.ts`,
+`src/ui/threadDrag.ts`, `src/ui/threadOrderStore.ts`. Edited: `src/ui/ThreadList.tsx`.
+`src/client/useThreadList.ts` intentionally UNCHANGED (custom order is a
+presentation concern; see D-tc01).
+
+### Per-step summary
+- **Step 0 -- recon/gate.** Baseline typecheck clean; no drift from the 2026-07-02
+  model; D5 stubs (`favorite`, `threadListDefaults()`) confirmed present. Sort seam
+  is `SORTERS` in useThreadList; card identity is the `(roomId, rootId)` pair.
+- **Step 1 -- FLIP utility** (`flip.ts`). `captureRects`/`playFLIP` + a
+  `useFlipList(containerRef, orderKey)` hook. Measures in CONTAINER-CONTENT
+  coordinates so a scroll between capture and play isn't mistaken for movement;
+  batched read/write with a single forced reflow (no thrash, D2); cleanup uses a
+  setTimeout failsafe (G-04f01d). Wired into the existing sort-mode switch.
+- **Step 2 -- live stats + pop** (`pop.ts`). Card memoized with a FIELD-LEVEL
+  comparator (the list rebuilds all item objects on every ThreadEvent, so a shallow
+  ref-compare wouldn't isolate re-renders). `usePopOnIncrease` pulses a card on a
+  last-activity increase, rate-limited to one pop / card / 2s, applied to an INNER
+  element so pop-scale never fights FLIP-translate on the outer card.
+- **Step 3 -- auto-resort etiquette** (`threadOrder.ts`, D3). Decouples DATA order
+  from DISPLAY order: while the pointer is over the list (even parked) or
+  scrolling, the on-screen order is frozen and each slot rebinds to the latest item
+  (stats/pops stay live); ~1.5s after the pointer leaves, the live order is adopted
+  and FLIP shuffles once. Never yanks a card out from under the pointer.
+- **Step 4 -- drag core** (`threadDrag.ts`, D4 hand-rolled). Pointer-capture,
+  5px engage threshold (plain click still opens the thread), lerp-follow "weight",
+  live sibling displacement by the dragged card's height projected from static
+  centers. FLIP is suppressed for the gesture via a `FlipControl` handle; on drop
+  the new order commits (switching to custom mode) and the card settles finger->slot
+  via WAAPI, then FLIP is rebaselined.
+- **Step 5 -- drop physics + cancel + autoscroll.** Overshoot settle; Escape or a
+  release far outside the list springs the card back with no reorder; edge
+  autoscroll with the scroll delta folded into the follow target so the projected
+  index stays correct in content space while scrolling.
+- **Step 6 -- custom mode + persistence** (`threadOrderStore.ts`). Per-scope
+  localStorage under `net.41chan.thread_order:<scopeKey>` (D5 naming, `(roomId,
+  rootId)` flip-id lists). Reload restores custom mode; new/unsaved threads sort to
+  the TOP with a "new" badge until the next drag re-saves the order (O3).
+- **Step 7 -- polish + reduced-motion.** `prefers-reduced-motion`: FLIP shuffles
+  become opacity crossfades; pop becomes an accent-color blink; drag follows
+  directly (no lerp weight, no tilt) and settles/cancels without spring.
+
+### Open-question resolutions (adopted brief recommendations)
+- **O1** -- dragging in a non-custom sort SILENTLY switches to custom (baseline =
+  the current visual order captured at drag start), no prompt. The `<select>`
+  gaining a "Custom" entry is the mode indicator.
+- **O2** -- custom order persists PER-SCOPE ("this room" vs "all rooms" independent).
+- **O3** -- new arrivals in custom mode go to the TOP, marked "new".
+
+### DRAFT fourier-phase nodes (for later canonical minting)
+- **D-tc01 (decision).** Thread-list order is a two-layer model: the data hook
+  (`useThreadList`) owns the three data SORTS; the UI layer owns the CUSTOM
+  arrangement, the freeze/auto-resort overlay, and new-thread placement. Custom is
+  a UI `SortMode`, not a data sort. Keeps the reusable data hook free of
+  presentation policy.
+- **D-tc02 (decision).** One FLIP system animates every order change (sort switch,
+  scope switch, idle-released auto-resort, drag settle). The drag layer temporarily
+  cedes control of transforms to itself via a shared `FlipControl` (setDragging +
+  recapture) rather than forking a second animation path.
+- **G-tc01 (gotcha).** This project's ESLint runs React-Compiler-aware rules that
+  TypeScript does NOT enforce: `react-hooks/refs` (no ref `.current` access during
+  render) and `react-hooks/set-state-in-effect` (no synchronous setState in an
+  effect body). Order-memory that must survive renders therefore can't be a
+  render-mutated ref, and can't be snapshotted via a `[dep]`-keyed setState effect.
+  Working pattern: drive setState from EVENT HANDLERS / timeouts, and mirror render
+  values into a ref via a no-dep effect (ref writes in effects are allowed) so
+  handlers read current values. Always run eslint, not just tsc -- all of these
+  pass `tsc --noEmit`.
+- **G-tc02 (gotcha).** `getBoundingClientRect()` reflects active CSS transforms, so
+  measuring a dragged card's "resting" slot must happen AFTER its drag transform is
+  cleared, not before -- otherwise the settle starts from the finger position twice.
+- **G-tc03 (observation, not this mission's doing).** `src/client/useThreadList.ts`
+  on main already violates `react-hooks/set-state-in-effect` (`rebuild()` in the
+  subscription effect). Pre-existing; a full-project `npm run lint` will flag it
+  independently of Thread Cards. Left untouched this session.
+
+### PENDING OPERATOR VERIFICATION (visual/interactive -- not self-runnable)
+Each needs eyes (and a 2nd Multi-Account-Container identity where noted):
+- Sort/scope switch visibly FLIP-shuffles surviving cards (~200ms ease-out).
+- Post from a 2nd identity: stat ticks, exactly one pop, siblings do NOT re-render
+  (React DevTools highlight); a burst within 2s pops once.
+- Pointer parked on the list: new activity pops but does NOT move cards; on leaving,
+  cards shuffle within ~1.5-2s.
+- Drag feel: lift (scale/shadow/tilt/weight), live sibling displacement, plain click
+  still opens, no text selection during drag, overshoot settle, Escape/outside
+  cancel springs back, edge autoscroll.
+- Reorder survives reload; sort away+back restores custom; per-scope orders
+  independent; new-thread "new" badge at top clears after a drag.
+- Reduced motion emulated in devtools: crossfades/blinks, drag without spring.
+
+### Deferred (not built this session)
+- **Touch reorder** -- mouse/pen only in v1 (distinguishing touch-drag from
+  touch-scroll needs `touch-action: none` on cards, which breaks list scroll). Touch
+  still scrolls the list normally.
+- **Keyboard-accessible reorder** -- deferred per the feel spec.
+- **v2 portable order** -- `net.41chan.thread_order` account-data (the localStorage
+  key is namespaced to match, so it's a move not a rename).
