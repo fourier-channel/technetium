@@ -132,10 +132,15 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
 
   useEffect(() => {
     roomRef.current = room
-    refresh()
-    setAtStart(false)
-    if (!client || !room) return
     let cancelled = false
+    // Reset the view for the new room off the effect body (a microtask, so it's
+    // not a synchronous setState-in-effect but still lands the same frame).
+    queueMicrotask(() => {
+      if (cancelled) return
+      refresh()
+      setAtStart(false)
+    })
+    if (!client || !room) return
 
     // Deepen a shallow initial view once per room open, so a fresh room
     // shows real history without the user clicking for it.

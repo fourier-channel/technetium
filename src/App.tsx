@@ -8,6 +8,7 @@ import { MemberList } from './ui/MemberList'
 import { ThreadPanel } from './ui/ThreadPanel'
 import { ThreadList } from './ui/ThreadList'
 import { LightboxProvider } from './ui/Lightbox'
+import { SpatialView } from './ui/SpatialView'
 
 // Thin shell: render purely by client lifecycle status. All auth/client logic
 // lives in ClientProvider; App reflects the current phase and, when ready,
@@ -19,6 +20,7 @@ function App() {
   const [threadListOpen, setThreadListOpen] = useState(false)
   const [threadListWidth, setThreadListWidth] = useState(190)
   const [threadPanelWidth, setThreadPanelWidth] = useState(380)
+  const [spatialMode, setSpatialMode] = useState(false)
 
   if (status === 'starting') return <Centered>Starting{'\u2026'}</Centered>
 
@@ -74,12 +76,41 @@ function App() {
 
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         {selectedRoom ? (
-          <>
-            <div style={{ flex: 1, minHeight: 0 }}>
-              <Timeline room={selectedRoom} onOpenThread={(roomId, rootId) => setOpenThread({ roomId, rootId })} threadListOpen={threadListOpen} onToggleThreadList={() => setThreadListOpen((o) => !o)} />
-            </div>
-            <Composer room={selectedRoom} />
-          </>
+          spatialMode ? (
+            <SpatialView room={selectedRoom} onExit={() => setSpatialMode(false)} />
+          ) : (
+            <>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  padding: '4px 10px 0',
+                  flexShrink: 0,
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setSpatialMode(true)}
+                  title="Enter spatial mode for this room"
+                  style={{
+                    fontSize: 12,
+                    padding: '3px 10px',
+                    borderRadius: 8,
+                    border: '1px solid rgba(128,128,128,0.35)',
+                    background: 'transparent',
+                    color: 'var(--cpd-color-text-primary)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Spatial mode
+                </button>
+              </div>
+              <div style={{ flex: 1, minHeight: 0 }}>
+                <Timeline room={selectedRoom} onOpenThread={(roomId, rootId) => setOpenThread({ roomId, rootId })} threadListOpen={threadListOpen} onToggleThreadList={() => setThreadListOpen((o) => !o)} />
+              </div>
+              <Composer room={selectedRoom} />
+            </>
+          )
         ) : (
           <div style={{ padding: 24, opacity: 0.6 }}>Select a room from the left.</div>
         )}
