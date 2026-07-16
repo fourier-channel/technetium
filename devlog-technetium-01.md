@@ -1125,3 +1125,116 @@ Fixes:
 - **G-bf04 (gotcha).** Matrix canonical JSON forbids floats -- a float in event
   content 400s with `M_BAD_JSON` "Bad JSON value: float". Encode fractional data as
   scaled integers (e.g. positions as permyriad 0..10000).
+
+---
+
+## 2026-07-16 -- Domain mode, part 1 (branch domain-mode, solo run)
+
+Start of a multi-goal UX pass renaming "spatial mode" to **domain mode** and
+building it out: canvas customization (backgrounds), interactables, position/
+object persistence, and an avatar right-click menu + profile. Run solo, self-
+verified per step (tsc / eslint on changed files / build). One dev branch
+(`domain-mode`), one commit per step. This entry covers Steps 1-3; Steps 4-6
+are scoped below for the next run.
+
+### Fourier name registry (logged as requested)
+- **fourier-transform (NEW).** Named this session as "a capstone project for
+  isolating and manipulating UI elements in a given operating environment." The
+  UI-manipulation module that domain-mode's background Transform UI seeds
+  (animated dotted selection, resize/rotate handles, per-object button overlays
+  -- "the UI of the UI builder") is a *consumer library of fourier-transform*.
+  Build rule: PORTABLE, destined for its own repo; every tunable (dotted-line
+  shift frequency, handle marker size/shape, button-overlay style, toggle look)
+  reads from a config var, never hardcoded.
+- **fourier-signature (existing).** Identity-assertion layer. Binds to the
+  profile module (Goal 4): the future "own your profile across platforms".
+- **fourier-resonance (existing).** Portable preference/values organizer;
+  adjacent to the portable-UI-config idea, not built here.
+- New canonical TERMS: "domain" = the user-interactible canvas; "domain mode" =
+  the feature; "roompos" = the single-source-of-truth position system (its own
+  project); the portable UI-manipulation module remains unnamed (feeds
+  fourier-transform).
+
+### Per-step summary
+- **Step 1 -- rename.** Files/components/hooks `Spatial*` -> `Domain*`; button
+  "Spatial mode" -> "Expand Domain", "Exit spatial" -> "Collapse Domain", header
+  "* domain". Wire + storage namespace (`net.41chan.spatial.*`, localStorage
+  keys) kept STABLE -- protocol/persistence identifiers already in production.
+- **Step 2 -- roompos SSOT.** `useDomainPositions` becomes the single source of
+  truth: canonical positions are normalized [0,1] (scale-free -- each renderer
+  projects onto its own rect, so multiple UI scales agree). Added a `present`
+  flag to the position event: entering the domain re-asserts present:true at the
+  saved spot; collapsing releases present:false at the last spot (effect
+  cleanup). Absent users render desaturated/dimmed at their saved spot -- the
+  "spot saver". Wire flag defaults true (pre-flag clients read as present).
+- **Step 3 -- Domain Options panel.** Header "Options" button opens a panel.
+  User: "Show backgrounds" toggle (local per-user display pref, default on;
+  hides the backdrop layer on this screen only). Admin (PL >= 50): "Set
+  background..." (opens the existing backdrop menu for now) + "Remove
+  background". Admin gate lives in a non-component module (`domainRoles.ts`:
+  `DOMAIN_ADMIN_PL`, `isDomainAdmin`) shared with the future avatar force-
+  collapse.
+
+### Claudecisions
+- **CD-1 -- one dev branch, staged commits (not parallel branches).** The goals
+  share the same surface (DomainView/DomainCanvas) and two foundations (roompos
+  SSOT, Options panel), so parallel branches would collide for no isolation
+  benefit; prior parallel work already lost a note to a throwaway integration
+  branch. Read-only research may still fan out.
+- **CD-2 -- rename code symbols but NOT wire/storage keys.** `net.41chan.spatial.*`
+  and localStorage keys stay; renaming them is a breaking migration that orphans
+  deployed clients' data for zero user benefit. Historical-name comment left at
+  the event const.
+- **CD-3 -- collapse desaturation deferred out of the rename into Step 2**, since
+  it depends on the roompos SSOT (its own project, flagged "important to get
+  right").
+- **CD-4 -- admin/mod threshold = PL >= 50**, matching the state-write power an
+  admin needs to actually change a domain for everyone; centralized in
+  `domainRoles.ts` so one var retunes every gate.
+
+### DRAFT fourier-phase nodes
+- **D-dm01 (decision).** roompos canonical unit is NORMALIZED [0,1], never
+  pixels -- one truth, many projections. This is how a position stays consistent
+  across UI surfaces at different scales; renderers project at read time.
+- **D-dm02 (decision).** Domain presence ("here" vs "was here") rides the SAME
+  PL0 timeline position event via a `present` boolean, not a separate channel.
+  Entry asserts true, collapse (effect cleanup) asserts false; absent = show the
+  saved spot desaturated. Boolean is canonical-JSON-safe (only floats 400).
+- **D-dm03 (decision).** The portable UI-manipulation module (feeds
+  fourier-transform) reads every tunable from a config var. Non-negotiable for a
+  clean later lift into its own repo.
+- **G-dm01 (gotcha).** A `.tsx` file that exports a component AND a plain
+  const/function trips eslint `react-refresh/only-export-components`. Put shared
+  constants/helpers in a non-component module (e.g. `domainRoles.ts`).
+
+### PENDING OPERATOR VERIFICATION (needs the running app; 2nd client for multi-user)
+- Expand Domain / Collapse Domain labels; header reads "* domain".
+- Collapse then re-open from a 2nd identity: the collapsed user shows
+  desaturated at their last spot; on their re-entry they un-desaturate.
+- Options -> "Show backgrounds" off: backdrop hidden on this screen only.
+- Options admin section only visible at PL >= 50; "Remove background" clears.
+
+### Next run -- Steps 4-6 (scoped, not yet built)
+- **Step 4 -- background upload + Transform UI (the portable module).** Options
+  "Set background" toggles the whole domain into an image drop-box; disable the
+  current background; image sits BEHIND users and the grid. Left-drag to move,
+  mousewheel to scale, arrows to nudge. `T` opens the Transform UI: animated
+  dotted selection + square handles, free transform. Bottom-left button strip:
+  "Oops" (undo one step; double-click = reset to pre-transform), "H|H"
+  (h-mirror), "V/V" (v-mirror) as momentary press-and-return buttons, "4:3->4:3"
+  (snap to original aspect ratio) as a lit/greyed TOGGLE, then a red Cancel and
+  green Apply. After Apply, stay in interact mode with the transformed image.
+  Bottom-right floating "Cancel" / "Set Background". Build portable, all tunables
+  via a config var (feeds fourier-transform).
+- **Step 5 -- media-post objects + TTD.** A media post in domain mode spawns
+  thumbnail-card objects from the sender's avatar; cards persist on the canvas
+  and click through like the inline image. Time-to-depop (TTD) control near the
+  grid options: a box defaulting to 60, clears to a blinking `#`-cursor on click,
+  shows "Hit Enter To Confirm" on input, restores prior focus on Enter. Range
+  1..600s (hard cap). Objects visible to anyone who joins within the TTD window;
+  TTD eventually scales with power level.
+- **Step 6 -- avatar right-click menu + profile.** Right-click another user's
+  puck -> menu. Non-admin: "Inspect" (basic profile popover: avatar, user:server
+  -- scoped as the seed of a full profile module, future fourier-signature
+  ownership). Admin/mod (reuse `isDomainAdmin`): "Force-collapse" (kick the user
+  out of the visible space).
