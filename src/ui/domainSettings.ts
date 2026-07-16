@@ -1,25 +1,25 @@
 import { useCallback, useEffect, useState } from 'react'
 
 // ---------------------------------------------------------------------------
-// Local spatial-mode settings (v1: localStorage): per-room backdrop image and
-// per-user avatar override (an emoji shown on the puck in spatial mode). Local
+// Local domain-mode settings (v1: localStorage): per-room backdrop image and
+// per-user avatar override (an emoji shown on the puck in domain mode). Local
 // so a user can restyle their own canvas without changing the room's real state
-// or their global Matrix avatar. Held as a single hook instance in SpatialView
+// or their global Matrix avatar. Held as a single hook instance in DomainView
 // and passed to the canvas + menus.
 // ---------------------------------------------------------------------------
 
 const KEY = 'net.41chan.spatial_settings'
 
-interface SpatialSettings {
+interface DomainSettings {
   backdrops: Record<string, string>
   avatars: Record<string, string>
 }
 
-function load(): SpatialSettings {
+function load(): DomainSettings {
   try {
     const raw = localStorage.getItem(KEY)
     if (!raw) return { backdrops: {}, avatars: {} }
-    const p = JSON.parse(raw) as Partial<SpatialSettings>
+    const p = JSON.parse(raw) as Partial<DomainSettings>
     return {
       backdrops: p.backdrops && typeof p.backdrops === 'object' ? p.backdrops : {},
       avatars: p.avatars && typeof p.avatars === 'object' ? p.avatars : {},
@@ -29,7 +29,7 @@ function load(): SpatialSettings {
   }
 }
 
-function save(s: SpatialSettings): void {
+function save(s: DomainSettings): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(s))
   } catch {
@@ -37,7 +37,7 @@ function save(s: SpatialSettings): void {
   }
 }
 
-export interface SpatialSettingsApi {
+export interface DomainSettingsApi {
   getBackdrop: (roomId: string) => string | undefined
   setBackdrop: (roomId: string, url: string) => void
   clearBackdrop: (roomId: string) => void
@@ -46,8 +46,8 @@ export interface SpatialSettingsApi {
   clearAvatar: (userId: string) => void
 }
 
-export function useSpatialSettings(): SpatialSettingsApi {
-  const [settings, setSettings] = useState<SpatialSettings>(load)
+export function useDomainSettings(): DomainSettingsApi {
+  const [settings, setSettings] = useState<DomainSettings>(load)
   useEffect(() => save(settings), [settings])
 
   const setBackdrop = useCallback(

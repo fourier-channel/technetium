@@ -1,18 +1,18 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { MatrixClient, Room } from 'matrix-js-sdk'
-import { useSpatialPositions, type SpatialPos } from '../client/useSpatialPositions'
-import { useSpatialBubbles, type Bubble } from '../client/useSpatialBubbles'
-import type { SpatialSettingsApi } from './spatialSettings'
+import { useDomainPositions, type DomainPos } from '../client/useDomainPositions'
+import { useDomainBubbles, type Bubble } from '../client/useDomainBubbles'
+import type { DomainSettingsApi } from './domainSettings'
 import { AuthedImage } from './AuthedImage'
 
 const PRESET_AVATARS = ['😀', '😎', '🤖', '👾', '🐱', '🦊', '🐸', '👻', '🎧', '🕹️', '🌟', '🔥']
 
 // ---------------------------------------------------------------------------
-// Spatial canvas: a grid "room" where each participant is an avatar puck at a
+// Domain canvas: a grid "room" where each participant is an avatar puck at a
 // normalized position. Click anywhere to move yourself there; your puck (and,
 // when their events arrive, others') travels smoothly to the spot.
 //
-// Positions come from useSpatialPositions (timeline-event transport). Bubbles,
+// Positions come from useDomainPositions (timeline-event transport). Bubbles,
 // backdrop, and the avatar-change menu layer on in later steps.
 // ---------------------------------------------------------------------------
 
@@ -38,17 +38,17 @@ function initialsFor(name: string): string {
   return cleaned.slice(0, 2).toUpperCase() || '?'
 }
 
-export function SpatialCanvas({
+export function DomainCanvas({
   client,
   room,
   settings,
 }: {
   client: MatrixClient
   room: Room
-  settings: SpatialSettingsApi
+  settings: DomainSettingsApi
 }) {
-  const { positions, myUserId, setMyPosition } = useSpatialPositions(client, room)
-  const bubbles = useSpatialBubbles(client, room)
+  const { positions, myUserId, setMyPosition } = useDomainPositions(client, room)
+  const bubbles = useDomainBubbles(client, room)
   const ref = useRef<HTMLDivElement>(null)
   const [avatarMenu, setAvatarMenu] = useState<{ x: number; y: number } | null>(null)
   const placedSelf = myUserId != null && positions.has(myUserId)
@@ -75,7 +75,7 @@ export function SpatialCanvas({
       }}
     >
       <style>{`
-        @keyframes spatialBubbleIn {
+        @keyframes domainBubbleIn {
           from { opacity: 0; transform: translate(-50%, 4px); }
           to   { opacity: 1; transform: translate(-50%, 0); }
         }
@@ -124,7 +124,7 @@ export function SpatialCanvas({
         </div>
       )}
       {[...positions.entries()].map(([userId, pos]) => (
-        <SpatialAvatar
+        <DomainAvatar
           key={userId}
           room={room}
           userId={userId}
@@ -163,7 +163,7 @@ export function SpatialCanvas({
   )
 }
 
-// Small popover to set your own spatial avatar (an emoji). Local override only.
+// Small popover to set your own domain avatar (an emoji). Local override only.
 function AvatarMenu({
   x,
   y,
@@ -286,7 +286,7 @@ function AvatarMenu({
   )
 }
 
-function SpatialAvatar({
+function DomainAvatar({
   room,
   userId,
   pos,
@@ -297,7 +297,7 @@ function SpatialAvatar({
 }: {
   room: Room
   userId: string
-  pos: SpatialPos
+  pos: DomainPos
   isSelf: boolean
   bubble?: Bubble
   override?: string
@@ -366,7 +366,7 @@ function SpatialAvatar({
             boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
             whiteSpace: 'normal',
             wordBreak: 'break-word',
-            animation: 'spatialBubbleIn 200ms ease-out',
+            animation: 'domainBubbleIn 200ms ease-out',
           }}
         >
           {bubble.text}

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { RoomEvent, type MatrixClient, type MatrixEvent, type Room } from 'matrix-js-sdk'
 
 // ---------------------------------------------------------------------------
-// Spatial-mode speech bubbles. When a live message lands, the sender's avatar
+// Domain-mode speech bubbles. When a live message lands, the sender's avatar
 // shows a bubble with the text; it auto-expires after a readability-scaled
 // duration (longer messages linger longer). One current bubble per user (a new
 // message replaces the old). Backfilled/scrollback events are ignored so
@@ -22,7 +22,7 @@ function durationFor(len: number): number {
   return Math.max(MIN_MS, Math.min(MAX_MS, 3000 + len * 45))
 }
 
-export function useSpatialBubbles(client: MatrixClient | null, room: Room | null): Map<string, Bubble> {
+export function useDomainBubbles(client: MatrixClient | null, room: Room | null): Map<string, Bubble> {
   const [bubbles, setBubbles] = useState<Map<string, Bubble>>(() => new Map())
 
   useEffect(() => {

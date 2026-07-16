@@ -1,21 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Room } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
-import { SpatialCanvas } from './SpatialCanvas'
+import { DomainCanvas } from './DomainCanvas'
 import { Timeline } from './Timeline'
 import { Composer } from './Composer'
-import { useSpatialSettings } from './spatialSettings'
+import { useDomainSettings } from './domainSettings'
 
 // ---------------------------------------------------------------------------
-// Spatial mode for a room: a header (room name -> right-click to change
-// backdrop, plus an exit button), the spatial canvas (the big area), and BELOW
+// Domain mode for a room: a header (room name -> right-click to change
+// backdrop, plus an exit button), the domain canvas (the big area), and BELOW
 // it the normal chat log + composer -- so the familiar chat window still exists
 // as a sizeable panel above the text input.
 // ---------------------------------------------------------------------------
 
-export function SpatialView({ room, onExit }: { room: Room; onExit: () => void }) {
+export function DomainView({ room, onExit }: { room: Room; onExit: () => void }) {
   const { client } = useClient()
-  const settings = useSpatialSettings()
+  const settings = useDomainSettings()
   const [backdropMenu, setBackdropMenu] = useState<{ x: number; y: number } | null>(null)
 
   if (!client) return null
@@ -49,7 +49,7 @@ export function SpatialView({ room, onExit }: { room: Room; onExit: () => void }
             cursor: 'context-menu',
           }}
         >
-          {room.name || room.roomId} {'·'} spatial
+          {room.name || room.roomId} {'·'} domain
         </span>
         <button
           type="button"
@@ -65,11 +65,11 @@ export function SpatialView({ room, onExit }: { room: Room; onExit: () => void }
             flexShrink: 0,
           }}
         >
-          Exit spatial
+          Collapse Domain
         </button>
       </div>
 
-      <SpatialCanvas client={client} room={room} settings={settings} />
+      <DomainCanvas client={client} room={room} settings={settings} />
 
       {/* The normal chat log, unchanged, as a sizeable panel above the composer. */}
       <div

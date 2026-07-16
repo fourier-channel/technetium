@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { RoomEvent, type MatrixClient, type MatrixEvent, type Room } from 'matrix-js-sdk'
 
 // ---------------------------------------------------------------------------
-// Spatial-mode position transport. Each participant's canvas position is a
+// Domain-mode position transport. Each participant's canvas position is a
 // normalized (x, y) in [0,1]. Positions ride the room timeline as custom events
 // (`net.41chan.spatial.position`) so REGULAR users can broadcast them (custom
 // timeline events are allowed at events_default / PL0, unlike state events which
@@ -14,14 +14,17 @@ import { RoomEvent, type MatrixClient, type MatrixEvent, type Room } from 'matri
 // verify (flagged).
 // ---------------------------------------------------------------------------
 
-export const SPATIAL_POSITION_EVENT = 'net.41chan.spatial.position'
+// Wire + storage namespace stays `net.41chan.spatial.*` (historical name; the
+// feature is now "domain mode") -- these are protocol/persistence identifiers
+// already live in production, so renaming them would orphan deployed data.
+export const DOMAIN_POSITION_EVENT = 'net.41chan.spatial.position'
 const LOCAL_KEY = 'net.41chan.spatial_local'
 const SEND_THROTTLE_MS = 160
 // Matrix canonical JSON forbids floats, so positions go on the wire as integers
 // in [0, POS_SCALE] (a permyriad of the canvas) and are divided back to [0,1].
 const POS_SCALE = 10000
 
-export interface SpatialPos {
+export interface DomainPos {
   x: number
   y: number
   ts: number
@@ -52,7 +55,7 @@ function saveLocal(roomId: string, pos: { x: number; y: number }): void {
   }
 }
 
-function parsePos(ev: MatrixEvent): SpatialPos | null {
+function parsePos(ev: MatrixEvent): DomainPos | null {
   const c = ev.getContent()
   if (typeof c.x !== 'number' || typeof c.y !== 'number') return null
   // Wire is integer permyriad; divide back to [0,1].
@@ -61,11 +64,11 @@ function parsePos(ev: MatrixEvent): SpatialPos | null {
 
 // Build the current positions map from the room timeline (last per sender),
 // overlaying the local user's persisted position.
-function scan(client: MatrixClient | null, room: Room | null): Map<string, SpatialPos> {
-  const m = new Map<string, SpatialPos>()
+function scan(client: MatrixClient | null, room: Room | null): Map<string, DomainPos> {
+  const m = new Map<string, DomainPos>()
   if (!room) return m
   for (const ev of room.getLiveTimeline().getEvents()) {
-    if (ev.getType() !== SPATIAL_POSITION_EVENT) continue
+    if (ev.getType() !== DOMAIN_POSITION_EVENT) continue
     const sender = ev.getSender()
     const pos = parsePos(ev)
     if (!sender || !pos) continue
@@ -84,17 +87,17 @@ function scan(client: MatrixClient | null, room: Room | null): Map<string, Spati
   return m
 }
 
-export interface SpatialPositionsApi {
-  positions: Map<string, SpatialPos>
+export interface DomainPositionsApi {
+  positions: Map<string, DomainPos>
   myUserId: string | null
   setMyPosition: (x: number, y: number) => void
 }
 
-export function useSpatialPositions(
+export function useDomainPositions(
   client: MatrixClient | null,
   room: Room | null,
-): SpatialPositionsApi {
-  const [positions, setPositions] = useState<Map<string, SpatialPos>>(() => scan(client, room))
+): DomainPositionsApi {
+  const [positions, setPositions] = useState<Map<string, DomainPos>>(() => scan(client, room))
   const myUserId = client?.getUserId() ?? null
 
   // Throttled trailing send so drag-to-move doesn't spam the timeline.
@@ -118,7 +121,7 @@ export function useSpatialPositions(
     ) => Promise<unknown>
     // Integer wire format (Matrix rejects floats with M_BAD_JSON).
     const content = { x: Math.round(p.x * POS_SCALE), y: Math.round(p.y * POS_SCALE) }
-    void send(room.roomId, SPATIAL_POSITION_EVENT, content).catch(() => {
+    void send(room.roomId, DOMAIN_POSITION_EVENT, content).catch(() => {
       // send may fail (permissions/offline); local + optimistic state still hold
     })
   }, [client, room])
@@ -154,7 +157,7 @@ export function useSpatialPositions(
 
     const onTimeline = (ev: MatrixEvent, evRoom: Room | undefined) => {
       if (evRoom?.roomId !== room.roomId) return
-      if (ev.getType() !== SPATIAL_POSITION_EVENT) return
+      if (ev.getType() !== DOMAIN_POSITION_EVENT) return
       const sender = ev.getSender()
       const pos = parsePos(ev)
       if (!sender || !pos) return

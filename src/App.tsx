@@ -10,7 +10,7 @@ import { ThreadList } from './ui/ThreadList'
 import { LightboxProvider } from './ui/Lightbox'
 import { RoomListSettingsProvider } from './ui/RoomListSettingsProvider'
 import { useReadMarker } from './client/useReadMarker'
-import { SpatialView } from './ui/SpatialView'
+import { DomainView } from './ui/DomainView'
 
 // Thin shell: render purely by client lifecycle status. All auth/client logic
 // lives in ClientProvider; App reflects the current phase and, when ready,
@@ -22,7 +22,7 @@ function App() {
   const [threadListOpen, setThreadListOpen] = useState(false)
   const [threadListWidth, setThreadListWidth] = useState(190)
   const [threadPanelWidth, setThreadPanelWidth] = useState(380)
-  const [spatialMode, setSpatialMode] = useState(false)
+  const [domainExpanded, setDomainExpanded] = useState(false)
   // Mark the viewed room read so its unread glow/ping clears (base client sent
   // no read receipts). Called before any early return to keep hook order stable.
   useReadMarker(client, selectedRoom)
@@ -82,8 +82,8 @@ function App() {
 
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         {selectedRoom ? (
-          spatialMode ? (
-            <SpatialView room={selectedRoom} onExit={() => setSpatialMode(false)} />
+          domainExpanded ? (
+            <DomainView room={selectedRoom} onExit={() => setDomainExpanded(false)} />
           ) : (
             <>
               <div
@@ -96,8 +96,8 @@ function App() {
               >
                 <button
                   type="button"
-                  onClick={() => setSpatialMode(true)}
-                  title="Enter spatial mode for this room"
+                  onClick={() => setDomainExpanded(true)}
+                  title="Expand this room into its domain"
                   style={{
                     fontSize: 12,
                     padding: '3px 10px',
@@ -107,8 +107,7 @@ function App() {
                     color: 'var(--cpd-color-text-primary)',
                     cursor: 'pointer',
                   }}
-                >
-                  Spatial mode
+                >Expand Domain
                 </button>
               </div>
               <div style={{ flex: 1, minHeight: 0 }}>
