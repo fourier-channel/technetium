@@ -1238,3 +1238,71 @@ are scoped below for the next run.
   -- scoped as the seed of a full profile module, future fourier-signature
   ownership). Admin/mod (reuse `isDomainAdmin`): "Force-collapse" (kick the user
   out of the visible space).
+
+---
+
+## 2026-07-16 -- Domain mode, part 2 (Step 4a: background upload)
+
+Branch `domain-mode` continued. Delivered a working uploadable / movable /
+scalable / persistent domain background, built on the first slice of the
+portable transform module. Self-verified (tsc / eslint-on-changed / build).
+
+New files: `src/ui/uitransform/transform.ts` (portable), `src/client/
+useDomainBackground.ts`, `src/ui/DomainBackgroundEditor.tsx`. Edited:
+`media.ts` (+`fetchHomeserverMedia`), `DomainCanvas`, `DomainView`,
+`DomainOptions`.
+
+### What shipped
+- **Portable transform seed (`uitransform/transform.ts`).** Scale-free
+  `Transform` (normalized center tx/ty, width-multiplier `scale`, rotation,
+  flipH/V), `transformToStyle` CSS projection, canonical-JSON wire codec
+  (permyriad/milli ints; bools ok), pure ops (`nudge`/`scaleBy`/`mirrorH/V`).
+  Zero Matrix/Tc specifics -- this is the library fourier-transform will
+  consume. Config-of-tunables (`config.ts`) lands with 4b's visual chrome.
+- **Shared background as room state** (`net.41chan.domain.background`, single
+  state key): admin sets `{ url: mxc, ...transformWire }`; everyone renders it.
+  Non-admin state write 403s (caught). Precedence over the legacy local backdrop
+  URL. `showBackgrounds` pref still gates per-user display.
+- **Background media path.** Backgrounds upload via `client.uploadContent`
+  (standard Matrix media, NOT booru content), so they render through the new
+  `fetchHomeserverMedia` (homeserver authenticated-download), NOT the
+  fourier-auth gate (which 403s non-booru media -- D-bf01).
+- **Editor.** Options "Set background" -> whole domain becomes a drop-box; pick/
+  drop -> drag to move, wheel to scale, arrows to nudge, image behind the grid
+  (z0) with a transparent capture layer (z60); Cancel / Set Background. `T`
+  routes to a callback for 4b.
+
+### Claudecisions
+- **CD-5 -- 4b free-transform stays scale-free via width-fraction + aspect
+  ratio, NOT container-relative sx/sy.** A naive non-uniform model (independent
+  x/y scale as fractions of the container) is NOT resolution-independent: the
+  same pair renders a different visual aspect at different container aspect
+  ratios, breaking the roompos SSOT principle (D-dm01). So 4b extends `Transform`
+  with a display **aspect ratio** `ar` (pixel width:height, container-
+  independent) rendered via CSS `aspect-ratio`; `ar` unset == natural (height
+  auto). Free resize edits width `w` and `ar`; the "4:3->4:3" toggle snaps `ar`
+  back to the image's natural ratio (captured on image load). Uniform wheel/
+  handle keeps `ar`. Rotation + flips unchanged. *Against container-relative
+  sx/sy:* not scale-free. *Against uniform-only scale:* can't satisfy "transform
+  freely".
+
+### DRAFT fourier-phase nodes
+- **G-dm02 (gotcha).** React Compiler lint (`react-hooks/refs`) forbids writing
+  `ref.current` during render (the "latest value" mirror pattern). Do it in an
+  effect: `useEffect(() => { ref.current = x }, [x])`.
+- **G-dm03 (watch).** React attaches `onWheel` as a passive listener, so
+  `e.preventDefault()` inside it may be ignored/warn. Harmless here (the domain
+  canvas has `overflow:hidden`, nothing to scroll), but if wheel-scale ever
+  fights page scroll, attach a native non-passive wheel listener via a ref.
+- **D-dm04 (decision).** The domain background is SHARED room state, not a local
+  pref -- "admins set/remove backgrounds from domains" is inherently room-wide;
+  PL>=50 is exactly the state-write gate. The per-user `showBackgrounds` toggle
+  is the only LOCAL background pref.
+
+### PENDING OPERATOR VERIFICATION (needs the running app; admin identity for state write)
+- Options (as PL>=50) -> "Set background": domain becomes a drop-box; drop an
+  image; drag/scroll/arrows reposition it behind the grid; "Set Background"
+  persists; it renders for a second identity in the room.
+- "Remove background" clears it. Non-admin: state write silently no-ops (403).
+
+### Next: Step 4b (transform editor) then Steps 5-6 as previously scoped.
