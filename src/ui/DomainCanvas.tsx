@@ -308,6 +308,9 @@ function DomainAvatar({
   const avatarMxc = member?.getMxcAvatarUrl() ?? null
   const travel = reduceMotion() ? undefined : 'left 380ms cubic-bezier(0.2,0.8,0.2,1), top 380ms cubic-bezier(0.2,0.8,0.2,1)'
 
+  // Absent = the user collapsed the domain; we still show WHERE they were, but
+  // desaturated and dimmed ("was here, not here now"). The spot is saved.
+  const absent = pos.present === false
   const puck: CSSProperties = {
     position: 'absolute',
     left: `${pos.x * 100}%`,
@@ -320,6 +323,8 @@ function DomainAvatar({
     alignItems: 'center',
     gap: 3,
     pointerEvents: 'none',
+    filter: absent ? 'grayscale(1)' : undefined,
+    opacity: absent ? 0.45 : 1,
   }
 
   const disc: CSSProperties = {
