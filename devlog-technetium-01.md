@@ -1069,3 +1069,59 @@ Edited: `src/client/useTimeline.ts` (filter + incidental fix), `src/App.tsx`.
 - Multi-user verification; state-event/EDU transport; shared backdrop; drag-to-
   move (currently click-to-place); presence/idle fade of absent users; avatar
   images (only emoji override in v1, plus the real Matrix avatar when set).
+
+---
+
+## 2026-07-16 -- Post-deploy bugfix pass (thread cards / room list / spatial)
+
+The three 2026-07-15 features shipped to production (tc.41chan.net, release
+399de84) after a round of live-testing fixes. Each fix was made on its feature
+branch, verified (tsc/eslint/build), merged to main, and deployed; the feature
+branches were then pruned (trunk-based -- branch fresh off main next time). An
+earlier consolidated note was lost with a throwaway integration branch, so this
+is the canonical record.
+
+Fixes:
+- **Threads un-enterable.** The drag hook called setPointerCapture on pointerdown,
+  which suppresses the following `click` in Chromium -- every press read as a drag
+  and tiles never opened. Capture now happens only once the drag ENGAGES past the
+  threshold; a plain click never captures and opens the thread.
+- **Unread indicators frozen.** The base client never sent read receipts, so a
+  room's unread count (and the room-list glow/ping) stayed at its login value and
+  viewing never cleared it. New `useReadMarker` sends an unthreaded read receipt
+  for the latest sent event on room open and on new live events while the room is
+  the visible, open one (tab-visibility gated).
+- **Avatars didn't load.** The media gateway authorizes booru content and 403s
+  avatars ("not authorized for this media"), which aren't booru content. Avatars/
+  chrome now load via the homeserver's Matrix authenticated-media endpoint
+  (`/_matrix/client/v1/media/thumbnail`) with the access token; message images stay
+  on the gateway. `AuthedImage` gained `viaHomeserver` + a `fallback` (degrade to
+  an initial); new `media.ts` helper `fetchHomeserverThumb`.
+- **Spatial move threw.** `client.sendEvent` was called through a detached alias so
+  `this` was undefined (`this.addThreadRelationIfNeeded`) and it threw on every
+  move -- positions never broadcast. Bound to the client.
+- **Spatial positions rejected.** Positions were sent as [0,1] floats -> Matrix
+  `M_BAD_JSON` "Bad JSON value: float". Now sent as integer permyriad [0,10000] and
+  divided back to [0,1] on read.
+- **Read-receipt 400.** `useReadMarker` was receipting a `~`-prefixed local-echo /
+  unsent event (400). It now walks back to the latest fully-sent event with a real
+  id, skipping local echoes and our own `net.41chan.spatial.*` presence events.
+
+### DRAFT fourier-phase nodes
+- **D-bf01 (decision).** Media splits by kind: booru CONTENT (message images) goes
+  through the fourier-auth media gateway; CHROME (avatars, and other standard
+  Matrix media the gate isn't meant to authorize) goes through the homeserver's
+  Matrix authenticated-media endpoint with the access token. `AuthedImage`'s
+  `viaHomeserver` selects the path.
+- **G-bf01 (gotcha).** Calling `setPointerCapture` inside pointerdown suppresses the
+  element's subsequent `click` in Chromium. For click-vs-drag, capture only when a
+  real drag engages (past the movement threshold), never on pointerdown.
+- **G-bf02 (gotcha).** A read receipt for a local-echo / unsent event (a
+  `~`-prefixed transaction id, or non-null `MatrixEvent.status`) 400s. Only receipt
+  fully-sent events (status null, real id).
+- **G-bf03 (gotcha).** `client.sendEvent` uses `this` internally
+  (`this.addThreadRelationIfNeeded`); a detached reference throws. Bind it to the
+  client, or call as `client.sendEvent(...)`. Supersedes G-sp01's cast-only advice.
+- **G-bf04 (gotcha).** Matrix canonical JSON forbids floats -- a float in event
+  content 400s with `M_BAD_JSON` "Bad JSON value: float". Encode fractional data as
+  scaled integers (e.g. positions as permyriad 0..10000).
