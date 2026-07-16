@@ -2,8 +2,12 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { MatrixClient, Room } from 'matrix-js-sdk'
 import { useDomainPositions, type DomainPos } from '../client/useDomainPositions'
 import { useDomainBubbles, type Bubble } from '../client/useDomainBubbles'
+import { useDomainBackground } from '../client/useDomainBackground'
+import { fetchHomeserverMedia } from '../client/media'
 import type { DomainSettingsApi } from './domainSettings'
 import { AuthedImage } from './AuthedImage'
+import { DomainBackgroundEditor } from './DomainBackgroundEditor'
+import { transformToStyle, type Transform } from './uitransform/transform'
 
 const PRESET_AVATARS = ['😀', '😎', '🤖', '👾', '🐱', '🦊', '🐸', '👻', '🎧', '🕹️', '🌟', '🔥']
 
@@ -42,19 +46,30 @@ export function DomainCanvas({
   client,
   room,
   settings,
+  bgEditing = false,
+  onExitBgEdit,
 }: {
   client: MatrixClient
   room: Room
   settings: DomainSettingsApi
+  bgEditing?: boolean
+  onExitBgEdit?: () => void
 }) {
   const { positions, myUserId, setMyPosition } = useDomainPositions(client, room)
   const bubbles = useDomainBubbles(client, room)
+  const { background } = useDomainBackground(client, room)
   const ref = useRef<HTMLDivElement>(null)
   const [avatarMenu, setAvatarMenu] = useState<{ x: number; y: number } | null>(null)
   const placedSelf = myUserId != null && positions.has(myUserId)
   const backdrop = settings.getBackdrop(room.roomId)
+  // The shared domain background (room state) takes precedence over the legacy
+  // local backdrop URL. Both are hidden while editing (so the editor's own
+  // preview is what you move) and behind the user's show-backgrounds pref.
+  const showSharedBg = background && settings.showBackgrounds && !bgEditing
+  const showLegacyBackdrop = !background && backdrop && settings.showBackgrounds && !bgEditing
 
   const onClick = (e: React.MouseEvent) => {
+    if (bgEditing) return // background editor owns input while active
     const el = ref.current
     if (!el) return
     const r = el.getBoundingClientRect()
@@ -80,9 +95,13 @@ export function DomainCanvas({
           to   { opacity: 1; transform: translate(-50%, 0); }
         }
       `}</style>
-      {/* Optional backdrop image, beneath the grid. Hidden when the user turns
-          backgrounds off in Domain Options (a local per-user display pref). */}
-      {backdrop && settings.showBackgrounds && (
+      {/* Shared domain background (room state) + its transform, beneath the
+          grid. Hidden while editing and behind the show-backgrounds pref. */}
+      {showSharedBg && background && (
+        <DomainBackgroundLayer client={client} mxc={background.mxc} transform={background.transform} />
+      )}
+      {/* Legacy local backdrop URL, only when no shared background is set. */}
+      {showLegacyBackdrop && (
         <div
           style={{
             position: 'absolute',
@@ -144,6 +163,9 @@ export function DomainCanvas({
           }
         />
       ))}
+      {bgEditing && (
+        <DomainBackgroundEditor client={client} room={room} onExit={() => onExitBgEdit?.()} />
+      )}
       {avatarMenu && myUserId && (
         <AvatarMenu
           x={avatarMenu.x}
@@ -407,5 +429,49 @@ function DomainAvatar({
         {name}
       </div>
     </div>
+  )
+}
+
+// Resolve a shared-background mxc to full-res bytes (homeserver auth path, NOT
+// the fourier-auth gate) and render it beneath the grid with its stored
+// transform. Self-contained so DomainCanvas need not know about media auth.
+function DomainBackgroundLayer({
+  client,
+  mxc,
+  transform,
+}: {
+  client: MatrixClient
+  mxc: string
+  transform: Transform
+}) {
+  const [src, setSrc] = useState<string | null>(null)
+
+  useEffect(() => {
+    let revoke: (() => void) | null = null
+    let alive = true
+    fetchHomeserverMedia(client, mxc)
+      .then((r) => {
+        if (!alive) {
+          r.revoke()
+          return
+        }
+        revoke = r.revoke
+        setSrc(r.src)
+      })
+      .catch(() => setSrc(null))
+    return () => {
+      alive = false
+      if (revoke) revoke()
+    }
+  }, [client, mxc])
+
+  if (!src) return null
+  return (
+    <img
+      src={src}
+      alt=""
+      draggable={false}
+      style={{ ...transformToStyle(transform), zIndex: 0, pointerEvents: 'none', userSelect: 'none' }}
+    />
   )
 }

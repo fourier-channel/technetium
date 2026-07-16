@@ -19,17 +19,20 @@ export function DomainOptions({
   room,
   settings,
   onSetBackground,
+  onRemoveBackground,
+  hasBackground,
   onClose,
 }: {
   client: MatrixClient
   room: Room
   settings: DomainSettingsApi
   onSetBackground: () => void
+  onRemoveBackground: () => void
+  hasBackground: boolean
   onClose: () => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const isAdmin = isDomainAdmin(client, room)
-  const hasBackground = settings.getBackdrop(room.roomId) !== undefined
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -80,7 +83,7 @@ export function DomainOptions({
           {hasBackground && (
             <MenuButton
               onClick={() => {
-                settings.clearBackdrop(room.roomId)
+                onRemoveBackground()
                 onClose()
               }}
             >

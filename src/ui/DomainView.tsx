@@ -6,6 +6,7 @@ import { Timeline } from './Timeline'
 import { Composer } from './Composer'
 import { useDomainSettings } from './domainSettings'
 import { DomainOptions } from './DomainOptions'
+import { useDomainBackground } from '../client/useDomainBackground'
 
 // ---------------------------------------------------------------------------
 // Domain mode for a room: a header (room name -> right-click to change
@@ -19,6 +20,9 @@ export function DomainView({ room, onExit }: { room: Room; onExit: () => void })
   const settings = useDomainSettings()
   const [backdropMenu, setBackdropMenu] = useState<{ x: number; y: number } | null>(null)
   const [optionsOpen, setOptionsOpen] = useState(false)
+  const [bgEditing, setBgEditing] = useState(false)
+  const { background, clearBackground } = useDomainBackground(client, room)
+  const hasBackground = background !== null || settings.getBackdrop(room.roomId) !== undefined
 
   if (!client) return null
 
@@ -95,15 +99,26 @@ export function DomainView({ room, onExit }: { room: Room; onExit: () => void })
           client={client}
           room={room}
           settings={settings}
+          hasBackground={hasBackground}
           onSetBackground={() => {
             setOptionsOpen(false)
-            setBackdropMenu({ x: window.innerWidth - 290, y: 60 })
+            setBgEditing(true)
+          }}
+          onRemoveBackground={() => {
+            void clearBackground()
+            settings.clearBackdrop(room.roomId)
           }}
           onClose={() => setOptionsOpen(false)}
         />
       )}
 
-      <DomainCanvas client={client} room={room} settings={settings} />
+      <DomainCanvas
+        client={client}
+        room={room}
+        settings={settings}
+        bgEditing={bgEditing}
+        onExitBgEdit={() => setBgEditing(false)}
+      />
 
       {/* The normal chat log, unchanged, as a sizeable panel above the composer. */}
       <div

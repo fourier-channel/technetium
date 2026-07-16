@@ -158,3 +158,29 @@ export async function fetchHomeserverThumb(
   const objUrl = URL.createObjectURL(await resp.blob())
   return { src: objUrl, revoke: () => URL.revokeObjectURL(objUrl) }
 }
+
+// Full-resolution download via the HOMESERVER's authenticated-media endpoint
+// (spec v1.11, /_matrix/client/v1/media/download). Like fetchHomeserverThumb
+// this BYPASSES the fourier-auth content gate -- domain backgrounds are uploaded
+// via client.uploadContent (standard Matrix media, not booru content), so the
+// gate would 403 them. The caller MUST revoke() the object URL on cleanup.
+export async function fetchHomeserverMedia(
+  client: MatrixClient,
+  mxc: string,
+): Promise<{ src: string; revoke: () => void }> {
+  const parsed = parseMxc(mxc)
+  if (!parsed) throw new Error(`invalid mxc URI: ${mxc}`)
+
+  const token = client.getAccessToken()
+  if (!token) throw new Error('no access token available for media fetch')
+
+  const base = client.getHomeserverUrl().replace(/\/+$/, '')
+  const url =
+    `${base}/_matrix/client/v1/media/download/` +
+    `${encodeURIComponent(parsed.serverName)}/${encodeURIComponent(parsed.mediaId)}`
+
+  const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  if (!resp.ok) throw new Error(`homeserver media download failed (${resp.status}) for ${mxc}`)
+  const objUrl = URL.createObjectURL(await resp.blob())
+  return { src: objUrl, revoke: () => URL.revokeObjectURL(objUrl) }
+}
