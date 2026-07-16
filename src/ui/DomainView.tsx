@@ -5,6 +5,7 @@ import { DomainCanvas } from './DomainCanvas'
 import { Timeline } from './Timeline'
 import { Composer } from './Composer'
 import { useDomainSettings } from './domainSettings'
+import { DomainOptions } from './DomainOptions'
 
 // ---------------------------------------------------------------------------
 // Domain mode for a room: a header (room name -> right-click to change
@@ -17,11 +18,12 @@ export function DomainView({ room, onExit }: { room: Room; onExit: () => void })
   const { client } = useClient()
   const settings = useDomainSettings()
   const [backdropMenu, setBackdropMenu] = useState<{ x: number; y: number } | null>(null)
+  const [optionsOpen, setOptionsOpen] = useState(false)
 
   if (!client) return null
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+    <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       <div
         style={{
           display: 'flex',
@@ -51,23 +53,55 @@ export function DomainView({ room, onExit }: { room: Room; onExit: () => void })
         >
           {room.name || room.roomId} {'·'} domain
         </span>
-        <button
-          type="button"
-          onClick={onExit}
-          style={{
-            fontSize: 12,
-            padding: '3px 10px',
-            borderRadius: 8,
-            border: '1px solid rgba(128,128,128,0.35)',
-            background: 'transparent',
-            color: 'var(--cpd-color-text-primary)',
-            cursor: 'pointer',
-            flexShrink: 0,
-          }}
-        >
-          Collapse Domain
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <button
+            type="button"
+            onClick={() => setOptionsOpen((o) => !o)}
+            title="Domain Options"
+            aria-label="Domain Options"
+            style={{
+              fontSize: 13,
+              lineHeight: 1,
+              padding: '4px 9px',
+              borderRadius: 8,
+              border: '1px solid rgba(128,128,128,0.35)',
+              background: optionsOpen ? 'var(--cpd-color-bg-subtle-secondary)' : 'transparent',
+              color: 'var(--cpd-color-text-primary)',
+              cursor: 'pointer',
+            }}
+          >
+            {'⚙'} Options
+          </button>
+          <button
+            type="button"
+            onClick={onExit}
+            style={{
+              fontSize: 12,
+              padding: '3px 10px',
+              borderRadius: 8,
+              border: '1px solid rgba(128,128,128,0.35)',
+              background: 'transparent',
+              color: 'var(--cpd-color-text-primary)',
+              cursor: 'pointer',
+            }}
+          >
+            Collapse Domain
+          </button>
+        </div>
       </div>
+
+      {optionsOpen && (
+        <DomainOptions
+          client={client}
+          room={room}
+          settings={settings}
+          onSetBackground={() => {
+            setOptionsOpen(false)
+            setBackdropMenu({ x: window.innerWidth - 290, y: 60 })
+          }}
+          onClose={() => setOptionsOpen(false)}
+        />
+      )}
 
       <DomainCanvas client={client} room={room} settings={settings} />
 

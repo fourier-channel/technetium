@@ -13,19 +13,24 @@ const KEY = 'net.41chan.spatial_settings'
 interface DomainSettings {
   backdrops: Record<string, string>
   avatars: Record<string, string>
+  // Global per-user display preference: whether domain backgrounds render on
+  // THIS user's screen. Default on.
+  showBackgrounds: boolean
 }
 
 function load(): DomainSettings {
+  const base: DomainSettings = { backdrops: {}, avatars: {}, showBackgrounds: true }
   try {
     const raw = localStorage.getItem(KEY)
-    if (!raw) return { backdrops: {}, avatars: {} }
+    if (!raw) return base
     const p = JSON.parse(raw) as Partial<DomainSettings>
     return {
       backdrops: p.backdrops && typeof p.backdrops === 'object' ? p.backdrops : {},
       avatars: p.avatars && typeof p.avatars === 'object' ? p.avatars : {},
+      showBackgrounds: p.showBackgrounds !== false,
     }
   } catch {
-    return { backdrops: {}, avatars: {} }
+    return base
   }
 }
 
@@ -44,6 +49,8 @@ export interface DomainSettingsApi {
   getAvatar: (userId: string) => string | undefined
   setAvatar: (userId: string, value: string) => void
   clearAvatar: (userId: string) => void
+  showBackgrounds: boolean
+  setShowBackgrounds: (on: boolean) => void
 }
 
 export function useDomainSettings(): DomainSettingsApi {
@@ -79,6 +86,11 @@ export function useDomainSettings(): DomainSettingsApi {
     [],
   )
 
+  const setShowBackgrounds = useCallback(
+    (on: boolean) => setSettings((s) => ({ ...s, showBackgrounds: on })),
+    [],
+  )
+
   return {
     getBackdrop: (roomId) => settings.backdrops[roomId],
     setBackdrop,
@@ -86,5 +98,7 @@ export function useDomainSettings(): DomainSettingsApi {
     getAvatar: (userId) => settings.avatars[userId],
     setAvatar,
     clearAvatar,
+    showBackgrounds: settings.showBackgrounds,
+    setShowBackgrounds,
   }
 }

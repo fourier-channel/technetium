@@ -80,8 +80,9 @@ export function DomainCanvas({
           to   { opacity: 1; transform: translate(-50%, 0); }
         }
       `}</style>
-      {/* Optional backdrop image, beneath the grid. */}
-      {backdrop && (
+      {/* Optional backdrop image, beneath the grid. Hidden when the user turns
+          backgrounds off in Domain Options (a local per-user display pref). */}
+      {backdrop && settings.showBackgrounds && (
         <div
           style={{
             position: 'absolute',
