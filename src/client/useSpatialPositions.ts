@@ -17,6 +17,9 @@ import { RoomEvent, type MatrixClient, type MatrixEvent, type Room } from 'matri
 export const SPATIAL_POSITION_EVENT = 'net.41chan.spatial.position'
 const LOCAL_KEY = 'net.41chan.spatial_local'
 const SEND_THROTTLE_MS = 160
+// Matrix canonical JSON forbids floats, so positions go on the wire as integers
+// in [0, POS_SCALE] (a permyriad of the canvas) and are divided back to [0,1].
+const POS_SCALE = 10000
 
 export interface SpatialPos {
   x: number
@@ -52,7 +55,8 @@ function saveLocal(roomId: string, pos: { x: number; y: number }): void {
 function parsePos(ev: MatrixEvent): SpatialPos | null {
   const c = ev.getContent()
   if (typeof c.x !== 'number' || typeof c.y !== 'number') return null
-  return { x: clamp01(c.x), y: clamp01(c.y), ts: ev.getTs() }
+  // Wire is integer permyriad; divide back to [0,1].
+  return { x: clamp01(c.x / POS_SCALE), y: clamp01(c.y / POS_SCALE), ts: ev.getTs() }
 }
 
 // Build the current positions map from the room timeline (last per sender),
@@ -112,7 +116,9 @@ export function useSpatialPositions(
       eventType: string,
       content: Record<string, unknown>,
     ) => Promise<unknown>
-    void send(room.roomId, SPATIAL_POSITION_EVENT, { x: p.x, y: p.y }).catch(() => {
+    // Integer wire format (Matrix rejects floats with M_BAD_JSON).
+    const content = { x: Math.round(p.x * POS_SCALE), y: Math.round(p.y * POS_SCALE) }
+    void send(room.roomId, SPATIAL_POSITION_EVENT, content).catch(() => {
       // send may fail (permissions/offline); local + optimistic state still hold
     })
   }, [client, room])
