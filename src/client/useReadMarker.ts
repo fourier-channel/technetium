@@ -21,13 +21,26 @@ export function useReadMarker(client: MatrixClient | null, room: Room | null): v
     const mark = () => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
       const events = room.getLiveTimeline().getEvents()
-      const last = events[events.length - 1]
-      const id = last?.getId()
-      if (!last || !id || id === lastSent.current) return
+      // Walk back to the latest event that is safe to receipt: a fully-sent
+      // event with a real id. Local echoes (status set, or a `~`-prefixed
+      // transaction id) 400 the receipt endpoint, and our own spatial presence
+      // events aren't "read" targets, so skip both.
+      let target: MatrixEvent | undefined
+      for (let i = events.length - 1; i >= 0; i--) {
+        const ev = events[i]
+        if (ev.status) continue // sending / not_sent local echo
+        const eid = ev.getId()
+        if (!eid || eid.startsWith('~')) continue
+        if (ev.getType().startsWith('net.41chan.spatial.')) continue
+        target = ev
+        break
+      }
+      const id = target?.getId()
+      if (!target || !id || id === lastSent.current) return
       lastSent.current = id
       // receiptType defaults to m.read; unthreaded=true clears the room's overall
       // unread regardless of thread.
-      void client.sendReadReceipt(last, undefined, true).catch(() => {})
+      void client.sendReadReceipt(target, undefined, true).catch(() => {})
     }
 
     mark()
