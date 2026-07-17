@@ -1370,3 +1370,74 @@ New files under `src/ui/uitransform/`: `config.ts`, `SelectionOverlay.tsx`,
   drag a corner resizes; H|H / V/V mirror; 4:3->4:3 lights and snaps aspect;
   Oops steps back, double-click resets; Cancel reverts + returns to interact;
   Apply keeps the transform + returns to interact; Set Background persists it.
+
+---
+
+## 2026-07-17 -- Domain mode, part 4 (Steps 5-6: media objects, avatar menu)
+
+Branch `domain-mode`. Completes the mission's build phase: media-post objects +
+TTD control, and the avatar right-click menu (profile + admin force-collapse).
+Self-verified (tsc / eslint-on-changed / build; full-tree lint still 24 = no new
+problems). In-app interaction UNVERIFIED (flagged).
+
+New files: `src/client/useDomainMedia.ts`, `src/ui/DomainTtdControl.tsx`,
+`src/client/useDomainModeration.ts`, `src/ui/DomainUserMenu.tsx`. Edited
+`Composer`, `DomainView`, `DomainCanvas`.
+
+### Step 5 -- media-post objects + TTD
+- A media post made in domain mode is stamped by the composer with
+  `net.41chan.domain_ttd` (seconds). The stamp MARKS it as a canvas object AND
+  carries its lifetime. `useDomainMedia` derives live objects from timeline
+  m.image events with the stamp, younger than their ttd; expiry is a 1/s
+  wall-clock filter. Cards spawn from the sender's puck (per-sender cascade,
+  pop-in), click == the shared lightbox, same as inline.
+- `DomainTtdControl` (top-left): default 60; click erases to a blinking `#`
+  cursor; typing shows "Hit Enter To Confirm"; Enter commits (clamped 1..600)
+  and hands focus back to the pre-click element.
+
+### Step 6 -- avatar right-click menu + profile + force-collapse
+- Right-click another user's puck (hit-tested at the canvas level so click-to-
+  place still works; the self puck keeps its emoji menu) -> `DomainUserMenu`.
+  Everyone: "Inspect" -> `DomainProfileCard` (avatar / name / user:server /
+  standing+PL) -- minimal but its own component, scoped as the profile-module
+  seed. Admin/mod: "Force-collapse domain".
+- `useDomainModeration`: force-collapse is a custom timeline event
+  `net.41chan.domain.force_collapse { target }`, honored ONLY when the sender is
+  verified PL >= DOMAIN_ADMIN_PL (no PL0 forgery). A puck hides while the
+  collapse ts >= the user's latest position ts; re-placing (newer ts) returns
+  them. Kept OUT of the roompos SSOT.
+
+### Claudecisions
+- **CD-7 -- TTD rides with the media post, not the viewer.** Depop lifetime is a
+  property of the object, so it must travel with the event (`domain_ttd` field)
+  for all clients + joiners to agree. A viewer-local TTD would make "visible to
+  anyone who joins during the window" ill-defined. The same stamp doubles as the
+  "posted in domain mode" marker. *Against local TTD:* inconsistent lifetimes.
+- **CD-8 -- force-collapse is a moderation SIGNAL verified on RECEIPT, not a
+  redaction.** Redacting a user's position events would be destructive and
+  heavy; a signal event that clients honor only from a verified-admin sender is
+  lighter, reversible (target re-places to return), and needs no elevated send
+  power. Verification is client-side against room PLs. *Against redaction:*
+  destructive + many events; *against trusting the event blindly:* PL0 forgery.
+
+### DRAFT fourier-phase nodes
+- **D-dm07 (decision).** Domain media persistence needs NO bespoke transport: an
+  object is any stamped m.image on the timeline younger than its ttd, so timeline
+  history + a wall-clock filter make it automatically visible to later joiners.
+- **D-dm08 (decision).** Cross-user moderation over a PL0 timeline transport is
+  made safe by verifying the SENDER's power level on receipt (honor only if
+  sender PL >= threshold), not by relying on send-side permissions.
+
+### PENDING OPERATOR VERIFICATION (needs the running app; 2nd + admin identities)
+- Post an image in domain mode -> a card pops from your puck, persists ~ttd,
+  then depops; a 2nd identity joining within the window sees it; clicking opens
+  the lightbox. Change TTD via the box (click -> blinking `#`, type, Enter).
+- Right-click another user -> Inspect shows their profile; as an admin,
+  Force-collapse hides their puck for everyone until they re-place.
+
+### Mission status
+All six planned steps built + committed on `domain-mode` (not merged/deployed).
+Remaining is operator smoke-testing (much of it needs 2nd/admin identities) and
+the flagged v1 gaps (transform rotation handle; Oops history for capture-layer
+moves; per-post TTD power-level gating). Portable UI-manipulation module lives
+in `src/ui/uitransform/` ready for later extraction into fourier-transform.
