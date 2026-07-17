@@ -3,10 +3,13 @@ import type { MatrixClient, Room } from 'matrix-js-sdk'
 import { useDomainPositions, type DomainPos } from '../client/useDomainPositions'
 import { useDomainBubbles, type Bubble } from '../client/useDomainBubbles'
 import { useDomainBackground } from '../client/useDomainBackground'
+import { useDomainMedia, type DomainMediaObject } from '../client/useDomainMedia'
 import { fetchHomeserverMedia } from '../client/media'
 import type { DomainSettingsApi } from './domainSettings'
 import { AuthedImage } from './AuthedImage'
 import { DomainBackgroundEditor } from './DomainBackgroundEditor'
+import { DomainTtdControl } from './DomainTtdControl'
+import { useLightbox } from './Lightbox'
 import { transformToStyle, type Transform } from './uitransform/transform'
 
 const PRESET_AVATARS = ['😀', '😎', '🤖', '👾', '🐱', '🦊', '🐸', '👻', '🎧', '🕹️', '🌟', '🔥']
@@ -21,6 +24,7 @@ const PRESET_AVATARS = ['😀', '😎', '🤖', '👾', '🐱', '🦊', '🐸', 
 // ---------------------------------------------------------------------------
 
 const AVATAR_SIZE = 44
+const CARD_SIZE = 92
 
 function reduceMotion(): boolean {
   return (
@@ -48,16 +52,22 @@ export function DomainCanvas({
   settings,
   bgEditing = false,
   onExitBgEdit,
+  ttd,
+  onTtdChange,
 }: {
   client: MatrixClient
   room: Room
   settings: DomainSettingsApi
   bgEditing?: boolean
   onExitBgEdit?: () => void
+  ttd: number
+  onTtdChange: (n: number) => void
 }) {
   const { positions, myUserId, setMyPosition } = useDomainPositions(client, room)
   const bubbles = useDomainBubbles(client, room)
   const { background } = useDomainBackground(client, room)
+  const media = useDomainMedia(client, room)
+  const { open: openLightbox } = useLightbox()
   const ref = useRef<HTMLDivElement>(null)
   const [avatarMenu, setAvatarMenu] = useState<{ x: number; y: number } | null>(null)
   const placedSelf = myUserId != null && positions.has(myUserId)
@@ -93,6 +103,10 @@ export function DomainCanvas({
         @keyframes domainBubbleIn {
           from { opacity: 0; transform: translate(-50%, 4px); }
           to   { opacity: 1; transform: translate(-50%, 0); }
+        }
+        @keyframes domainCardIn {
+          from { opacity: 0; transform: scale(0.4); }
+          to   { opacity: 1; transform: scale(1); }
         }
       `}</style>
       {/* Shared domain background (room state) + its transform, beneath the
@@ -163,6 +177,35 @@ export function DomainCanvas({
           }
         />
       ))}
+      {/* Media-objects: cards spawned from each sender's puck, live for their
+          ttd, click == open the image like inline. Multiple from one sender
+          cascade so they don't stack. */}
+      {(() => {
+        const nth = new Map<string, number>()
+        return media.map((obj) => {
+          const i = nth.get(obj.sender) ?? 0
+          nth.set(obj.sender, i + 1)
+          const pos = positions.get(obj.sender) ?? { x: 0.5, y: 0.5 }
+          return (
+            <DomainMediaCard
+              key={obj.id}
+              obj={obj}
+              x={pos.x}
+              y={pos.y}
+              index={i}
+              onOpen={() => openLightbox([{ mxc: obj.mxc, name: obj.name, mimetype: obj.mimetype }], 0)}
+            />
+          )
+        })
+      })()}
+
+      {/* TTD control (top-left), hidden during background editing. */}
+      {!bgEditing && (
+        <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 40 }} onClick={(e) => e.stopPropagation()}>
+          <DomainTtdControl ttd={ttd} onChange={onTtdChange} />
+        </div>
+      )}
+
       {bgEditing && (
         <DomainBackgroundEditor client={client} room={room} onExit={() => onExitBgEdit?.()} />
       )}
@@ -473,5 +516,60 @@ function DomainBackgroundLayer({
       draggable={false}
       style={{ ...transformToStyle(transform), zIndex: 0, pointerEvents: 'none', userSelect: 'none' }}
     />
+  )
+}
+
+// A media-object card: a thumbnail spawned near its sender's puck, live for its
+// ttd. Clicking opens the image in the shared lightbox, same as inline. Outer
+// div positions + cascades (index); inner div plays the spawn pop.
+function DomainMediaCard({
+  obj,
+  x,
+  y,
+  index,
+  onOpen,
+}: {
+  obj: DomainMediaObject
+  x: number
+  y: number
+  index: number
+  onOpen: () => void
+}) {
+  const off = 26 + index * 16
+  const rm = reduceMotion()
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: `${x * 100}%`,
+        top: `${y * 100}%`,
+        transform: `translate(${AVATAR_SIZE / 2 + off}px, ${-CARD_SIZE / 2 + off * 0.4}px)`,
+        zIndex: 3,
+        pointerEvents: 'none',
+      }}
+    >
+      <div
+        onClick={(e) => {
+          e.stopPropagation()
+          onOpen()
+        }}
+        title={obj.name}
+        style={{
+          width: CARD_SIZE,
+          height: CARD_SIZE,
+          borderRadius: 10,
+          overflow: 'hidden',
+          border: '2px solid var(--cpd-color-bg-canvas-default)',
+          boxShadow: '0 6px 16px rgba(0,0,0,0.45)',
+          cursor: 'pointer',
+          pointerEvents: 'auto',
+          background: 'var(--cpd-color-bg-subtle-secondary)',
+          transformOrigin: 'top left',
+          animation: rm ? undefined : 'domainCardIn 260ms cubic-bezier(0.2,0.8,0.2,1)',
+        }}
+      >
+        <AuthedImage mxc={obj.mxc} width={180} fill alt={obj.name ?? ''} />
+      </div>
+    </div>
   )
 }

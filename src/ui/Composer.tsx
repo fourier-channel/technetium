@@ -49,7 +49,17 @@ function readImageSize(file: File): Promise<{ w: number; h: number }> {
 // body = caption) on the FIRST image. Every image in a batch also carries a dormant
 // `net.41chan.gallery` hint ({id, index, count}) so a later grid renderer can
 // coalesce them; clients that don't know the field just show stacked images.
-export function Composer({ room, threadId }: { room: Room; threadId?: string }) {
+export function Composer({
+  room,
+  threadId,
+  domainTtd,
+}: {
+  room: Room
+  threadId?: string
+  // When set (composer is under an expanded domain), stamp each image with the
+  // domain time-to-depop so it spawns as a canvas object for that many seconds.
+  domainTtd?: number
+}) {
   const { client } = useClient()
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<PendingAttachment[]>([])
@@ -112,6 +122,10 @@ export function Composer({ room, threadId }: { room: Room; threadId?: string }) 
         ? { format: 'org.matrix.custom.html', formatted_body: caption!.html }
         : {}),
       'net.41chan.gallery': gallery,
+      // Domain-mode stamp: marks this as a canvas media-object + its lifetime.
+      ...(domainTtd !== undefined
+        ? { 'net.41chan.domain_ttd': Math.max(1, Math.min(600, Math.round(domainTtd))) }
+        : {}),
     }
   }
 

@@ -7,6 +7,7 @@ import { Composer } from './Composer'
 import { useDomainSettings } from './domainSettings'
 import { DomainOptions } from './DomainOptions'
 import { useDomainBackground } from '../client/useDomainBackground'
+import { TTD_DEFAULT } from '../client/useDomainMedia'
 
 // ---------------------------------------------------------------------------
 // Domain mode for a room: a header (room name -> right-click to change
@@ -21,6 +22,7 @@ export function DomainView({ room, onExit }: { room: Room; onExit: () => void })
   const [backdropMenu, setBackdropMenu] = useState<{ x: number; y: number } | null>(null)
   const [optionsOpen, setOptionsOpen] = useState(false)
   const [bgEditing, setBgEditing] = useState(false)
+  const [ttd, setTtd] = useState(TTD_DEFAULT)
   const { background, clearBackground } = useDomainBackground(client, room)
   const hasBackground = background !== null || settings.getBackdrop(room.roomId) !== undefined
 
@@ -118,6 +120,8 @@ export function DomainView({ room, onExit }: { room: Room; onExit: () => void })
         settings={settings}
         bgEditing={bgEditing}
         onExitBgEdit={() => setBgEditing(false)}
+        ttd={ttd}
+        onTtdChange={setTtd}
       />
 
       {/* The normal chat log, unchanged, as a sizeable panel above the composer. */}
@@ -133,7 +137,7 @@ export function DomainView({ room, onExit }: { room: Room; onExit: () => void })
       >
         <Timeline room={room} />
       </div>
-      <Composer room={room} />
+      <Composer room={room} domainTtd={ttd} />
 
       {backdropMenu && (
         <BackdropMenu
