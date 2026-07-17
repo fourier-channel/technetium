@@ -8,13 +8,16 @@ import {
   transformToStyle,
   type Transform,
 } from './uitransform/transform'
+import { TransformEditor } from './uitransform/TransformEditor'
 
 // ---------------------------------------------------------------------------
-// Background edit mode (Step 4a): the whole domain becomes an image drop-box.
-// Pick/drop an image, then move it (drag), scale it (wheel), and nudge it
-// (arrows) in real time -- it sits BEHIND the grid (z0) while a transparent
-// capture layer (z60) takes the input. Bottom-right: Cancel / Set Background.
-// "Press T to transform" is wired in Step 4b (the portable Transform editor).
+// Background edit mode: the whole domain becomes an image drop-box. Pick/drop
+// an image, then move it (drag), scale it (wheel), nudge it (arrows) in real
+// time -- it sits BEHIND the grid (z0) while a transparent capture layer (z60)
+// takes the input. Bottom-right: Cancel / Set Background. Press T for the
+// transform sub-mode (portable TransformEditor: marching-ants selection, resize
+// handles, mirror/aspect/undo strip). Cancel/Apply there return to interact
+// mode; move/scale/nudge keep working throughout.
 // ---------------------------------------------------------------------------
 
 const NUDGE_STEP = 0.01 // normalized per arrow press
@@ -24,17 +27,17 @@ export function DomainBackgroundEditor({
   client,
   room,
   onExit,
-  onOpenTransform,
 }: {
   client: MatrixClient
   room: Room
   onExit: () => void
-  onOpenTransform?: (t: Transform, img: string) => void
 }) {
   const { setBackground } = useDomainBackground(client, room)
   const [imgUrl, setImgUrl] = useState<string | null>(null)
   const fileRef = useRef<File | null>(null)
   const [transform, setTransform] = useState<Transform>(IDENTITY_TRANSFORM)
+  const [mode, setMode] = useState<'interact' | 'transform'>('interact')
+  const [naturalAspect, setNaturalAspect] = useState(1)
   const [busy, setBusy] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const captureRef = useRef<HTMLDivElement>(null)
@@ -45,6 +48,8 @@ export function DomainBackgroundEditor({
     tRef.current = transform
   }, [transform])
 
+  const getRect = useCallback(() => captureRef.current?.getBoundingClientRect() ?? null, [])
+
   const loadFile = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) return
     fileRef.current = file
@@ -53,6 +58,7 @@ export function DomainBackgroundEditor({
       return URL.createObjectURL(file)
     })
     setTransform(IDENTITY_TRANSFORM)
+    setMode('interact')
   }, [])
 
   // Revoke the object URL on unmount.
@@ -62,16 +68,18 @@ export function DomainBackgroundEditor({
     }
   }, [imgUrl])
 
-  // Keyboard: arrows nudge, Escape cancels, T opens the transform editor (4b).
+  // Keyboard: arrows nudge, T toggles the transform sub-mode, Escape backs out
+  // (transform -> interact, then interact -> exit).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onExit()
+        if (mode === 'transform') setMode('interact')
+        else onExit()
         return
       }
       if (!imgUrl) return
       if (e.key === 't' || e.key === 'T') {
-        if (onOpenTransform) onOpenTransform(tRef.current, imgUrl)
+        setMode((m) => (m === 'transform' ? 'interact' : 'transform'))
         e.preventDefault()
         return
       }
@@ -87,7 +95,7 @@ export function DomainBackgroundEditor({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [imgUrl, onExit, onOpenTransform])
+  }, [imgUrl, mode, onExit])
 
   const onWheel = (e: React.WheelEvent) => {
     if (!imgUrl) return
@@ -133,7 +141,18 @@ export function DomainBackgroundEditor({
     <>
       {/* Image preview, behind the grid (z0). */}
       {imgUrl && (
-        <img src={imgUrl} alt="" draggable={false} style={{ ...transformToStyle(transform), zIndex: 0, pointerEvents: 'none', userSelect: 'none' }} />
+        <img
+          src={imgUrl}
+          alt=""
+          draggable={false}
+          onLoad={(e) => {
+            const el = e.currentTarget
+            if (el.naturalWidth > 0 && el.naturalHeight > 0) {
+              setNaturalAspect(el.naturalWidth / el.naturalHeight)
+            }
+          }}
+          style={{ ...transformToStyle(transform), zIndex: 0, pointerEvents: 'none', userSelect: 'none' }}
+        />
       )}
 
       {/* Transparent capture + controls layer, above everything (z60). */}
@@ -212,23 +231,40 @@ export function DomainBackgroundEditor({
               borderRadius: 999,
             }}
           >
-            Drag to move {'·'} scroll to scale {'·'} arrows to nudge {'·'} T to transform
+            {mode === 'transform'
+              ? 'Drag handles to resize · buttons below · Esc to leave transform'
+              : 'Drag to move · scroll to scale · arrows to nudge · T to transform'}
           </div>
         )}
 
-        {/* Bottom-right: Cancel / Set Background. */}
-        <div
-          onPointerDown={(e) => e.stopPropagation()}
-          style={{ position: 'absolute', right: 12, bottom: 12, display: 'flex', gap: 8 }}
-        >
-          <FloatBtn onClick={onExit} disabled={busy}>
-            Cancel
-          </FloatBtn>
-          <FloatBtn onClick={commit} disabled={!imgUrl || busy} accent>
-            {busy ? 'Setting…' : 'Set Background'}
-          </FloatBtn>
-        </div>
+        {/* Bottom-right: Cancel / Set Background (interact mode only -- the
+            transform sub-mode has its own Cancel/Apply strip). */}
+        {mode === 'interact' && (
+          <div
+            onPointerDown={(e) => e.stopPropagation()}
+            style={{ position: 'absolute', right: 12, bottom: 12, display: 'flex', gap: 8 }}
+          >
+            <FloatBtn onClick={onExit} disabled={busy}>
+              Cancel
+            </FloatBtn>
+            <FloatBtn onClick={commit} disabled={!imgUrl || busy} accent>
+              {busy ? 'Setting…' : 'Set Background'}
+            </FloatBtn>
+          </div>
+        )}
       </div>
+
+      {/* Transform sub-mode chrome (portable), over the capture layer. */}
+      {imgUrl && mode === 'transform' && (
+        <TransformEditor
+          transform={transform}
+          onChange={setTransform}
+          naturalAspect={naturalAspect}
+          getRect={getRect}
+          onCancel={() => setMode('interact')}
+          onApply={() => setMode('interact')}
+        />
+      )}
     </>
   )
 }
