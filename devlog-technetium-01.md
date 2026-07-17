@@ -1306,3 +1306,67 @@ useDomainBackground.ts`, `src/ui/DomainBackgroundEditor.tsx`. Edited:
 - "Remove background" clears it. Non-admin: state write silently no-ops (403).
 
 ### Next: Step 4b (transform editor) then Steps 5-6 as previously scoped.
+
+---
+
+## 2026-07-17 -- Domain mode, part 3 (Step 4b: portable Transform UI)
+
+Branch `domain-mode`. Built the Transform editor -- the portable UI-manipulation
+module ("the UI of the UI builder") that fourier-transform will consume -- and
+wired it as a sub-mode of the background editor (press T). Self-verified
+(tsc / eslint-on-changed / build). Interaction is UNVERIFIED in-app (flagged).
+
+New files under `src/ui/uitransform/`: `config.ts`, `SelectionOverlay.tsx`,
+`TransformButtons.tsx`, `TransformEditor.tsx`. Extended `transform.ts`. Edited
+`DomainBackgroundEditor.tsx`.
+
+### What shipped
+- **Model (`transform.ts`).** + `ar` display aspect ratio (pixel width:height,
+  container-independent; 0 == natural). Box geometry `transformToBox` /
+  `boxToTransform`, `resizeBox` (8 handles, opposite edge/corner anchored,
+  aspect-lock derives the free dimension), `snapAspect`. Wire codec carries
+  `ar` as a scaled int.
+- **Config (`config.ts`).** `UiTransformConfig` -- every drawn value (marching-
+  ants dash/gap/thickness/color/period, handle size/shape/fill/stroke/width,
+  button + toggle look) is a field, none hardcoded. Components take
+  `config = defaultUiTransformConfig`. The theme surface fourier-transform owns.
+- **Chrome.** `SelectionOverlay` = animated marching ants (SVG stroke-dashoffset
+  keyframe) + 8 square handles with resize cursors, purely presentational.
+  `TransformButtons` = momentary Oops (click undo, dbl-click reset) / H-mirror /
+  V-mirror, a lit/dim maintain-aspect toggle, round red Cancel / green Apply.
+- **Harness (`TransformEditor`).** CONTROLLED: host owns the Transform and
+  renders the target; the editor draws chrome over the target's projected box,
+  resizes via handle-drag, and routes mirror/aspect/undo through an internal
+  history. Decoupled from React refs by a `getRect()` accessor (portability).
+  Cancel restores the transform captured on entry; Apply keeps the current one;
+  both return to interact mode, still movable/scalable.
+
+### Claudecisions
+- **CD-6 -- portable module takes `getRect()`, not a React ref.** fourier-
+  transform must isolate elements in arbitrary hosts, so the module can't couple
+  to a host's React ref / element type. A `() => DOMRect | null` accessor is the
+  minimal host contract. *Against passing a ref:* leaks host framework types
+  into the portable surface.
+
+### DRAFT fourier-phase nodes
+- **D-dm05 (decision).** Free (non-uniform) transform stays scale-free via a
+  container-independent display aspect `ar` rendered with CSS `aspect-ratio`
+  (not container-relative x/y scale). Same transform, identical render at any
+  surface size. Supersedes any sx/sy sketch.
+- **D-dm06 (decision).** The portable UI-manipulation module theming contract:
+  ALL chrome values live in one `UiTransformConfig`; components read from it,
+  never literals. A host reskins the whole manipulation surface by passing a
+  different config -- the extraction seam for fourier-transform.
+
+### Known v1 gaps (live-tuning candidates, not blockers)
+- Rotation is modelled but has no handle; `resizeBox` assumes rotation 0.
+- Capture-layer move/scale/nudge are not recorded in the Oops history (only
+  handle-resize / mirror / aspect are); "reset" still reverts everything to the
+  pre-transform entry snapshot.
+- Handle-resize math + marching-ants feel are UNVERIFIED in-app -- need eyes.
+
+### PENDING OPERATOR VERIFICATION (needs the running app)
+- Set background -> pick image -> T: marching-ants selection + 8 handles appear;
+  drag a corner resizes; H|H / V/V mirror; 4:3->4:3 lights and snaps aspect;
+  Oops steps back, double-click resets; Cancel reverts + returns to interact;
+  Apply keeps the transform + returns to interact; Set Background persists it.
