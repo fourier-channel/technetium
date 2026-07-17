@@ -31,7 +31,22 @@
       actually have (names/nesting), not a wrong/old shape that misleads.
 
 ## L3 — guided walkthrough (Fourier-chan)
-- [ ] (pending build)
+- [ ] Create account → "Walk me through it" opens the wizard: Fourier-chan
+      portrait (signal-∿ placeholder until art lands), her line in a speech
+      bubble, progress dots, and a **"Skip to the form"** link on every step.
+- [ ] **Next** advances through all 5 steps; the last step's button reads
+      **Create account** and launches the real MAS sign-in.
+- [ ] **Back** steps backward; Back on step 1 returns to the choice node (not a
+      dead end). **Skip to the form** from any step goes straight to sign-in.
+- [ ] Progress dots fill left-to-right and the active dot widens.
+- [ ] Steps with a quote (What / Joining rooms) show the italic TBD quote block;
+      steps without one show no empty blockquote (silent-null).
+- [ ] Reduced-motion: no jarring transitions; everything still operable.
+- [ ] Advanced door ("I know what I'm doing") still skips the guide entirely.
+
+Note: Fourier-chan portraits + master-doc/devlog quotes are "Image/Quote TBD"
+slots — placeholder text now becomes the caption/quote when real assets land
+(`ONBOARDING_ASSETS`, `ONBOARDING_QUOTES`). See docs/fourier-chan-brief.md.
 
 ## Watch items
 - [ ] Cache is `localStorage` key `net.41chan.server_shape` — clearing site data

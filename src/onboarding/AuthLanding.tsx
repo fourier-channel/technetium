@@ -1,6 +1,7 @@
 import { useState, type CSSProperties, type ReactNode } from 'react'
 import { SilentBoundary } from './SilentBoundary'
 import { AssetImage } from './AssetImage'
+import { GuidedFlow } from './GuidedFlow'
 import { ONBOARDING_ASSETS } from './assets'
 
 // ---------------------------------------------------------------------------
@@ -14,16 +15,14 @@ import { ONBOARDING_ASSETS } from './assets'
 // wraps the guided door with the walkthrough. The choice structure is real.
 // ---------------------------------------------------------------------------
 
-export function AuthLanding({
-  onLogin,
-  onCreateGuided,
-  onCreateAdvanced,
-}: {
-  onLogin: () => void
-  onCreateGuided: () => void
-  onCreateAdvanced: () => void
-}) {
-  const [view, setView] = useState<'home' | 'create'>('home')
+export function AuthLanding({ onProceed }: { onProceed: () => void }) {
+  const [view, setView] = useState<'home' | 'create' | 'guided'>('home')
+
+  // The guided walkthrough takes over the whole surface; finishing or skipping
+  // it starts the same sign-in, Back on step one returns to the choice.
+  if (view === 'guided') {
+    return <GuidedFlow onProceed={onProceed} onExit={() => setView('create')} />
+  }
 
   return (
     <div style={shell}>
@@ -51,7 +50,7 @@ export function AuthLanding({
               <Button kind="primary" onClick={() => setView('create')}>
                 Create account
               </Button>
-              <Button kind="ghost" onClick={onLogin}>
+              <Button kind="ghost" onClick={onProceed}>
                 Log in
               </Button>
             </div>
@@ -63,13 +62,13 @@ export function AuthLanding({
               <Choice
                 title="Walk me through it"
                 sub="A short guided setup. Recommended if Matrix is new to you."
-                onClick={onCreateGuided}
+                onClick={() => setView('guided')}
                 primary
               />
               <Choice
                 title="I know what I'm doing"
                 sub="Skip the guide -- straight to the account form."
-                onClick={onCreateAdvanced}
+                onClick={onProceed}
               />
             </div>
             <button type="button" style={backLink} onClick={() => setView('home')}>

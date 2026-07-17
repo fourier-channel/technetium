@@ -30,15 +30,9 @@ function App() {
   useReadMarker(client, selectedRoom)
 
   if (status === 'awaiting_login') {
-    // L1 -- both create-account doors begin the same OIDC/MAS flow for now; L3
-    // wraps the guided door with the Fourier-chan walkthrough.
-    return (
-      <AuthLanding
-        onLogin={() => login()}
-        onCreateGuided={() => login()}
-        onCreateAdvanced={() => login()}
-      />
-    )
+    // Every door (log in, advanced create, or finishing the guided walkthrough)
+    // begins the same OIDC/MAS sign-in; MAS presents login-or-register.
+    return <AuthLanding onProceed={() => login()} />
   }
 
   if (status === 'error') {
