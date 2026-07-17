@@ -11,6 +11,7 @@ import { LightboxProvider } from './ui/Lightbox'
 import { RoomListSettingsProvider } from './ui/RoomListSettingsProvider'
 import { useReadMarker } from './client/useReadMarker'
 import { SpatialView } from './ui/SpatialView'
+import { AuthLanding } from './onboarding/AuthLanding'
 
 // Thin shell: render purely by client lifecycle status. All auth/client logic
 // lives in ClientProvider; App reflects the current phase and, when ready,
@@ -30,11 +31,14 @@ function App() {
   if (status === 'starting') return <Centered>Starting{'\u2026'}</Centered>
 
   if (status === 'awaiting_login') {
+    // L1 -- both create-account doors begin the same OIDC/MAS flow for now; L3
+    // wraps the guided door with the Fourier-chan walkthrough.
     return (
-      <Centered>
-        <h1>Technetium</h1>
-        <button type="button" onClick={() => login()}>Log in with Matrix</button>
-      </Centered>
+      <AuthLanding
+        onLogin={() => login()}
+        onCreateGuided={() => login()}
+        onCreateAdvanced={() => login()}
+      />
     )
   }
 
