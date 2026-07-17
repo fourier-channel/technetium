@@ -4,11 +4,14 @@ import { useDomainPositions, type DomainPos } from '../client/useDomainPositions
 import { useDomainBubbles, type Bubble } from '../client/useDomainBubbles'
 import { useDomainBackground } from '../client/useDomainBackground'
 import { useDomainMedia, type DomainMediaObject } from '../client/useDomainMedia'
+import { useDomainModeration } from '../client/useDomainModeration'
 import { fetchHomeserverMedia } from '../client/media'
 import type { DomainSettingsApi } from './domainSettings'
 import { AuthedImage } from './AuthedImage'
 import { DomainBackgroundEditor } from './DomainBackgroundEditor'
 import { DomainTtdControl } from './DomainTtdControl'
+import { DomainUserMenu, DomainProfileCard } from './DomainUserMenu'
+import { isDomainAdmin } from './domainRoles'
 import { useLightbox } from './Lightbox'
 import { transformToStyle, type Transform } from './uitransform/transform'
 
@@ -67,9 +70,20 @@ export function DomainCanvas({
   const bubbles = useDomainBubbles(client, room)
   const { background } = useDomainBackground(client, room)
   const media = useDomainMedia(client, room)
+  const { collapsed, forceCollapse } = useDomainModeration(client, room)
   const { open: openLightbox } = useLightbox()
+  const isAdmin = isDomainAdmin(client, room)
   const ref = useRef<HTMLDivElement>(null)
   const [avatarMenu, setAvatarMenu] = useState<{ x: number; y: number } | null>(null)
+  const [userMenu, setUserMenu] = useState<{ x: number; y: number; userId: string } | null>(null)
+  const [profile, setProfile] = useState<{ x: number; y: number; userId: string } | null>(null)
+  // A puck is hidden when an admin force-collapse is at least as new as the
+  // user's latest position (they reappear by re-placing -> newer position ts).
+  const isHidden = (userId: string, ts: number) => {
+    const c = collapsed.get(userId)
+    return c !== undefined && c >= ts
+  }
+  const visible = [...positions.entries()].filter(([uid, pos]) => !isHidden(uid, pos.ts))
   const placedSelf = myUserId != null && positions.has(myUserId)
   const backdrop = settings.getBackdrop(room.roomId)
   // The shared domain background (room state) takes precedence over the legacy
@@ -86,10 +100,33 @@ export function DomainCanvas({
     setMyPosition((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height)
   }
 
+  // Right-click another user's puck -> user menu. Hit-tested at the canvas level
+  // (pucks are pointer-transparent so placement still works); the self puck's
+  // own handler catches self right-clicks first.
+  const onContextMenu = (e: React.MouseEvent) => {
+    if (bgEditing) return
+    const el = ref.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const cx = e.clientX - r.left
+    const cy = e.clientY - r.top
+    for (const [uid, pos] of visible) {
+      if (uid === myUserId) continue
+      const dx = pos.x * r.width - cx
+      const dy = pos.y * r.height - cy
+      if (Math.hypot(dx, dy) <= AVATAR_SIZE * 0.75) {
+        e.preventDefault()
+        setUserMenu({ x: e.clientX, y: e.clientY, userId: uid })
+        return
+      }
+    }
+  }
+
   return (
     <div
       ref={ref}
       onClick={onClick}
+      onContextMenu={onContextMenu}
       style={{
         position: 'relative',
         flex: 1,
@@ -157,7 +194,7 @@ export function DomainCanvas({
           Click anywhere to place yourself
         </div>
       )}
-      {[...positions.entries()].map(([userId, pos]) => (
+      {visible.map(([userId, pos]) => (
         <DomainAvatar
           key={userId}
           room={room}
@@ -208,6 +245,33 @@ export function DomainCanvas({
 
       {bgEditing && (
         <DomainBackgroundEditor client={client} room={room} onExit={() => onExitBgEdit?.()} />
+      )}
+      {userMenu && (
+        <DomainUserMenu
+          x={userMenu.x}
+          y={userMenu.y}
+          userId={userMenu.userId}
+          room={room}
+          isAdmin={isAdmin}
+          onInspect={() => {
+            setProfile({ x: userMenu.x, y: userMenu.y, userId: userMenu.userId })
+            setUserMenu(null)
+          }}
+          onForceCollapse={() => {
+            forceCollapse(userMenu.userId)
+            setUserMenu(null)
+          }}
+          onClose={() => setUserMenu(null)}
+        />
+      )}
+      {profile && (
+        <DomainProfileCard
+          x={profile.x}
+          y={profile.y}
+          userId={profile.userId}
+          room={room}
+          onClose={() => setProfile(null)}
+        />
       )}
       {avatarMenu && myUserId && (
         <AvatarMenu
