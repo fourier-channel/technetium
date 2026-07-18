@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
-import { ThreadEvent, ClientEvent, type MatrixClient, type Thread } from 'matrix-js-sdk'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { ThreadEvent, ClientEvent, RoomEvent, type MatrixClient, type Room, type Thread } from 'matrix-js-sdk'
 
 // ---------------------------------------------------------------------------
 // Thread list model. Normalized, flat items so filtering/sorting/favorites
@@ -146,25 +146,48 @@ export function useThreadList(
     setAll(out)
   }, [client])
 
+  // Per-room server-side thread backfill: idempotent + retryable. fetchRoomThreads
+  // deposits into room.threadsTimelineSets, which are EMPTY until
+  // createThreadsTimelineSets() runs (the SDK null-chains the deposit, so an
+  // uninitialized room makes the fetch a silent no-op). Marked done on success;
+  // on failure the room is un-marked so a later sync tick retries it -- heavy
+  // initial sync often starves the first attempt.
+  const backfilledRef = useRef<Set<string>>(new Set())
+  const backfillRoom = useCallback(
+    (room: Room) => {
+      if (room.getMyMembership() !== 'join') return
+      if (backfilledRef.current.has(room.roomId)) return
+      backfilledRef.current.add(room.roomId)
+      void room
+        .createThreadsTimelineSets()
+        .then(() => room.fetchRoomThreads())
+        .then(rebuild)
+        .catch((e) => {
+          backfilledRef.current.delete(room.roomId) // allow a later retry
+          console.warn('[threads] backfill failed:', room.roomId, e)
+        })
+    },
+    [rebuild],
+  )
+
   useEffect(() => {
     if (!client) return
-    // Backfill each joined room's server-side thread list once (idempotent).
-    for (const room of client.getRooms()) {
-      if (room.getMyMembership() === 'join') {
-        // fetchRoomThreads deposits results into room.threadsTimelineSets,
-        // which are EMPTY arrays until createThreadsTimelineSets() runs (the
-        // SDK null-chains the deposit, so an uninitialized room makes the
-        // fetch a silent no-op -- threads beyond the sync horizon never
-        // materialize). Initialize first, then fetch.
-        void room
-          .createThreadsTimelineSets()
-          .then(() => room.fetchRoomThreads())
-          .then(rebuild)
-          .catch((e) => console.warn('[threads] backfill failed:', room.roomId, e))
-      }
-    }
-    rebuild()
+    // Backfill every joined room now, AND every room that syncs in later. The
+    // old one-shot loop iterated getRooms() at mount only, so under a heavy
+    // initial sync every room that landed afterwards was never hydrated -- its
+    // threads stayed at whatever sync happened to deliver ("only the very first
+    // threads"). Driving off ClientEvent.Room spreads the /threads requests as
+    // rooms arrive (also gentler on the congestion) and covers late rooms.
+    for (const room of client.getRooms()) backfillRoom(room)
+    // Populate immediately from already-synced threads (deferred a microtask so
+    // this isn't a synchronous setState in the effect body).
+    queueMicrotask(rebuild)
+
     const onChange = () => rebuild()
+    const onRoom = (room: Room) => {
+      backfillRoom(room)
+      rebuild()
+    }
     // The client re-emits room-level ThreadEvents, but its typed EmittedEvents
     // union doesn't enumerate them -- cast the event names. Runtime is correct
     // (verified: live cross-room thread updates fire); this is types-only.
@@ -175,14 +198,16 @@ export function useThreadList(
     client.on(TE_NEW, onChange)
     client.on(TE_UPDATE, onChange)
     client.on(TE_NEWREPLY, onChange)
-    client.on(ClientEvent.Room, onChange)
+    client.on(ClientEvent.Room, onRoom)
+    client.on(RoomEvent.MyMembership, onRoom)
     return () => {
       client.off(TE_NEW, onChange)
       client.off(TE_UPDATE, onChange)
       client.off(TE_NEWREPLY, onChange)
-      client.off(ClientEvent.Room, onChange)
+      client.off(ClientEvent.Room, onRoom)
+      client.off(RoomEvent.MyMembership, onRoom)
     }
-  }, [client, rebuild])
+  }, [client, rebuild, backfillRoom])
 
   // Scope -> filters -> sort, all pure over the normalized items.
   return useMemo(() => {
