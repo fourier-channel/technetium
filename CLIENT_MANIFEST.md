@@ -35,7 +35,8 @@ principles. See §6.
 | `@vector-im/compound-design-tokens` | `10.2.2` | Compound peer-needs `>=1.6.1 <11`; 10.2.2 satisfies. |
 | `@matrix-org/matrix-wysiwyg` | `2.37.9` | Phase 4+. |
 | `matrix-widget-api` | `1.17.0` | Optional / later. |
-| `dompurify` | `3.4.11` | Add when timeline rendering begins (Phase 3). |
+| `dompurify` | `3.4.11` | Installed (Phase 3). Ships its own types since v3 — no `@types/dompurify`. |
+| `marked` | `18.0.5` | Installed. Markdown -> HTML for the composer; output always sanitized by `dompurify` before render. |
 
 Compound also pulls font packages (`@fontsource/inter`, `@fontsource/inconsolata`)
 as peers — install alongside Compound.
@@ -60,7 +61,7 @@ deps" instinct). Each phase's install is one command, run on vesper in
 
 - **Phase 0 (now, already done):** `matrix-js-sdk` — present. Crypto-wasm rode in with it.
 - **Phase 1 (UI foundation):** `@vector-im/compound-web @vector-im/compound-design-tokens @fontsource/inter @fontsource/inconsolata`
-- **Phase 3 (timeline rendering):** `dompurify` (+ `@types/dompurify` if not bundled)
+- **Phase 3 (timeline rendering):** `dompurify` (bundles its own types; no `@types`) + `marked` for markdown
 - **Phase 4 (rich composer, optional):** `@matrix-org/matrix-wysiwyg`
 - **Later / maybe:** `matrix-widget-api`
 
