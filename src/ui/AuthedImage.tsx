@@ -2,6 +2,11 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useClient } from '../client/ClientContext'
 import { fetchMediaSrc, fetchHomeserverThumb, type ThumbSize } from '../client/media'
 
+// Retry transient media failures (heavy sync starves fetches) before showing the
+// unavailable state: ~0.8s, 1.6s, 3.2s, 6.4s -> gives up after ~12s.
+const MEDIA_MAX_RETRIES = 4
+const MEDIA_RETRY_BASE_MS = 800
+
 // Renders an mxc:// image by fetching it through the media gateway with the
 // client's bearer token and showing the resulting blob. Owns the object-URL
 // lifecycle: fetch on mount / mxc change, revoke on cleanup so blobs don't leak
@@ -34,13 +39,26 @@ export function AuthedImage({
   const { client } = useClient()
   const [src, setSrc] = useState<string | null>(null)
   const [error, setError] = useState(false)
+  const [retryTick, setRetryTick] = useState(0)
   // Track the current object URL across renders so cleanup always revokes the
   // exact blob this instance created, even if mxc changes mid-flight.
   const revokeRef = useRef<(() => void) | null>(null)
+  // Retry bookkeeping. Ref writes happen in the EFFECT (allowed), never render.
+  const attemptsRef = useRef(0)
+  const sourceKeyRef = useRef('')
 
   useEffect(() => {
     if (!client) return
     let cancelled = false
+    let retryTimer: ReturnType<typeof setTimeout> | undefined
+
+    // Reset the attempt counter only when the SOURCE changes, not on a retry.
+    const sourceKey = `${mxc}|${width ?? ''}|${viaHomeserver}`
+    if (sourceKeyRef.current !== sourceKey) {
+      sourceKeyRef.current = sourceKey
+      attemptsRef.current = 0
+    }
+
     // Reset for the new mxc off the effect body (a microtask -- not a synchronous
     // setState-in-effect) so the previous image clears before the new one loads.
     queueMicrotask(() => {
@@ -64,17 +82,31 @@ export function AuthedImage({
         setSrc(resolved)
       })
       .catch(() => {
-        if (!cancelled) setError(true)
+        if (cancelled) return
+        // A heavy initial sync starves media fetches, so a failure here is
+        // usually transient. Retry with backoff before giving up, so images
+        // self-heal instead of sticking at "[image unavailable]" until the user
+        // navigates away and back (CD-10 go-fish; no dead states).
+        if (attemptsRef.current < MEDIA_MAX_RETRIES) {
+          const delay = MEDIA_RETRY_BASE_MS * 2 ** attemptsRef.current
+          attemptsRef.current += 1
+          retryTimer = setTimeout(() => {
+            if (!cancelled) setRetryTick((t) => t + 1)
+          }, delay)
+        } else {
+          setError(true)
+        }
       })
 
     return () => {
       cancelled = true
+      if (retryTimer) clearTimeout(retryTimer)
       if (revokeRef.current) {
         revokeRef.current()
         revokeRef.current = null
       }
     }
-  }, [client, mxc, width, viaHomeserver])
+  }, [client, mxc, width, viaHomeserver, retryTick])
 
   if (error) {
     if (fallback !== undefined) return <>{fallback}</>

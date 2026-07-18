@@ -17,6 +17,9 @@ export interface Bubble {
 const MAX_LEN = 160
 const MIN_MS = 4000
 const MAX_MS = 9000
+// Ignore the timeline burst for this long after entering, so catching up doesn't
+// pop a wall of bubbles; after it, bubble every live message (late or not).
+const BUBBLE_GRACE_MS = 2000
 
 function durationFor(len: number): number {
   return Math.max(MIN_MS, Math.min(MAX_MS, 3000 + len * 45))
@@ -29,12 +32,21 @@ export function useDomainBubbles(client: MatrixClient | null, room: Room | null)
     if (!client || !room) return
     const timers = new Map<string, ReturnType<typeof setTimeout>>()
 
+    // Skip the burst of messages delivered while entering / catching up, then
+    // bubble every live message. The old `ts < now - 15s` guard silently dropped
+    // messages delivered LATE by a heavy sync -- so a lagging viewer saw the
+    // chat text but never the speech bubble. A mount grace catches the entry
+    // burst without punishing late delivery.
+    let ready = false
+    const graceTimer = setTimeout(() => {
+      ready = true
+    }, BUBBLE_GRACE_MS)
+
     const onTimeline = (ev: MatrixEvent, evRoom: Room | undefined, toStart?: boolean) => {
       if (toStart) return
+      if (!ready) return
       if (evRoom?.roomId !== room.roomId) return
       if (ev.getType() !== 'm.room.message' || ev.isRedacted()) return
-      // Skip backfill: only bubble genuinely fresh events.
-      if (ev.getTs() < Date.now() - 15000) return
       const sender = ev.getSender()
       if (!sender) return
       const c = ev.getContent()
@@ -62,6 +74,7 @@ export function useDomainBubbles(client: MatrixClient | null, room: Room | null)
 
     client.on(RoomEvent.Timeline, onTimeline)
     return () => {
+      clearTimeout(graceTimer)
       client.off(RoomEvent.Timeline, onTimeline)
       for (const t of timers.values()) clearTimeout(t)
     }
