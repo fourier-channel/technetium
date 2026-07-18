@@ -1583,3 +1583,11 @@ STILL PENDING (operator): live smoke-tests of BOTH missions -- domain-mode
 (`docs/smoke-login-flow.md`). Merged != verified; much needs 2nd/admin
 identities. Held (not forgotten): the 24 pre-existing eslint problems, for a
 future debt-burndown pass.
+
+## 2026-07-18 -- fourier-chan-brief.md retired (Merge and Purge)
+
+The character brief was written as instructions to CREATE the living canon
+doc but was misread as BEING it. Canon now lives in the private
+fourier-channel/fourier-chan repo (canon/ tree, per-aspect files). All
+salvageable brief content merged there first, then this purge. Onboarding
+code keeps referencing her normally; canon questions route to that repo.
