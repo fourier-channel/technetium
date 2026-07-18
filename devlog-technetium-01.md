@@ -1552,3 +1552,34 @@ the stale->live reconcile in particular wants a reload with a warm cache.
   each carries its own devlog entries after the 2026-07-16 bugfix entry -- expect
   a devlog merge to reconcile them; CD/node numbering is global and continues
   across both.
+
+---
+
+## 2026-07-18 -- Merge to main + housekeeping
+
+Both feature branches were approved and merged to `main` (not yet deployed --
+deploy is a separate operator-only step), then pruned (trunk-based: branch fresh
+off main next time).
+
+- `domain-mode` -> main: fast-forward (11 commits).
+- `login-flow` -> main: 3-way merge. Conflicts only in `App.tsx` (the auth-gate
+  region from login-flow vs. the spatial->domain rename from domain-mode -- kept
+  `DomainView` + `AuthLanding`/`BootScreen`, dropped the stale `SpatialView`
+  import) and this devlog (both appended after the 2026-07-16 bugfix entry --
+  kept both, in order). tsc / build clean; full-tree lint holds at the 24
+  baseline.
+
+Housekeeping pass (chore commit on login-flow, now on main):
+- Deleted 18 untracked `.bak` snapshots from the working tree (gitignored; zero
+  repo impact).
+- Removed unused Vite-scaffold assets (`react.svg`, `vite.svg`, `hero.png`).
+- Dropped `@types/dompurify` (dompurify 3.x bundles its own types; that stub is
+  deprecated for v3). tsc still clean.
+- Recorded `marked` (^18.0.5, markdown->HTML, always piped through dompurify) in
+  `DEPENDENCIES.md` + `CLIENT_MANIFEST.md` per the recorded-rationale discipline.
+
+STILL PENDING (operator): live smoke-tests of BOTH missions -- domain-mode
+(`docs`-adjacent checklist / the earlier artifact) and login-flow
+(`docs/smoke-login-flow.md`). Merged != verified; much needs 2nd/admin
+identities. Held (not forgotten): the 24 pre-existing eslint problems, for a
+future debt-burndown pass.
