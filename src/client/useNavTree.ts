@@ -7,10 +7,14 @@ import {
   type MatrixEvent,
 } from 'matrix-js-sdk'
 import { buildNavTree, type HierarchyRoom, type NavTree } from './spaces'
+import { isEmptyTree, loadServerShape, saveServerShape } from './serverShape'
 
 export interface NavTreeState {
   tree: NavTree | null
   loading: boolean
+  // true while the tree shown is the cached "last known shape" and the live
+  // sync hasn't produced a real (non-empty) tree yet (CD-11).
+  stale: boolean
 }
 
 // Top-level spaces the user is joined to: joined space rooms not referenced as
@@ -52,17 +56,30 @@ async function fetchSpaceHierarchy(
 // rooms), live membership overlaid from sync. Returns a loading flag; never
 // blanks the tree mid-fetch (keep-previous).
 export function useNavTree(client: MatrixClient | null): NavTreeState {
-  const [tree, setTree] = useState<NavTree | null>(null)
+  // Seed from the cached "last known shape" so the room list paints instantly.
+  const [tree, setTree] = useState<NavTree | null>(() => loadServerShape())
   const [loading, setLoading] = useState<boolean>(!!client)
+  const [stale, setStale] = useState<boolean>(() => !isEmptyTree(loadServerShape()))
   const cacheRef = useRef<HierarchyRoom[]>([])
   const fetchSeq = useRef(0)
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Commit a freshly-built tree. Guard: a mid-sync EMPTY build must not clobber
+  // a non-empty stale preview (getRooms() is empty until PREPARED). A non-empty
+  // live tree becomes the new cache and clears the stale flag.
+  const commit = useCallback((built: NavTree) => {
+    setTree((prev) => (isEmptyTree(built) && !isEmptyTree(prev) ? prev : built))
+    if (!isEmptyTree(built)) {
+      saveServerShape(built)
+      setStale(false)
+    }
+  }, [])
+
   // Cheap: re-overlay membership/names on the cached skeleton (no network).
   const rebuildFromCache = useCallback(() => {
     if (!client) return
-    setTree(buildNavTree(client, cacheRef.current))
-  }, [client])
+    commit(buildNavTree(client, cacheRef.current))
+  }, [client, commit])
 
   // Expensive: re-discover roots and re-fetch every hierarchy, then rebuild.
   const refetch = useCallback(async () => {
@@ -83,14 +100,14 @@ export function useNavTree(client: MatrixClient | null): NavTreeState {
       }
       if (seq !== fetchSeq.current) return
       cacheRef.current = all
-      setTree(buildNavTree(client, all))
+      commit(buildNavTree(client, all))
     } catch (err) {
       console.error('useNavTree: hierarchy fetch failed', err)
       // leave the previous tree in place
     } finally {
       if (seq === fetchSeq.current) setLoading(false)
     }
-  }, [client])
+  }, [client, commit])
 
   useEffect(() => {
     if (!client) {
@@ -139,5 +156,5 @@ export function useNavTree(client: MatrixClient | null): NavTreeState {
     }
   }, [client, refetch, rebuildFromCache])
 
-  return { tree, loading }
+  return { tree, loading, stale }
 }

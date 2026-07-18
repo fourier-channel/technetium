@@ -1441,3 +1441,114 @@ Remaining is operator smoke-testing (much of it needs 2nd/admin identities) and
 the flagged v1 gaps (transform rotation handle; Oops history for capture-layer
 moves; per-post TTD power-level gating). Portable UI-manipulation module lives
 in `src/ui/uitransform/` ready for later extraction into fourier-transform.
+
+---
+
+## 2026-07-17 -- Login flow, part 1 (branch login-flow, L1-L3)
+
+The barebones "Log in with Matrix" button was fine for early dev; approaching a
+launchable product it isn't. This mission rebuilds the entry experience around
+one unchanging mission (below) and a mascot. Run solo, self-verified per step
+(tsc / eslint-on-changed / build; full-tree lint held at the 24 baseline). New
+module: `src/onboarding/`. Branched from main, independent of `domain-mode`.
+
+### New canon (in auto-memory + docs)
+- **Onboarding-UX-law (the unfailable mission).** Make the next action obvious
+  WITHOUT agency-removing rails -- no screen-dim-to-5%-bouncing-finger tour, no
+  self-checkout hostage UX. Every action gives realtime progress; no silent
+  stale states ("refresh to see it" without saying so is treason against trust).
+  Teach by legibility, preserve agency.
+- **Fourier-chan.** Mascot/guide of the Fourier suite: cheerful, wholesome,
+  genuinely DSP-knowledgeable AI who leads onboarding. Strictly PG on launch.
+  Full brief lives in `docs/fourier-chan-brief.md` (living doc).
+
+### Per-step
+- **L1 -- landing + choice node.** Logo / Create account / Log in, then a choice:
+  guided walkthrough vs. "I know what I'm doing" (straight to the form). The
+  escape hatch is the anti-rails law made literal. Primitives: `SilentBoundary`
+  (a throwing subtree renders NOTHING) and one-var asset slots (`assets.ts` /
+  `AssetImage`: `text` is placeholder now AND caption later; `hasImage()` is the
+  single-bit check).
+- **L2 -- perceptible boot + stale-then-live rooms.** `serverShape.ts` persists
+  the nav tree's structure as the "last known shape". `useNavTree` seeds from it
+  so the room list paints instantly (dimmed + a "Syncing your rooms..." pulse)
+  and reconciles to live opacity the moment a real tree lands. Guard: a mid-sync
+  EMPTY build never clobbers a non-empty stale preview. `BootScreen` moves (a
+  signal spectrum). The real shell mounts DURING sync once a client exists, with
+  an indeterminate top progress bar -- no blank screen, ever.
+- **L3 -- guided walkthrough.** A 5-step teaching wizard: Fourier-chan (portrait
+  = an Image-TBD slot with a signal-monogram placeholder) walks a newcomer
+  through what this is / account / joining rooms / done, then hands off to the
+  same MAS sign-in. Back + "Skip to the form" on every step; progress dots. The
+  41chan join guide 403'd on fetch -> go-fish degrade to known-flow copy + TBD
+  quote slots the operator swaps in later.
+
+### Claudecisions (continue the project sequence; CD-1..8 are on branch domain-mode)
+- **CD-9 -- silent-null UI.** A UI element that fails to render is replaced by
+  nothing -- no error card, no layout shift.
+- **CD-10 -- go-fish data (one saving throw).** Primary source -> single next
+  likeliest -> else categorical (log once, stop retrying). Accept broadened
+  types; discard mismatches by the cheapest boolean.
+- **CD-11 -- stale-then-live.** Cache last-known shape, paint it marked stale,
+  reconcile live with a transition. Stale/live is a visual differentiator, not a
+  blocking gate.
+- **CD-12 -- perceptible progress.** No static "Loading"; motion + staged status;
+  the stale list gives the user something real to watch.
+- **CD-13 -- one var, many uses.** An asset slot is a single `{ src?, text }`;
+  `text` is placeholder now / caption later. Point at existing sources; don't
+  mint parallel vars.
+- **CD-14 -- agency-preserving onboarding.** No rails/hostage tutorials; the
+  guided flow always offers Back + Skip and shows progress.
+
+### DRAFT fourier-phase nodes
+- **D-lf01 (decision).** Room list is stale-then-live off a serialized
+  "server shape" in localStorage; the live `Room` handle is dropped (not
+  serializable) and stale nodes are un-clickable-until-live -- correct for boot.
+- **D-lf02 (decision).** The app shell mounts DURING initial sync (once a client
+  exists), not gated on PREPARED, so the cached room list shows immediately; a
+  brief pre-client boot screen covers only the moment before a client exists.
+- **G-lf01 (gotcha).** During initial sync `getRooms()` is empty until PREPARED,
+  so a naive nav rebuild yields an EMPTY tree that would wipe the stale preview
+  and the cache. Guard every commit: an empty build must not replace a non-empty
+  tree, and only a non-empty tree is persisted.
+- **G-lf02 (gotcha).** Seeding `useState` from `localStorage` is fine, but the
+  React-Compiler lint still forbids writing a ref during render (see G-dm02);
+  do stale/live bookkeeping in state + effects, not render-time ref writes.
+
+### NEW node type: C- (comedy) -- taxonomy minted this session
+The operator proposed a `C-` prefix: mint a node whenever a snarky / casual /
+comedic input actually ENCODES a real decision. Threshold to adopt was 5
+candidates in a session; we hit 7, so it's adopted. C-01 links only to itself,
+in homage to "the robot told me to delete this useless line, but I kept it
+because it was funny." Initial mint:
+- **C-01.** "the robot told me to delete this useless line, but I kept it
+  because it was funny." -> the C-node concept itself. Links: [[C-01]] (only).
+- **C-02.** self-checkout hell (keyed 8012 for bananas, "GET HELP", 1980s
+  over-inflected voice, the whole thing halting) -> onboarding must never remove
+  agency -> [[onboarding-ux-law]] / CD-14.
+- **C-03.** "dim the entire screen to 5% except for a circle containing a
+  bouncing pointy finger" -> no spotlight/rails tutorials.
+- **C-04.** "borderline treason as far as user distrust goes" -> silent stale
+  states must be communicated -> CD-11 / CD-12.
+- **C-05.** "apparently the creator had certain interests." -> Fourier-chan's
+  canonical verbatim deflection line.
+- **C-06.** "you me (the human who can kinda talk to computers) and you (the
+  computer that can kinda talk to humans)" -> the trust-delegation model.
+- **C-07.** "AIRPing" / "dude im so high right now braindump" -> lore-dump mode
+  vs. code mode; compartmentalize the input, keep the actionable part.
+
+### PENDING OPERATOR VERIFICATION
+See `docs/smoke-login-flow.md` (the "need to feel it" list) -- landing/choice,
+stale-then-live boot, and the guided wizard all need a human at the running app;
+the stale->live reconcile in particular wants a reload with a warm cache.
+
+### Deferred / next
+- **L4** -- room-less default content ("click any room to join"), which is the
+  DEFAULT for a room-less chat frame but NOT the generic fallback (a failed load
+  leaves emptiness, CD-9).
+- **L5** -- formalize the go-fish/degradation helpers app-wide; reduced-motion
+  audit; polish.
+- **Branch note:** `domain-mode` and `login-flow` are both unmerged off main and
+  each carries its own devlog entries after the 2026-07-16 bugfix entry -- expect
+  a devlog merge to reconcile them; CD/node numbering is global and continues
+  across both.

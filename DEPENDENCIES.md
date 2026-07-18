@@ -85,6 +85,8 @@ client-specific deps so a later extraction is a move, not a rewrite.
 | `react` / `react-dom` | `19.2.6` | Satisfies Compound's `^18 \|\| ^19` peer range. |
 | `@vector-im/compound-web` | `^9.4.1` | Element's design system — UI primitives. |
 | `@vector-im/compound-design-tokens` | `^10.2.2` | Theme CSS vars (`--cpd-*`); light/dark via prefers-color-scheme. |
+| `dompurify` | `^3.4.11` | Mandatory HTML sanitizer before rendering any message HTML. Ships its OWN types since v3, so no `@types/dompurify` (that stub is deprecated for v3 and was removed 2026-07-18). |
+| `marked` | `^18.0.5` | Markdown -> HTML for the composer (`messageFormat.ts`); its output is ALWAYS piped through `dompurify` before render. Chosen for its small, sync, zero-dep core. |
 | `@fontsource/inter` | `^5.2.8` | UI font. Weights 400/500/600/700 imported. |
 | `@fontsource/inconsolata` | `^5.2.8` | Mono font. Weight 400 imported. |
 | `@fontsource/space-grotesk` | `^5.2.10` | Techy-but-readable room-list face. Weights 400/500/600/700 imported; surfaced as CSS var `--tc-ui-font` (user-swappable via settings UI). OFL. |
@@ -92,8 +94,8 @@ client-specific deps so a later extraction is a move, not a rewrite.
 | `typescript` | (scaffold) | — |
 
 ### Deferred (install when the phase needs them)
-- `dompurify` — mandatory before rendering message HTML (Phase: timeline).
-- `@matrix-org/matrix-wysiwyg` — rich composer (Phase: composer).
+- `@matrix-org/matrix-wysiwyg` — rich composer (Phase: composer). Still deferred;
+  the current composer uses `marked` + `dompurify` (both now installed, above).
 - `matrix-widget-api` — only if widgets are embedded (later/maybe).
 
 ---

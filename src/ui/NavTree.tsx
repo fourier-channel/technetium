@@ -28,7 +28,7 @@ export function NavTree({
   onSelectRoom?: (room: Room) => void
 }) {
   const { client } = useClient()
-  const { tree, loading } = useNavTree(client)
+  const { tree, loading, stale } = useNavTree(client)
   const notifs = useRoomNotifications(client)
   const { animationsEnabled, setAnimationsEnabled } = useRoomListSettings()
   const reduced = useReducedMotion()
@@ -64,9 +64,41 @@ export function NavTree({
         lineHeight: 1.3,
         color: 'var(--cpd-color-text-primary)',
         userSelect: 'none',
+        // Stale = last-known shape, still syncing: dim + soft pulse, reconciles
+        // to full opacity the instant the live tree lands (CD-11).
+        opacity: stale ? 0.5 : 1,
+        transition: 'opacity 400ms ease',
+        animation: stale && !reduced ? 'navStalePulse 1.6s ease-in-out infinite' : undefined,
       }}
     >
+      {stale && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '2px 10px 8px',
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: 0.3,
+            color: 'var(--cpd-color-text-secondary)',
+          }}
+        >
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: 'var(--cpd-color-bg-accent-rest, #3390ff)',
+              animation: reduced ? undefined : 'navStaleDot 1s ease-in-out infinite',
+            }}
+          />
+          Syncing your rooms{'…'}
+        </div>
+      )}
       <style>{`
+        @keyframes navStalePulse { 0%,100% { opacity: 0.5; } 50% { opacity: 0.62; } }
+        @keyframes navStaleDot { 0%,100% { opacity: 0.35; } 50% { opacity: 1; } }
         @keyframes navJoinRipple {
           0%   { background: var(--cpd-color-bg-action-primary-rest); }
           100% { background: transparent; }

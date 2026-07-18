@@ -11,6 +11,8 @@ import { LightboxProvider } from './ui/Lightbox'
 import { RoomListSettingsProvider } from './ui/RoomListSettingsProvider'
 import { useReadMarker } from './client/useReadMarker'
 import { DomainView } from './ui/DomainView'
+import { AuthLanding } from './onboarding/AuthLanding'
+import { BootScreen } from './onboarding/BootScreen'
 
 // Thin shell: render purely by client lifecycle status. All auth/client logic
 // lives in ClientProvider; App reflects the current phase and, when ready,
@@ -27,15 +29,10 @@ function App() {
   // no read receipts). Called before any early return to keep hook order stable.
   useReadMarker(client, selectedRoom)
 
-  if (status === 'starting') return <Centered>Starting{'\u2026'}</Centered>
-
   if (status === 'awaiting_login') {
-    return (
-      <Centered>
-        <h1>Technetium</h1>
-        <button type="button" onClick={() => login()}>Log in with Matrix</button>
-      </Centered>
-    )
+    // Every door (log in, advanced create, or finishing the guided walkthrough)
+    // begins the same OIDC/MAS sign-in; MAS presents login-or-register.
+    return <AuthLanding onProceed={() => login()} />
   }
 
   if (status === 'error') {
@@ -50,12 +47,33 @@ function App() {
     )
   }
 
-  if (status === 'syncing') return <Centered>Syncing{'\u2026'}</Centered>
+  // Pre-client beat only: a moving boot screen, never a dead "Loading".
+  if (status === 'starting' || (status === 'syncing' && !client)) {
+    return <BootScreen label={status === 'starting' ? 'Starting' : 'Connecting'} />
+  }
 
-  // status === 'ready' -- three-pane layout.
+  // A client now exists. Mount the real shell for BOTH 'syncing' (room list
+  // shows the cached stale shape) and 'ready' -- the user never faces a blank
+  // screen. `booting` drives an indeterminate top progress bar.
+  const booting = status !== 'ready'
+
+  // status === 'ready' or 'syncing' (with client) -- three-pane layout.
   return (
     <LightboxProvider>
     <RoomListSettingsProvider>
+    {booting && (
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 3, zIndex: 2000, overflow: 'hidden' }}>
+        <div
+          className="tc-boot-sweep"
+          style={{ height: '100%', width: '40%', borderRadius: 2, background: 'var(--cpd-color-bg-accent-rest, #3390ff)' }}
+        />
+        <style>{`
+          .tc-boot-sweep { animation: tcBootSweep 1.1s ease-in-out infinite; }
+          @keyframes tcBootSweep { 0% { transform: translateX(-110%); } 100% { transform: translateX(360%); } }
+          @media (prefers-reduced-motion: reduce) { .tc-boot-sweep { animation: none; width: 100%; } }
+        `}</style>
+      </div>
+    )}
     <div style={{ display: 'flex', height: '100vh', fontFamily: 'sans-serif' }}>
       <aside
         style={{
