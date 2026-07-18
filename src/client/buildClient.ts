@@ -1,6 +1,7 @@
 import * as sdk from 'matrix-js-sdk'
 import type { MatrixClient, TokenRefreshFunction } from 'matrix-js-sdk'
 import { Thread, FeatureSupport } from 'matrix-js-sdk'
+import { buildSlidingSync, slidingSyncEnabled } from './slidingSync'
 
 export interface BuildClientParams {
   homeserverUrl: string
@@ -57,6 +58,14 @@ export function startAndWaitForSync(client: MatrixClient): Promise<void> {
       if (s === 'PREPARED') resolve()
       else if (s === 'ERROR') reject(new Error('Sync failed'))
     })
+    // EXPERIMENTAL: native Simplified Sliding Sync (MSC4186), opt-in via
+    // VITE_SLIDING_SYNC. Windowed room loading -> a far lighter initial sync.
+    // All the fragile internal-SDK wiring is isolated in ./slidingSync. Default
+    // (flag off) is the classic sync below, untouched.
+    if (slidingSyncEnabled()) {
+      client.startClient({ slidingSync: buildSlidingSync(client), threadSupport: true })
+      return
+    }
     // threadSupport is a startClient option (read from clientOpts), NOT a
     // createClient option — pass it here so the SDK routes m.thread
     // replies into Thread timelines instead of the main timeline.

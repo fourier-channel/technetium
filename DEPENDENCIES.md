@@ -100,6 +100,22 @@ client-specific deps so a later extraction is a move, not a rewrite.
 
 ---
 
+## Fragile internal imports (SCAN BEFORE ANY matrix-js-sdk UPGRADE)
+
+- **`matrix-js-sdk/lib/sliding-sync`** — `src/client/slidingSync.ts` deep-imports
+  the INTERNAL `SlidingSync` class. It is NOT public in 41.6.0 (only
+  `SlidingSyncEvent` is exported from the package root), so this reaches into
+  unsupported surface. Operator-approved deviation (2026-07-18) to use native
+  Simplified Sliding Sync (MSC4186), which `matrix.41chan.net` advertises
+  (`org.matrix.simplified_msc3575`) with no proxy. Kept behind `VITE_SLIDING_SYNC`
+  (default off); all the fragile surface lives in that ONE module.
+  - **RULE:** before recommending ANY matrix-js-sdk bump, scan the target version
+    for sliding-sync changes — is `SlidingSync` public yet? did the class
+    signature / list-config shape / endpoint move? — and re-verify
+    `slidingSync.ts` against it. **Never bump the SDK blind.**
+
+---
+
 ## License note
 
 All current dependencies are permissively licensed (matrix-js-sdk: Apache-2.0;
