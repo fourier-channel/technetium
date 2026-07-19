@@ -1,8 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Room } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
 import { useMembers } from '../client/useMembers'
+import { useMemberBackfill } from '../client/useMemberBackfill'
 import { honorificFor, maxPower, type MergedMember } from '../client/members'
+import { useFlipList } from './flip'
+import { usePopEnter } from './pop'
 
 type Mode = 'room' | 'all' | 'all-highlight'
 
@@ -17,6 +20,22 @@ export function MemberList({ room }: { room: Room | null }) {
   const { client } = useClient()
   const members = useMembers(client)
   const [mode, setMode] = useState<Mode>('all-highlight')
+  const listRef = useRef<HTMLDivElement>(null)
+
+  // Background-hydrate the community roster so All / Nearby fill in (sliding sync
+  // ships only $ME per room). Arrivals animate in via the FLIP + pop below.
+  useMemberBackfill(client)
+
+  // Member-on-demand (CD-15): sliding sync ships only $ME's membership, so a
+  // room's full roster isn't present until we ask for it. Fetch it when a room
+  // is opened; the SDK applies it in one batch (out-of-band members), which the
+  // member source hears via RoomState.members and repaints once (no re-sort
+  // churn). Idempotent -- loadMembersIfNeeded no-ops if already loaded.
+  useEffect(() => {
+    room?.loadMembersIfNeeded().catch(() => {
+      /* transient under sync; a later open or membership event retries */
+    })
+  }, [room])
 
   const inRoom = (m: MergedMember) =>
     room ? room.roomId in m.powerByRoom : false
@@ -31,6 +50,14 @@ export function MemberList({ room }: { room: Room | null }) {
   shown = [...shown].sort((a, b) =>
     a.displayName.toLowerCase().localeCompare(b.displayName.toLowerCase()),
   )
+
+  // One animation system for every order/membership change: the rows that MOVED
+  // slide to their new slot (useFlipList -- the "push"), and rows that just
+  // ARRIVED pop into the opened gap (usePopEnter). orderKey changes only on a
+  // real change, so stat-only re-renders don't animate.
+  const orderKey = shown.map((m) => m.id).join('|')
+  useFlipList(listRef, orderKey)
+  usePopEnter(listRef, orderKey)
 
   return (
     <div
@@ -49,7 +76,7 @@ export function MemberList({ room }: { room: Room | null }) {
         <ModeBtn active={mode === 'all-highlight'} onClick={() => setMode('all-highlight')}>Nearby</ModeBtn>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '2px 4px' }}>
+      <div ref={listRef} style={{ flex: 1, overflowY: 'auto', padding: '2px 4px' }}>
         <div style={{ fontSize: 11, color: 'var(--cpd-color-text-secondary)', padding: '2px 8px' }}>
           {shown.length} {shown.length === 1 ? 'member' : 'members'}
         </div>
@@ -105,6 +132,7 @@ function MemberRow({
 
   return (
     <div
+      data-flip-id={member.id}
       style={{
         display: 'flex',
         alignItems: 'center',

@@ -46,6 +46,7 @@ const LIST_REQUIRED_STATE: string[][] = [
   ['m.room.avatar', ''],
   ['m.room.canonical_alias', ''],
   ['m.room.create', ''], // room vs space (m.space)
+  ['m.room.power_levels', ''], // honorifics (~/@/+) once members load on demand
   ['m.space.child', '*'], // space hierarchy (parent -> children)
   ['m.space.parent', '*'], // child -> parent, for the parent-gate in spaces.ts
   ['m.room.member', '$ME'], // OWN membership only -- not the roster

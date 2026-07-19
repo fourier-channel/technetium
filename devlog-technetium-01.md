@@ -1729,3 +1729,34 @@ Rollback is cheap: re-deploy with the flag at 0 (transport only), or flip the
 `current` release symlink back (release dirs kept, last 5). The `sliding-sync`
 branch is retained as a known-good checkpoint. Watch: fresh-join sync weight,
 the reveal/intro on real rooms, DM pill, resizable sidebar.
+
+---
+
+## 2026-07-19 -- Member list under sliding sync (member-on-demand + animated backfill)
+
+Post-deploy the member list showed only SELF: sliding sync's lean required_state
+carries just $ME per room, so a client reading room.getJoinedMembers() sees one
+person. Fixed + polished; deployed.
+
+- **Member-on-demand (CD-15).** `lazyLoadMembers: true` on the sliding-sync
+  startClient so the SDK treats each roster as partial; `m.room.power_levels`
+  added to required_state so honorifics resolve once members load; the member
+  source now also subscribes to `RoomState.members` (out-of-band member loads
+  emit THAT, not `RoomState.events` -- without it the fetch never repaints);
+  MemberList calls `room.loadMembersIfNeeded()` when a room opens.
+- **Background backfill.** `useMemberBackfill` (sliding-sync only, 4-concurrent,
+  idempotent, re-runs as late rooms arrive) hydrates the rest so All / Nearby
+  fill to the whole community.
+- **Animated arrivals** through the existing FLIP system (thread-cards mission):
+  `useFlipList` slides the rows that moved (the push) + a new `usePopEnter`
+  (scale + fade + accent glow, lagged and staggered so the push leads and the
+  newcomer drops into the gap). Reduced motion -> colour blink.
+
+### DRAFT fourier-phase nodes
+- **G-ms01 (gotcha).** Sliding sync delivers only $ME per room -- getJoinedMembers
+  shows just self. Needs lazyLoadMembers + load-on-open + background backfill; and
+  out-of-band member loads emit `RoomState.members`, NOT `RoomState.events`, so a
+  member source must subscribe to it or the fetch silently never repaints.
+- **G-ms02 (gotcha).** A lone 401 on the sliding-sync long-poll is a MAS access
+  token expiring mid-poll; the SDK refreshes + reconnects (benign when a 200
+  follows). Only a real fault if sync WEDGES with no follow-up 200.

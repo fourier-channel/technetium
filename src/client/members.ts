@@ -1,4 +1,4 @@
-import type { MatrixClient, Room } from 'matrix-js-sdk'
+import { RoomStateEvent, type MatrixClient, type Room } from 'matrix-js-sdk'
 
 // IRC-style honorific tiers, mapped to Matrix power levels.
 // ~ owner (100), @ op/mod (50), + voice (25, placeholder), default = none.
@@ -114,10 +114,15 @@ export function createMatrixSpaceSource(client: MatrixClient): MemberSource {
       client.on('RoomMember.membership' as any, onChange)
       client.on('RoomMember.powerLevel' as any, onChange)
       client.on('RoomState.events' as any, onChange)
+      // On-demand (lazy) member loads land as out-of-band members, which emit
+      // RoomState.members -- NOT RoomState.events. Without this the roster fetch
+      // would never repaint the list under sliding sync.
+      client.on(RoomStateEvent.Members, onChange)
       return () => {
         client.off('RoomMember.membership' as any, onChange)
         client.off('RoomMember.powerLevel' as any, onChange)
         client.off('RoomState.events' as any, onChange)
+        client.off(RoomStateEvent.Members, onChange)
       }
     },
   }

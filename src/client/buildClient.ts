@@ -63,7 +63,11 @@ export function startAndWaitForSync(client: MatrixClient): Promise<void> {
     // All the fragile internal-SDK wiring is isolated in ./slidingSync. Default
     // (flag off) is the classic sync below, untouched.
     if (slidingSyncEnabled()) {
-      client.startClient({ slidingSync: buildSlidingSync(client), threadSupport: true })
+      // lazyLoadMembers: sliding sync's required_state carries only $ME, so the
+      // SDK must treat each room's roster as PARTIAL and lazy-fetch the rest on
+      // demand (room.loadMembersIfNeeded on open) -- otherwise the member list
+      // shows only self. See src/ui/MemberList.tsx.
+      client.startClient({ slidingSync: buildSlidingSync(client), threadSupport: true, lazyLoadMembers: true })
       return
     }
     // threadSupport is a startClient option (read from clientOpts), NOT a
