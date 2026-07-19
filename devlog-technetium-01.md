@@ -1717,7 +1717,15 @@ server by the operator across the session). Self-verified per step (tsc / eslint
 
 ### Status / next
 - Sync-robustness fixes (above) are DEPLOYED. Sliding sync + the nav overhaul are
-  on `sliding-sync`, flag-gated, NOT deployed. Next: a consolidation pass --
-  end-to-end smoke, then a merge decision (and whether sliding sync ships on or
-  stays behind `VITE_SLIDING_SYNC`). Deferred: ② member-list-on-demand (CD-15)
+  on `sliding-sync`, flag-gated. Deferred: (2) member-list-on-demand (CD-15)
   once windowing lands; the sound pill's actual audio.
+
+### SHIPPED 2026-07-19
+Merged `sliding-sync` -> main (no-ff), pushed, deployed. Operator call: sliding
+sync ON in prod -- `VITE_SLIDING_SYNC=1` set in `.env.production` (explicit, so
+the prod build no longer depends on the machine-local `.env.local`). So the
+community's live sync path is now native MSC4186, and the nav overhaul is live.
+Rollback is cheap: re-deploy with the flag at 0 (transport only), or flip the
+`current` release symlink back (release dirs kept, last 5). The `sliding-sync`
+branch is retained as a known-good checkpoint. Watch: fresh-join sync weight,
+the reveal/intro on real rooms, DM pill, resizable sidebar.
