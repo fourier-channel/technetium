@@ -32,14 +32,23 @@ const SLIDING_SYNC_TIMEOUT_MS = 30_000
 
 // The room-list window + what state each room ships with. Tunables kept here as
 // named values, not inline literals, so the window/sort/state are one edit.
+//
+// `slow_get_all_rooms` is the crux: the range [0,20] is only the PRIORITY window
+// (loads first); with slow_get_all_rooms the server then streams EVERY joined
+// room -- spaces included -- over subsequent responses. So the whole nav fills
+// in (the L2 stale-then-live nav already renders rooms as they arrive), while
+// `required_state` stays LEAN: room chrome + own membership only, NEVER the full
+// member lists that made classic sync heavy. Per-user members load on demand
+// (CD-15). This is the "full nav, light sync" shape.
 const INITIAL_RANGE: number[][] = [[0, 20]]
 const LIST_SORT = ['by_recency']
 const LIST_REQUIRED_STATE: string[][] = [
   ['m.room.name', ''],
   ['m.room.avatar', ''],
   ['m.room.canonical_alias', ''],
-  ['m.room.create', ''],
-  ['m.space.child', '*'],
+  ['m.room.create', ''], // room vs space (m.space)
+  ['m.space.child', '*'], // space hierarchy
+  ['m.room.member', '$ME'], // OWN membership only -- one event, not the roster
 ]
 const TIMELINE_LIMIT = 1
 
@@ -55,6 +64,8 @@ export function buildSlidingSync(client: MatrixClient): SlidingSync {
         sort: LIST_SORT,
         required_state: LIST_REQUIRED_STATE,
         timeline_limit: TIMELINE_LIMIT,
+        // Stream ALL joined rooms/spaces past the priority window (incrementally).
+        slow_get_all_rooms: true,
       },
     ],
   ])
