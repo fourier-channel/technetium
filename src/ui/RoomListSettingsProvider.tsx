@@ -17,6 +17,10 @@ function loadSettings(): RoomListSettings {
       favorites: Array.isArray(p.favorites) ? p.favorites.filter((x) => typeof x === 'string') : [],
       icons: p.icons && typeof p.icons === 'object' ? p.icons : {},
       mutes: p.mutes && typeof p.mutes === 'object' ? p.mutes : {},
+      soundEnabled: p.soundEnabled === true,
+      soundVolume: typeof p.soundVolume === 'number' ? Math.max(0, Math.min(100, p.soundVolume)) : 5,
+      panelWidth: typeof p.panelWidth === 'number' ? p.panelWidth : null,
+      panelLocked: p.panelLocked === true,
     }
   } catch {
     return defaultRoomListSettings()
@@ -38,6 +42,22 @@ export function RoomListSettingsProvider({ children }: { children: ReactNode }) 
 
   const setAnimationsEnabled = useCallback(
     (on: boolean) => setSettings((s) => ({ ...s, animationsEnabled: on })),
+    [],
+  )
+  const setSoundEnabled = useCallback(
+    (on: boolean) => setSettings((s) => ({ ...s, soundEnabled: on })),
+    [],
+  )
+  const setSoundVolume = useCallback(
+    (v: number) => setSettings((s) => ({ ...s, soundVolume: Math.max(0, Math.min(100, Math.round(v))) })),
+    [],
+  )
+  const setPanelWidth = useCallback(
+    (w: number | null) => setSettings((s) => ({ ...s, panelWidth: w })),
+    [],
+  )
+  const setPanelLocked = useCallback(
+    (locked: boolean) => setSettings((s) => ({ ...s, panelLocked: locked })),
     [],
   )
   const toggleFavorite = useCallback(
@@ -84,6 +104,14 @@ export function RoomListSettingsProvider({ children }: { children: ReactNode }) 
     () => ({
       animationsEnabled: settings.animationsEnabled,
       setAnimationsEnabled,
+      soundEnabled: settings.soundEnabled,
+      setSoundEnabled,
+      soundVolume: settings.soundVolume,
+      setSoundVolume,
+      panelWidth: settings.panelWidth,
+      setPanelWidth,
+      panelLocked: settings.panelLocked,
+      setPanelLocked,
       isFavorite: (roomId) => settings.favorites.includes(roomId),
       toggleFavorite,
       getIcon: (roomId) => settings.icons[roomId],
@@ -99,7 +127,19 @@ export function RoomListSettingsProvider({ children }: { children: ReactNode }) 
       setMute,
       clearMute,
     }),
-    [settings, setAnimationsEnabled, toggleFavorite, setIcon, clearIcon, setMute, clearMute],
+    [
+      settings,
+      setAnimationsEnabled,
+      setSoundEnabled,
+      setSoundVolume,
+      setPanelWidth,
+      setPanelLocked,
+      toggleFavorite,
+      setIcon,
+      clearIcon,
+      setMute,
+      clearMute,
+    ],
   )
 
   return <RoomListSettingsContext.Provider value={api}>{children}</RoomListSettingsContext.Provider>

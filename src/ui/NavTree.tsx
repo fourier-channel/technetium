@@ -30,7 +30,8 @@ export function NavTree({
   const { client } = useClient()
   const { tree, loading, stale } = useNavTree(client)
   const notifs = useRoomNotifications(client)
-  const { animationsEnabled, setAnimationsEnabled } = useRoomListSettings()
+  const { animationsEnabled, setAnimationsEnabled, soundEnabled, setSoundEnabled, soundVolume, setSoundVolume } =
+    useRoomListSettings()
   const reduced = useReducedMotion()
   const animate = animationsEnabled && !reduced
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
@@ -141,6 +142,24 @@ export function NavTree({
           100% { background: transparent; }
         }
         .nav-join-ripple { animation: navJoinRipple 900ms ease-out 1; }
+        /* Toggle pills (animations sine wave / sound speaker): glow on, dim off;
+           the animations wave flows on hover while on, to show what it does. */
+        .tc-pill {
+          display: inline-flex; align-items: center; justify-content: center;
+          height: 24px; min-width: 36px; padding: 0 9px; border-radius: 999px;
+          cursor: pointer; border: 1px solid rgba(128,128,128,0.35);
+          background: transparent; color: var(--cpd-color-text-secondary);
+          transition: color .15s ease, box-shadow .15s ease, border-color .15s ease;
+        }
+        .tc-pill:hover { border-color: rgba(128,128,128,0.6); }
+        .tc-pill-on {
+          color: var(--tc-unread, #ff9a3c);
+          border-color: rgba(255,150,40,0.5);
+          box-shadow: 0 0 8px rgba(255,150,40,0.4);
+        }
+        .tc-wave { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+        @keyframes tcWaveFlow { from { transform: translateX(0); } to { transform: translateX(-12px); } }
+        .tc-pill-on:hover .tc-wave { animation: tcWaveFlow 0.9s linear infinite; }
         /* Staged descent: each row drops in, delayed by its depth (--stage). */
         @keyframes navStageIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
         .nav-stage { animation: navStageIn 420ms ease-out var(--stage, 0ms) both; }
@@ -213,35 +232,66 @@ export function NavTree({
         .room-pulse-letter { animation: roomLetterPulse 1600ms linear infinite; }
       `}</style>
       {/* Master animations toggle (seed for the future settings UI). */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '2px 10px 6px',
-          fontSize: 11,
-          color: 'var(--cpd-color-text-secondary)',
-        }}
-      >
-        <span>Animations</span>
-        <button
-          type="button"
-          onClick={() => setAnimationsEnabled(!animationsEnabled)}
-          title="Toggle room-list animations (pulses, glows, collapse)"
+      <div style={{ padding: '2px 10px 8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Animations pill: a sine wave; glows on, dims off; on hover-while-on
+              the wave flows to show what it does. */}
+          <button
+            type="button"
+            onClick={() => setAnimationsEnabled(!animationsEnabled)}
+            title="Room-list animations"
+            className={animationsEnabled ? 'tc-pill tc-pill-on' : 'tc-pill'}
+          >
+            <svg width="26" height="14" viewBox="0 0 26 14" style={{ overflow: 'hidden' }}>
+              <path
+                className="tc-wave"
+                d="M-12,7 Q-9,2.5 -6,7 T0,7 T6,7 T12,7 T18,7 T24,7 T30,7 T36,7"
+              />
+            </svg>
+          </button>
+          {/* Sound pill: doesn't do anything yet -- a speaker; on drops a volume slider. */}
+          <button
+            type="button"
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            title="This doesn't do anything yet, but it's pretty."
+            className={soundEnabled ? 'tc-pill tc-pill-on' : 'tc-pill'}
+          >
+            <svg width="18" height="16" viewBox="0 0 18 16">
+              <path d="M2,6 H5 L9,3 V13 L5,10 H2 Z" fill="currentColor" stroke="none" />
+              {soundEnabled ? (
+                <>
+                  <path d="M11.5,6 Q13,8 11.5,10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                  <path d="M13.6,4.4 Q16.2,8 13.6,11.6" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                </>
+              ) : (
+                <line x1="11" y1="4.5" x2="16" y2="11.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+              )}
+            </svg>
+          </button>
+        </div>
+        {/* Volume slider descends from the speaker pill when sound is on. */}
+        <div
           style={{
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: 0.3,
-            padding: '2px 8px',
-            borderRadius: 10,
-            cursor: 'pointer',
-            border: '1px solid rgba(128,128,128,0.35)',
-            color: animationsEnabled ? '#1b1300' : 'var(--cpd-color-text-secondary)',
-            background: animationsEnabled ? 'var(--tc-unread)' : 'transparent',
+            display: 'grid',
+            gridTemplateRows: soundEnabled ? '1fr' : '0fr',
+            transition: 'grid-template-rows 220ms ease',
           }}
         >
-          {animationsEnabled ? 'ON' : 'OFF'}
-        </button>
+          <div style={{ overflow: 'hidden', minHeight: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 2px 1px', fontSize: 10, color: 'var(--cpd-color-text-secondary)' }}>
+              <span>Vol</span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={soundVolume}
+                onChange={(e) => setSoundVolume(Number(e.target.value))}
+                style={{ flex: 1, accentColor: 'var(--cpd-color-bg-accent-rest, #3390ff)', cursor: 'pointer' }}
+              />
+              <span style={{ width: 30, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{soundVolume}%</span>
+            </div>
+          </div>
+        </div>
       </div>
       {/* Direct Messages: a top pill; expanded, DMs are icon-only, wrapping
           horizontally, and pushing the room list down (intended reflow). */}

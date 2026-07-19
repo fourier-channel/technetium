@@ -24,15 +24,36 @@ export interface RoomListSettings {
   favorites: string[]
   icons: Record<string, string>
   mutes: Record<string, number | null>
+  soundEnabled: boolean
+  soundVolume: number // 0..100
+  panelWidth: number | null // px; null = use the computed default
+  panelLocked: boolean
 }
 
 export function defaultRoomListSettings(): RoomListSettings {
-  return { animationsEnabled: true, favorites: [], icons: {}, mutes: {} }
+  return {
+    animationsEnabled: true,
+    favorites: [],
+    icons: {},
+    mutes: {},
+    soundEnabled: false,
+    soundVolume: 5,
+    panelWidth: null,
+    panelLocked: false,
+  }
 }
 
 export interface RoomListSettingsApi {
   animationsEnabled: boolean
   setAnimationsEnabled: (on: boolean) => void
+  soundEnabled: boolean
+  setSoundEnabled: (on: boolean) => void
+  soundVolume: number
+  setSoundVolume: (v: number) => void
+  panelWidth: number | null
+  setPanelWidth: (w: number | null) => void
+  panelLocked: boolean
+  setPanelLocked: (locked: boolean) => void
   isFavorite: (roomId: string) => boolean
   toggleFavorite: (roomId: string) => void
   getIcon: (roomId: string) => string | undefined
