@@ -20,12 +20,41 @@ function nodeMode(node: TreeNode): Mode {
   return 'joinable'
 }
 
+// Text width via a shared offscreen canvas (no DOM thrash).
+let measureCanvas: HTMLCanvasElement | null = null
+function measureText(text: string, font: string): number {
+  if (!measureCanvas) measureCanvas = document.createElement('canvas')
+  const ctx = measureCanvas.getContext('2d')
+  if (!ctx) return text.length * 7
+  ctx.font = font
+  return ctx.measureText(text).width
+}
+// Default panel width: fit the WIDEST room name -- unless it's more than 1.5x the
+// second-widest (an outlier), in which case fall back to the second-widest.
+function computeDefaultPanelWidth(tree: ReturnType<typeof useNavTree>['tree']): number {
+  if (!tree) return 260
+  const names: string[] = []
+  const walk = (nodes: TreeNode[]) => nodes.forEach((n) => { names.push(n.name); walk(n.children) })
+  walk(tree.spaces)
+  for (const r of tree.orphanRooms) names.push(r.name)
+  const font = '600 13px "Space Grotesk", system-ui, sans-serif'
+  const widths = names.map((n) => measureText(n, font)).sort((a, b) => b - a)
+  if (widths.length === 0) return 260
+  const widest = widths[0]
+  const second = widths[1] ?? widest
+  const chosen = widest <= 1.5 * second ? widest : second
+  const BASE = 100 // icon + chevron + indent + padding + count badge
+  return Math.round(Math.max(200, Math.min(460, BASE + chosen)))
+}
+
 export function NavTree({
   selectedRoomId,
   onSelectRoom,
+  onDefaultWidth,
 }: {
   selectedRoomId?: string
   onSelectRoom?: (room: Room) => void
+  onDefaultWidth?: (w: number) => void
 }) {
   const { client } = useClient()
   const { tree, loading, stale } = useNavTree(client)
@@ -72,6 +101,11 @@ export function NavTree({
     }
     setTimeout(step, INTRO_START_MS)
   }, [animate, tree])
+
+  // Report the smart default width (widest room name rule) to the sidebar.
+  useEffect(() => {
+    if (tree && onDefaultWidth) onDefaultWidth(computeDefaultPanelWidth(tree))
+  }, [tree, onDefaultWidth])
   const onContext = (node: TreeNode, e: React.MouseEvent) => {
     e.preventDefault()
     setMenu({ node, x: e.clientX, y: e.clientY })

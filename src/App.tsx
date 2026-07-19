@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import type { Room } from 'matrix-js-sdk'
 import { useClient } from './client/ClientContext'
-import { NavTree } from './ui/NavTree'
+import { Sidebar } from './ui/Sidebar'
 import { Timeline } from './ui/Timeline'
 import { Composer } from './ui/Composer'
 import { MemberList } from './ui/MemberList'
@@ -75,29 +75,23 @@ function App() {
       </div>
     )}
     <div style={{ display: 'flex', height: '100vh', fontFamily: 'sans-serif' }}>
-      <aside
-        className="tc-scroll"
-        style={{
-          width: 260,
-          flexShrink: 0,
-          borderRight: '1px solid rgba(128,128,128,0.25)',
-          overflowY: 'auto',
-          padding: '8px 4px',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '4px 8px 8px',
-          }}
-        >
-          <strong>{userId}</strong>
-          <button type="button" onClick={logout} style={{ fontSize: 12 }}>Log out</button>
-        </div>
-        <NavTree selectedRoomId={selectedRoom?.roomId} onSelectRoom={setSelectedRoom} />
-      </aside>
+      <Sidebar
+        selectedRoomId={selectedRoom?.roomId}
+        onSelectRoom={setSelectedRoom}
+        header={
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '4px 8px 8px',
+            }}
+          >
+            <strong>{userId}</strong>
+            <button type="button" onClick={logout} style={{ fontSize: 12 }}>Log out</button>
+          </div>
+        }
+      />
 
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         {selectedRoom ? (
