@@ -104,6 +104,9 @@ export function NavTree({
           100% { background: transparent; }
         }
         .nav-join-ripple { animation: navJoinRipple 900ms ease-out 1; }
+        /* Staged descent: each row drops in, delayed by its depth (--stage). */
+        @keyframes navStageIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+        .nav-stage { animation: navStageIn 420ms ease-out var(--stage, 0ms) both; }
         /* Fourier reveal: an N-harmonic square composite is drawn left->right;
            as the sweep passes, the room name flickers in behind it. */
         @keyframes frSweep { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
@@ -116,20 +119,22 @@ export function NavTree({
         .fr { position: relative; display: inline-flex; align-items: center; min-width: 0; max-width: 100%; }
         .fr-name {
           display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-          animation: frNameWipe 780ms ease-out 470ms both, frFlicker 780ms steps(24, end) 470ms both;
+          animation: frNameWipe 780ms ease-out calc(470ms + var(--stage, 0ms)) both,
+                     frFlicker 780ms steps(24, end) calc(470ms + var(--stage, 0ms)) both;
         }
-        .fr-wave { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; animation: frWaveFade 1250ms ease-out forwards; }
+        .fr-wave { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; animation: frWaveFade 1250ms ease-out var(--stage, 0ms) both; }
         .fr-sweep {
           fill: none; stroke: #ff9a3c; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
           stroke-dasharray: 1; filter: drop-shadow(0 0 2px rgba(255,150,40,0.7));
-          animation: frSweep 900ms ease-in-out forwards;
+          animation: frSweep 900ms ease-in-out var(--stage, 0ms) both;
         }
         /* Epicycle icon reveal: hand sweeps + traces the composite (~62%), ring
            blips out (62-80%), then the icon zooms out past the ring and settles. */
         @keyframes epiDraw { 0% { stroke-dashoffset: 1; } 62%, 100% { stroke-dashoffset: 0; } }
         @keyframes epiHand { 0% { transform: rotate(-90deg); } 62%, 100% { transform: rotate(270deg); } }
         @keyframes epiOut {
-          0%, 62% { opacity: 1; transform: scale(1); }
+          0% { opacity: 0; transform: scale(1); }
+          5%, 62% { opacity: 1; transform: scale(1); }
           70% { opacity: 1; transform: scale(1.12); }
           80%, 100% { opacity: 0; transform: scale(0.15); }
         }
@@ -139,13 +144,13 @@ export function NavTree({
           100% { opacity: 1; transform: scale(1); }
         }
         .epi { position: relative; display: inline-grid; place-items: center; }
-        .epi-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; animation: epiOut 1500ms ease-in forwards; }
+        .epi-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; animation: epiOut 1500ms ease-in var(--stage, 0ms) both; }
         .epi-ring { fill: none; stroke: #00b200; stroke-width: 1.4; filter: drop-shadow(0 0 3px #00b200); }
-        .epi-wave { fill: none; stroke: #ff9a3c; stroke-width: 1.3; stroke-linejoin: round; stroke-dasharray: 1; filter: drop-shadow(0 0 1.5px rgba(255,150,40,0.85)); animation: epiDraw 1500ms ease-in-out forwards; }
-        .epi-hand-g { transform-box: view-box; transform-origin: 12px 12px; animation: epiHand 1500ms ease-in-out forwards; }
+        .epi-wave { fill: none; stroke: #ff9a3c; stroke-width: 1.3; stroke-linejoin: round; stroke-dasharray: 1; filter: drop-shadow(0 0 1.5px rgba(255,150,40,0.85)); animation: epiDraw 1500ms ease-in-out var(--stage, 0ms) forwards; }
+        .epi-hand-g { transform-box: view-box; transform-origin: 12px 12px; animation: epiHand 1500ms ease-in-out var(--stage, 0ms) forwards; }
         .epi-hand { stroke: #00b200; stroke-width: 1; stroke-linecap: round; opacity: 0.75; }
         .epi-spark { fill: #eaffea; filter: drop-shadow(0 0 2.5px #00b200); }
-        .epi-icon { position: relative; opacity: 0; animation: epiIconIn 1500ms cubic-bezier(0.2, 0.9, 0.3, 1) forwards; }
+        .epi-icon { position: relative; opacity: 0; animation: epiIconIn 1500ms cubic-bezier(0.2, 0.9, 0.3, 1) var(--stage, 0ms) forwards; }
         @keyframes roomLetterPulse {
           0%, 40%, 60%, 100% {
             color: var(--tc-unread-base);
@@ -355,8 +360,16 @@ function TreeRow({
         onClick={onClick}
         onContextMenu={(e) => onContext(node, e)}
         title={knocked ? `${label} (request sent)` : label}
-        className={ripple && animate ? 'nav-join-ripple' : undefined}
+        className={
+          [ripple && animate ? 'nav-join-ripple' : '', animate ? 'nav-stage' : '']
+            .filter(Boolean)
+            .join(' ') || undefined
+        }
         style={{
+          // Staged reveal: rows descend + their name/icon reveals fire delayed by
+          // tree depth, so the list builds main-space -> sub-spaces -> rooms. The
+          // var cascades to the reveal animations below.
+          '--stage': animate ? `${depth * NAV_STAGE_MS}ms` : '0ms',
           display: 'flex',
           alignItems: 'center',
           gap: 6,
@@ -372,7 +385,7 @@ function TreeRow({
           background: isSelected
             ? 'var(--cpd-color-bg-action-primary-rest)'
             : 'transparent',
-        }}
+        } as React.CSSProperties}
         onMouseEnter={(e) => {
           if (!isSelected)
             e.currentTarget.style.background = 'var(--cpd-color-bg-subtle-secondary)'
@@ -526,6 +539,11 @@ function collectFavoriteRooms(node: TreeNode, isFavorite: (roomId: string) => bo
 // gets an orange glow + a "(N)" count. A ping (highlight > 0) additionally shows
 // an orange "@" and, when animations are enabled, a pulse that travels through
 // the name letter by letter. When animations are off / reduced-motion, the ping
+// Stage spacing for the depth-cascaded reveal: level N's rows (+ their name/icon
+// reveals) start this many ms after level N-1, so the tree builds top-down
+// (main space -> sub-spaces -> rooms) and later rooms get time to load.
+const NAV_STAGE_MS = 850
+
 // Fourier reveal wrapper (Ask 2026-07-19, tuned): on a room's first appearance a
 // square-wave PARTIAL SUM of N harmonics (N random-ish per room, 2..5 -> a
 // different composite each time) is drawn left->right in Fourier-chan amber; as
