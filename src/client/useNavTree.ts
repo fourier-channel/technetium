@@ -6,7 +6,7 @@ import {
   type MatrixClient,
   type MatrixEvent,
 } from 'matrix-js-sdk'
-import { buildNavTree, type HierarchyRoom, type NavTree } from './spaces'
+import { buildNavTree, collectParentedIds, type HierarchyRoom, type NavTree } from './spaces'
 import { isEmptyTree, loadServerShape, saveServerShape } from './serverShape'
 
 export interface NavTreeState {
@@ -63,6 +63,11 @@ export function useNavTree(client: MatrixClient | null): NavTreeState {
   const cacheRef = useRef<HierarchyRoom[]>([])
   const fetchSeq = useRef(0)
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Grow-only set of rooms known to live under a space (seeded from the cached
+  // shape). Passed to every build so a transient rebuild can't demote a child to
+  // a loose orphan before its parent hierarchy is re-fetched (the "children in
+  // Direct-and-Other" flash). Never shrinks within a session.
+  const parentedRef = useRef<Set<string>>(collectParentedIds(loadServerShape()))
 
   // Commit a freshly-built tree. Guard: a mid-sync EMPTY build must not clobber
   // a non-empty stale preview (getRooms() is empty until PREPARED). A non-empty
@@ -70,6 +75,8 @@ export function useNavTree(client: MatrixClient | null): NavTreeState {
   const commit = useCallback((built: NavTree) => {
     setTree((prev) => (isEmptyTree(built) && !isEmptyTree(prev) ? prev : built))
     if (!isEmptyTree(built)) {
+      // Remember every room now placed under a space (grow-only).
+      for (const id of collectParentedIds(built)) parentedRef.current.add(id)
       saveServerShape(built)
       setStale(false)
     }
@@ -78,7 +85,7 @@ export function useNavTree(client: MatrixClient | null): NavTreeState {
   // Cheap: re-overlay membership/names on the cached skeleton (no network).
   const rebuildFromCache = useCallback(() => {
     if (!client) return
-    commit(buildNavTree(client, cacheRef.current))
+    commit(buildNavTree(client, cacheRef.current, parentedRef.current))
   }, [client, commit])
 
   // Expensive: re-discover roots and re-fetch every hierarchy, then rebuild.
@@ -100,7 +107,7 @@ export function useNavTree(client: MatrixClient | null): NavTreeState {
       }
       if (seq !== fetchSeq.current) return
       cacheRef.current = all
-      commit(buildNavTree(client, all))
+      commit(buildNavTree(client, all, parentedRef.current))
     } catch (err) {
       console.error('useNavTree: hierarchy fetch failed', err)
       // leave the previous tree in place

@@ -56,22 +56,43 @@ function sortChildren(children: TreeNode[]): TreeNode[] {
 }
 
 // Does this room DECLARE a parent space (a valid m.space.parent with content)?
-// If so it must render UNDER that parent, never as a loose orphan -- so while its
-// parent hasn't loaded/placed yet we HOLD it out of the tree entirely rather than
-// dumping it into "Direct and Other" (parent-gate: parents load+show before their
-// children, priority main-space -> sub-spaces -> rooms). Rooms with NO parent
-// declaration are genuine orphans (DMs / direct-joins) and still show.
+// Many child rooms DON'T set this (the canonical link is m.space.child on the
+// parent), so it's only a weak signal -- the strong one is `heldIds` below.
 function hasParentSpace(room: Room): boolean {
   return room.currentState
     .getStateEvents('m.space.parent')
     .some((e) => Object.keys(e.getContent()).length > 0)
 }
 
+// Every room id nested UNDER a space in a tree (descendants of top-level spaces).
+// Used to seed the grow-only "held" set: once we've seen a room live under a
+// space (from the cache or a prior good build), never demote it to a loose
+// orphan during a transient rebuild -- which is what dumped children into
+// "Direct and Other" the moment the live rooms confirmed but their parent
+// hierarchy hadn't been re-fetched yet. Parent-gate: parents show before
+// children (main-space -> sub-spaces -> rooms); a held-but-unplaced room simply
+// doesn't render until its parent is back.
+export function collectParentedIds(tree: NavTree | null): Set<string> {
+  const ids = new Set<string>()
+  const walk = (nodes: TreeNode[]) => {
+    for (const n of nodes) {
+      ids.add(n.roomId)
+      walk(n.children)
+    }
+  }
+  if (tree) for (const space of tree.spaces) walk(space.children)
+  return ids
+}
+
 // Build the nav tree from one-or-more getRoomHierarchy() responses (structure +
 // names, including unjoined rooms) with live membership overlaid from sync.
 // `rooms` is the concatenation of every queried top-level space's
 // hierarchy.rooms.
-export function buildNavTree(client: MatrixClient, rooms: HierarchyRoom[]): NavTree {
+export function buildNavTree(
+  client: MatrixClient,
+  rooms: HierarchyRoom[],
+  heldIds: Set<string> = new Set(),
+): NavTree {
   // De-dupe by room_id (a room may appear under more than one parent).
   const byId = new Map<string, HierarchyRoom>()
   for (const h of rooms) if (h.room_id && !byId.has(h.room_id)) byId.set(h.room_id, h)
@@ -121,7 +142,13 @@ export function buildNavTree(client: MatrixClient, rooms: HierarchyRoom[]): NavT
   // directly-joined rooms). Surfaced from sync, not the hierarchy.
   const orphanRooms: TreeNode[] = client
     .getRooms()
-    .filter((r) => !r.isSpaceRoom() && !byId.has(r.roomId) && !hasParentSpace(r))
+    .filter(
+      (r) =>
+        !r.isSpaceRoom() &&
+        !byId.has(r.roomId) &&
+        !hasParentSpace(r) &&
+        !heldIds.has(r.roomId), // known to live under a space -> hold, don't orphan
+    )
     .map((r) => ({
       roomId: r.roomId,
       name: r.name || r.roomId,
@@ -155,8 +182,9 @@ export function buildNavTree(client: MatrixClient, rooms: HierarchyRoom[]): NavT
         !present.has(r.roomId) &&
         !childIds.has(r.roomId) &&
         // Hold a sub-space out of the top level until its parent space loads +
-        // places it (parent-gate). A true root space declares no parent.
-        !hasParentSpace(r),
+        // places it (parent-gate). A true root space is in neither set.
+        !hasParentSpace(r) &&
+        !heldIds.has(r.roomId),
     )
     .map((r) => ({
       roomId: r.roomId,
