@@ -84,6 +84,25 @@ export function collectParentedIds(tree: NavTree | null): Set<string> {
   return ids
 }
 
+// Order in which the intro sequence reveals nodes: the top space(s), then ALL
+// descendant spaces breadth-first (so every sub-space lands before any room),
+// then each space's direct rooms in that same order, then the orphan rooms.
+// This produces: 41chan -> sub-spaces (top-down) -> each sub-space's rooms in
+// order -> Direct & other.
+export function computeRevealOrder(tree: NavTree): string[] {
+  const spaceIds: string[] = []
+  const roomGroups: string[][] = []
+  const queue: TreeNode[] = [...tree.spaces]
+  let guard = 0
+  while (queue.length && guard++ < 10000) {
+    const node = queue.shift() as TreeNode
+    spaceIds.push(node.roomId)
+    queue.push(...node.children.filter((c) => c.isSpace))
+    roomGroups.push(node.children.filter((c) => !c.isSpace).map((r) => r.roomId))
+  }
+  return [...spaceIds, ...roomGroups.flat(), ...tree.orphanRooms.map((r) => r.roomId)]
+}
+
 // Build the nav tree from one-or-more getRoomHierarchy() responses (structure +
 // names, including unjoined rooms) with live membership overlaid from sync.
 // `rooms` is the concatenation of every queried top-level space's

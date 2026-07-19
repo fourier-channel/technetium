@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Room } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
-import { type TreeNode } from '../client/spaces'
+import { computeRevealOrder, type TreeNode } from '../client/spaces'
 import { useNavTree } from '../client/useNavTree'
 import { useRoomNotifications, type NotifMap, type NotifCounts } from '../client/useRoomNotifications'
 import { useRoomListSettings } from './roomListSettings'
@@ -36,6 +36,40 @@ export function NavTree({
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [orphansCollapsed, setOrphansCollapsed] = useState(false)
   const [menu, setMenu] = useState<{ node: TreeNode; x: number; y: number } | null>(null)
+
+  // Intro sequence: rows spawn in one at a time (41chan -> sub-spaces -> their
+  // rooms), each growing open + revealing. `introActive` gates a row's
+  // visibility until its turn. It must NEVER get in the way: ANY interaction
+  // (select / toggle / right-click) aborts it and shows everything at once.
+  const [appeared, setAppeared] = useState<Set<string>>(new Set())
+  const [introDone, setIntroDone] = useState(false)
+  const introStartedRef = useRef(false)
+  const introAbortedRef = useRef(false)
+  const introActive = animate && !introDone
+  const abortIntro = useCallback(() => {
+    introAbortedRef.current = true
+    setIntroDone(true)
+  }, [])
+
+  useEffect(() => {
+    // Run once, when the tree first has content + animations are on. StrictMode-
+    // safe: guarded by a ref, and the timer chain checks introAbortedRef rather
+    // than relying on effect cleanup (which double-fires in dev).
+    if (!animate || !tree || introStartedRef.current) return
+    if (tree.spaces.length === 0 && tree.orphanRooms.length === 0) return
+    introStartedRef.current = true
+    const order = computeRevealOrder(tree)
+    let i = 0
+    const step = () => {
+      if (introAbortedRef.current) return
+      const id = order[i]
+      if (id) setAppeared((prev) => new Set(prev).add(id))
+      i += 1
+      if (i < order.length) setTimeout(step, INTRO_STEP_MS)
+      else setTimeout(() => !introAbortedRef.current && setIntroDone(true), 300)
+    }
+    setTimeout(step, INTRO_START_MS)
+  }, [animate, tree])
   const onContext = (node: TreeNode, e: React.MouseEvent) => {
     e.preventDefault()
     setMenu({ node, x: e.clientX, y: e.clientY })
@@ -196,12 +230,11 @@ export function NavTree({
           {animationsEnabled ? 'ON' : 'OFF'}
         </button>
       </div>
-      {tree.spaces.map((node, i) => (
+      {tree.spaces.map((node) => (
         <TreeRow
           key={node.roomId}
           node={node}
           depth={0}
-          index={i}
           collapsed={collapsed}
           onToggle={toggle}
           selectedRoomId={selectedRoomId}
@@ -209,6 +242,9 @@ export function NavTree({
           notifs={notifs}
           animate={animate}
           onContext={onContext}
+          appeared={appeared}
+          introActive={introActive}
+          onIntroInteract={abortIntro}
         />
       ))}
       {tree.orphanRooms.length > 0 && (
@@ -240,12 +276,11 @@ export function NavTree({
             }}
           >
             <div style={{ overflow: 'hidden', minHeight: 0 }}>
-              {tree.orphanRooms.map((node, i) => (
+              {tree.orphanRooms.map((node) => (
                 <TreeRow
                   key={node.roomId}
                   node={node}
                   depth={0}
-                  index={i}
                   collapsed={collapsed}
                   onToggle={toggle}
                   selectedRoomId={selectedRoomId}
@@ -253,6 +288,9 @@ export function NavTree({
                   notifs={notifs}
                   animate={animate}
                   onContext={onContext}
+                  appeared={appeared}
+                  introActive={introActive}
+                  onIntroInteract={abortIntro}
                 />
               ))}
             </div>
@@ -274,7 +312,6 @@ export function NavTree({
 function TreeRow({
   node,
   depth,
-  index = 0,
   collapsed,
   onToggle,
   selectedRoomId,
@@ -282,10 +319,12 @@ function TreeRow({
   notifs,
   animate,
   onContext,
+  appeared,
+  introActive,
+  onIntroInteract,
 }: {
   node: TreeNode
   depth: number
-  index?: number
   collapsed: Set<string>
   onToggle: (roomId: string) => void
   selectedRoomId?: string
@@ -293,6 +332,11 @@ function TreeRow({
   notifs: NotifMap
   animate: boolean
   onContext: (node: TreeNode, e: React.MouseEvent) => void
+  // Intro sequence: a row is hidden (height 0) until it has appeared; any
+  // interaction fires onIntroInteract to abort the intro (show everything).
+  appeared: Set<string>
+  introActive: boolean
+  onIntroInteract: () => void
 }) {
   const { client } = useClient()
   const { isFavorite, isMutedNow } = useRoomListSettings()
@@ -376,24 +420,32 @@ function TreeRow({
   // Favorited descendant rooms stay visible when the space is collapsed.
   const favChildren = node.isSpace && isCollapsed ? collectFavoriteRooms(node, isFavorite) : []
 
+  // Intro: this row is hidden (height 0) until it's its turn to spawn.
+  const shown = !introActive || appeared.has(node.roomId)
+
   return (
     <>
+      {/* Intro appear-grid: grows this row in when its turn arrives. */}
       <div
-        onClick={onClick}
-        onContextMenu={(e) => onContext(node, e)}
-        title={knocked ? `${label} (request sent)` : label}
-        className={
-          [ripple && animate ? 'nav-join-ripple' : '', animate ? 'nav-stage' : '']
-            .filter(Boolean)
-            .join(' ') || undefined
-        }
         style={{
-          // Staged reveal: rows descend + their name/icon reveals fire delayed by
-          // tree depth, so the list builds main-space -> sub-spaces -> rooms. The
-          // var cascades to the reveal animations below.
-          '--stage': animate
-            ? `${depth * NAV_LEVEL_GAP_MS + index * NAV_ITEM_STAGGER_MS}ms`
-            : '0ms',
+          display: 'grid',
+          gridTemplateRows: shown ? '1fr' : '0fr',
+          transition: animate ? 'grid-template-rows 240ms ease' : undefined,
+        }}
+      >
+        <div style={{ overflow: 'hidden', minHeight: 0 }}>
+      <div
+        onClick={() => {
+          onIntroInteract()
+          onClick()
+        }}
+        onContextMenu={(e) => {
+          onIntroInteract()
+          onContext(node, e)
+        }}
+        title={knocked ? `${label} (request sent)` : label}
+        className={ripple && animate ? 'nav-join-ripple' : undefined}
+        style={{
           display: 'flex',
           alignItems: 'center',
           gap: 6,
@@ -409,7 +461,7 @@ function TreeRow({
           background: isSelected
             ? 'var(--cpd-color-bg-action-primary-rest)'
             : 'transparent',
-        } as React.CSSProperties}
+        }}
         onMouseEnter={(e) => {
           if (!isSelected)
             e.currentTarget.style.background = 'var(--cpd-color-bg-subtle-secondary)'
@@ -421,7 +473,7 @@ function TreeRow({
         <span style={{ width: 10, flexShrink: 0, textAlign: 'center', fontSize: 10, opacity: 0.7 }}>
           {node.isSpace ? (isCollapsed ? '\u25B8' : '\u25BE') : ''}
         </span>
-        <EpicycleReveal seed={node.roomId} play={animate}>
+        <EpicycleReveal seed={node.roomId} play={animate && shown}>
           <RoomIcon node={node} />
         </EpicycleReveal>
         {node.isSpace ? (
@@ -436,12 +488,12 @@ function TreeRow({
               textShadow: spaceUnread ? '0 0 6px rgba(255,150,40,0.5)' : undefined,
             }}
           >
-            <FourierReveal seed={node.roomId} play={animate}>
+            <FourierReveal seed={node.roomId} play={animate && shown}>
               {label}
             </FourierReveal>
           </span>
         ) : (
-          <FourierReveal seed={node.roomId} play={animate}>
+          <FourierReveal seed={node.roomId} play={animate && shown}>
             <RoomName label={label} counts={notifs.get(node.roomId)} roomId={node.roomId} animate={animate} />
           </FourierReveal>
         )}
@@ -481,6 +533,8 @@ function TreeRow({
           {knocked && <span style={{ fontSize: 10, opacity: 0.8 }}>requested</span>}
         </span>
       </div>
+        </div>
+      </div>
       {node.isSpace && (
         // Fluid collapse via grid-template-rows 1fr <-> 0fr (animates to auto
         // height with no fixed-height measurement). Inner wrapper clips content.
@@ -492,12 +546,11 @@ function TreeRow({
           }}
         >
           <div style={{ overflow: 'hidden', minHeight: 0 }}>
-            {node.children.map((child, i) => (
+            {node.children.map((child) => (
               <TreeRow
                 key={child.roomId}
                 node={child}
                 depth={depth + 1}
-                index={i}
                 collapsed={collapsed}
                 onToggle={onToggle}
                 selectedRoomId={selectedRoomId}
@@ -505,6 +558,9 @@ function TreeRow({
                 notifs={notifs}
                 animate={animate}
                 onContext={onContext}
+                appeared={appeared}
+                introActive={introActive}
+                onIntroInteract={onIntroInteract}
               />
             ))}
           </div>
@@ -523,6 +579,9 @@ function TreeRow({
           notifs={notifs}
           animate={animate}
           onContext={onContext}
+          appeared={appeared}
+          introActive={introActive}
+          onIntroInteract={onIntroInteract}
         />
       ))}
     </>
@@ -566,12 +625,11 @@ function collectFavoriteRooms(node: TreeNode, isFavorite: (roomId: string) => bo
 // gets an orange glow + a "(N)" count. A ping (highlight > 0) additionally shows
 // an orange "@" and, when animations are enabled, a pulse that travels through
 // the name letter by letter. When animations are off / reduced-motion, the ping
-// Stage spacing for the depth-cascaded reveal. A row's reveal is delayed by its
-// tree DEPTH (level gap -> the main space finishes, a beat of downtime, then all
-// sub-spaces, then rooms) PLUS its sibling INDEX (item stagger -> within a level
-// the rows open ONE AT A TIME, top to bottom, "spilling downwards"). Tunable.
-const NAV_LEVEL_GAP_MS = 2200
-const NAV_ITEM_STAGGER_MS = 180
+// Intro spawn cadence: ms between each row appearing (its grow-in + reveal), and
+// the initial beat before the first row. The sequence itself (computeRevealOrder)
+// controls the ORDER; these control the pace. Tunable, and fully abortable.
+const INTRO_STEP_MS = 130
+const INTRO_START_MS = 220
 
 // Fourier reveal wrapper (Ask 2026-07-19, tuned): on a room's first appearance a
 // square-wave PARTIAL SUM of N harmonics (N random-ish per room, 2..5 -> a
