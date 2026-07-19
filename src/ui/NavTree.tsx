@@ -104,23 +104,26 @@ export function NavTree({
           100% { background: transparent; }
         }
         .nav-join-ripple { animation: navJoinRipple 900ms ease-out 1; }
-        /* Fourier reveal: orange harmonics draw in, collapse into a square wave,
-           then the name pops as the wave vanishes. Plays once on a room's entrance. */
-        @keyframes frName {
-          0%, 52% { opacity: 0; transform: translateY(1px) scale(0.96); }
-          74%     { opacity: 1; transform: translateY(0) scale(1.06); }
-          100%    { opacity: 1; transform: none; }
+        /* Fourier reveal: an N-harmonic square composite is drawn left->right;
+           as the sweep passes, the room name flickers in behind it. */
+        @keyframes frSweep { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+        @keyframes frWaveFade { 0% { opacity: 0; } 8% { opacity: 1; } 68% { opacity: 1; } 100% { opacity: 0; } }
+        @keyframes frNameWipe { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+        @keyframes frFlicker {
+          0% { opacity: 0.12; } 20% { opacity: 0.85; } 32% { opacity: 0.22; }
+          48% { opacity: 1; } 60% { opacity: 0.5; } 75% { opacity: 1; } 100% { opacity: 1; }
         }
-        @keyframes frWave { 0% { opacity: 0; } 12% { opacity: 1; } 58% { opacity: 1; } 80%, 100% { opacity: 0; } }
-        @keyframes frDraw { 0% { stroke-dashoffset: 260; } 48%, 100% { stroke-dashoffset: 0; } }
-        @keyframes frHarmFade { 0%, 42% { opacity: 1; } 60%, 100% { opacity: 0; } }
-        @keyframes frSquareMorph { 0%, 36% { opacity: 0; } 54% { opacity: 1; } 72%, 100% { opacity: 0; } }
         .fr { position: relative; display: inline-flex; align-items: center; min-width: 0; max-width: 100%; }
-        .fr-name { display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0; animation: frName 760ms ease-out forwards; }
-        .fr-wave { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; animation: frWave 760ms ease-out forwards; }
-        .fr-h { fill: none; stroke: #ff9a3c; stroke-width: 1.6; stroke-linecap: round; stroke-dasharray: 260; animation: frDraw 760ms ease-out forwards, frHarmFade 760ms ease-out forwards; }
-        .fr-h2 { stroke-width: 1.1; stroke: #ffb020; }
-        .fr-sq { fill: none; stroke: #ffb84d; stroke-width: 1.8; opacity: 0; animation: frSquareMorph 760ms ease-out forwards; }
+        .fr-name {
+          display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+          animation: frNameWipe 780ms ease-out 470ms both, frFlicker 780ms steps(24, end) 470ms both;
+        }
+        .fr-wave { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; animation: frWaveFade 1250ms ease-out forwards; }
+        .fr-sweep {
+          fill: none; stroke: #ff9a3c; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+          stroke-dasharray: 1; filter: drop-shadow(0 0 2px rgba(255,150,40,0.7));
+          animation: frSweep 900ms ease-in-out forwards;
+        }
         @keyframes roomLetterPulse {
           0%, 40%, 60%, 100% {
             color: var(--tc-unread-base);
@@ -375,7 +378,7 @@ function TreeRow({
             {label}
           </span>
         ) : (
-          <FourierReveal play={animate}>
+          <FourierReveal seed={node.roomId} play={animate}>
             <RoomName label={label} counts={notifs.get(node.roomId)} roomId={node.roomId} animate={animate} />
           </FourierReveal>
         )}
@@ -499,25 +502,51 @@ function collectFavoriteRooms(node: TreeNode, isFavorite: (roomId: string) => bo
 // gets an orange glow + a "(N)" count. A ping (highlight > 0) additionally shows
 // an orange "@" and, when animations are enabled, a pulse that travels through
 // the name letter by letter. When animations are off / reduced-motion, the ping
-// Fourier reveal wrapper (Ask, 2026-07-19): on a room name's first appearance,
-// two orange harmonics draw in and collapse into a square wave, then the name
-// pops as the wave disappears -- so the list materializes instead of snapping.
-// Plays once on mount; `play=false` (animations off / reduced motion) renders
-// the name plainly. Paths live in a 120x24 viewBox, baseline y=12.
-const FR_SINE1 = 'M0,12 Q15,4 30,12 T60,12 T90,12 T120,12'
-const FR_SINE3 =
-  'M0,12 Q5,8.5 10,12 T20,12 T30,12 T40,12 T50,12 T60,12 T70,12 T80,12 T90,12 T100,12 T110,12 T120,12'
-const FR_SQUARE = 'M0,6 H30 V18 H60 V6 H90 V18 H120'
+// Fourier reveal wrapper (Ask 2026-07-19, tuned): on a room's first appearance a
+// square-wave PARTIAL SUM of N harmonics (N random-ish per room, 2..5 -> a
+// different composite each time) is drawn left->right in Fourier-chan amber; as
+// the sweep passes, the room name flickers in behind it (landing-page style).
+// Plays once on mount; play=false (animations off / reduced motion) = plain name.
 
-function FourierReveal({ children, play }: { children: React.ReactNode; play: boolean }) {
+// Square-wave partial sum f_N(t) = (4/pi) sum_{k<N} sin((2k+1)t)/(2k+1), sampled
+// across a 120x24 box (2 cycles). pathLength=1 so the draw is length-agnostic.
+function squarePartialPath(harmonics: number): string {
+  const W = 120, H = 24, mid = H / 2, amp = 7, samples = 72, cycles = 2
+  const pts: string[] = []
+  for (let i = 0; i <= samples; i++) {
+    const x = (i / samples) * W
+    const t = (i / samples) * Math.PI * 2 * cycles
+    let y = 0
+    for (let k = 0; k < harmonics; k++) {
+      const n = 2 * k + 1
+      y += Math.sin(n * t) / n
+    }
+    y = mid - amp * (4 / Math.PI) * y
+    pts.push(`${x.toFixed(1)},${y.toFixed(1)}`)
+  }
+  return 'M' + pts.join(' L')
+}
+// One composite per harmonic count (2..5) -- squarer with more harmonics.
+const FR_COMPOSITES: Record<number, string> = {
+  2: squarePartialPath(2),
+  3: squarePartialPath(3),
+  4: squarePartialPath(4),
+  5: squarePartialPath(5),
+}
+function frHash(s: string): number {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
+  return Math.abs(h)
+}
+
+function FourierReveal({ children, seed, play }: { children: React.ReactNode; seed: string; play: boolean }) {
   if (!play) return <>{children}</>
+  const harmonics = 2 + (frHash(seed) % 4) // 2..5, stable per room
   return (
     <span className="fr">
       <span className="fr-name">{children}</span>
       <svg className="fr-wave" viewBox="0 0 120 24" preserveAspectRatio="none" aria-hidden="true">
-        <path className="fr-h" d={FR_SINE1} />
-        <path className="fr-h fr-h2" d={FR_SINE3} />
-        <path className="fr-sq" d={FR_SQUARE} />
+        <path className="fr-sweep" pathLength={1} d={FR_COMPOSITES[harmonics]} />
       </svg>
     </span>
   )
