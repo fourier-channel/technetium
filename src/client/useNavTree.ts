@@ -6,7 +6,7 @@ import {
   type MatrixClient,
   type MatrixEvent,
 } from 'matrix-js-sdk'
-import { buildNavTree, type HierarchyRoom, type NavTree } from './spaces'
+import { buildNavTree, collectParentedIds, type HierarchyRoom, type NavTree } from './spaces'
 import { isEmptyTree, loadServerShape, saveServerShape } from './serverShape'
 
 export interface NavTreeState {
@@ -52,6 +52,13 @@ async function fetchSpaceHierarchy(
   return out
 }
 
+// How much real STRUCTURE a tree carries (top-level spaces + every room placed
+// under a space). A mid-load rebuild with no hierarchy fetched scores near zero;
+// the cached full tree scores high. Used to reject structurally-degraded builds.
+function structureScore(t: NavTree | null): number {
+  return t ? t.spaces.length + collectParentedIds(t).size : 0
+}
+
 // Hybrid nav tree: structure + names from getRoomHierarchy (includes unjoined
 // rooms), live membership overlaid from sync. Returns a loading flag; never
 // blanks the tree mid-fetch (keep-previous).
@@ -63,22 +70,39 @@ export function useNavTree(client: MatrixClient | null): NavTreeState {
   const cacheRef = useRef<HierarchyRoom[]>([])
   const fetchSeq = useRef(0)
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Grow-only set of rooms known to live under a space (seeded from the cached
+  // shape). Passed to every build so a transient rebuild can't demote a child to
+  // a loose orphan before its parent hierarchy is re-fetched (the "children in
+  // Direct-and-Other" flash). Never shrinks within a session.
+  const parentedRef = useRef<Set<string>>(collectParentedIds(loadServerShape()))
+  // Mirror of the current tree so commit can compare synchronously.
+  const treeRef = useRef<NavTree | null>(tree)
+  useEffect(() => {
+    treeRef.current = tree
+  }, [tree])
 
-  // Commit a freshly-built tree. Guard: a mid-sync EMPTY build must not clobber
-  // a non-empty stale preview (getRooms() is empty until PREPARED). A non-empty
-  // live tree becomes the new cache and clears the stale flag.
-  const commit = useCallback((built: NavTree) => {
-    setTree((prev) => (isEmptyTree(built) && !isEmptyTree(prev) ? prev : built))
-    if (!isEmptyTree(built)) {
-      saveServerShape(built)
-      setStale(false)
-    }
+  // Commit a freshly-built tree, unless it would REGRESS the structure. A build
+  // is `authoritative` only when it came from a real fetched hierarchy (roots
+  // discovered) -- that reflects current server state and may legitimately be
+  // smaller. A non-authoritative build (cheap overlay, or a rebuild before the
+  // hierarchy is fetched) must never replace a structurally richer tree: that
+  // was the "first live room collapses the whole cached tree" flash.
+  const commit = useCallback((built: NavTree, authoritative: boolean) => {
+    if (isEmptyTree(built)) return
+    const prev = treeRef.current
+    if (!authoritative && prev && structureScore(built) < structureScore(prev)) return
+    treeRef.current = built
+    setTree(built)
+    for (const id of collectParentedIds(built)) parentedRef.current.add(id) // grow-only
+    saveServerShape(built)
+    setStale(false)
   }, [])
 
-  // Cheap: re-overlay membership/names on the cached skeleton (no network).
+  // Cheap: re-overlay membership/names on the cached skeleton (no network). Skip
+  // when there's no hierarchy skeleton yet -- rebuilding from nothing degrades.
   const rebuildFromCache = useCallback(() => {
-    if (!client) return
-    commit(buildNavTree(client, cacheRef.current))
+    if (!client || cacheRef.current.length === 0) return
+    commit(buildNavTree(client, cacheRef.current, parentedRef.current), false)
   }, [client, commit])
 
   // Expensive: re-discover roots and re-fetch every hierarchy, then rebuild.
@@ -99,8 +123,10 @@ export function useNavTree(client: MatrixClient | null): NavTreeState {
         all.push(...rooms)
       }
       if (seq !== fetchSeq.current) return
-      cacheRef.current = all
-      commit(buildNavTree(client, all))
+      // Only overwrite the skeleton with a real fetch (don't wipe it to empty
+      // when no roots are loaded yet). Authoritative iff we actually found roots.
+      if (all.length > 0) cacheRef.current = all
+      commit(buildNavTree(client, all, parentedRef.current), roots.length > 0)
     } catch (err) {
       console.error('useNavTree: hierarchy fetch failed', err)
       // leave the previous tree in place

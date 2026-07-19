@@ -1591,3 +1591,133 @@ doc but was misread as BEING it. Canon now lives in the private
 fourier-channel/fourier-chan repo (canon/ tree, per-aspect files). All
 salvageable brief content merged there first, then this purge. Onboarding
 code keeps referencing her normally; canon questions route to that repo.
+
+---
+
+## 2026-07-18 -- Sync robustness (deployed to main)
+
+Live testing on a fresh, congested join surfaced three symptoms, all traced to
+one root cause -- the classic `/sync` on a large community ships every room's
+full member list, so everything downstream (media, presence, threads) queues
+behind that overhead. Three symptom-robustness fixes; each verified, merged to
+main, and DEPLOYED.
+
+- **Self-healing media.** `AuthedImage` retried nothing on a failed fetch, so a
+  transient failure under sync stuck at "[image unavailable]" until the user
+  navigated away and back (a remount). Now it retries with backoff (~0.8/1.6/
+  3.2/6.4s) before giving up -- images self-heal as the sync settles.
+- **Late-delivered domain bubbles.** `useDomainBubbles` dropped any message with
+  `ts < now - 15s`, so a lagging viewer saw the chat text but never the speech
+  bubble (the message was delivered live, just late). Replaced the ts guard with
+  a mount grace: skip the entry burst, then bubble every live message regardless
+  of delivery lag.
+- **Thread list hydration.** The server-side thread backfill ran ONCE over
+  getRooms() at mount, so rooms that finished syncing later were never hydrated
+  ("only the very first threads"). Backfill is now per-room, idempotent +
+  retryable, re-triggered as rooms arrive (ClientEvent.Room / MyMembership).
+
+### DRAFT fourier-phase nodes
+- **D-sr01 (decision).** Root cause of fresh-join congestion is classic-sync
+  member-list overhead. Ship symptom robustness now (retry / grace / re-hydrate
+  so things CONVERGE as sync settles); the structural fix is sliding sync (next).
+- **G-sr01 (gotcha).** A media fetch that fails under heavy sync is usually
+  transient -- retry with backoff instead of latching an error state.
+- **G-sr02 (gotcha).** A `ts`-based freshness guard on live timeline events drops
+  genuinely-live messages delivered LATE by a lagging sync. Gate on a mount grace
+  (skip the entry burst), not wall-clock age.
+- **G-sr03 (gotcha).** A one-shot "backfill every joined room at mount" misses
+  rooms that sync in afterwards. Drive it off ClientEvent.Room, idempotent +
+  retryable, so it covers late arrivals.
+
+---
+
+## 2026-07-19 -- Sliding sync (MSC4186) + nav overhaul (branch sliding-sync)
+
+The structural fix for the congestion, plus a large room-list UX pass. All on
+branch `sliding-sync`; flag-gated and NOT deployed (smoke-tested live on the dev
+server by the operator across the session). Self-verified per step (tsc / eslint
+-on-changed / build; full-tree lint held at the 23 baseline).
+
+### Sliding sync (native Simplified Sliding Sync, MSC4186)
+- Feasibility confirmed: the homeserver advertises native simplified sliding
+  sync and answers its endpoint (no proxy). matrix-js-sdk 41.6.0 HAS the engine
+  (`SlidingSyncSdk`, `client.startClient({ slidingSync })`) but does NOT export
+  the `SlidingSync` class publicly (only `SlidingSyncEvent`) -- so we deep-import
+  the internal `matrix-js-sdk/lib/sliding-sync`. Operator-approved fragile
+  deviation, ISOLATED in `src/client/slidingSync.ts`, behind `VITE_SLIDING_SYNC`
+  (default off). Recorded in DEPENDENCIES.md + CLIENT_MANIFEST.md + memory with a
+  STANDING RULE: scan any matrix-js-sdk upgrade for sliding-sync changes first.
+- Two lists (a spaces list + a generous-range rooms list) with LEAN
+  `required_state` (room chrome + own membership, never full rosters) -> the full
+  nav on a light sync. Native MSC4186 ignores the proxy-era `slow_get_all_rooms`,
+  so we cover the nav with explicit ranges + the dedicated spaces list.
+
+### Nav overhaul (built + dev-smoked, not deployed)
+- **Parent-gate.** Children never appear before their space. `m.space.parent` is
+  often unset on child rooms, so the strong signal is a grow-only "held" set
+  seeded from the cached shape; a room known to live under a space is never
+  demoted to a loose orphan during a transient rebuild.
+- **No-regress tree.** The cached (correct) nav no longer falls back to a
+  structurally-degraded live rebuild: a `structureScore` + an `authoritative`
+  flag (only a real fetched hierarchy is authoritative) hold the good tree until
+  a complete live one is ready, then swap.
+- **Reveals.** Room + space names get a Fourier reveal (an N-harmonic square
+  composite, per-room count, drawn left->right; the name flickers in behind the
+  sweep). Room + space icons get an epicycle reveal (green-glow ring; a clock
+  hand + spark traces a polar wavy loop of the composite; the ring blips out and
+  the icon zooms out past the ring, settles, and lands with a dust poof).
+- **Two-phase expansion intro.** A state-driven sequence (main space -> all
+  sub-spaces top-down -> each sub-space's rooms in order) grows each row in via
+  the same grid collapse animation; the reveal fires as the row spawns. It NEVER
+  gets in the way: any interaction (select / toggle / right-click) aborts it and
+  shows everything at once. Animations-off / reduced-motion skips it.
+- **DM pill + chrome.** DMs move to a collapsed "Direct Messages" pill at the TOP
+  (icon-only, wrapping). Animations toggle is now a sine-wave pill (flows on
+  hover); a sound pill (default off, volume slider) is stubbed. The sidebar is
+  resizable + persisted (widest-name default with a 1.5x-outlier fallback) with a
+  right-click Lock / Reset.
+
+### Claudecisions
+- **CD-15 -- member list loads ATOMICALLY (planned).** Under windowed loading the
+  roster fetches on demand, but the list must never re-sort in view: stable
+  placeholder during load, one sorted paint on settle, individual deltas via FLIP.
+- **CD-16 -- sliding sync via an internal deep-import.** The class isn't public
+  in 41.6.0; isolating the deviation in one module + a scan-before-upgrade rule is
+  the pragmatic call vs. an SDK bump (only newer publish is an RC).
+- **CD-17 -- the nav shows a STABLE tree.** A non-authoritative, structurally
+  poorer rebuild never replaces a richer one (kills the "first live room collapses
+  the cached tree" flash).
+- **CD-18 -- load animations YIELD.** The intro (and any "shiny" load motion)
+  must never block functionality; any interaction aborts it instantly. Ties to
+  the onboarding-ux-law and the new no-forced-reflow-law.
+
+### New standing rule (in memory)
+- **no-forced-reflow-law.** A UI element must never push/pull others out of place
+  unless that displacement IS its intended behavior. (Repro: a status line that
+  shifted the whole list up when it disappeared -> reserve its space instead.)
+
+### DRAFT fourier-phase nodes
+- **D-ss01 (decision).** Native MSC4186 ignores `slow_get_all_rooms`; get the
+  full nav with explicit list ranges + a dedicated spaces list, lean
+  required_state (no rosters). Members load on demand.
+- **G-ss01 (gotcha).** matrix-js-sdk 41.6.0 does not export the `SlidingSync`
+  class from its public entry (only `SlidingSyncEvent`). Deep-import
+  `matrix-js-sdk/lib/sliding-sync` -- unsupported surface; re-verify on any SDK
+  bump. Isolate it in one module.
+- **G-ss02 (gotcha).** `m.space.parent` is frequently absent on child rooms (the
+  canonical link is m.space.child on the PARENT), so it's too weak to gate on
+  alone. Use a cache-authoritative grow-only "held" set.
+- **G-ss03 (gotcha).** A mid-load nav rebuild before the hierarchy is fetched
+  degrades structure (empty spaces, orphaned children). Never let a
+  non-authoritative build replace a higher-structure tree (structure-score
+  no-regress); only a real fetched hierarchy is authoritative.
+- **G-ss04 (gotcha).** StrictMode double-invokes effects in dev; a one-shot timed
+  sequence must be guarded by a run-once ref + an abort FLAG (checked by the timer
+  chain), not by effect cleanup (which double-fires and would cancel the run).
+
+### Status / next
+- Sync-robustness fixes (above) are DEPLOYED. Sliding sync + the nav overhaul are
+  on `sliding-sync`, flag-gated, NOT deployed. Next: a consolidation pass --
+  end-to-end smoke, then a merge decision (and whether sliding sync ships on or
+  stays behind `VITE_SLIDING_SYNC`). Deferred: ② member-list-on-demand (CD-15)
+  once windowing lands; the sound pill's actual audio.

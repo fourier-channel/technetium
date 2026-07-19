@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Room } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
-import { type TreeNode } from '../client/spaces'
+import { computeRevealOrder, type TreeNode } from '../client/spaces'
 import { useNavTree } from '../client/useNavTree'
 import { useRoomNotifications, type NotifMap, type NotifCounts } from '../client/useRoomNotifications'
 import { useRoomListSettings } from './roomListSettings'
@@ -20,21 +20,92 @@ function nodeMode(node: TreeNode): Mode {
   return 'joinable'
 }
 
+// Text width via a shared offscreen canvas (no DOM thrash).
+let measureCanvas: HTMLCanvasElement | null = null
+function measureText(text: string, font: string): number {
+  if (!measureCanvas) measureCanvas = document.createElement('canvas')
+  const ctx = measureCanvas.getContext('2d')
+  if (!ctx) return text.length * 7
+  ctx.font = font
+  return ctx.measureText(text).width
+}
+// Default panel width: fit the WIDEST room name -- unless it's more than 1.5x the
+// second-widest (an outlier), in which case fall back to the second-widest.
+function computeDefaultPanelWidth(tree: ReturnType<typeof useNavTree>['tree']): number {
+  if (!tree) return 260
+  const names: string[] = []
+  const walk = (nodes: TreeNode[]) => nodes.forEach((n) => { names.push(n.name); walk(n.children) })
+  walk(tree.spaces)
+  for (const r of tree.orphanRooms) names.push(r.name)
+  const font = '600 13px "Space Grotesk", system-ui, sans-serif'
+  const widths = names.map((n) => measureText(n, font)).sort((a, b) => b - a)
+  if (widths.length === 0) return 260
+  const widest = widths[0]
+  const second = widths[1] ?? widest
+  const chosen = widest <= 1.5 * second ? widest : second
+  const BASE = 100 // icon + chevron + indent + padding + count badge
+  return Math.round(Math.max(200, Math.min(460, BASE + chosen)))
+}
+
 export function NavTree({
   selectedRoomId,
   onSelectRoom,
+  onDefaultWidth,
 }: {
   selectedRoomId?: string
   onSelectRoom?: (room: Room) => void
+  onDefaultWidth?: (w: number) => void
 }) {
   const { client } = useClient()
   const { tree, loading, stale } = useNavTree(client)
   const notifs = useRoomNotifications(client)
-  const { animationsEnabled, setAnimationsEnabled } = useRoomListSettings()
+  const { animationsEnabled, setAnimationsEnabled, soundEnabled, setSoundEnabled, soundVolume, setSoundVolume } =
+    useRoomListSettings()
   const reduced = useReducedMotion()
   const animate = animationsEnabled && !reduced
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [dmOpen, setDmOpen] = useState(false)
+  const [dmRevealKey, setDmRevealKey] = useState(0)
   const [menu, setMenu] = useState<{ node: TreeNode; x: number; y: number } | null>(null)
+
+  // Intro sequence: rows spawn in one at a time (41chan -> sub-spaces -> their
+  // rooms), each growing open + revealing. `introActive` gates a row's
+  // visibility until its turn. It must NEVER get in the way: ANY interaction
+  // (select / toggle / right-click) aborts it and shows everything at once.
+  const [appeared, setAppeared] = useState<Set<string>>(new Set())
+  const [introDone, setIntroDone] = useState(false)
+  const introStartedRef = useRef(false)
+  const introAbortedRef = useRef(false)
+  const introActive = animate && !introDone
+  const abortIntro = useCallback(() => {
+    introAbortedRef.current = true
+    setIntroDone(true)
+  }, [])
+
+  useEffect(() => {
+    // Run once, when the tree first has content + animations are on. StrictMode-
+    // safe: guarded by a ref, and the timer chain checks introAbortedRef rather
+    // than relying on effect cleanup (which double-fires in dev).
+    if (!animate || !tree || introStartedRef.current) return
+    if (tree.spaces.length === 0 && tree.orphanRooms.length === 0) return
+    introStartedRef.current = true
+    const order = computeRevealOrder(tree)
+    let i = 0
+    const step = () => {
+      if (introAbortedRef.current) return
+      const id = order[i]
+      if (id) setAppeared((prev) => new Set(prev).add(id))
+      i += 1
+      if (i < order.length) setTimeout(step, INTRO_STEP_MS)
+      else setTimeout(() => !introAbortedRef.current && setIntroDone(true), 300)
+    }
+    setTimeout(step, INTRO_START_MS)
+  }, [animate, tree])
+
+  // Report the smart default width (widest room name rule) to the sidebar.
+  useEffect(() => {
+    if (tree && onDefaultWidth) onDefaultWidth(computeDefaultPanelWidth(tree))
+  }, [tree, onDefaultWidth])
   const onContext = (node: TreeNode, e: React.MouseEvent) => {
     e.preventDefault()
     setMenu({ node, x: e.clientX, y: e.clientY })
@@ -64,38 +135,39 @@ export function NavTree({
         lineHeight: 1.3,
         color: 'var(--cpd-color-text-primary)',
         userSelect: 'none',
-        // Stale = last-known shape, still syncing: dim + soft pulse, reconciles
-        // to full opacity the instant the live tree lands (CD-11).
-        opacity: stale ? 0.5 : 1,
-        transition: 'opacity 400ms ease',
-        animation: stale && !reduced ? 'navStalePulse 1.6s ease-in-out infinite' : undefined,
       }}
     >
-      {stale && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '2px 10px 8px',
-            fontSize: 11,
-            fontWeight: 600,
-            letterSpacing: 0.3,
-            color: 'var(--cpd-color-text-secondary)',
-          }}
-        >
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: 'var(--cpd-color-bg-accent-rest, #3390ff)',
-              animation: reduced ? undefined : 'navStaleDot 1s ease-in-out infinite',
-            }}
-          />
-          Syncing your rooms{'…'}
-        </div>
-      )}
+      {/* Fixed-height slot -- reserved whether syncing or not, so the line
+          appearing/disappearing never shifts the list (no-forced-reflow-law). */}
+      <div
+        style={{
+          height: 22,
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '0 10px',
+          fontSize: 11,
+          fontWeight: 600,
+          letterSpacing: 0.3,
+          color: 'var(--cpd-color-text-secondary)',
+        }}
+      >
+        {stale ? (
+          <>
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: 'var(--cpd-color-bg-accent-rest, #3390ff)',
+                animation: reduced ? undefined : 'navStaleDot 1s ease-in-out infinite',
+              }}
+            />
+            Syncing your rooms{'…'}
+          </>
+        ) : null}
+      </div>
       <style>{`
         @keyframes navStalePulse { 0%,100% { opacity: 0.5; } 50% { opacity: 0.62; } }
         @keyframes navStaleDot { 0%,100% { opacity: 0.35; } 50% { opacity: 1; } }
@@ -104,6 +176,83 @@ export function NavTree({
           100% { background: transparent; }
         }
         .nav-join-ripple { animation: navJoinRipple 900ms ease-out 1; }
+        /* Toggle pills (animations sine wave / sound speaker): glow on, dim off;
+           the animations wave flows on hover while on, to show what it does. */
+        .tc-pill {
+          display: inline-flex; align-items: center; justify-content: center;
+          height: 24px; min-width: 36px; padding: 0 9px; border-radius: 999px;
+          cursor: pointer; border: 1px solid rgba(128,128,128,0.35);
+          background: transparent; color: var(--cpd-color-text-secondary);
+          transition: color .15s ease, box-shadow .15s ease, border-color .15s ease;
+        }
+        .tc-pill:hover { border-color: rgba(128,128,128,0.6); }
+        .tc-pill-on {
+          color: var(--tc-unread, #ff9a3c);
+          border-color: rgba(255,150,40,0.5);
+          box-shadow: 0 0 8px rgba(255,150,40,0.4);
+        }
+        .tc-wave { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+        @keyframes tcWaveFlow { from { transform: translateX(0); } to { transform: translateX(-12px); } }
+        .tc-pill-on:hover .tc-wave { animation: tcWaveFlow 0.9s linear infinite; }
+        /* Staged descent: each row drops in, delayed by its depth (--stage). */
+        @keyframes navStageIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+        .nav-stage { animation: navStageIn 420ms ease-out var(--stage, 0ms) both; }
+        /* Fourier reveal: an N-harmonic square composite is drawn left->right;
+           as the sweep passes, the room name flickers in behind it. */
+        @keyframes frSweep { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+        @keyframes frWaveFade { 0% { opacity: 0; } 8% { opacity: 1; } 68% { opacity: 1; } 100% { opacity: 0; } }
+        @keyframes frNameWipe { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+        @keyframes frFlicker {
+          0% { opacity: 0.12; } 20% { opacity: 0.85; } 32% { opacity: 0.22; }
+          48% { opacity: 1; } 60% { opacity: 0.5; } 75% { opacity: 1; } 100% { opacity: 1; }
+        }
+        .fr { position: relative; display: inline-flex; align-items: center; min-width: 0; max-width: 100%; }
+        .fr-name {
+          display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+          animation: frNameWipe 1150ms ease-out calc(700ms + var(--stage, 0ms)) both,
+                     frFlicker 1150ms steps(24, end) calc(700ms + var(--stage, 0ms)) both;
+        }
+        .fr-wave { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; animation: frWaveFade 2000ms ease-out var(--stage, 0ms) both; }
+        .fr-sweep {
+          fill: none; stroke: #ff9a3c; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+          stroke-dasharray: 1; filter: drop-shadow(0 0 2px rgba(255,150,40,0.7));
+          animation: frSweep 1500ms ease-in-out var(--stage, 0ms) both;
+        }
+        /* Epicycle icon reveal: hand sweeps + traces the composite (~62%), ring
+           blips out (62-80%), then the icon zooms out past the ring and settles. */
+        @keyframes epiDraw { 0% { stroke-dashoffset: 1; } 62%, 100% { stroke-dashoffset: 0; } }
+        @keyframes epiHand { 0% { transform: rotate(-90deg); } 62%, 100% { transform: rotate(270deg); } }
+        @keyframes epiOut {
+          0% { opacity: 0; transform: scale(1); }
+          5%, 62% { opacity: 1; transform: scale(1); }
+          70% { opacity: 1; transform: scale(1.12); }
+          80%, 100% { opacity: 0; transform: scale(0.15); }
+        }
+        @keyframes epiIconIn {
+          0%, 78% { opacity: 0; transform: scale(0); }
+          90% { opacity: 1; transform: scale(1.15); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        .epi { position: relative; display: inline-grid; place-items: center; }
+        .epi-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; animation: epiOut 2300ms ease-in var(--stage, 0ms) both; }
+        .epi-ring { fill: none; stroke: #00b200; stroke-width: 1.4; filter: drop-shadow(0 0 3px #00b200); }
+        .epi-wave { fill: none; stroke: #ff9a3c; stroke-width: 1.3; stroke-linejoin: round; stroke-dasharray: 1; filter: drop-shadow(0 0 1.5px rgba(255,150,40,0.85)); animation: epiDraw 2300ms ease-in-out var(--stage, 0ms) forwards; }
+        .epi-hand-g { transform-box: view-box; transform-origin: 12px 12px; animation: epiHand 2300ms ease-in-out var(--stage, 0ms) forwards; }
+        .epi-hand { stroke: #00b200; stroke-width: 1; stroke-linecap: round; opacity: 0.75; }
+        .epi-spark { fill: #eaffea; filter: drop-shadow(0 0 2.5px #00b200); }
+        .epi-icon { position: relative; opacity: 0; animation: epiIconIn 2300ms cubic-bezier(0.2, 0.9, 0.3, 1) var(--stage, 0ms) forwards; }
+        /* Dust poof: a soft puff of dust bursts outward as the icon lands
+           (shrinks back into its spot ~end of epiIconIn). */
+        @keyframes epiPoof {
+          0% { opacity: 0; transform: scale(0.35); }
+          10% { opacity: 0.6; }
+          100% { opacity: 0; transform: scale(1.9); }
+        }
+        .epi-poof {
+          position: absolute; inset: -3px; border-radius: 50%; pointer-events: none; opacity: 0;
+          background: radial-gradient(circle, rgba(212,196,160,0.55) 0%, rgba(212,196,160,0.16) 45%, transparent 70%);
+          animation: epiPoof 520ms ease-out calc(2020ms + var(--stage, 0ms)) forwards;
+        }
         @keyframes roomLetterPulse {
           0%, 40%, 60%, 100% {
             color: var(--tc-unread-base);
@@ -117,36 +266,128 @@ export function NavTree({
         .room-pulse-letter { animation: roomLetterPulse 1600ms linear infinite; }
       `}</style>
       {/* Master animations toggle (seed for the future settings UI). */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '2px 10px 6px',
-          fontSize: 11,
-          color: 'var(--cpd-color-text-secondary)',
-        }}
-      >
-        <span>Animations</span>
-        <button
-          type="button"
-          onClick={() => setAnimationsEnabled(!animationsEnabled)}
-          title="Toggle room-list animations (pulses, glows, collapse)"
+      <div style={{ padding: '2px 10px 8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Animations pill: a sine wave; glows on, dims off; on hover-while-on
+              the wave flows to show what it does. */}
+          <button
+            type="button"
+            onClick={() => setAnimationsEnabled(!animationsEnabled)}
+            title="Room-list animations"
+            className={animationsEnabled ? 'tc-pill tc-pill-on' : 'tc-pill'}
+          >
+            <svg width="26" height="14" viewBox="0 0 26 14" style={{ overflow: 'hidden' }}>
+              <path
+                className="tc-wave"
+                d="M-12,7 Q-9,2.5 -6,7 T0,7 T6,7 T12,7 T18,7 T24,7 T30,7 T36,7"
+              />
+            </svg>
+          </button>
+          {/* Sound pill: doesn't do anything yet -- a speaker; on drops a volume slider. */}
+          <button
+            type="button"
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            title="This doesn't do anything yet, but it's pretty."
+            className={soundEnabled ? 'tc-pill tc-pill-on' : 'tc-pill'}
+          >
+            <svg width="18" height="16" viewBox="0 0 18 16">
+              <path d="M2,6 H5 L9,3 V13 L5,10 H2 Z" fill="currentColor" stroke="none" />
+              {soundEnabled ? (
+                <>
+                  <path d="M11.5,6 Q13,8 11.5,10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                  <path d="M13.6,4.4 Q16.2,8 13.6,11.6" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                </>
+              ) : (
+                <line x1="11" y1="4.5" x2="16" y2="11.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+              )}
+            </svg>
+          </button>
+        </div>
+        {/* Volume slider descends from the speaker pill when sound is on. */}
+        <div
           style={{
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: 0.3,
-            padding: '2px 8px',
-            borderRadius: 10,
-            cursor: 'pointer',
-            border: '1px solid rgba(128,128,128,0.35)',
-            color: animationsEnabled ? '#1b1300' : 'var(--cpd-color-text-secondary)',
-            background: animationsEnabled ? 'var(--tc-unread)' : 'transparent',
+            display: 'grid',
+            gridTemplateRows: soundEnabled ? '1fr' : '0fr',
+            transition: 'grid-template-rows 220ms ease',
           }}
         >
-          {animationsEnabled ? 'ON' : 'OFF'}
-        </button>
+          <div style={{ overflow: 'hidden', minHeight: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 2px 1px', fontSize: 10, color: 'var(--cpd-color-text-secondary)' }}>
+              <span>Vol</span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={soundVolume}
+                onChange={(e) => setSoundVolume(Number(e.target.value))}
+                style={{ flex: 1, accentColor: 'var(--cpd-color-bg-accent-rest, #3390ff)', cursor: 'pointer' }}
+              />
+              <span style={{ width: 30, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{soundVolume}%</span>
+            </div>
+          </div>
+        </div>
       </div>
+      {/* Direct Messages: a top pill; expanded, DMs are icon-only, wrapping
+          horizontally, and pushing the room list down (intended reflow). */}
+      {tree.orphanRooms.length > 0 && (
+        <div style={{ margin: '2px 4px 6px' }}>
+          <button
+            type="button"
+            onClick={() =>
+              setDmOpen((o) => {
+                if (!o) setDmRevealKey((k) => k + 1) // replay icon reveals on open
+                return !o
+              })
+            }
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              width: '100%',
+              padding: '4px 10px',
+              borderRadius: 999,
+              cursor: 'pointer',
+              border: '1px solid rgba(128,128,128,0.3)',
+              background: dmOpen ? 'var(--cpd-color-bg-subtle-secondary)' : 'transparent',
+              color: 'var(--cpd-color-text-secondary)',
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: 0.4,
+              textTransform: 'uppercase',
+            }}
+          >
+            <span style={{ fontSize: 9, opacity: 0.7 }}>{dmOpen ? '▾' : '▸'}</span>
+            Direct Messages
+            <span style={{ marginLeft: 'auto', opacity: 0.7 }}>{tree.orphanRooms.length}</span>
+          </button>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateRows: dmOpen ? '1fr' : '0fr',
+              transition: animate ? 'grid-template-rows 240ms ease' : undefined,
+            }}
+          >
+            <div style={{ overflow: 'hidden', minHeight: 0 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, padding: '7px 8px 3px' }}>
+                {tree.orphanRooms.map((node) => (
+                  <button
+                    key={`${node.roomId}:${dmRevealKey}`}
+                    type="button"
+                    onClick={() => node.room && onSelectRoom?.(node.room)}
+                    onContextMenu={(e) => onContext(node, e)}
+                    title={node.name || node.roomId}
+                    style={{ padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', lineHeight: 0 }}
+                  >
+                    <EpicycleReveal seed={node.roomId} play={animate}>
+                      <RoomIcon node={node} size={30} />
+                    </EpicycleReveal>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {tree.spaces.map((node) => (
         <TreeRow
           key={node.roomId}
@@ -159,39 +400,11 @@ export function NavTree({
           notifs={notifs}
           animate={animate}
           onContext={onContext}
+          appeared={appeared}
+          introActive={introActive}
+          onIntroInteract={abortIntro}
         />
       ))}
-      {tree.orphanRooms.length > 0 && (
-        <>
-          <div
-            style={{
-              margin: '10px 0 2px',
-              padding: '0 8px',
-              fontSize: 11,
-              fontWeight: 600,
-              letterSpacing: 0.4,
-              textTransform: 'uppercase',
-              color: 'var(--cpd-color-text-secondary)',
-            }}
-          >
-            Direct &amp; other
-          </div>
-          {tree.orphanRooms.map((node) => (
-            <TreeRow
-              key={node.roomId}
-              node={node}
-              depth={0}
-              collapsed={collapsed}
-              onToggle={toggle}
-              selectedRoomId={selectedRoomId}
-              onSelectRoom={onSelectRoom}
-              notifs={notifs}
-              animate={animate}
-              onContext={onContext}
-            />
-          ))}
-        </>
-      )}
       {menu && (
         <RoomContextMenu
           node={menu.node}
@@ -214,6 +427,9 @@ function TreeRow({
   notifs,
   animate,
   onContext,
+  appeared,
+  introActive,
+  onIntroInteract,
 }: {
   node: TreeNode
   depth: number
@@ -224,6 +440,11 @@ function TreeRow({
   notifs: NotifMap
   animate: boolean
   onContext: (node: TreeNode, e: React.MouseEvent) => void
+  // Intro sequence: a row is hidden (height 0) until it has appeared; any
+  // interaction fires onIntroInteract to abort the intro (show everything).
+  appeared: Set<string>
+  introActive: boolean
+  onIntroInteract: () => void
 }) {
   const { client } = useClient()
   const { isFavorite, isMutedNow } = useRoomListSettings()
@@ -307,11 +528,29 @@ function TreeRow({
   // Favorited descendant rooms stay visible when the space is collapsed.
   const favChildren = node.isSpace && isCollapsed ? collectFavoriteRooms(node, isFavorite) : []
 
+  // Intro: this row is hidden (height 0) until it's its turn to spawn.
+  const shown = !introActive || appeared.has(node.roomId)
+
   return (
     <>
+      {/* Intro appear-grid: grows this row in when its turn arrives. */}
       <div
-        onClick={onClick}
-        onContextMenu={(e) => onContext(node, e)}
+        style={{
+          display: 'grid',
+          gridTemplateRows: shown ? '1fr' : '0fr',
+          transition: animate ? 'grid-template-rows 240ms ease' : undefined,
+        }}
+      >
+        <div style={{ overflow: 'hidden', minHeight: 0 }}>
+      <div
+        onClick={() => {
+          onIntroInteract()
+          onClick()
+        }}
+        onContextMenu={(e) => {
+          onIntroInteract()
+          onContext(node, e)
+        }}
         title={knocked ? `${label} (request sent)` : label}
         className={ripple && animate ? 'nav-join-ripple' : undefined}
         style={{
@@ -342,7 +581,9 @@ function TreeRow({
         <span style={{ width: 10, flexShrink: 0, textAlign: 'center', fontSize: 10, opacity: 0.7 }}>
           {node.isSpace ? (isCollapsed ? '\u25B8' : '\u25BE') : ''}
         </span>
-        <RoomIcon node={node} />
+        <EpicycleReveal seed={node.roomId} play={animate && shown}>
+          <RoomIcon node={node} />
+        </EpicycleReveal>
         {node.isSpace ? (
           <span
             style={{
@@ -355,10 +596,14 @@ function TreeRow({
               textShadow: spaceUnread ? '0 0 6px rgba(255,150,40,0.5)' : undefined,
             }}
           >
-            {label}
+            <FourierReveal seed={node.roomId} play={animate && shown}>
+              {label}
+            </FourierReveal>
           </span>
         ) : (
-          <RoomName label={label} counts={notifs.get(node.roomId)} roomId={node.roomId} animate={animate} />
+          <FourierReveal seed={node.roomId} play={animate && shown}>
+            <RoomName label={label} counts={notifs.get(node.roomId)} roomId={node.roomId} animate={animate} />
+          </FourierReveal>
         )}
         <span
           style={{
@@ -396,6 +641,8 @@ function TreeRow({
           {knocked && <span style={{ fontSize: 10, opacity: 0.8 }}>requested</span>}
         </span>
       </div>
+        </div>
+      </div>
       {node.isSpace && (
         // Fluid collapse via grid-template-rows 1fr <-> 0fr (animates to auto
         // height with no fixed-height measurement). Inner wrapper clips content.
@@ -419,6 +666,9 @@ function TreeRow({
                 notifs={notifs}
                 animate={animate}
                 onContext={onContext}
+                appeared={appeared}
+                introActive={introActive}
+                onIntroInteract={onIntroInteract}
               />
             ))}
           </div>
@@ -437,6 +687,9 @@ function TreeRow({
           notifs={notifs}
           animate={animate}
           onContext={onContext}
+          appeared={appeared}
+          introActive={introActive}
+          onIntroInteract={onIntroInteract}
         />
       ))}
     </>
@@ -480,6 +733,62 @@ function collectFavoriteRooms(node: TreeNode, isFavorite: (roomId: string) => bo
 // gets an orange glow + a "(N)" count. A ping (highlight > 0) additionally shows
 // an orange "@" and, when animations are enabled, a pulse that travels through
 // the name letter by letter. When animations are off / reduced-motion, the ping
+// Intro spawn cadence: ms between each row appearing (its grow-in + reveal), and
+// the initial beat before the first row. The sequence itself (computeRevealOrder)
+// controls the ORDER; these control the pace. Tunable, and fully abortable.
+const INTRO_STEP_MS = 130
+const INTRO_START_MS = 220
+
+// Fourier reveal wrapper (Ask 2026-07-19, tuned): on a room's first appearance a
+// square-wave PARTIAL SUM of N harmonics (N random-ish per room, 2..5 -> a
+// different composite each time) is drawn left->right in Fourier-chan amber; as
+// the sweep passes, the room name flickers in behind it (landing-page style).
+// Plays once on mount; play=false (animations off / reduced motion) = plain name.
+
+// Square-wave partial sum f_N(t) = (4/pi) sum_{k<N} sin((2k+1)t)/(2k+1), sampled
+// across a 120x24 box (2 cycles). pathLength=1 so the draw is length-agnostic.
+function squarePartialPath(harmonics: number): string {
+  const W = 120, H = 24, mid = H / 2, amp = 7, samples = 72, cycles = 2
+  const pts: string[] = []
+  for (let i = 0; i <= samples; i++) {
+    const x = (i / samples) * W
+    const t = (i / samples) * Math.PI * 2 * cycles
+    let y = 0
+    for (let k = 0; k < harmonics; k++) {
+      const n = 2 * k + 1
+      y += Math.sin(n * t) / n
+    }
+    y = mid - amp * (4 / Math.PI) * y
+    pts.push(`${x.toFixed(1)},${y.toFixed(1)}`)
+  }
+  return 'M' + pts.join(' L')
+}
+// One composite per harmonic count (2..5) -- squarer with more harmonics.
+const FR_COMPOSITES: Record<number, string> = {
+  2: squarePartialPath(2),
+  3: squarePartialPath(3),
+  4: squarePartialPath(4),
+  5: squarePartialPath(5),
+}
+function frHash(s: string): number {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
+  return Math.abs(h)
+}
+
+function FourierReveal({ children, seed, play }: { children: React.ReactNode; seed: string; play: boolean }) {
+  if (!play) return <>{children}</>
+  const harmonics = 2 + (frHash(seed) % 4) // 2..5, stable per room
+  return (
+    <span className="fr">
+      <span className="fr-name">{children}</span>
+      <svg className="fr-wave" viewBox="0 0 120 24" preserveAspectRatio="none" aria-hidden="true">
+        <path className="fr-sweep" pathLength={1} d={FR_COMPOSITES[harmonics]} />
+      </svg>
+    </span>
+  )
+}
+
 // shows the static @ + glow with no travelling pulse.
 function RoomName({
   label,
@@ -548,6 +857,63 @@ function RoomName({
 // Icon to the left of a room/space name: a user-set emoji/glyph override
 // (right-click -> Set icon), else the room/space avatar, else a generated
 // initial. Spaces get a rounded-square frame, rooms a circle.
+// Epicycle icon reveal (Ask 2026-07-19): a green-glow ring; a clock hand sweeps
+// once, its spark tracing the N-harmonic composite drawn as a POLAR wavy loop
+// (squarer with more harmonics -- precomputed, same per-room count as the name);
+// the ring blips out and the real icon zooms from a point to slightly-larger-
+// than-the-ring, then settles in. Green = #00b200 (the landing "Fourier green").
+function polarWaveLoop(harmonics: number): string {
+  const cx = 12, cy = 12, baseR = 7, amp = 1.9, samples = 96
+  const pts: string[] = []
+  for (let i = 0; i <= samples; i++) {
+    const th = (i / samples) * Math.PI * 2
+    let v = 0
+    for (let k = 0; k < harmonics; k++) {
+      const n = 2 * k + 1
+      v += Math.sin(n * th) / n
+    }
+    v *= 4 / Math.PI
+    const r = baseR + amp * v
+    pts.push(`${(cx + r * Math.cos(th)).toFixed(2)},${(cy + r * Math.sin(th)).toFixed(2)}`)
+  }
+  return 'M' + pts.join(' L') + 'Z'
+}
+const EPI_LOOPS: Record<number, string> = {
+  2: polarWaveLoop(2),
+  3: polarWaveLoop(3),
+  4: polarWaveLoop(4),
+  5: polarWaveLoop(5),
+}
+
+function EpicycleReveal({
+  children,
+  seed,
+  size = 20,
+  play,
+}: {
+  children: React.ReactNode
+  seed: string
+  size?: number
+  play: boolean
+}) {
+  if (!play) return <>{children}</>
+  const harmonics = 2 + (frHash(seed) % 4)
+  return (
+    <span className="epi" style={{ width: size, height: size, flexShrink: 0 }}>
+      <svg className="epi-svg" viewBox="0 0 24 24" aria-hidden="true">
+        <circle className="epi-ring" cx="12" cy="12" r="9" />
+        <path className="epi-wave" pathLength={1} d={EPI_LOOPS[harmonics]} />
+        <g className="epi-hand-g">
+          <line className="epi-hand" x1="12" y1="12" x2="12" y2="4.2" />
+          <circle className="epi-spark" cx="12" cy="4.2" r="1.3" />
+        </g>
+      </svg>
+      <span className="epi-poof" aria-hidden="true" />
+      <span className="epi-icon">{children}</span>
+    </span>
+  )
+}
+
 function RoomIcon({ node, size = 20 }: { node: TreeNode; size?: number }) {
   const { getIcon } = useRoomListSettings()
   const override = getIcon(node.roomId)

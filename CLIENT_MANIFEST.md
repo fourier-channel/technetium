@@ -41,6 +41,13 @@ principles. See §6.
 Compound also pulls font packages (`@fontsource/inter`, `@fontsource/inconsolata`)
 as peers — install alongside Compound.
 
+> **Fragile internal import — scan before any matrix-js-sdk upgrade.**
+> `src/client/slidingSync.ts` deep-imports the internal `SlidingSync` class
+> (`matrix-js-sdk/lib/sliding-sync`), which is NOT public in 41.6.0. Native
+> Simplified Sliding Sync (MSC4186), operator-approved 2026-07-18, flag-gated
+> `VITE_SLIDING_SYNC`. Before bumping the SDK, re-verify that module against the
+> target version. Full rationale + rule in `DEPENDENCIES.md`.
+
 ---
 
 ## 3. React version decision (RESOLVE BEFORE INSTALLING COMPOUND)
