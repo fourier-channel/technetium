@@ -124,6 +124,28 @@ export function NavTree({
           stroke-dasharray: 1; filter: drop-shadow(0 0 2px rgba(255,150,40,0.7));
           animation: frSweep 900ms ease-in-out forwards;
         }
+        /* Epicycle icon reveal: hand sweeps + traces the composite (~62%), ring
+           blips out (62-80%), then the icon zooms out past the ring and settles. */
+        @keyframes epiDraw { 0% { stroke-dashoffset: 1; } 62%, 100% { stroke-dashoffset: 0; } }
+        @keyframes epiHand { 0% { transform: rotate(-90deg); } 62%, 100% { transform: rotate(270deg); } }
+        @keyframes epiOut {
+          0%, 62% { opacity: 1; transform: scale(1); }
+          70% { opacity: 1; transform: scale(1.12); }
+          80%, 100% { opacity: 0; transform: scale(0.15); }
+        }
+        @keyframes epiIconIn {
+          0%, 78% { opacity: 0; transform: scale(0); }
+          90% { opacity: 1; transform: scale(1.15); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        .epi { position: relative; display: inline-grid; place-items: center; }
+        .epi-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; animation: epiOut 1500ms ease-in forwards; }
+        .epi-ring { fill: none; stroke: #00b200; stroke-width: 1.4; filter: drop-shadow(0 0 3px #00b200); }
+        .epi-wave { fill: none; stroke: #ff9a3c; stroke-width: 1.3; stroke-linejoin: round; stroke-dasharray: 1; filter: drop-shadow(0 0 1.5px rgba(255,150,40,0.85)); animation: epiDraw 1500ms ease-in-out forwards; }
+        .epi-hand-g { transform-box: view-box; transform-origin: 12px 12px; animation: epiHand 1500ms ease-in-out forwards; }
+        .epi-hand { stroke: #00b200; stroke-width: 1; stroke-linecap: round; opacity: 0.75; }
+        .epi-spark { fill: #eaffea; filter: drop-shadow(0 0 2.5px #00b200); }
+        .epi-icon { position: relative; opacity: 0; animation: epiIconIn 1500ms cubic-bezier(0.2, 0.9, 0.3, 1) forwards; }
         @keyframes roomLetterPulse {
           0%, 40%, 60%, 100% {
             color: var(--tc-unread-base);
@@ -362,7 +384,9 @@ function TreeRow({
         <span style={{ width: 10, flexShrink: 0, textAlign: 'center', fontSize: 10, opacity: 0.7 }}>
           {node.isSpace ? (isCollapsed ? '\u25B8' : '\u25BE') : ''}
         </span>
-        <RoomIcon node={node} />
+        <EpicycleReveal seed={node.roomId} play={animate && !node.isSpace}>
+          <RoomIcon node={node} />
+        </EpicycleReveal>
         {node.isSpace ? (
           <span
             style={{
@@ -620,6 +644,62 @@ function RoomName({
 // Icon to the left of a room/space name: a user-set emoji/glyph override
 // (right-click -> Set icon), else the room/space avatar, else a generated
 // initial. Spaces get a rounded-square frame, rooms a circle.
+// Epicycle icon reveal (Ask 2026-07-19): a green-glow ring; a clock hand sweeps
+// once, its spark tracing the N-harmonic composite drawn as a POLAR wavy loop
+// (squarer with more harmonics -- precomputed, same per-room count as the name);
+// the ring blips out and the real icon zooms from a point to slightly-larger-
+// than-the-ring, then settles in. Green = #00b200 (the landing "Fourier green").
+function polarWaveLoop(harmonics: number): string {
+  const cx = 12, cy = 12, baseR = 7, amp = 1.9, samples = 96
+  const pts: string[] = []
+  for (let i = 0; i <= samples; i++) {
+    const th = (i / samples) * Math.PI * 2
+    let v = 0
+    for (let k = 0; k < harmonics; k++) {
+      const n = 2 * k + 1
+      v += Math.sin(n * th) / n
+    }
+    v *= 4 / Math.PI
+    const r = baseR + amp * v
+    pts.push(`${(cx + r * Math.cos(th)).toFixed(2)},${(cy + r * Math.sin(th)).toFixed(2)}`)
+  }
+  return 'M' + pts.join(' L') + 'Z'
+}
+const EPI_LOOPS: Record<number, string> = {
+  2: polarWaveLoop(2),
+  3: polarWaveLoop(3),
+  4: polarWaveLoop(4),
+  5: polarWaveLoop(5),
+}
+
+function EpicycleReveal({
+  children,
+  seed,
+  size = 20,
+  play,
+}: {
+  children: React.ReactNode
+  seed: string
+  size?: number
+  play: boolean
+}) {
+  if (!play) return <>{children}</>
+  const harmonics = 2 + (frHash(seed) % 4)
+  return (
+    <span className="epi" style={{ width: size, height: size, flexShrink: 0 }}>
+      <svg className="epi-svg" viewBox="0 0 24 24" aria-hidden="true">
+        <circle className="epi-ring" cx="12" cy="12" r="9" />
+        <path className="epi-wave" pathLength={1} d={EPI_LOOPS[harmonics]} />
+        <g className="epi-hand-g">
+          <line className="epi-hand" x1="12" y1="12" x2="12" y2="4.2" />
+          <circle className="epi-spark" cx="12" cy="4.2" r="1.3" />
+        </g>
+      </svg>
+      <span className="epi-icon">{children}</span>
+    </span>
+  )
+}
+
 function RoomIcon({ node, size = 20 }: { node: TreeNode; size?: number }) {
   const { getIcon } = useRoomListSettings()
   const override = getIcon(node.roomId)
