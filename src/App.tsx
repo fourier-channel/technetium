@@ -76,6 +76,7 @@ function App() {
     )}
     <div style={{ display: 'flex', height: '100vh', fontFamily: 'sans-serif' }}>
       <aside
+        className="tc-scroll"
         style={{
           width: 260,
           flexShrink: 0,

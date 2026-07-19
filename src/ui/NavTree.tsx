@@ -34,6 +34,7 @@ export function NavTree({
   const reduced = useReducedMotion()
   const animate = animationsEnabled && !reduced
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [orphansCollapsed, setOrphansCollapsed] = useState(false)
   const [menu, setMenu] = useState<{ node: TreeNode; x: number; y: number } | null>(null)
   const onContext = (node: TreeNode, e: React.MouseEvent) => {
     e.preventDefault()
@@ -213,6 +214,7 @@ export function NavTree({
       {tree.orphanRooms.length > 0 && (
         <>
           <div
+            onClick={() => setOrphansCollapsed((c) => !c)}
             style={{
               margin: '10px 0 2px',
               padding: '0 8px',
@@ -221,25 +223,40 @@ export function NavTree({
               letterSpacing: 0.4,
               textTransform: 'uppercase',
               color: 'var(--cpd-color-text-secondary)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
             }}
           >
+            <span style={{ fontSize: 9, opacity: 0.7 }}>{orphansCollapsed ? '▸' : '▾'}</span>
             Direct &amp; other
           </div>
-          {tree.orphanRooms.map((node, i) => (
-            <TreeRow
-              key={node.roomId}
-              node={node}
-              depth={0}
-              index={i}
-              collapsed={collapsed}
-              onToggle={toggle}
-              selectedRoomId={selectedRoomId}
-              onSelectRoom={onSelectRoom}
-              notifs={notifs}
-              animate={animate}
-              onContext={onContext}
-            />
-          ))}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateRows: orphansCollapsed ? '0fr' : '1fr',
+              transition: animate ? 'grid-template-rows 240ms ease' : undefined,
+            }}
+          >
+            <div style={{ overflow: 'hidden', minHeight: 0 }}>
+              {tree.orphanRooms.map((node, i) => (
+                <TreeRow
+                  key={node.roomId}
+                  node={node}
+                  depth={0}
+                  index={i}
+                  collapsed={collapsed}
+                  onToggle={toggle}
+                  selectedRoomId={selectedRoomId}
+                  onSelectRoom={onSelectRoom}
+                  notifs={notifs}
+                  animate={animate}
+                  onContext={onContext}
+                />
+              ))}
+            </div>
+          </div>
         </>
       )}
       {menu && (
