@@ -30,18 +30,17 @@ export function slidingSyncEnabled(): boolean {
 // Long-poll timeout for a sliding-sync request.
 const SLIDING_SYNC_TIMEOUT_MS = 30_000
 
-// The room-list window + what state each room ships with. Tunables kept here as
-// named values, not inline literals, so the window/sort/state are one edit.
-//
-// `slow_get_all_rooms` is the crux: the range [0,20] is only the PRIORITY window
-// (loads first); with slow_get_all_rooms the server then streams EVERY joined
-// room -- spaces included -- over subsequent responses. So the whole nav fills
-// in (the L2 stale-then-live nav already renders rooms as they arrive), while
-// `required_state` stays LEAN: room chrome + own membership only, NEVER the full
-// member lists that made classic sync heavy. Per-user members load on demand
-// (CD-15). This is the "full nav, light sync" shape.
-const INITIAL_RANGE: number[][] = [[0, 20]]
-const LIST_SORT = ['by_recency']
+// Two explicit lists (tunables named, not inline). Native MSC4186 does NOT honor
+// the proxy-era `slow_get_all_rooms`, so we cover the nav with real ranges:
+//   - a SPACES list (all spaces, sorted by name) so the hierarchy is ALWAYS
+//     complete -- spaces sort low by recency and otherwise fall out of a window;
+//   - a ROOMS list with a generous range.
+// `required_state` stays LEAN everywhere: room chrome + own membership only,
+// NEVER the full member rosters that made classic sync heavy. Per-user members
+// load on demand (CD-15). Ranges are generous but finite; true grow-on-scroll
+// windowing is a later optimization for thousands-of-rooms accounts.
+const SPACES_RANGE: number[][] = [[0, 99]]
+const ROOMS_RANGE: number[][] = [[0, 499]]
 const LIST_REQUIRED_STATE: string[][] = [
   ['m.room.name', ''],
   ['m.room.avatar', ''],
@@ -58,14 +57,25 @@ const TIMELINE_LIMIT = 1
 export function buildSlidingSync(client: MatrixClient): SlidingSync {
   const lists = new Map<string, MSC3575List>([
     [
+      // All spaces, so the nav hierarchy is always complete regardless of activity.
+      'spaces',
+      {
+        ranges: SPACES_RANGE,
+        sort: ['by_name'],
+        filters: { room_types: ['m.space'] },
+        required_state: LIST_REQUIRED_STATE,
+        timeline_limit: 0,
+      },
+    ],
+    [
+      // Non-space rooms, generous range, most-recent first.
       'rooms',
       {
-        ranges: INITIAL_RANGE,
-        sort: LIST_SORT,
+        ranges: ROOMS_RANGE,
+        sort: ['by_recency'],
+        filters: { not_room_types: ['m.space'] },
         required_state: LIST_REQUIRED_STATE,
         timeline_limit: TIMELINE_LIMIT,
-        // Stream ALL joined rooms/spaces past the priority window (incrementally).
-        slow_get_all_rooms: true,
       },
     ],
   ])
