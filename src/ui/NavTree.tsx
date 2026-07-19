@@ -104,6 +104,23 @@ export function NavTree({
           100% { background: transparent; }
         }
         .nav-join-ripple { animation: navJoinRipple 900ms ease-out 1; }
+        /* Fourier reveal: orange harmonics draw in, collapse into a square wave,
+           then the name pops as the wave vanishes. Plays once on a room's entrance. */
+        @keyframes frName {
+          0%, 52% { opacity: 0; transform: translateY(1px) scale(0.96); }
+          74%     { opacity: 1; transform: translateY(0) scale(1.06); }
+          100%    { opacity: 1; transform: none; }
+        }
+        @keyframes frWave { 0% { opacity: 0; } 12% { opacity: 1; } 58% { opacity: 1; } 80%, 100% { opacity: 0; } }
+        @keyframes frDraw { 0% { stroke-dashoffset: 260; } 48%, 100% { stroke-dashoffset: 0; } }
+        @keyframes frHarmFade { 0%, 42% { opacity: 1; } 60%, 100% { opacity: 0; } }
+        @keyframes frSquareMorph { 0%, 36% { opacity: 0; } 54% { opacity: 1; } 72%, 100% { opacity: 0; } }
+        .fr { position: relative; display: inline-flex; align-items: center; min-width: 0; max-width: 100%; }
+        .fr-name { display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0; animation: frName 760ms ease-out forwards; }
+        .fr-wave { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; animation: frWave 760ms ease-out forwards; }
+        .fr-h { fill: none; stroke: #ff9a3c; stroke-width: 1.6; stroke-linecap: round; stroke-dasharray: 260; animation: frDraw 760ms ease-out forwards, frHarmFade 760ms ease-out forwards; }
+        .fr-h2 { stroke-width: 1.1; stroke: #ffb020; }
+        .fr-sq { fill: none; stroke: #ffb84d; stroke-width: 1.8; opacity: 0; animation: frSquareMorph 760ms ease-out forwards; }
         @keyframes roomLetterPulse {
           0%, 40%, 60%, 100% {
             color: var(--tc-unread-base);
@@ -358,7 +375,9 @@ function TreeRow({
             {label}
           </span>
         ) : (
-          <RoomName label={label} counts={notifs.get(node.roomId)} roomId={node.roomId} animate={animate} />
+          <FourierReveal play={animate}>
+            <RoomName label={label} counts={notifs.get(node.roomId)} roomId={node.roomId} animate={animate} />
+          </FourierReveal>
         )}
         <span
           style={{
@@ -480,6 +499,30 @@ function collectFavoriteRooms(node: TreeNode, isFavorite: (roomId: string) => bo
 // gets an orange glow + a "(N)" count. A ping (highlight > 0) additionally shows
 // an orange "@" and, when animations are enabled, a pulse that travels through
 // the name letter by letter. When animations are off / reduced-motion, the ping
+// Fourier reveal wrapper (Ask, 2026-07-19): on a room name's first appearance,
+// two orange harmonics draw in and collapse into a square wave, then the name
+// pops as the wave disappears -- so the list materializes instead of snapping.
+// Plays once on mount; `play=false` (animations off / reduced motion) renders
+// the name plainly. Paths live in a 120x24 viewBox, baseline y=12.
+const FR_SINE1 = 'M0,12 Q15,4 30,12 T60,12 T90,12 T120,12'
+const FR_SINE3 =
+  'M0,12 Q5,8.5 10,12 T20,12 T30,12 T40,12 T50,12 T60,12 T70,12 T80,12 T90,12 T100,12 T110,12 T120,12'
+const FR_SQUARE = 'M0,6 H30 V18 H60 V6 H90 V18 H120'
+
+function FourierReveal({ children, play }: { children: React.ReactNode; play: boolean }) {
+  if (!play) return <>{children}</>
+  return (
+    <span className="fr">
+      <span className="fr-name">{children}</span>
+      <svg className="fr-wave" viewBox="0 0 120 24" preserveAspectRatio="none" aria-hidden="true">
+        <path className="fr-h" d={FR_SINE1} />
+        <path className="fr-h fr-h2" d={FR_SINE3} />
+        <path className="fr-sq" d={FR_SQUARE} />
+      </svg>
+    </span>
+  )
+}
+
 // shows the static @ + glow with no travelling pulse.
 function RoomName({
   label,
