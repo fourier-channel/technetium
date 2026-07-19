@@ -64,38 +64,39 @@ export function NavTree({
         lineHeight: 1.3,
         color: 'var(--cpd-color-text-primary)',
         userSelect: 'none',
-        // Stale = last-known shape, still syncing: dim + soft pulse, reconciles
-        // to full opacity the instant the live tree lands (CD-11).
-        opacity: stale ? 0.5 : 1,
-        transition: 'opacity 400ms ease',
-        animation: stale && !reduced ? 'navStalePulse 1.6s ease-in-out infinite' : undefined,
       }}
     >
-      {stale && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '2px 10px 8px',
-            fontSize: 11,
-            fontWeight: 600,
-            letterSpacing: 0.3,
-            color: 'var(--cpd-color-text-secondary)',
-          }}
-        >
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: 'var(--cpd-color-bg-accent-rest, #3390ff)',
-              animation: reduced ? undefined : 'navStaleDot 1s ease-in-out infinite',
-            }}
-          />
-          Syncing your rooms{'…'}
-        </div>
-      )}
+      {/* Fixed-height slot -- reserved whether syncing or not, so the line
+          appearing/disappearing never shifts the list (no-forced-reflow-law). */}
+      <div
+        style={{
+          height: 22,
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '0 10px',
+          fontSize: 11,
+          fontWeight: 600,
+          letterSpacing: 0.3,
+          color: 'var(--cpd-color-text-secondary)',
+        }}
+      >
+        {stale ? (
+          <>
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: 'var(--cpd-color-bg-accent-rest, #3390ff)',
+                animation: reduced ? undefined : 'navStaleDot 1s ease-in-out infinite',
+              }}
+            />
+            Syncing your rooms{'…'}
+          </>
+        ) : null}
+      </div>
       <style>{`
         @keyframes navStalePulse { 0%,100% { opacity: 0.5; } 50% { opacity: 0.62; } }
         @keyframes navStaleDot { 0%,100% { opacity: 0.35; } 50% { opacity: 1; } }
@@ -119,14 +120,14 @@ export function NavTree({
         .fr { position: relative; display: inline-flex; align-items: center; min-width: 0; max-width: 100%; }
         .fr-name {
           display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-          animation: frNameWipe 780ms ease-out calc(470ms + var(--stage, 0ms)) both,
-                     frFlicker 780ms steps(24, end) calc(470ms + var(--stage, 0ms)) both;
+          animation: frNameWipe 1150ms ease-out calc(700ms + var(--stage, 0ms)) both,
+                     frFlicker 1150ms steps(24, end) calc(700ms + var(--stage, 0ms)) both;
         }
-        .fr-wave { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; animation: frWaveFade 1250ms ease-out var(--stage, 0ms) both; }
+        .fr-wave { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; animation: frWaveFade 2000ms ease-out var(--stage, 0ms) both; }
         .fr-sweep {
           fill: none; stroke: #ff9a3c; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
           stroke-dasharray: 1; filter: drop-shadow(0 0 2px rgba(255,150,40,0.7));
-          animation: frSweep 900ms ease-in-out var(--stage, 0ms) both;
+          animation: frSweep 1500ms ease-in-out var(--stage, 0ms) both;
         }
         /* Epicycle icon reveal: hand sweeps + traces the composite (~62%), ring
            blips out (62-80%), then the icon zooms out past the ring and settles. */
@@ -144,13 +145,13 @@ export function NavTree({
           100% { opacity: 1; transform: scale(1); }
         }
         .epi { position: relative; display: inline-grid; place-items: center; }
-        .epi-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; animation: epiOut 1500ms ease-in var(--stage, 0ms) both; }
+        .epi-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; animation: epiOut 2300ms ease-in var(--stage, 0ms) both; }
         .epi-ring { fill: none; stroke: #00b200; stroke-width: 1.4; filter: drop-shadow(0 0 3px #00b200); }
-        .epi-wave { fill: none; stroke: #ff9a3c; stroke-width: 1.3; stroke-linejoin: round; stroke-dasharray: 1; filter: drop-shadow(0 0 1.5px rgba(255,150,40,0.85)); animation: epiDraw 1500ms ease-in-out var(--stage, 0ms) forwards; }
-        .epi-hand-g { transform-box: view-box; transform-origin: 12px 12px; animation: epiHand 1500ms ease-in-out var(--stage, 0ms) forwards; }
+        .epi-wave { fill: none; stroke: #ff9a3c; stroke-width: 1.3; stroke-linejoin: round; stroke-dasharray: 1; filter: drop-shadow(0 0 1.5px rgba(255,150,40,0.85)); animation: epiDraw 2300ms ease-in-out var(--stage, 0ms) forwards; }
+        .epi-hand-g { transform-box: view-box; transform-origin: 12px 12px; animation: epiHand 2300ms ease-in-out var(--stage, 0ms) forwards; }
         .epi-hand { stroke: #00b200; stroke-width: 1; stroke-linecap: round; opacity: 0.75; }
         .epi-spark { fill: #eaffea; filter: drop-shadow(0 0 2.5px #00b200); }
-        .epi-icon { position: relative; opacity: 0; animation: epiIconIn 1500ms cubic-bezier(0.2, 0.9, 0.3, 1) var(--stage, 0ms) forwards; }
+        .epi-icon { position: relative; opacity: 0; animation: epiIconIn 2300ms cubic-bezier(0.2, 0.9, 0.3, 1) var(--stage, 0ms) forwards; }
         @keyframes roomLetterPulse {
           0%, 40%, 60%, 100% {
             color: var(--tc-unread-base);
@@ -194,11 +195,12 @@ export function NavTree({
           {animationsEnabled ? 'ON' : 'OFF'}
         </button>
       </div>
-      {tree.spaces.map((node) => (
+      {tree.spaces.map((node, i) => (
         <TreeRow
           key={node.roomId}
           node={node}
           depth={0}
+          index={i}
           collapsed={collapsed}
           onToggle={toggle}
           selectedRoomId={selectedRoomId}
@@ -223,11 +225,12 @@ export function NavTree({
           >
             Direct &amp; other
           </div>
-          {tree.orphanRooms.map((node) => (
+          {tree.orphanRooms.map((node, i) => (
             <TreeRow
               key={node.roomId}
               node={node}
               depth={0}
+              index={i}
               collapsed={collapsed}
               onToggle={toggle}
               selectedRoomId={selectedRoomId}
@@ -254,6 +257,7 @@ export function NavTree({
 function TreeRow({
   node,
   depth,
+  index = 0,
   collapsed,
   onToggle,
   selectedRoomId,
@@ -264,6 +268,7 @@ function TreeRow({
 }: {
   node: TreeNode
   depth: number
+  index?: number
   collapsed: Set<string>
   onToggle: (roomId: string) => void
   selectedRoomId?: string
@@ -369,7 +374,9 @@ function TreeRow({
           // Staged reveal: rows descend + their name/icon reveals fire delayed by
           // tree depth, so the list builds main-space -> sub-spaces -> rooms. The
           // var cascades to the reveal animations below.
-          '--stage': animate ? `${depth * NAV_STAGE_MS}ms` : '0ms',
+          '--stage': animate
+            ? `${depth * NAV_LEVEL_GAP_MS + index * NAV_ITEM_STAGGER_MS}ms`
+            : '0ms',
           display: 'flex',
           alignItems: 'center',
           gap: 6,
@@ -397,7 +404,7 @@ function TreeRow({
         <span style={{ width: 10, flexShrink: 0, textAlign: 'center', fontSize: 10, opacity: 0.7 }}>
           {node.isSpace ? (isCollapsed ? '\u25B8' : '\u25BE') : ''}
         </span>
-        <EpicycleReveal seed={node.roomId} play={animate && !node.isSpace}>
+        <EpicycleReveal seed={node.roomId} play={animate}>
           <RoomIcon node={node} />
         </EpicycleReveal>
         {node.isSpace ? (
@@ -412,7 +419,9 @@ function TreeRow({
               textShadow: spaceUnread ? '0 0 6px rgba(255,150,40,0.5)' : undefined,
             }}
           >
-            {label}
+            <FourierReveal seed={node.roomId} play={animate}>
+              {label}
+            </FourierReveal>
           </span>
         ) : (
           <FourierReveal seed={node.roomId} play={animate}>
@@ -466,11 +475,12 @@ function TreeRow({
           }}
         >
           <div style={{ overflow: 'hidden', minHeight: 0 }}>
-            {node.children.map((child) => (
+            {node.children.map((child, i) => (
               <TreeRow
                 key={child.roomId}
                 node={child}
                 depth={depth + 1}
+                index={i}
                 collapsed={collapsed}
                 onToggle={onToggle}
                 selectedRoomId={selectedRoomId}
@@ -539,10 +549,12 @@ function collectFavoriteRooms(node: TreeNode, isFavorite: (roomId: string) => bo
 // gets an orange glow + a "(N)" count. A ping (highlight > 0) additionally shows
 // an orange "@" and, when animations are enabled, a pulse that travels through
 // the name letter by letter. When animations are off / reduced-motion, the ping
-// Stage spacing for the depth-cascaded reveal: level N's rows (+ their name/icon
-// reveals) start this many ms after level N-1, so the tree builds top-down
-// (main space -> sub-spaces -> rooms) and later rooms get time to load.
-const NAV_STAGE_MS = 850
+// Stage spacing for the depth-cascaded reveal. A row's reveal is delayed by its
+// tree DEPTH (level gap -> the main space finishes, a beat of downtime, then all
+// sub-spaces, then rooms) PLUS its sibling INDEX (item stagger -> within a level
+// the rows open ONE AT A TIME, top to bottom, "spilling downwards"). Tunable.
+const NAV_LEVEL_GAP_MS = 2200
+const NAV_ITEM_STAGGER_MS = 180
 
 // Fourier reveal wrapper (Ask 2026-07-19, tuned): on a room's first appearance a
 // square-wave PARTIAL SUM of N harmonics (N random-ish per room, 2..5 -> a
