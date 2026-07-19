@@ -34,7 +34,8 @@ export function NavTree({
   const reduced = useReducedMotion()
   const animate = animationsEnabled && !reduced
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
-  const [orphansCollapsed, setOrphansCollapsed] = useState(false)
+  const [dmOpen, setDmOpen] = useState(false)
+  const [dmRevealKey, setDmRevealKey] = useState(0)
   const [menu, setMenu] = useState<{ node: TreeNode; x: number; y: number } | null>(null)
 
   // Intro sequence: rows spawn in one at a time (41chan -> sub-spaces -> their
@@ -187,6 +188,18 @@ export function NavTree({
         .epi-hand { stroke: #00b200; stroke-width: 1; stroke-linecap: round; opacity: 0.75; }
         .epi-spark { fill: #eaffea; filter: drop-shadow(0 0 2.5px #00b200); }
         .epi-icon { position: relative; opacity: 0; animation: epiIconIn 2300ms cubic-bezier(0.2, 0.9, 0.3, 1) var(--stage, 0ms) forwards; }
+        /* Dust poof: a soft puff of dust bursts outward as the icon lands
+           (shrinks back into its spot ~end of epiIconIn). */
+        @keyframes epiPoof {
+          0% { opacity: 0; transform: scale(0.35); }
+          10% { opacity: 0.6; }
+          100% { opacity: 0; transform: scale(1.9); }
+        }
+        .epi-poof {
+          position: absolute; inset: -3px; border-radius: 50%; pointer-events: none; opacity: 0;
+          background: radial-gradient(circle, rgba(212,196,160,0.55) 0%, rgba(212,196,160,0.16) 45%, transparent 70%);
+          animation: epiPoof 520ms ease-out calc(2020ms + var(--stage, 0ms)) forwards;
+        }
         @keyframes roomLetterPulse {
           0%, 40%, 60%, 100% {
             color: var(--tc-unread-base);
@@ -230,6 +243,67 @@ export function NavTree({
           {animationsEnabled ? 'ON' : 'OFF'}
         </button>
       </div>
+      {/* Direct Messages: a top pill; expanded, DMs are icon-only, wrapping
+          horizontally, and pushing the room list down (intended reflow). */}
+      {tree.orphanRooms.length > 0 && (
+        <div style={{ margin: '2px 4px 6px' }}>
+          <button
+            type="button"
+            onClick={() =>
+              setDmOpen((o) => {
+                if (!o) setDmRevealKey((k) => k + 1) // replay icon reveals on open
+                return !o
+              })
+            }
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              width: '100%',
+              padding: '4px 10px',
+              borderRadius: 999,
+              cursor: 'pointer',
+              border: '1px solid rgba(128,128,128,0.3)',
+              background: dmOpen ? 'var(--cpd-color-bg-subtle-secondary)' : 'transparent',
+              color: 'var(--cpd-color-text-secondary)',
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: 0.4,
+              textTransform: 'uppercase',
+            }}
+          >
+            <span style={{ fontSize: 9, opacity: 0.7 }}>{dmOpen ? '▾' : '▸'}</span>
+            Direct Messages
+            <span style={{ marginLeft: 'auto', opacity: 0.7 }}>{tree.orphanRooms.length}</span>
+          </button>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateRows: dmOpen ? '1fr' : '0fr',
+              transition: animate ? 'grid-template-rows 240ms ease' : undefined,
+            }}
+          >
+            <div style={{ overflow: 'hidden', minHeight: 0 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, padding: '7px 8px 3px' }}>
+                {tree.orphanRooms.map((node) => (
+                  <button
+                    key={`${node.roomId}:${dmRevealKey}`}
+                    type="button"
+                    onClick={() => node.room && onSelectRoom?.(node.room)}
+                    onContextMenu={(e) => onContext(node, e)}
+                    title={node.name || node.roomId}
+                    style={{ padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', lineHeight: 0 }}
+                  >
+                    <EpicycleReveal seed={node.roomId} play={animate}>
+                      <RoomIcon node={node} size={30} />
+                    </EpicycleReveal>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {tree.spaces.map((node) => (
         <TreeRow
           key={node.roomId}
@@ -247,56 +321,6 @@ export function NavTree({
           onIntroInteract={abortIntro}
         />
       ))}
-      {tree.orphanRooms.length > 0 && (
-        <>
-          <div
-            onClick={() => setOrphansCollapsed((c) => !c)}
-            style={{
-              margin: '10px 0 2px',
-              padding: '0 8px',
-              fontSize: 11,
-              fontWeight: 600,
-              letterSpacing: 0.4,
-              textTransform: 'uppercase',
-              color: 'var(--cpd-color-text-secondary)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 5,
-            }}
-          >
-            <span style={{ fontSize: 9, opacity: 0.7 }}>{orphansCollapsed ? '▸' : '▾'}</span>
-            Direct &amp; other
-          </div>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateRows: orphansCollapsed ? '0fr' : '1fr',
-              transition: animate ? 'grid-template-rows 240ms ease' : undefined,
-            }}
-          >
-            <div style={{ overflow: 'hidden', minHeight: 0 }}>
-              {tree.orphanRooms.map((node) => (
-                <TreeRow
-                  key={node.roomId}
-                  node={node}
-                  depth={0}
-                  collapsed={collapsed}
-                  onToggle={toggle}
-                  selectedRoomId={selectedRoomId}
-                  onSelectRoom={onSelectRoom}
-                  notifs={notifs}
-                  animate={animate}
-                  onContext={onContext}
-                  appeared={appeared}
-                  introActive={introActive}
-                  onIntroInteract={abortIntro}
-                />
-              ))}
-            </div>
-          </div>
-        </>
-      )}
       {menu && (
         <RoomContextMenu
           node={menu.node}
@@ -800,6 +824,7 @@ function EpicycleReveal({
           <circle className="epi-spark" cx="12" cy="4.2" r="1.3" />
         </g>
       </svg>
+      <span className="epi-poof" aria-hidden="true" />
       <span className="epi-icon">{children}</span>
     </span>
   )

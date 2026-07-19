@@ -100,7 +100,8 @@ export function computeRevealOrder(tree: NavTree): string[] {
     queue.push(...node.children.filter((c) => c.isSpace))
     roomGroups.push(node.children.filter((c) => !c.isSpace).map((r) => r.roomId))
   }
-  return [...spaceIds, ...roomGroups.flat(), ...tree.orphanRooms.map((r) => r.roomId)]
+  // Orphans (DMs) are their own top pill now, not part of the tree spill-in.
+  return [...spaceIds, ...roomGroups.flat()]
 }
 
 // Build the nav tree from one-or-more getRoomHierarchy() responses (structure +
