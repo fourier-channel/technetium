@@ -46,8 +46,9 @@ const LIST_REQUIRED_STATE: string[][] = [
   ['m.room.avatar', ''],
   ['m.room.canonical_alias', ''],
   ['m.room.create', ''], // room vs space (m.space)
-  ['m.space.child', '*'], // space hierarchy
-  ['m.room.member', '$ME'], // OWN membership only -- one event, not the roster
+  ['m.space.child', '*'], // space hierarchy (parent -> children)
+  ['m.space.parent', '*'], // child -> parent, for the parent-gate in spaces.ts
+  ['m.room.member', '$ME'], // OWN membership only -- not the roster
 ]
 const TIMELINE_LIMIT = 1
 

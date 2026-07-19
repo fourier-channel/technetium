@@ -55,6 +55,18 @@ function sortChildren(children: TreeNode[]): TreeNode[] {
   })
 }
 
+// Does this room DECLARE a parent space (a valid m.space.parent with content)?
+// If so it must render UNDER that parent, never as a loose orphan -- so while its
+// parent hasn't loaded/placed yet we HOLD it out of the tree entirely rather than
+// dumping it into "Direct and Other" (parent-gate: parents load+show before their
+// children, priority main-space -> sub-spaces -> rooms). Rooms with NO parent
+// declaration are genuine orphans (DMs / direct-joins) and still show.
+function hasParentSpace(room: Room): boolean {
+  return room.currentState
+    .getStateEvents('m.space.parent')
+    .some((e) => Object.keys(e.getContent()).length > 0)
+}
+
 // Build the nav tree from one-or-more getRoomHierarchy() responses (structure +
 // names, including unjoined rooms) with live membership overlaid from sync.
 // `rooms` is the concatenation of every queried top-level space's
@@ -109,7 +121,7 @@ export function buildNavTree(client: MatrixClient, rooms: HierarchyRoom[]): NavT
   // directly-joined rooms). Surfaced from sync, not the hierarchy.
   const orphanRooms: TreeNode[] = client
     .getRooms()
-    .filter((r) => !r.isSpaceRoom() && !byId.has(r.roomId))
+    .filter((r) => !r.isSpaceRoom() && !byId.has(r.roomId) && !hasParentSpace(r))
     .map((r) => ({
       roomId: r.roomId,
       name: r.name || r.roomId,
@@ -141,7 +153,10 @@ export function buildNavTree(client: MatrixClient, rooms: HierarchyRoom[]): NavT
         r.isSpaceRoom() &&
         (r.getMyMembership() === 'invite' || r.getMyMembership() === 'join') &&
         !present.has(r.roomId) &&
-        !childIds.has(r.roomId),
+        !childIds.has(r.roomId) &&
+        // Hold a sub-space out of the top level until its parent space loads +
+        // places it (parent-gate). A true root space declares no parent.
+        !hasParentSpace(r),
     )
     .map((r) => ({
       roomId: r.roomId,
