@@ -6,6 +6,7 @@ import { renderMessageBody } from '../client/messageBody'
 import { parseMxc } from '../client/media'
 import { AuthedImage } from './AuthedImage'
 import { useLightbox, type LightboxItem } from './Lightbox'
+import { linkify } from './linkify'
 
 // Read-only timeline. Message bodies render sanitized rich HTML (via DOMPurify)
 // when present, else plaintext. Encrypted events show a placeholder until the
@@ -170,7 +171,7 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
           dangerouslySetInnerHTML={{ __html: rendered.html }}
         />
       ) : (
-        <span>{rendered.text}</span>
+        <span style={{ whiteSpace: 'pre-wrap' }}>{linkify(rendered.text ?? '')}</span>
       )
     }
   } else if (kind === 'encrypted') {
@@ -384,7 +385,7 @@ function GalleryBody({ cells, layout }: { cells: (MatrixEvent | null)[]; layout:
           {caption.html !== undefined ? (
             <span className="tc-message-html" dangerouslySetInnerHTML={{ __html: caption.html }} />
           ) : (
-            <span>{caption.text}</span>
+            <span style={{ whiteSpace: 'pre-wrap' }}>{linkify(caption.text ?? '')}</span>
           )}
         </div>
       )}

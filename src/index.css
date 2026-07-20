@@ -119,6 +119,112 @@ code {
   background: var(--code-bg);
 }
 
+/* ---------------------------------------------------------------------------
+   Chat message rich text (Discord-flavored). Applies to sanitized formatted
+   bodies (.tc-message-html) and to linkified plaintext URLs (.tc-link). All
+   colors read from Compound tokens with hard fallbacks so it works even before
+   tokens resolve. Kept tight and readable -- the feel target is Discord's chat.
+   --------------------------------------------------------------------------- */
+:root {
+  --tc-link: #3ea6ff;              /* readable blue on the dark canvas */
+  --tc-code-bg: rgba(128, 128, 128, 0.16);
+  --tc-code-block-bg: rgba(0, 0, 0, 0.28);
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --tc-link: #1a73e8;
+    --tc-code-bg: rgba(120, 120, 130, 0.14);
+    --tc-code-block-bg: rgba(120, 120, 130, 0.12);
+  }
+}
+
+.tc-link,
+.tc-message-html a {
+  color: var(--tc-link);
+  text-decoration: none;
+  word-break: break-word;
+}
+.tc-link:hover,
+.tc-message-html a:hover {
+  text-decoration: underline;
+}
+
+.tc-message-html {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.tc-message-html p {
+  margin: 0 0 4px;
+}
+.tc-message-html p:last-child {
+  margin-bottom: 0;
+}
+/* Inline code: subtle pill, monospace, slightly smaller than the body. */
+.tc-message-html code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--tc-code-bg);
+  color: inherit;
+  display: inline;
+  white-space: pre-wrap;
+}
+/* Fenced/preformatted block: darker slab, scrolls horizontally, no wrap. */
+.tc-message-html pre {
+  margin: 4px 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--tc-code-block-bg);
+  overflow-x: auto;
+  max-width: 100%;
+}
+.tc-message-html pre code {
+  display: block;
+  padding: 0;
+  background: none;
+  border-radius: 0;
+  font-size: 0.85em;
+  line-height: 1.45;
+  white-space: pre;
+}
+.tc-message-html blockquote {
+  margin: 3px 0;
+  padding: 1px 0 1px 10px;
+  border-left: 3px solid rgba(128, 128, 128, 0.5);
+  color: var(--cpd-color-text-secondary, #9ca3af);
+}
+.tc-message-html ul,
+.tc-message-html ol {
+  margin: 3px 0;
+  padding-left: 22px;
+}
+.tc-message-html li {
+  margin: 1px 0;
+}
+.tc-message-html h1,
+.tc-message-html h2,
+.tc-message-html h3,
+.tc-message-html h4,
+.tc-message-html h5,
+.tc-message-html h6 {
+  margin: 4px 0 2px;
+  font-size: 1.05em;
+  font-weight: 700;
+  line-height: 1.3;
+  color: inherit;
+  letter-spacing: normal;
+}
+.tc-message-html table {
+  border-collapse: collapse;
+  margin: 4px 0;
+}
+.tc-message-html th,
+.tc-message-html td {
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  padding: 2px 8px;
+}
+
 /* Thin, always-visible scrollbar for the sidebar (never an auto-hiding overlay
    bar -- the position must always read). Firefox + WebKit. */
 .tc-scroll {
