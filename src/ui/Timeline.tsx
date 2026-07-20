@@ -7,6 +7,8 @@ import { parseMxc } from '../client/media'
 import { AuthedImage } from './AuthedImage'
 import { useLightbox, type LightboxItem } from './Lightbox'
 import { linkify } from './linkify'
+import { useChatBackground } from './chatBackground'
+import { ChatBackdrop, ChatBackgroundMenu } from './ChatBackground'
 
 // Read-only timeline. Message bodies render sanitized rich HTML (via DOMPurify)
 // when present, else plaintext. Encrypted events show a placeholder until the
@@ -14,6 +16,9 @@ import { linkify } from './linkify'
 export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadList }: { room: Room; onOpenThread?: (roomId: string, rootId: string) => void; threadListOpen?: boolean; onToggleThreadList?: () => void }) {
   const { client } = useClient()
   const { items, loadOlder, loadingOlder, atStart } = useTimeline(client, room)
+  const chatBg = useChatBackground()
+  const [bgMenuOpen, setBgMenuOpen] = useState(false)
+  const bg = chatBg.get(room.roomId)
   useEffect(() => {
     followRef.current = true
   }, [room])
@@ -108,27 +113,58 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
               {threadListOpen ? 'Threads X' : 'Threads'}
             </button>
           )}
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              onClick={() => setBgMenuOpen((o) => !o)}
+              title="Chat background"
+              aria-label="Chat background"
+              style={{ fontSize: 13, fontWeight: 400, lineHeight: 1, padding: '2px 4px' }}
+            >
+              🖼
+            </button>
+            {bgMenuOpen && client && (
+              <ChatBackgroundMenu
+                client={client}
+                current={bg}
+                onApply={(next) => {
+                  chatBg.set(room.roomId, next)
+                  setBgMenuOpen(false)
+                }}
+                onClear={() => {
+                  chatBg.clear(room.roomId)
+                  setBgMenuOpen(false)
+                }}
+                onClose={() => setBgMenuOpen(false)}
+              />
+            )}
+          </div>
         </div>
       </header>
-      <div
-        ref={scrollRef}
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: '12px 16px',
-          color: 'var(--cpd-color-text-primary)',
-        }}
-      >
-        {atStart && (
-          <div style={{ fontSize: 12, color: 'var(--cpd-color-text-secondary)', padding: '4px 0', marginBottom: 8 }}>
-            Beginning of the room.
-          </div>
-        )}
+      <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        {bg && client && <ChatBackdrop client={client} bg={bg} />}
+        <div
+          ref={scrollRef}
+          style={{
+            position: 'relative',
+            zIndex: 1,
+            flex: 1,
+            overflowY: 'auto',
+            padding: '12px 16px',
+            color: 'var(--cpd-color-text-primary)',
+          }}
+        >
+          {atStart && (
+            <div style={{ fontSize: 12, color: 'var(--cpd-color-text-secondary)', padding: '4px 0', marginBottom: 8 }}>
+              Beginning of the room.
+            </div>
+          )}
 
-        {items.map((item) => (
-          <Row key={item.id} item={item} onOpenThread={onOpenThread} />
-        ))}
-        <div ref={bottomRef} />
+          {items.map((item) => (
+            <Row key={item.id} item={item} onOpenThread={onOpenThread} />
+          ))}
+          <div ref={bottomRef} />
+        </div>
       </div>
     </div>
   )

@@ -5,7 +5,7 @@ import { useDomainBubbles, type Bubble } from '../client/useDomainBubbles'
 import { useDomainBackground } from '../client/useDomainBackground'
 import { useDomainMedia, type DomainMediaObject } from '../client/useDomainMedia'
 import { useDomainModeration } from '../client/useDomainModeration'
-import { fetchHomeserverMedia } from '../client/media'
+import { useAutoRefreshMedia } from '../client/useAutoRefreshMedia'
 import type { DomainSettingsApi } from './domainSettings'
 import { AuthedImage } from './AuthedImage'
 import { DomainBackgroundEditor } from './DomainBackgroundEditor'
@@ -551,26 +551,10 @@ function DomainBackgroundLayer({
   mxc: string
   transform: Transform
 }) {
-  const [src, setSrc] = useState<string | null>(null)
-
-  useEffect(() => {
-    let revoke: (() => void) | null = null
-    let alive = true
-    fetchHomeserverMedia(client, mxc)
-      .then((r) => {
-        if (!alive) {
-          r.revoke()
-          return
-        }
-        revoke = r.revoke
-        setSrc(r.src)
-      })
-      .catch(() => setSrc(null))
-    return () => {
-      alive = false
-      if (revoke) revoke()
-    }
-  }, [client, mxc])
+  // Auto-refreshing source: keeps the last good image on transient failures and
+  // re-fetches on interval / focus / online, so the background self-heals rather
+  // than vanishing for the session on one bad fetch (see useAutoRefreshMedia).
+  const src = useAutoRefreshMedia(client, mxc)
 
   if (!src) return null
   return (
