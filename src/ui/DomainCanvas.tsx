@@ -5,6 +5,7 @@ import { useDomainBubbles, type Bubble } from '../client/useDomainBubbles'
 import { useDomainBackground } from '../client/useDomainBackground'
 import { useDomainMedia, type DomainMediaObject } from '../client/useDomainMedia'
 import { useDomainObjects, type DomainObject, type MovePerm } from '../client/useDomainObjects'
+import { useDomainActions, ACTION_REGISTRY, type ActiveAction } from '../client/useDomainActions'
 import { useDomainModeration } from '../client/useDomainModeration'
 import { useAutoRefreshMedia } from '../client/useAutoRefreshMedia'
 import type { DomainSettingsApi } from './domainSettings'
@@ -72,6 +73,7 @@ export function DomainCanvas({
   const { background } = useDomainBackground(client, room)
   const media = useDomainMedia(client, room)
   const objects = useDomainObjects(client, room)
+  const actions = useDomainActions(client, room)
   const { collapsed, forceCollapse } = useDomainModeration(client, room)
   const { open: openLightbox } = useLightbox()
   const isAdmin = isDomainAdmin(client, room)
@@ -149,6 +151,18 @@ export function DomainCanvas({
         @keyframes domainCardIn {
           from { opacity: 0; transform: scale(0.4); }
           to   { opacity: 1; transform: scale(1); }
+        }
+        @keyframes domainActionPop {
+          0%   { transform: scale(0);   opacity: 0; }
+          14%  { transform: scale(1);   opacity: 1; }
+          68%  { transform: scale(1);   opacity: 1; }
+          100% { transform: scale(0);   opacity: 0; }
+        }
+        @keyframes domainActionFade {
+          0%   { opacity: 0; }
+          15%  { opacity: 1; }
+          70%  { opacity: 1; }
+          100% { opacity: 0; }
         }
       `}</style>
       {/* Shared domain background (room state) + its transform, beneath the
@@ -264,6 +278,19 @@ export function DomainCanvas({
         />
       ))}
 
+      {/* Ephemeral avatar actions: self effects anchored to a puck; thrown items
+          arc from sender to target. Scaffolding + POC (square / throw). */}
+      {actions.actions.map((a) => {
+        const from = positions.get(a.sender)
+        if (!from) return null
+        if (a.def.kind === 'throw') {
+          const to = a.target ? positions.get(a.target) : undefined
+          if (!to) return null
+          return <ThrownProjectile key={a.key} action={a} from={{ x: from.x, y: from.y }} to={{ x: to.x, y: to.y }} />
+        }
+        return <SelfActionEffect key={a.key} action={a} pos={{ x: from.x, y: from.y }} />
+      })}
+
       {/* TTD control (top-left), hidden during background editing. */}
       {!bgEditing && (
         <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 40 }} onClick={(e) => e.stopPropagation()}>
@@ -359,6 +386,10 @@ export function DomainCanvas({
             forceCollapse(userMenu.userId)
             setUserMenu(null)
           }}
+          onThrow={() => {
+            actions.trigger('throw', userMenu.userId)
+            setUserMenu(null)
+          }}
           onClose={() => setUserMenu(null)}
         />
       )}
@@ -384,6 +415,10 @@ export function DomainCanvas({
             settings.clearAvatar(myUserId)
             setAvatarMenu(null)
           }}
+          onAction={(action) => {
+            actions.trigger(action)
+            setAvatarMenu(null)
+          }}
           onClose={() => setAvatarMenu(null)}
         />
       )}
@@ -399,6 +434,7 @@ function AvatarMenu({
   onPick,
   onClear,
   onClose,
+  onAction,
 }: {
   x: number
   y: number
@@ -406,7 +442,9 @@ function AvatarMenu({
   onPick: (emoji: string) => void
   onClear: () => void
   onClose: () => void
+  onAction: (action: string) => void
 }) {
+  const selfActions = Object.entries(ACTION_REGISTRY).filter(([, d]) => d.kind === 'self')
   const [draft, setDraft] = useState('')
   const ref = useRef<HTMLDivElement>(null)
   const left = Math.max(6, Math.min(x, window.innerWidth - 220))
@@ -510,6 +548,34 @@ function AvatarMenu({
           </button>
         )}
       </div>
+
+      {selfActions.length > 0 && (
+        <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid rgba(128,128,128,0.2)' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--cpd-color-text-secondary)', marginBottom: 4 }}>
+            Actions
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {selfActions.map(([key, def]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => onAction(key)}
+                style={{
+                  fontSize: 12,
+                  padding: '3px 8px',
+                  borderRadius: 6,
+                  border: '1px solid rgba(128,128,128,0.35)',
+                  background: 'var(--cpd-color-bg-subtle-secondary)',
+                  color: 'var(--cpd-color-text-primary)',
+                  cursor: 'pointer',
+                }}
+              >
+                {def.glyph} {def.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -817,6 +883,99 @@ function DomainObjectCard({
       }}
     >
       <AuthedImage mxc={obj.mxc} width={180} fill alt={obj.name ?? ''} />
+    </div>
+  )
+}
+
+// A self-anchored action effect: the glyph pops in next to the sender's puck
+// and shrinks away over the action's duration. POC = 'square' (a black-square
+// glyph). Reduced motion -> a fade instead of a scale pop.
+function SelfActionEffect({ action, pos }: { action: ActiveAction; pos: { x: number; y: number } }) {
+  const rm = reduceMotion()
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: `${pos.x * 100}%`,
+        top: `${pos.y * 100}%`,
+        transform: 'translate(calc(-50% + 46px), -50%)',
+        zIndex: 5,
+        pointerEvents: 'none',
+      }}
+    >
+      <div
+        style={{
+          fontSize: 30,
+          lineHeight: 1,
+          filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))',
+          animation: `${rm ? 'domainActionFade' : 'domainActionPop'} ${action.def.durationMs}ms ease-in-out both`,
+        }}
+      >
+        {action.def.glyph}
+      </div>
+    </div>
+  )
+}
+
+// A thrown item: the glyph flies from the sender's puck to the target's along a
+// quadratic-bezier ARC (control point lifted up), spinning as it goes -- the
+// seed of the "target another user with an image" goal. Driven by rAF writing
+// left/top/transform directly (no per-frame re-render). Reduced motion -> it
+// just appears at the target.
+function ThrownProjectile({
+  action,
+  from,
+  to,
+}: {
+  action: ActiveAction
+  from: { x: number; y: number }
+  to: { x: number; y: number }
+}) {
+  const elRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = elRef.current
+    if (!el) return
+    if (reduceMotion()) {
+      el.style.left = `${to.x * 100}%`
+      el.style.top = `${to.y * 100}%`
+      return
+    }
+    const dur = action.def.durationMs
+    const start = performance.now()
+    const cx = (from.x + to.x) / 2
+    const cy = Math.max(0, Math.min(from.y, to.y) - 0.22) // control point lifted up = the arc
+    let raf = 0
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / dur)
+      const mt = 1 - t
+      const x = mt * mt * from.x + 2 * mt * t * cx + t * t * to.x
+      const y = mt * mt * from.y + 2 * mt * t * cy + t * t * to.y
+      el.style.left = `${x * 100}%`
+      el.style.top = `${y * 100}%`
+      el.style.transform = `translate(-50%, -50%) rotate(${t * 540}deg) scale(${1 + 0.3 * Math.sin(t * Math.PI)})`
+      if (t < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [action.def.durationMs, from.x, from.y, to.x, to.y])
+
+  return (
+    <div
+      ref={elRef}
+      style={{
+        position: 'absolute',
+        left: `${from.x * 100}%`,
+        top: `${from.y * 100}%`,
+        transform: 'translate(-50%, -50%)',
+        zIndex: 6,
+        pointerEvents: 'none',
+        fontSize: 34,
+        lineHeight: 1,
+        filter: 'drop-shadow(0 3px 8px rgba(0,0,0,0.6))',
+      }}
+    >
+      {action.def.glyph}
     </div>
   )
 }

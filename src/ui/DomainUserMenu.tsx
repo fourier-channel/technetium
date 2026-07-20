@@ -34,6 +34,7 @@ export function DomainUserMenu({
   isAdmin,
   onInspect,
   onForceCollapse,
+  onThrow,
   onClose,
 }: {
   x: number
@@ -43,6 +44,7 @@ export function DomainUserMenu({
   isAdmin: boolean
   onInspect: () => void
   onForceCollapse: () => void
+  onThrow?: () => void
   onClose: () => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -103,6 +105,8 @@ export function DomainUserMenu({
       </div>
 
       <MenuItem onClick={onInspect}>Inspect</MenuItem>
+
+      {onThrow && <MenuItem onClick={onThrow}>Throw {'⭐'}</MenuItem>}
 
       {isAdmin && <MenuItem danger onClick={onForceCollapse}>Force-collapse domain</MenuItem>}
     </div>,
