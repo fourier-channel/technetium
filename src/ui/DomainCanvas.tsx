@@ -4,6 +4,7 @@ import { useDomainPositions, type DomainPos } from '../client/useDomainPositions
 import { useDomainBubbles, type Bubble } from '../client/useDomainBubbles'
 import { useDomainBackground } from '../client/useDomainBackground'
 import { useDomainMedia, type DomainMediaObject } from '../client/useDomainMedia'
+import { useDomainObjects, type DomainObject, type MovePerm } from '../client/useDomainObjects'
 import { useDomainModeration } from '../client/useDomainModeration'
 import { useAutoRefreshMedia } from '../client/useAutoRefreshMedia'
 import type { DomainSettingsApi } from './domainSettings'
@@ -70,6 +71,7 @@ export function DomainCanvas({
   const bubbles = useDomainBubbles(client, room)
   const { background } = useDomainBackground(client, room)
   const media = useDomainMedia(client, room)
+  const objects = useDomainObjects(client, room)
   const { collapsed, forceCollapse } = useDomainModeration(client, room)
   const { open: openLightbox } = useLightbox()
   const isAdmin = isDomainAdmin(client, room)
@@ -77,6 +79,9 @@ export function DomainCanvas({
   const [avatarMenu, setAvatarMenu] = useState<{ x: number; y: number } | null>(null)
   const [userMenu, setUserMenu] = useState<{ x: number; y: number; userId: string } | null>(null)
   const [profile, setProfile] = useState<{ x: number; y: number; userId: string } | null>(null)
+  // Right-click menus for canvas media (detach) and detached objects (perm/remove).
+  const [mediaMenu, setMediaMenu] = useState<{ x: number; y: number; obj: DomainMediaObject; px: number; py: number } | null>(null)
+  const [objectMenu, setObjectMenu] = useState<{ x: number; y: number; obj: DomainObject } | null>(null)
   // A puck is hidden when an admin force-collapse is at least as new as the
   // user's latest position (they reappear by re-placing -> newer position ts).
   const isHidden = (userId: string, ts: number) => {
@@ -231,10 +236,33 @@ export function DomainCanvas({
               y={pos.y}
               index={i}
               onOpen={() => openLightbox([{ mxc: obj.mxc, name: obj.name, mimetype: obj.mimetype }], 0)}
+              onContext={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setMediaMenu({ x: e.clientX, y: e.clientY, obj, px: pos.x, py: pos.y })
+              }}
             />
           )
         })
       })()}
+
+      {/* Detached canvas objects: images left on the canvas, draggable by whoever
+          is permitted. Rendered above the grid; right-click for perm/remove. */}
+      {objects.objects.map((obj) => (
+        <DomainObjectCard
+          key={obj.id}
+          obj={obj}
+          containerRef={ref}
+          canMove={objects.canMove(obj)}
+          onMove={(x, y) => objects.move(obj.id, x, y)}
+          onOpen={() => openLightbox([{ mxc: obj.mxc, name: obj.name, mimetype: obj.mimetype }], 0)}
+          onContext={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            setObjectMenu({ x: e.clientX, y: e.clientY, obj })
+          }}
+        />
+      ))}
 
       {/* TTD control (top-left), hidden during background editing. */}
       {!bgEditing && (
@@ -246,6 +274,76 @@ export function DomainCanvas({
       {bgEditing && (
         <DomainBackgroundEditor client={client} room={room} onExit={() => onExitBgEdit?.()} />
       )}
+      {mediaMenu && (
+        <CanvasMenu
+          x={mediaMenu.x}
+          y={mediaMenu.y}
+          onClose={() => setMediaMenu(null)}
+          items={[
+            {
+              label: 'Open image',
+              onClick: () => {
+                openLightbox([{ mxc: mediaMenu.obj.mxc, name: mediaMenu.obj.name, mimetype: mediaMenu.obj.mimetype }], 0)
+                setMediaMenu(null)
+              },
+            },
+            ...(mediaMenu.obj.sender === myUserId || isAdmin
+              ? [
+                  {
+                    label: 'Detach to canvas',
+                    onClick: () => {
+                      objects.create({
+                        mxc: mediaMenu.obj.mxc,
+                        x: Math.min(1, mediaMenu.px + 0.05),
+                        y: mediaMenu.py,
+                        name: mediaMenu.obj.name,
+                        mimetype: mediaMenu.obj.mimetype,
+                      })
+                      setMediaMenu(null)
+                    },
+                  },
+                ]
+              : []),
+          ]}
+        />
+      )}
+      {objectMenu &&
+        (() => {
+          const o = objectMenu.obj
+          const admin = objects.isOwnerOrAdmin(o)
+          const items: CanvasMenuItem[] = [
+            {
+              label: 'Open image',
+              onClick: () => {
+                openLightbox([{ mxc: o.mxc, name: o.name, mimetype: o.mimetype }], 0)
+                setObjectMenu(null)
+              },
+            },
+          ]
+          if (admin) {
+            const permItem = (perm: MovePerm, label: string): CanvasMenuItem => ({
+              label: (o.perm === perm ? '• ' : '  ') + label,
+              onClick: () => {
+                objects.setPerm(o.id, perm, perm === 'whitelist' ? o.allow : undefined)
+                setObjectMenu(null)
+              },
+            })
+            items.push({ label: 'Who can move:', header: true, onClick: () => {} })
+            items.push(permItem('everyone', 'Anyone'))
+            items.push(permItem('owner', 'Only me'))
+            items.push(permItem('mods', 'Mods & me'))
+            items.push(permItem('whitelist', 'Whitelist (edit TBD)'))
+            items.push({
+              label: 'Remove from canvas',
+              danger: true,
+              onClick: () => {
+                objects.remove(o.id)
+                setObjectMenu(null)
+              },
+            })
+          }
+          return <CanvasMenu x={objectMenu.x} y={objectMenu.y} onClose={() => setObjectMenu(null)} items={items} />
+        })()}
       {userMenu && (
         <DomainUserMenu
           x={userMenu.x}
@@ -576,12 +674,14 @@ function DomainMediaCard({
   y,
   index,
   onOpen,
+  onContext,
 }: {
   obj: DomainMediaObject
   x: number
   y: number
   index: number
   onOpen: () => void
+  onContext: (e: React.MouseEvent) => void
 }) {
   const off = 26 + index * 16
   const rm = reduceMotion()
@@ -601,6 +701,7 @@ function DomainMediaCard({
           e.stopPropagation()
           onOpen()
         }}
+        onContextMenu={onContext}
         title={obj.name}
         style={{
           width: CARD_SIZE,
@@ -618,6 +719,200 @@ function DomainMediaCard({
       >
         <AuthedImage mxc={obj.mxc} width={180} fill alt={obj.name ?? ''} />
       </div>
+    </div>
+  )
+}
+
+// A detached canvas object: a persistent image left on the canvas. Draggable by
+// permitted users (hand-rolled pointer drag; capture only past the 5px threshold
+// so a plain click still opens the lightbox, G-bf01). Right-click -> perm/remove
+// menu (owner/admin). Others' moves arrive via timeline and travel smoothly.
+function DomainObjectCard({
+  obj,
+  containerRef,
+  canMove,
+  onMove,
+  onOpen,
+  onContext,
+}: {
+  obj: DomainObject
+  containerRef: React.RefObject<HTMLDivElement | null>
+  canMove: boolean
+  onMove: (x: number, y: number) => void
+  onOpen: () => void
+  onContext: (e: React.MouseEvent) => void
+}) {
+  const rm = reduceMotion()
+  const dragRef = useRef<{ startX: number; startY: number; moved: boolean; pointerId: number } | null>(null)
+  const movedRef = useRef(false)
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0 || !canMove) return
+    e.stopPropagation()
+    dragRef.current = { startX: e.clientX, startY: e.clientY, moved: false, pointerId: e.pointerId }
+  }
+  const onPointerMove = (e: React.PointerEvent) => {
+    const d = dragRef.current
+    if (!d) return
+    if (!d.moved) {
+      if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 5) return
+      d.moved = true
+      // Capture only once a real drag engages (capture-on-down suppresses click).
+      try {
+        e.currentTarget.setPointerCapture(d.pointerId)
+      } catch {
+        // ignore: capture can fail if the pointer already released
+      }
+    }
+    const el = containerRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    onMove(
+      Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)),
+      Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)),
+    )
+  }
+  const onPointerUp = (e: React.PointerEvent) => {
+    const d = dragRef.current
+    if (d) {
+      movedRef.current = d.moved
+      if (e.currentTarget.hasPointerCapture(d.pointerId)) e.currentTarget.releasePointerCapture(d.pointerId)
+    }
+    dragRef.current = null
+  }
+  const onClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (movedRef.current) {
+      movedRef.current = false
+      return // was a drag, not a click
+    }
+    onOpen()
+  }
+
+  return (
+    <div
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onClick={onClick}
+      onContextMenu={onContext}
+      title={canMove ? 'Drag to move · right-click for options' : obj.name ?? ''}
+      style={{
+        position: 'absolute',
+        left: `${obj.x * 100}%`,
+        top: `${obj.y * 100}%`,
+        transform: 'translate(-50%, -50%)',
+        transition: rm ? undefined : 'left 140ms ease-out, top 140ms ease-out',
+        width: CARD_SIZE,
+        height: CARD_SIZE,
+        zIndex: 4,
+        borderRadius: 10,
+        overflow: 'hidden',
+        border: '2px solid var(--cpd-color-bg-canvas-default)',
+        boxShadow: '0 6px 16px rgba(0,0,0,0.5)',
+        cursor: canMove ? 'grab' : 'pointer',
+        pointerEvents: 'auto',
+        touchAction: 'none',
+        background: 'var(--cpd-color-bg-subtle-secondary)',
+      }}
+    >
+      <AuthedImage mxc={obj.mxc} width={180} fill alt={obj.name ?? ''} />
+    </div>
+  )
+}
+
+export interface CanvasMenuItem {
+  label: string
+  onClick: () => void
+  danger?: boolean
+  header?: boolean
+}
+
+// A small fixed-position popover menu (shared by the media-detach and object
+// perm/remove menus). Closes on outside-click / Escape.
+function CanvasMenu({
+  x,
+  y,
+  items,
+  onClose,
+}: {
+  x: number
+  y: number
+  items: CanvasMenuItem[]
+  onClose: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const left = Math.max(6, Math.min(x, window.innerWidth - 210))
+  const top = Math.max(6, Math.min(y, window.innerHeight - (items.length * 30 + 16)))
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('mousedown', onDown)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('mousedown', onDown)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [onClose])
+
+  return (
+    <div
+      ref={ref}
+      onClick={(e) => e.stopPropagation()}
+      onContextMenu={(e) => e.preventDefault()}
+      style={{
+        position: 'fixed',
+        left,
+        top,
+        width: 200,
+        zIndex: 1000,
+        padding: 4,
+        borderRadius: 8,
+        fontFamily: 'var(--tc-ui-font, inherit)',
+        color: 'var(--cpd-color-text-primary)',
+        background: 'var(--cpd-color-bg-canvas-default)',
+        border: '1px solid rgba(128,128,128,0.35)',
+        boxShadow: '0 8px 28px rgba(0,0,0,0.45)',
+      }}
+    >
+      {items.map((it, i) =>
+        it.header ? (
+          <div
+            key={i}
+            style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--cpd-color-text-secondary)', padding: '6px 8px 2px' }}
+          >
+            {it.label}
+          </div>
+        ) : (
+          <button
+            key={i}
+            type="button"
+            onClick={it.onClick}
+            style={{
+              display: 'block',
+              width: '100%',
+              textAlign: 'left',
+              fontSize: 13,
+              padding: '6px 8px',
+              borderRadius: 6,
+              border: 'none',
+              background: 'transparent',
+              color: it.danger ? 'var(--cpd-color-text-critical-primary, #ff6b6b)' : 'var(--cpd-color-text-primary)',
+              cursor: 'pointer',
+              whiteSpace: 'pre',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--cpd-color-bg-subtle-secondary)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+          >
+            {it.label}
+          </button>
+        ),
+      )}
     </div>
   )
 }
