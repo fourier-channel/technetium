@@ -1,0 +1,16 @@
+# LF in the index and in the working tree, on every platform. Two clones of one
+# repository must not hold different bytes -- see the 2026-07-25 false-drift
+# incident recorded in fourier-coherence's devlog.
+* text=auto eol=lf
+
+# Platform-native and binary exceptions.
+*.ps1    text eol=crlf
+*.bat    text eol=crlf
+*.cmd    text eol=crlf
+*.png    binary
+*.jpg    binary
+*.webp   binary
+*.woff2  binary
+*.pdf    binary
+*.zst    binary
+*.tar.gz binary
