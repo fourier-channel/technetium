@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "check": "for f in checks/*.check.ts; do echo \"== $f\"; node \"$f\" || exit 1; done",
     "preview": "vite preview"
   },
   "dependencies": {

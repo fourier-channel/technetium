@@ -69,7 +69,10 @@ export function ThreadPanel({
   const tl = thread?.timeline ?? []
   const events =
     rootEv && !tl.some((e) => e.getId() === rootEv.getId()) ? [rootEv, ...tl] : tl
-  const items = toItems(events)
+  // myUserId is what marks own reactions and finds the annotation to redact
+  // when toggling one off -- the thread panel shares the Row, so it needs the
+  // same item model the main timeline gets.
+  const items = toItems(events, { myUserId: client?.getUserId() ?? null })
 
   return (
     <aside
