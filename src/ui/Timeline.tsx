@@ -17,6 +17,7 @@ import { useMessageActions } from './messageActions'
 import { MessageActionBar } from './MessageActionBar'
 import { MessageVerbsProvider } from './MessageVerbs'
 import { JumpContext, scrollToEventInDom, useJump, type JumpApi } from './jumpToEvent'
+import { ReactionStrip } from './Reactions'
 
 // How many pages of history a click-to-jump will paginate before giving up.
 const MAX_JUMP_PAGES = 8
@@ -399,8 +400,40 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
             </span>
           )}
         </div>
-        {event.isThreadRoot && <ThreadChip event={event} onOpen={onOpenThread} />}
+        <RowFooter item={item} onOpenThread={onOpenThread} />
       </div>
+    </div>
+  )
+}
+
+// W2.4's designed footer region: one wrapping flex row under the body, holding
+// the reactions strip, the thread chip, and (W2.6) the receipts cluster.
+//
+// It renders NOTHING when it has no children -- no empty box with a min-height
+// -- so adding the first reaction to a message does not push the body. That is
+// the no-forced-reflow rule: the footer is appended, never inserted.
+function RowFooter({
+  item,
+  onOpenThread,
+}: {
+  item: TimelineItem
+  onOpenThread?: (roomId: string, rootId: string) => void
+}) {
+  const { client } = useClient()
+  const roomId = item.event.getRoomId() ?? ''
+  const isThreadRoot = item.event.isThreadRoot
+  const canReact = item.kind === 'message' || item.kind === 'gallery'
+  const hasReactions = (item.reactions?.length ?? 0) > 0
+
+  // The strip renders its own "+" affordance, so it is present whenever the
+  // message can be reacted to -- CSS keeps it hidden until the row is hovered
+  // or focused when there is nothing tallied yet.
+  if (!isThreadRoot && !canReact && !hasReactions) return null
+
+  return (
+    <div className="tc-row-footer" data-empty={!hasReactions && !isThreadRoot ? 'true' : undefined}>
+      {canReact && roomId && <ReactionStrip item={item} client={client} roomId={roomId} />}
+      {isThreadRoot && <ThreadChip event={item.event} onOpen={onOpenThread} />}
     </div>
   )
 }

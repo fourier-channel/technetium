@@ -396,3 +396,98 @@ code {
   user-select: none;
   white-space: nowrap;
 }
+
+/* ---------------------------------------------------------------------------
+   Row footer (W2.4 design note): reactions strip + thread chip + (W2.6)
+   receipts cluster, in one wrapping flex row under the body.
+
+   The footer is ABSENT when it has nothing to show, never present-but-empty,
+   so the first reaction on a message does not push the body down. Fixed 20px
+   control heights keep a row's height stable whether or not it has reactions.
+   --------------------------------------------------------------------------- */
+.tc-row-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+/* A footer holding only the (hidden) add-reaction button takes no vertical
+   space until the row is hovered or focused -- otherwise every message would
+   reserve a footer's worth of height for a button nobody can see. */
+.tc-row-footer[data-empty='true'] {
+  margin-top: 0;
+  height: 0;
+  overflow: hidden;
+}
+.tc-row:hover > * .tc-row-footer[data-empty='true'],
+.tc-row:focus-within > * .tc-row-footer[data-empty='true'] {
+  height: auto;
+  margin-top: 2px;
+  overflow: visible;
+}
+
+.tc-reactions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tc-reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 10px;
+  background: var(--cpd-color-bg-subtle-secondary, rgba(128, 128, 128, 0.14));
+  color: var(--cpd-color-text-primary, #e7ebf0);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+.tc-reaction:hover:not(:disabled) {
+  border-color: rgba(128, 128, 128, 0.6);
+}
+.tc-reaction:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.tc-reaction:focus-visible {
+  outline: 2px solid var(--tc-link);
+  outline-offset: 1px;
+}
+/* Own reaction: the accent border is the signal, so it reads without relying
+   on color alone at a glance. */
+.tc-reaction[data-mine='true'] {
+  border-color: var(--tc-link);
+  background: color-mix(in srgb, var(--tc-link) 18%, transparent);
+}
+.tc-reaction-key {
+  font-size: 13px;
+}
+.tc-reaction-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+}
+
+/* The "+" only shows on hover/focus when the message has no reactions yet;
+   once there are pills it stays visible so the strip does not reflow. */
+.tc-reaction-add {
+  opacity: 0;
+  transition: opacity 90ms ease-out;
+}
+.tc-row:hover .tc-reaction-add,
+.tc-row:focus-within .tc-reaction-add,
+.tc-reactions:hover .tc-reaction-add {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tc-reaction-add {
+    transition: none;
+  }
+}

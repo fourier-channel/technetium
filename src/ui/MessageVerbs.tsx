@@ -6,6 +6,7 @@ import { isEditableContent } from '../client/editContent'
 import { eventPreview } from '../client/eventPreview'
 import { MessageActionsProvider } from './MessageActionBar'
 import { useComposerMode } from './composerMode'
+import { ReactTargetContext } from './reactTarget'
 import type { MessageActionBuilder } from './messageActions'
 
 // ---------------------------------------------------------------------------
@@ -32,6 +33,9 @@ export function MessageVerbsProvider({ room, children }: { room: Room | null; ch
   // Redaction is destructive and irreversible, so it is two-step: the action
   // bar arms it, this dialog confirms it.
   const [pendingDelete, setPendingDelete] = useState<MatrixEvent | null>(null)
+  // Which message has the emoji picker open. Owned here so the action bar's
+  // React verb and each strip's "+" cannot both open one.
+  const [reactTarget, setReactTarget] = useState<string | null>(null)
 
   // May the local user redact OTHER people's messages here? Own messages are
   // always redactable by their sender.
@@ -71,6 +75,17 @@ export function MessageVerbsProvider({ room, children }: { room: Room | null; ch
       },
       (item) => {
         if (!isActionable(item.kind)) return null
+        // A local echo has no server-side id yet, so nothing can annotate it.
+        if (item.id.startsWith('~')) return null
+        return {
+          id: 'react',
+          label: 'React',
+          icon: '☺', // white smiling face
+          onSelect: () => setReactTarget(item.id),
+        }
+      },
+      (item) => {
+        if (!isActionable(item.kind)) return null
         const isMine = !!myUserId && item.event.getSender() === myUserId
         // Hidden rather than shown-and-failing: a Delete that always 403s
         // teaches people to distrust the whole bar.
@@ -102,9 +117,14 @@ export function MessageVerbsProvider({ room, children }: { room: Room | null; ch
     }
   }
 
+  const reactApi = useMemo(
+    () => ({ target: reactTarget, setTarget: setReactTarget }),
+    [reactTarget],
+  )
+
   return (
     <MessageActionsProvider builders={builders}>
-      {children}
+      <ReactTargetContext.Provider value={reactApi}>{children}</ReactTargetContext.Provider>
       {pendingDelete && (
         <ConfirmDelete
           target={pendingDelete}
