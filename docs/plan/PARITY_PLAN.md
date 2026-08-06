@@ -15,7 +15,7 @@
 | --- | --- |
 | campaign | parity-v1 (30 features, 3 audit categories) |
 | current wave | Wave 2 in progress -- W2.1-W2.6 landed; next W2.7 pinned messages |
-| pure checks | 123 passing (`npm run check`) -- 5 harnesses, zero deps |
+| pure checks | 174 passing (`npm run check`) -- 6 harnesses incl. 51 sanitizer security checks |
 | devlog | 2 entries appended (Wave 0+1, Wave 2 part 1) |
 | branch | `parity-v1` (off `main`) |
 | base HEAD | `d4d1494` (main, "Merge branch 'chatbox-domain-v1'") |
@@ -24,7 +24,7 @@
 | lint baseline | **23 problems (22 errors, 1 warning)** -- HOLD THIS NUMBER |
 | build baseline | PASSING (`npm run build`, ~700ms, 1.38MB index chunk) |
 | deploys | NONE. Ever. tc.41chan.net is the operator's. |
-| new deps so far | none |
+| new deps so far | `jsdom` + `@types/jsdom` (DEV ONLY, O-tp11); dompurify patched 3.4.11 -> 3.4.13 |
 
 ### Lint baseline detail (23 = the number to hold)
 
@@ -80,7 +80,7 @@ are the eight files above.
 | O-tp7 | Devlog stays at repo root (path correction above); no `docs/devlogs/` move -- moving a 122KB tracked file to satisfy a handoff typo is churn. | open, proceed |
 | O-tp8 | CLAUDE.md mission block replaced rather than appended -- Thread Cards v1 is shipped (flip.ts, threadDrag.ts, threadOrder.ts, threadOrderStore.ts, pop.ts, reducedMotion.ts all present in tree). Standing rules + environment facts preserved. | open, proceed |
 | O-tp9 | Test path is `checks/*.check.ts` run by `npm run check` -- standalone harnesses executed by Node's native TS type stripping. **Zero new dependencies** (no vitest/jest). Justification: the standing law REQUIRES sanitizer negative tests in Wave 2, so a test path must exist; the project already compiles under `erasableSyntaxOnly`, so its sources are directly Node-runnable; and the dependency stance here is prefer-hand-rolled. Constraint: a module under check must import matrix-js-sdk TYPES only. `checks/` is eslint-ignored and outside tsconfig.app's src-only include. If the operator would rather have vitest, this is one `npm i -D` and a rewrite of thin harness scaffolding -- cheap to reverse. | open, proceed |
-| O-tp11 | **BLOCKS W2.L1 / W2.L2 -- needs an operator decision.** The standing law requires sanitizer negative tests for any allowlist WIDENING (syntax highlighting needs `span`+`class`; spoilers need `data-mx-spoiler`). DOMPurify cannot run in bare Node, so the zero-dependency harness (O-tp9) cannot test them. Options: (a) add `jsdom` or `happy-dom` as the campaign's first dev dependency, (b) run those two negative tests in the browser as an operator-verified checklist, (c) restructure the sanitizer so the POLICY is a pure exported object asserted by the harness while the DOM call stays untested. Recommendation: (a) happy-dom -- dev-only, no prod bytes, and the security tests are non-negotiable. NOT proceeding on the widenings until this is answered. | **open, BLOCKING** |
+| O-tp11 | **RESOLVED 2026-08-06 by the operator: add the dependency.** Chose `jsdom` over the recommended `happy-dom` -- these are SECURITY tests and spec-completeness beats speed (DOMPurify's own suite runs against jsdom; a lighter DOM could pass a test a browser would fail). 51 sanitizer checks now run, including a vacuity guard proving the sanitizer is actually executing -- without a DOM, DOMPurify's `sanitize()` returns its input UNCHANGED, so every negative test would have passed while sanitizing nothing. Proven by running the suite with the DOM removed: it fails on assertion one. Also bumped dompurify 3.4.11 -> 3.4.13 (GHSA-c2j3-45gr-mqc4; we use neither affected hook). Original text: The standing law requires sanitizer negative tests for any allowlist WIDENING (syntax highlighting needs `span`+`class`; spoilers need `data-mx-spoiler`). DOMPurify cannot run in bare Node, so the zero-dependency harness (O-tp9) cannot test them. Options: (a) add `jsdom` or `happy-dom` as the campaign's first dev dependency, (b) run those two negative tests in the browser as an operator-verified checklist, (c) restructure the sanitizer so the POLICY is a pure exported object asserted by the harness while the DOM call stays untested. Recommendation: (a) happy-dom -- dev-only, no prod bytes, and the security tests are non-negotiable. NOT proceeding on the widenings until this is answered. | **CLOSED -- jsdom installed, unblocked** |
 | O-tp10 | S1 does NOT filter thread replies out of the main timeline. That is pre-existing behaviour (a threaded reply appears both inline and in the panel) and reads as deliberate for a chan-shaped client, so changing it is a product call, not a substrate one. Flagged, untouched. | open, operator's call |
 
 ---
