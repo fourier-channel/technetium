@@ -116,7 +116,7 @@ export function ThreadPanel({
         ) : (
           // The thread panel paginates its whole thread to exhaustion on open,
           // so the default DOM-only jump is sufficient here -- no JumpContext.
-          <MessageVerbsProvider>
+          <MessageVerbsProvider room={room}>
             {items.map((item) => (
               <Row key={item.id} item={item} />
             ))}

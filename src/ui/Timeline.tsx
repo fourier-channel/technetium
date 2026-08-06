@@ -223,7 +223,7 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
           )}
 
           <JumpContext.Provider value={jumpApi}>
-            <MessageVerbsProvider>
+            <MessageVerbsProvider room={room}>
               {items.map((item) => (
                 <Row key={item.id} item={item} onOpenThread={onOpenThread} />
               ))}
