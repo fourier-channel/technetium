@@ -1935,3 +1935,94 @@ New files: `src/ui/linkify.tsx`, `src/ui/EmojiPicker.tsx`,
 - Sender grouping (consecutive same-sender messages) not done; every row shows
   its own pillbox.
 - Not merged/deployed: all on `chatbox-domain-v1`, pending operator smoke-test.
+
+---
+
+## 2026-08-06 -- Media tags: bridge tag display on every image surface
+
+The bridge began publishing per-image tag data, and the client had no idea. This
+session built the display end to end: a live tag store, one strip component, and
+attachment at every surface where an image is visible. Also written this session:
+a browser-side test checklist for the (still unverified) chatbox-domain-v1
+features, since that branch had never been through human eyes.
+
+New files: `src/client/mediaTags.ts` (wire parsing), `src/client/useMediaTags.ts`
+(live store + ingest), `src/ui/MediaTags.tsx` (the strip/chip), and
+`src/ui/mediaTagSettings.ts` (visibility prefs). Edited: `App.tsx`,
+`useTimeline.ts`, `Timeline.tsx`, `ThreadList.tsx`, `DomainCanvas.tsx`,
+`Lightbox.tsx`.
+
+### What the bridge actually sends
+`net.41chan.media.tags` as ROOM STATE, one event per image, `state_key` = the
+FULL mxc uri (`mxc://41chan.net/auARX...`). Content is flat: `{ post_id, tags:
+[strings], rating, updated_by, updated_at }` -- no categories, no source URL.
+
+### Attachment points (six)
+Inline `m.image` in the shared `Row` covers main chat, thread view, DMs, AND the
+domain chat panel in one wiring (ThreadPanel reuses `Row`). Plus gallery cells,
+the thread-card preview, the domain media card, the detached canvas object, and
+the lightbox. Avatars and room icons are deliberately EXCLUDED -- `AuthedImage`
+is shared with chrome, so the strip attaches at CONTENT sites, never in the
+primitive.
+
+### Claudecisions (last was CD-25)
+- **CD-26 -- the store is keyed by MEDIA ID, globally, not by (room, event).**
+  Tags describe the media, so the same image posted in three rooms resolves from
+  one entry, and no surface needs to know which room an image came from. The
+  bridge's full-mxc state key is normalized down to the bare media id on read.
+- **CD-27 -- three ingest paths, because none is complete alone.** currentState
+  (canonical), the live timeline (the only path that fires today), and an
+  on-demand `getStateEvent` fetch (the one that scales). See G-mt01.
+- **CD-28 -- realtime via sync, with a 250ms coalescing flush.** No polling: room
+  state already arrives over sync. The gate exists so a bridge backfilling a room
+  costs one render pass, not one per image (D1 lineage). Per-image subscriptions
+  (useSyncExternalStore) keep a tag arrival scoped to that image's strip.
+- **CD-29 -- density-aware display, one component.** Full strip on inline chat
+  and the lightbox; a count chip that expands on click for surfaces too small to
+  carry a strip (gallery cells, the 180x90 thread preview, canvas cards). A strip
+  on the thread preview would swamp the card and fight the drag-reorder work.
+- **CD-30 -- tags render as buttons with an onTagClick seam, wired but inert in
+  v1.** Operator: get them working before getting fancy. The filter/search layer
+  lands later without restyling anything.
+
+### DRAFT fourier-phase nodes
+- **D-mt01 (decision).** Image tags live in ROOM STATE keyed by media id, not in
+  the timeline. State gives random access at any age; timeline events resolve
+  only if the client has paginated to them, which would silently show tags on
+  recent images and never on old ones. Cost accepted: one state event per image,
+  which is membership-shaped (Matrix survives 50k-member rooms). Bucketed
+  sharding stays available as a later migration behind the same lookup API.
+- **G-mt01 (gotcha, standing).** Under sliding sync, `required_state` is lean --
+  custom state types are NEVER delivered in the state block, so `currentState` is
+  empty for them even though the events exist server-side. They surface only by
+  riding down the TIMELINE when written live. Any custom-state feature needs an
+  on-demand `getStateEvent` fetch to be correct for history; do not assume
+  `getStateEvents` sees what the server has.
+- **G-mt02 (gotcha).** State events also travel the timeline, so a custom state
+  type renders as `[type]` junk rows between messages unless explicitly filtered
+  in `toItems` (the spatial-event precedent).
+- **G-mt03 (gotcha).** A card with `overflow: hidden` clips any child that floats
+  outside it. The detached-object card's clipping moved to an inner layer so the
+  expanded tag list is not cut off; pointer handlers stayed on the root.
+
+### PENDING OPERATOR VERIFICATION
+- Tags appear under inline chat images, in the thread panel, in DMs, and under
+  the domain chat panel; rating badge and #post-id chip read correctly.
+- Count chips on gallery cells / thread previews / canvas cards expand on click
+  and are not clipped by the card edge.
+- The header tag button hides/shows tags everywhere; a per-image pin survives
+  reload; the `x` on a strip hides only that image.
+- Scroll back to an OLD image whose tag event is outside the loaded timeline ->
+  tags still resolve (the on-demand fetch path, G-mt01).
+- No `[net.41chan.media.tags]` junk rows remain in any timeline.
+- Drag a detached canvas object -- unchanged by the G-mt03 restructure.
+
+### Deferred / flagged
+- Tag categories: the bridge sends flat strings, so every tag renders 'general'.
+  Category coloring (artist/character/copyright/meta) is BUILT and dormant --
+  it lights up if the bridge emits `{name, category}` or a category map.
+- `post_id` renders as an inert `#N` chip; it becomes a link as soon as a source
+  base URL is configured. Not guessed.
+- Tag click behavior (filter state layer, per-room tag search) -- v2, per CD-30.
+- chatbox-domain-v1 merged to main WITHOUT the human smoke test (operator's
+  call); the test checklist stands as a post-merge exercise.
