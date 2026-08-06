@@ -248,3 +248,72 @@ code {
   background: rgba(140, 150, 170, 0.8);
   background-clip: content-box;
 }
+
+/* ---------------------------------------------------------------------------
+   Message action bar (S2). Visibility is CSS on purpose: driving row hover
+   from React state would re-render a row on every pointer crossing, and Row is
+   not memoized. The bar stays in the DOM (opacity, not display) so that
+   :focus-within can reveal it for keyboard users -- it is an ARIA toolbar with
+   one tab stop and arrow-key movement inside.
+
+   The bar overlays the row's top-right rather than occupying layout, so
+   revealing it never reflows the message under the pointer.
+   --------------------------------------------------------------------------- */
+.tc-row {
+  position: relative;
+}
+
+.tc-row-actions {
+  position: absolute;
+  top: -6px;
+  right: 6px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--cpd-color-bg-canvas-default, #16181d);
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 90ms ease-out;
+}
+.tc-row:hover > .tc-row-actions,
+.tc-row:focus-within > .tc-row-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.tc-row-action {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.tc-row-action:hover {
+  background: var(--cpd-color-bg-subtle-secondary, rgba(128, 128, 128, 0.18));
+  color: var(--cpd-color-text-primary, #e7ebf0);
+}
+.tc-row-action:focus-visible {
+  outline: 2px solid var(--tc-link);
+  outline-offset: -2px;
+}
+.tc-row-action[data-danger='true']:hover {
+  color: var(--cpd-color-text-critical-primary, #ff6b6b);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tc-row-actions {
+    transition: none;
+  }
+}

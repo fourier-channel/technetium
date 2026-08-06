@@ -11,6 +11,8 @@ import { useChatBackground } from './chatBackground'
 import { ChatBackdrop, ChatBackgroundMenu } from './ChatBackground'
 import { MediaTags } from './MediaTags'
 import { useMediaTagPrefs } from './mediaTagSettings'
+import { useMessageActions } from './messageActions'
+import { MessageActionBar } from './MessageActionBar'
 
 // Read-only timeline. Message bodies render sanitized rich HTML (via DOMPurify)
 // when present, else plaintext. Encrypted events show a placeholder until the
@@ -272,6 +274,7 @@ function SenderPill({ event, time }: { event: MatrixEvent; time: string }) {
 export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?: (roomId: string, rootId: string) => void }) {
   const { event, kind, cells, layout } = item
   const { open } = useLightbox()
+  const actions = useMessageActions(item)
   const time = new Date(event.getTs()).toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit',
@@ -324,7 +327,11 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
   }
 
   return (
-    <div style={{ padding: '4px 0' }}>
+    <div className="tc-row" style={{ padding: '4px 0' }}>
+      {/* Overlays the row's top-right; revealed by CSS on hover/focus-within so
+          no React state churns per pointer crossing. Renders nothing until a
+          verb registers a builder, so this is inert until Wave 2. */}
+      <MessageActionBar actions={actions} />
       <SenderPill event={event} time={time} />
       <div
         style={{
