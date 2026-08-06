@@ -14,8 +14,9 @@
 | field | value |
 | --- | --- |
 | campaign | parity-v1 (30 features, 3 audit categories) |
-| current wave | Wave 2 in progress -- W2.1-W2.4 landed, W2.5 reactions next |
+| current wave | Wave 2 in progress -- W2.1-W2.6 landed; next W2.7 pinned messages |
 | pure checks | 123 passing (`npm run check`) -- 5 harnesses, zero deps |
+| devlog | 2 entries appended (Wave 0+1, Wave 2 part 1) |
 | branch | `parity-v1` (off `main`) |
 | base HEAD | `d4d1494` (main, "Merge branch 'chatbox-domain-v1'") |
 | current HEAD | see `git log -1` |
@@ -79,6 +80,7 @@ are the eight files above.
 | O-tp7 | Devlog stays at repo root (path correction above); no `docs/devlogs/` move -- moving a 122KB tracked file to satisfy a handoff typo is churn. | open, proceed |
 | O-tp8 | CLAUDE.md mission block replaced rather than appended -- Thread Cards v1 is shipped (flip.ts, threadDrag.ts, threadOrder.ts, threadOrderStore.ts, pop.ts, reducedMotion.ts all present in tree). Standing rules + environment facts preserved. | open, proceed |
 | O-tp9 | Test path is `checks/*.check.ts` run by `npm run check` -- standalone harnesses executed by Node's native TS type stripping. **Zero new dependencies** (no vitest/jest). Justification: the standing law REQUIRES sanitizer negative tests in Wave 2, so a test path must exist; the project already compiles under `erasableSyntaxOnly`, so its sources are directly Node-runnable; and the dependency stance here is prefer-hand-rolled. Constraint: a module under check must import matrix-js-sdk TYPES only. `checks/` is eslint-ignored and outside tsconfig.app's src-only include. If the operator would rather have vitest, this is one `npm i -D` and a rewrite of thin harness scaffolding -- cheap to reverse. | open, proceed |
+| O-tp11 | **BLOCKS W2.L1 / W2.L2 -- needs an operator decision.** The standing law requires sanitizer negative tests for any allowlist WIDENING (syntax highlighting needs `span`+`class`; spoilers need `data-mx-spoiler`). DOMPurify cannot run in bare Node, so the zero-dependency harness (O-tp9) cannot test them. Options: (a) add `jsdom` or `happy-dom` as the campaign's first dev dependency, (b) run those two negative tests in the browser as an operator-verified checklist, (c) restructure the sanitizer so the POLICY is a pure exported object asserted by the harness while the DOM call stays untested. Recommendation: (a) happy-dom -- dev-only, no prod bytes, and the security tests are non-negotiable. NOT proceeding on the widenings until this is answered. | **open, BLOCKING** |
 | O-tp10 | S1 does NOT filter thread replies out of the main timeline. That is pre-existing behaviour (a threaded reply appears both inline and in the panel) and reads as deliberate for a chan-shaped client, so changing it is a product call, not a substrate one. Flagged, untouched. | open, operator's call |
 
 ---
@@ -322,8 +324,8 @@ splitting rather than by moving the baseline.
 | W2.2 | Message editing (`m.replace`, "(edited)" marker) | **landed** | `3e0c300` | Own messages only (forged edits are rejected by S1 anyway). Seed from `item.content`, not `getContent()` -- else a 2nd edit reverts to the original. Sent with `threadId: null` (an event cannot carry both m.thread and m.replace). Draft stashed/restored around edit mode. |
 | W2.3 | Redact / delete (two-step confirm, PL-gated) | **landed** | `86e19b9` | Own OR `hasSufficientPowerLevelFor('redact')`. Verb HIDDEN when not permitted, not shown-and-403ing. Modal confirm, not click-again -- the bar is under the pointer. |
 | W2.4 | Row footer design note (ledger only, NO code) | **landed** | (this ledger) | See "Row footer layout" below. |
-| W2.5 | Reactions (strip, toggle, EmojiPicker anchored) | todo | | |
-| W2.6 | Read-receipts display (seen-by cluster, +N cap) | todo | | |
+| W2.5 | Reactions (strip, toggle, EmojiPicker anchored) | **landed** | `0111379` | Tallies from S1. Built the W2.4 footer; thread chip moved in. Footer ABSENT when empty (no-forced-reflow). ONE picker keyed by event id across the action bar's React verb + each strip's `+`. Local echoes (`~` ids) excluded. Shared `useRoving` -- and it owns NO ref: returning a ref from a hook trips the React-Compiler refs-during-render rule when spread (cost 8 lint errors before rework). |
+| W2.6 | Read-receipts display (seen-by cluster, +N cap) | **landed** | `74156b5` | Walks MEMBERS not events -> O(members), independent of scrollback. Self excluded. Capped at 5 + N. Right-aligned for a stable column. 250ms debounce. Reaches the footer by context (thread panel shares Row, computes none). |
 | W2.7 | Pinned messages (`m.room.pinned_events` + panel) | todo | | |
 | W2.8 | Forwarding (+ new `ui/RoomPicker.tsx`) | todo | | |
 | W2.9 | Mention autocomplete (`@` popup, matrix.to anchor, `m.mentions`) | todo | | |
@@ -432,6 +434,16 @@ visual or interactive is claimed only as PENDING.
 | S2-a | Hovering a message reveals a small bar at the row's top-right with NO buttons in it (inert until W2.1). Confirm no layout shift and no stray empty box. | no |
 | S5-a | Domain canvas right-click -> Inspect renders the profile card exactly as before: avatar, name, user:server, standing pill, PL pill. | no |
 | S3-a | Composer is visually and behaviourally unchanged in all three mounts (room, thread panel, domain). No banner should ever appear yet. | no |
+| W2.1-a | Reply verb on hover -> banner -> sent reply shows a pill in BOTH clients; clicking the pill scrolls + flashes. | yes |
+| W2.1-b | **Replies sent from Element no longer show their quoted text inline** (was a live bug). | yes |
+| W2.2-a | Edit only on your own text messages; prefill; Esc restores a stashed draft; "(edited)" appears; editing twice starts from the latest text. | yes |
+| W2.2-b | **Edits made in Element show as edits, not duplicate rows** (was a live bug). | yes |
+| W2.3-a | Delete hidden on others' messages at PL0, present for a moderator; confirm modal; row becomes "(message deleted)" in both clients. | yes |
+| W2.5-a | Reaction pills tally across identities; own reaction visibly distinct; toggle on/off; `+` and React verb open the SAME picker. | yes |
+| W2.5-b | **Reactions from Element no longer render as `[m.reaction]` junk rows** (was a live bug). | yes |
+| W2.5-c | A message with no reactions reserves NO footer height until hovered -- confirm no vertical jitter scrolling a busy room. | no |
+| W2.6-a | Other identity's avatar appears under the last message it has seen and advances as it reads; your own never appears; caps at 5 + N. | yes |
+| KBD-a | Tab from the timeline reaches the composer in a sane number of stops; arrows move within a row's action bar and reaction strip. | no |
 
 Standing note: receipts, typing, reactions and presence all need a
 SECOND identity. Use Firefox Multi-Account Containers, never a private

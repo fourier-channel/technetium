@@ -2026,3 +2026,179 @@ primitive.
 - Tag click behavior (filter state layer, per-room tag search) -- v2, per CD-30.
 - chatbox-domain-v1 merged to main WITHOUT the human smoke test (operator's
   call); the test checklist stands as a post-merge exercise.
+
+---
+
+## 2026-08-06 -- parity-v1 Wave 0 + Wave 1 substrate (branch parity-v1, auto run)
+
+Opening the parity campaign: every non-Yes row of the 2026-08-05 feature audit
+across core messaging, rooms/navigation, and members/presence -- 30 features,
+ordered so prerequisites land first. The campaign ledger is
+`docs/plan/PARITY_PLAN.md` and it, not this devlog, is what a fresh session
+boots from.
+
+Operator confirmed the server-wide member list stays excluded (O-tp1 closed).
+
+### Baselines held all wave
+
+tsc clean; **lint 23 problems (22 errors, 1 warning)**; build passing. The lint
+number is a hold-the-line figure with a per-file breakdown in the ledger. One
+intermediate violation appeared and was fixed by restructuring rather than by
+moving the baseline (see G-tp01).
+
+Correction to the handoff: it names `useThreadList.ts` set-state-in-effect as
+the known pre-existing offender. It is not in the current output. The live 23
+are spread across ClientContext (7), members.ts (6), spaces.ts (3),
+tokenRefresher, useMembers, useNavTree (2), Composer, Lightbox (2).
+
+### Recon findings that changed the plan
+
+- **`useTimeline` read no relations at all** and subscribed to exactly one sdk
+  event. The handoff assumed threads had already forced the relations plumbing
+  on and S1 could "extend, don't fork" -- they had not; thread awareness was
+  UI-only, in ThreadChip. S1 was new plumbing.
+- **Row was not memoized and had no hover state**, and its root lacked
+  `position: relative`.
+- **The sanitizer allowed no `class`, no `data-mx-*`, no `mx-reply`**, so
+  replies, spoilers and syntax highlighting each need their own reviewed pass.
+- **`messageFormat` uses `parseInline`**, so fenced code blocks never produce
+  `<pre><code>` -- W2.L1 will have nothing to highlight until that is faced.
+- Lane C's entire write side (invite, createRoom, m.direct, ignore list,
+  profile setters, uploads) is greenfield.
+
+### What landed
+
+- **S1 relations read layer** (`client/relations.ts`). A pure single-pass index
+  over the loaded window resolving the winning `m.replace`, aggregated
+  `m.annotation` tallies, and user-authored `m.in_reply_to` targets.
+  TimelineItem gained `content` / `editedTs` / `reactions` / `replyTo`.
+  Live via Redaction + LocalEchoUpdated + TimelineReset, coalesced.
+- **S2 action bar shell** (`messageActions.ts`, `MessageActionBar.tsx`). A slot
+  registry, not props. Visibility is CSS; keyboard reach is an ARIA toolbar.
+- **S3 composer modes** (`composerMode.ts`, `ComposerModeProvider.tsx`).
+  One provider per composer scope; unprovided reads a frozen inert context.
+- **S4 receipts helper** (`client/receipts.ts`). `findReceiptableEvent` lifted
+  out of useReadMarker so Wave 3's mark-as-read cannot drift from it.
+- **S5 shared ProfileCard** (`ui/ProfileCard.tsx`). Two identity sources
+  (RoomMember, else MergedMember + maxPower) and an `actions` slot.
+
+### Claudecisions
+
+- **D-tp01 -- test path with zero new dependencies.** The standing law requires
+  sanitizer negative tests, so a test path had to exist. Rather than add
+  vitest, `checks/*.check.ts` are standalone harnesses run by `npm run check`
+  under Node's native type stripping -- the project already compiles with
+  `erasableSyntaxOnly`, so its sources are directly runnable. A module under
+  check must import matrix-js-sdk TYPES only. Cheap to reverse if the operator
+  prefers a real runner.
+- **D-tp02 -- CLAUDE.md mission block replaced, not appended.** Thread Cards v1
+  is shipped. Standing rules and environment facts preserved verbatim. Note
+  CLAUDE.md is gitignored here by design, so the ledger is the only tracked
+  campaign artifact and is written client-clean.
+- **D-tp03 -- devlog stays at repo root.** The handoff's `docs/devlogs/` path is
+  wrong for this repo; moving a 122KB tracked file to match a typo is churn.
+
+### Gotchas
+
+- **G-tp01 (gotcha).** `react-refresh/only-export-components` fires when one
+  file exports both components and non-components. It bit twice: the action
+  registry beside its components, and the composer-mode context beside its
+  provider. The fix is always the same -- context/hook/types in a `.ts`,
+  components in the `.tsx`.
+- **G-tp02 (gotcha).** Returning a `ref` from a custom hook trips the React
+  Compiler's refs-during-render rule the moment a caller spreads the returned
+  object -- 8 lint errors from one `useRoving` that held a `containerRef`.
+  A keydown handler on the container already has the container as
+  `e.currentTarget`; no ref was needed. Related to G-tc01.
+- **G-tp03 (gotcha).** Node cannot load this tree's bundler-style extensionless
+  relative imports. Rather than put `.ts` on source imports to satisfy a
+  harness, `checks/_hooks.mjs` registers a resolve hook.
+
+### PENDING OPERATOR VERIFICATION
+See the ledger's running list -- Wave 1 is substrate and mostly invisible.
+The observable claims are: the profile card renders identically from the domain
+canvas; the composer is unchanged in all three mounts; hovering a message shows
+an empty bar; and remote edits/reactions no longer render as junk rows.
+
+---
+
+## 2026-08-06 -- parity-v1 Wave 2 message verbs, part 1 (branch parity-v1, auto run)
+
+Reply, edit, delete, reactions and read receipts. Each verb plugs into the S2
+registry, so the thread panel inherits all of them for free.
+
+### Three live bugs fixed on the way past
+
+These were not planned work; they were what the relations layer exposed.
+
+1. **Remote edits rendered as duplicate messages.** An `m.replace` travels down
+   the timeline as an ordinary event and `toItems` made a row of it.
+2. **Remote reactions rendered as `[m.reaction]` junk rows.** Same cause.
+3. **Replies from Element showed their quoted text inline.** `mx-reply` was
+   already absent from ALLOWED_TAGS, but **DOMPurify UNWRAPS a disallowed tag**
+   -- it drops the element and keeps the children. `FORBID_CONTENTS` removes
+   the subtree. This is a sanitizer NARROWING, so it did not need its own
+   commit; the Wave 2 lane's widenings still do.
+
+### What landed
+
+- **W2.1 replies.** Reply pill with sender, preview and click-to-jump.
+- **W2.2 editing.** Own messages only, `(edited)` marker, draft stashing.
+- **W2.3 redaction.** Modal confirm, PL-gated, verb hidden when not permitted.
+- **W2.4 row footer design note.** Ledger only -- specified once so reactions
+  and receipts did not collide in the same region.
+- **W2.5 reactions.** Pills, toggle, one shared picker, roving tabindex.
+- **W2.6 read receipts.** Capped seen-by cluster, member-walk not event-walk.
+
+### Claudecisions
+
+- **D-tp04 -- reply fallbacks quote ESCAPED PLAIN TEXT, never the target's
+  `formatted_body`.** Re-emitting another user's HTML inside our own event
+  makes us a relay for whatever they wrote, and buys nothing: the block is
+  fallback, and any client that renders replies natively strips it first.
+  Losing bold inside a quote nobody renders is the right trade.
+- **D-tp05 -- Edit is offered on own messages only.** Matrix accepts an
+  `m.replace` for anyone's event; only well-behaved clients ignore it. Our own
+  reader rejects a forged edit, so the verb would produce an event that changes
+  nothing here and might change something elsewhere.
+- **D-tp06 -- Delete is HIDDEN when not permitted, not shown-and-403ing.** A
+  button that always fails teaches people to distrust the whole bar.
+
+### Gotchas
+
+- **G-tp04 (gotcha).** An event carries only ONE `m.relates_to`. An edit must
+  be sent with `threadId: null` -- passing a thread id makes the sdk add an
+  `m.thread` relation and the `m.replace` is silently ignored, so the edit
+  arrives as a new thread reply. Same for annotations.
+- **G-tp05 (gotcha).** `MSC3440` thread replies carry an `m.in_reply_to`
+  FALLBACK pointing at the thread's previous message, flagged
+  `is_falling_back: true`. Treating it as a reply puts a spurious reply pill on
+  every threaded message.
+- **G-tp06 (gotcha, security).** An `m.replace` must be honoured only from the
+  ORIGINAL sender. Without that check any room member can rewrite anyone's
+  message in the renderer. Checked in `relations.ts`, with a test.
+- **G-tp07 (gotcha).** Seeding an edit from `event.getContent()` depends on
+  whether the sdk aggregated the replacement, so editing a message twice can
+  silently revert it. Seed from the effective content the relations layer
+  computed.
+- **G-tp08 (gotcha).** `client.sendEvent`'s typed overloads reject the string
+  `'m.reaction'`; it wants `EventType.Reaction`. The failure is a confusing
+  "no overload matches" naming `keyof TimelineEvents`.
+
+### Verification
+123 pure checks pass (`npm run check`), covering edit precedence and
+tie-breaking, forged-edit rejection, per-sender annotation dedupe, own-reaction
+identification, reply-chain non-accumulation, hostile-input escaping, the
+refusal to relay a target's `formatted_body`, and the receipt walk-back rules.
+
+Every visual and interactive claim is PENDING OPERATOR VERIFICATION -- this box
+is headless. The ledger carries the list, marking which items need a second
+identity (Multi-Account Containers, never a private window at the dev origin).
+
+### Deferred / flagged
+- **Sanitizer negative tests need a DOM.** DOMPurify cannot run in bare Node,
+  so the allowlist widenings in W2.L1 (syntax highlighting) and W2.L2
+  (spoilers) cannot be tested by the current harness without jsdom or
+  happy-dom. Recorded as **O-tp11** -- an operator decision before those steps,
+  since it is the first dev dependency the campaign would add.
+- Nothing deployed. Nothing outside the repo written.
