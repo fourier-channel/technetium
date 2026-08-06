@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { RoomEvent, type MatrixClient, type MatrixEvent, type Room } from 'matrix-js-sdk'
+import { findReceiptableEvent } from './receipts'
 
 // ---------------------------------------------------------------------------
 // Mark the viewed room read. The base client never sent read receipts, so a
@@ -18,28 +19,16 @@ export function useReadMarker(client: MatrixClient | null, room: Room | null): v
     if (!client || !room) return
     lastSent.current = null
 
+    // The walk-back rule itself lives in client/receipts.ts so the Wave 3
+    // "mark as read" menu action receipts by identical rules; this hook keeps
+    // only the visibility gate, the dedupe and the listener plumbing.
     const mark = () => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
-      const events = room.getLiveTimeline().getEvents()
-      // Walk back to the latest event that is safe to receipt: a fully-sent
-      // event with a real id. Local echoes (status set, or a `~`-prefixed
-      // transaction id) 400 the receipt endpoint, and our own spatial presence
-      // events aren't "read" targets, so skip both.
-      let target: MatrixEvent | undefined
-      for (let i = events.length - 1; i >= 0; i--) {
-        const ev = events[i]
-        if (ev.status) continue // sending / not_sent local echo
-        const eid = ev.getId()
-        if (!eid || eid.startsWith('~')) continue
-        if (ev.getType().startsWith('net.41chan.spatial.')) continue
-        target = ev
-        break
-      }
+      const target = findReceiptableEvent(room)
       const id = target?.getId()
       if (!target || !id || id === lastSent.current) return
       lastSent.current = id
-      // receiptType defaults to m.read; unthreaded=true clears the room's overall
-      // unread regardless of thread.
+      // unthreaded=true clears the room's overall unread regardless of thread.
       void client.sendReadReceipt(target, undefined, true).catch(() => {})
     }
 
