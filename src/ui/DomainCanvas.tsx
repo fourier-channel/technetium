@@ -13,7 +13,8 @@ import { AuthedImage } from './AuthedImage'
 import { MediaTags } from './MediaTags'
 import { DomainBackgroundEditor } from './DomainBackgroundEditor'
 import { DomainTtdControl } from './DomainTtdControl'
-import { DomainUserMenu, DomainProfileCard } from './DomainUserMenu'
+import { DomainUserMenu } from './DomainUserMenu'
+import { ProfileCard } from './ProfileCard'
 import { isDomainAdmin } from './domainRoles'
 import { useLightbox } from './Lightbox'
 import { transformToStyle, type Transform } from './uitransform/transform'
@@ -397,7 +398,7 @@ export function DomainCanvas({
         />
       )}
       {profile && (
-        <DomainProfileCard
+        <ProfileCard
           x={profile.x}
           y={profile.y}
           userId={profile.userId}
