@@ -18,9 +18,15 @@ import { MessageActionBar } from './MessageActionBar'
 import { MessageVerbsProvider } from './MessageVerbs'
 import { JumpContext, scrollToEventInDom, useJump, type JumpApi } from './jumpToEvent'
 import { ReactionStrip } from './Reactions'
+import { ReceiptCluster } from './ReceiptCluster'
+import { useRoomReceipts } from '../client/useReceipts'
+import { ReceiptsContext, useReceipts } from './receiptsContext'
 
 // How many pages of history a click-to-jump will paginate before giving up.
 const MAX_JUMP_PAGES = 8
+
+// Stable empty array: a fresh [] per render would re-render every footer.
+const EMPTY_SEEN: string[] = []
 
 // Read-only timeline. Message bodies render sanitized rich HTML (via DOMPurify)
 // when present, else plaintext. Encrypted events show a placeholder until the
@@ -28,6 +34,7 @@ const MAX_JUMP_PAGES = 8
 export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadList }: { room: Room; onOpenThread?: (roomId: string, rootId: string) => void; threadListOpen?: boolean; onToggleThreadList?: () => void }) {
   const { client } = useClient()
   const { items, loadOlder, loadingOlder, atStart } = useTimeline(client, room)
+  const receipts = useRoomReceipts(client, room)
   const chatBg = useChatBackground()
   const tagPrefs = useMediaTagPrefs()
   const [bgMenuOpen, setBgMenuOpen] = useState(false)
@@ -224,11 +231,13 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
           )}
 
           <JumpContext.Provider value={jumpApi}>
+            <ReceiptsContext.Provider value={receipts}>
             <MessageVerbsProvider room={room}>
               {items.map((item) => (
                 <Row key={item.id} item={item} onOpenThread={onOpenThread} />
               ))}
             </MessageVerbsProvider>
+            </ReceiptsContext.Provider>
           </JumpContext.Provider>
           <div ref={bottomRef} />
         </div>
@@ -420,20 +429,30 @@ function RowFooter({
   onOpenThread?: (roomId: string, rootId: string) => void
 }) {
   const { client } = useClient()
+  const receipts = useReceipts()
   const roomId = item.event.getRoomId() ?? ''
   const isThreadRoot = item.event.isThreadRoot
   const canReact = item.kind === 'message' || item.kind === 'gallery'
   const hasReactions = (item.reactions?.length ?? 0) > 0
+  const seenBy = receipts.get(item.id) ?? EMPTY_SEEN
 
   // The strip renders its own "+" affordance, so it is present whenever the
   // message can be reacted to -- CSS keeps it hidden until the row is hovered
   // or focused when there is nothing tallied yet.
-  if (!isThreadRoot && !canReact && !hasReactions) return null
+  if (!isThreadRoot && !canReact && !hasReactions && seenBy.length === 0) return null
 
   return (
-    <div className="tc-row-footer" data-empty={!hasReactions && !isThreadRoot ? 'true' : undefined}>
+    <div
+      className="tc-row-footer"
+      data-empty={!hasReactions && !isThreadRoot && seenBy.length === 0 ? 'true' : undefined}
+    >
       {canReact && roomId && <ReactionStrip item={item} client={client} roomId={roomId} />}
       {isThreadRoot && <ThreadChip event={item.event} onOpen={onOpenThread} />}
+      {seenBy.length > 0 && (
+        <span style={{ marginLeft: 'auto', display: 'inline-flex' }}>
+          <ReceiptCluster room={client?.getRoom(roomId) ?? null} userIds={seenBy} />
+        </span>
+      )}
     </div>
   )
 }

@@ -491,3 +491,37 @@ code {
     transition: none;
   }
 }
+
+/* Read-receipt "seen by" cluster (W2.6). Right-aligned in the footer so it
+   sits in a stable column down the timeline instead of jittering with the
+   reaction count. Avatars overlap slightly, capped with a +N. */
+.tc-receipts {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+}
+.tc-receipt-avatar {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  font-size: 8px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--cpd-color-bg-subtle-primary, #4a5568);
+  margin-right: -6px;
+  border: 1px solid var(--cpd-color-bg-canvas-default, #16181d);
+}
+.tc-receipt-avatar:last-of-type {
+  margin-right: 0;
+}
+.tc-receipt-more {
+  margin-left: 8px;
+  font-size: 10px;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  font-variant-numeric: tabular-nums;
+}
