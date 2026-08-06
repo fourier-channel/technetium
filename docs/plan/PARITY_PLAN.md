@@ -14,7 +14,8 @@
 | field | value |
 | --- | --- |
 | campaign | parity-v1 (30 features, 3 audit categories) |
-| current wave | Wave 0 LANDED (`11743d1`) -- next up: Wave 1 substrate |
+| current wave | Wave 1 COMPLETE (`d40018d`) -- next up: Wave 2 message verbs |
+| pure checks | 64 passing (`npm run check`) -- 3 harnesses, zero deps |
 | branch | `parity-v1` (off `main`) |
 | base HEAD | `d4d1494` (main, "Merge branch 'chatbox-domain-v1'") |
 | current HEAD | see `git log -1` |
@@ -303,10 +304,15 @@ PENDING = needs operator eyes in a browser (headless box cannot verify).
 | id | step | files | status | commit | result / pendings |
 | --- | --- | --- | --- | --- | --- |
 | S1 | Relations read layer: edits (`m.replace`), reactions (`m.annotation`), reply targets (`m.in_reply_to`) on the item model, live-updating | `useTimeline.ts`, new `relations.ts`, new `checks/` | **landed** | `fb7ab49` | Pure single-pass index, NOT the sdk RelationsContainer. Item gains `content`/`editedTs`/`reactions`/`replyTo`. Fixed 2 live bugs: remote edits rendered as duplicate rows, remote reactions as `[m.reaction]` junk. Forged-edit rejection + MSC3440 fallback suppression enforced. Added Redaction/LocalEchoUpdated/TimelineReset subs + burst coalescing. 36/36 pure checks pass. |
-| S2 | Message action bar shell: hover/focus bar + keyboard reach + slot registry (no verbs) | `Timeline.tsx` | todo | | |
-| S3 | Composer modes `normal|reply|edit` + banner + Esc cancel; threadId preserved | `Composer.tsx` | todo | | |
-| S4 | Receipts helper extraction -> `client/receipts.ts`; useReadMarker becomes a caller | `useReadMarker.ts`, new `receipts.ts` | todo | | |
-| S5 | ProfileCard promotion -> shared `ui/ProfileCard.tsx`; domain mode consumes it | `DomainUserMenu.tsx`, new `ProfileCard.tsx` | todo | | |
+| S2 | Message action bar shell: hover/focus bar + keyboard reach + slot registry (no verbs) | `Timeline.tsx`, new `messageActions.ts` + `MessageActionBar.tsx`, `index.css` | **landed** | `ea5a802` | Builder registry, not props: verbs return an action or null per item, Row never learns a verb. Visibility is CSS (`.tc-row:hover/:focus-within`) -- React hover state would re-render unmemoized Rows on every pointer crossing. ARIA toolbar w/ roving tabindex = ONE tab stop per row. Inert until a builder registers. |
+| S3 | Composer modes `normal\|reply\|edit` + banner + Esc cancel; threadId preserved | `Composer.tsx`, new `composerMode.ts` + `ComposerModeProvider.tsx` + `client/eventPreview.ts`, `App.tsx`, `ThreadPanel.tsx`, `DomainView.tsx` | **landed** | `d40018d` | One provider PER composer (room / thread / domain) so a thread reply cannot retarget the room composer. Unprovided = frozen inert context = exact pre-S3 behaviour. Esc bound to the textarea, not window (would steal from menus/lightbox). eventPreview is plain text, never HTML, and strips the mx-reply fallback. |
+| S4 | Receipts helper extraction -> `client/receipts.ts`; useReadMarker becomes a caller | `useReadMarker.ts`, new `receipts.ts` | **landed** | `504a852` | `findReceiptableEvent(room)` + `markRoomRead()`. No behaviour change. Hook keeps only visibility gate + dedupe + listeners. |
+| S5 | ProfileCard promotion -> shared `ui/ProfileCard.tsx`; domain mode consumes it | `DomainUserMenu.tsx`, `DomainCanvas.tsx`, `members.ts`, new `ProfileCard.tsx` | **landed** | `1d6832e` | Two identity sources: RoomMember, else MergedMember + maxPower (member list All/Nearby has no room PL). `actions` slot for Wave 3/4. `initials`/`HONORIFIC_LABEL`/`standingLabel`/`splitUserId` hoisted to members.ts -- HONORIFIC_LABEL was duplicated. |
+
+**Wave 1 COMPLETE.** All five substrate tracks landed. Lint held at 23
+throughout; one intermediate violation (react-refresh/only-export-components
+from mixing the registry and its components in one file) was fixed by
+splitting rather than by moving the baseline.
 
 ### Wave 2 -- message verbs (chain is SERIAL; lanes are parallel)
 
@@ -378,7 +384,11 @@ visual or interactive is claimed only as PENDING.
 
 | id | what needs eyes | 2nd identity? |
 | --- | --- | --- |
-| (none yet -- Wave 0 landed no UI) | | |
+| S1-a | Remote edits no longer render as a duplicate message row; remote reactions no longer render as `[m.reaction]` junk rows. Both were live bugs. | yes -- react/edit from a 2nd identity |
+| S1-b | An edited message shows the edited text (the renderer still reads `event.getContent()`; W2.2 switches it to `item.content`). Expect NO visible edit marker yet. | yes |
+| S2-a | Hovering a message reveals a small bar at the row's top-right with NO buttons in it (inert until W2.1). Confirm no layout shift and no stray empty box. | no |
+| S5-a | Domain canvas right-click -> Inspect renders the profile card exactly as before: avatar, name, user:server, standing pill, PL pill. | no |
+| S3-a | Composer is visually and behaviourally unchanged in all three mounts (room, thread panel, domain). No banner should ever appear yet. | no |
 
 Standing note: receipts, typing, reactions and presence all need a
 SECOND identity. Use Firefox Multi-Account Containers, never a private
