@@ -14,7 +14,7 @@
 | field | value |
 | --- | --- |
 | campaign | parity-v1 (30 features, 3 audit categories) |
-| current wave | Wave 0 -- recon, baselines, ledger |
+| current wave | Wave 0 LANDED (`11743d1`) -- next up: Wave 1 substrate |
 | branch | `parity-v1` (off `main`) |
 | base HEAD | `d4d1494` (main, "Merge branch 'chatbox-domain-v1'") |
 | current HEAD | see `git log -1` |
@@ -77,6 +77,8 @@ are the eight files above.
 | --- | --- | --- |
 | O-tp7 | Devlog stays at repo root (path correction above); no `docs/devlogs/` move -- moving a 122KB tracked file to satisfy a handoff typo is churn. | open, proceed |
 | O-tp8 | CLAUDE.md mission block replaced rather than appended -- Thread Cards v1 is shipped (flip.ts, threadDrag.ts, threadOrder.ts, threadOrderStore.ts, pop.ts, reducedMotion.ts all present in tree). Standing rules + environment facts preserved. | open, proceed |
+| O-tp9 | Test path is `checks/*.check.ts` run by `npm run check` -- standalone harnesses executed by Node's native TS type stripping. **Zero new dependencies** (no vitest/jest). Justification: the standing law REQUIRES sanitizer negative tests in Wave 2, so a test path must exist; the project already compiles under `erasableSyntaxOnly`, so its sources are directly Node-runnable; and the dependency stance here is prefer-hand-rolled. Constraint: a module under check must import matrix-js-sdk TYPES only. `checks/` is eslint-ignored and outside tsconfig.app's src-only include. If the operator would rather have vitest, this is one `npm i -D` and a rewrite of thin harness scaffolding -- cheap to reverse. | open, proceed |
+| O-tp10 | S1 does NOT filter thread replies out of the main timeline. That is pre-existing behaviour (a threaded reply appears both inline and in the panel) and reads as deliberate for a chan-shaped client, so changing it is a product call, not a substrate one. Flagged, untouched. | open, operator's call |
 
 ---
 
@@ -290,17 +292,17 @@ PENDING = needs operator eyes in a browser (headless box cannot verify).
 
 | id | step | status | commit | result / pendings |
 | --- | --- | --- | --- | --- |
-| W0.1 | Clean `main`, branch `parity-v1` | landed | -- | branched off `d4d1494`; only untracked file was `TESTING-chatbox-domain-v1.md` (left alone) |
-| W0.2 | Record baselines | landed | -- | tsc clean; lint 23 (22e/1w); build passing |
-| W0.3 | CLAUDE.md campaign block | landed | -- | mission block replaced (O-tp8); standing rules preserved |
-| W0.4 | 3 read-only recon lanes | landed | -- | maps above |
-| W0.5 | O-tp register | landed | -- | O-tp1 CONFIRMED by operator; O-tp7/O-tp8 added |
+| W0.1 | Clean `main`, branch `parity-v1` | landed | `11743d1` | branched off `d4d1494`, pushed to origin; only untracked file was `TESTING-chatbox-domain-v1.md` (left alone) |
+| W0.2 | Record baselines | landed | `11743d1` | tsc clean; lint 23 (22e/1w); build passing |
+| W0.3 | CLAUDE.md campaign block | landed | (untracked) | mission block replaced (O-tp8); standing rules preserved; file is gitignored by design, NOT force-added |
+| W0.4 | 3 read-only recon lanes | landed | `11743d1` | maps above |
+| W0.5 | O-tp register | landed | `11743d1` | O-tp1 CONFIRMED by operator; O-tp7/O-tp8 added |
 
 ### Wave 1 -- substrate (S1/S2/S3 file-disjoint, parallelizable; S4/S5 ride along)
 
 | id | step | files | status | commit | result / pendings |
 | --- | --- | --- | --- | --- | --- |
-| S1 | Relations read layer: edits (`m.replace`), reactions (`m.annotation`), reply targets (`m.in_reply_to`) on the item model, live-updating | `useTimeline.ts` | todo | | |
+| S1 | Relations read layer: edits (`m.replace`), reactions (`m.annotation`), reply targets (`m.in_reply_to`) on the item model, live-updating | `useTimeline.ts`, new `relations.ts`, new `checks/` | **landed** | `fb7ab49` | Pure single-pass index, NOT the sdk RelationsContainer. Item gains `content`/`editedTs`/`reactions`/`replyTo`. Fixed 2 live bugs: remote edits rendered as duplicate rows, remote reactions as `[m.reaction]` junk. Forged-edit rejection + MSC3440 fallback suppression enforced. Added Redaction/LocalEchoUpdated/TimelineReset subs + burst coalescing. 36/36 pure checks pass. |
 | S2 | Message action bar shell: hover/focus bar + keyboard reach + slot registry (no verbs) | `Timeline.tsx` | todo | | |
 | S3 | Composer modes `normal|reply|edit` + banner + Esc cancel; threadId preserved | `Composer.tsx` | todo | | |
 | S4 | Receipts helper extraction -> `client/receipts.ts`; useReadMarker becomes a caller | `useReadMarker.ts`, new `receipts.ts` | todo | | |
