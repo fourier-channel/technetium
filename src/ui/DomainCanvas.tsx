@@ -10,6 +10,7 @@ import { useDomainModeration } from '../client/useDomainModeration'
 import { useAutoRefreshMedia } from '../client/useAutoRefreshMedia'
 import type { DomainSettingsApi } from './domainSettings'
 import { AuthedImage } from './AuthedImage'
+import { MediaTags } from './MediaTags'
 import { DomainBackgroundEditor } from './DomainBackgroundEditor'
 import { DomainTtdControl } from './DomainTtdControl'
 import { DomainUserMenu, DomainProfileCard } from './DomainUserMenu'
@@ -249,6 +250,7 @@ export function DomainCanvas({
               x={pos.x}
               y={pos.y}
               index={i}
+              roomId={room.roomId}
               onOpen={() => openLightbox([{ mxc: obj.mxc, name: obj.name, mimetype: obj.mimetype }], 0)}
               onContext={(e) => {
                 e.preventDefault()
@@ -268,6 +270,7 @@ export function DomainCanvas({
           obj={obj}
           containerRef={ref}
           canMove={objects.canMove(obj)}
+          roomId={room.roomId}
           onMove={(x, y) => objects.move(obj.id, x, y)}
           onOpen={() => openLightbox([{ mxc: obj.mxc, name: obj.name, mimetype: obj.mimetype }], 0)}
           onContext={(e) => {
@@ -739,6 +742,7 @@ function DomainMediaCard({
   x,
   y,
   index,
+  roomId,
   onOpen,
   onContext,
 }: {
@@ -746,6 +750,7 @@ function DomainMediaCard({
   x: number
   y: number
   index: number
+  roomId: string
   onOpen: () => void
   onContext: (e: React.MouseEvent) => void
 }) {
@@ -785,6 +790,9 @@ function DomainMediaCard({
       >
         <AuthedImage mxc={obj.mxc} width={180} fill alt={obj.name ?? ''} />
       </div>
+      {/* Outside the clipping card: the expanded tag list floats above it and
+          would be cut off by the card's own overflow: hidden. */}
+      <MediaTags mxc={obj.mxc} roomId={roomId} variant="chip" max={8} />
     </div>
   )
 }
@@ -797,6 +805,7 @@ function DomainObjectCard({
   obj,
   containerRef,
   canMove,
+  roomId,
   onMove,
   onOpen,
   onContext,
@@ -804,6 +813,7 @@ function DomainObjectCard({
   obj: DomainObject
   containerRef: React.RefObject<HTMLDivElement | null>
   canMove: boolean
+  roomId: string
   onMove: (x: number, y: number) => void
   onOpen: () => void
   onContext: (e: React.MouseEvent) => void
@@ -872,17 +882,28 @@ function DomainObjectCard({
         width: CARD_SIZE,
         height: CARD_SIZE,
         zIndex: 4,
-        borderRadius: 10,
-        overflow: 'hidden',
-        border: '2px solid var(--cpd-color-bg-canvas-default)',
-        boxShadow: '0 6px 16px rgba(0,0,0,0.5)',
         cursor: canMove ? 'grab' : 'pointer',
         pointerEvents: 'auto',
         touchAction: 'none',
-        background: 'var(--cpd-color-bg-subtle-secondary)',
       }}
     >
-      <AuthedImage mxc={obj.mxc} width={180} fill alt={obj.name ?? ''} />
+      {/* Clipping lives on an inner layer so the tag strip, which floats above
+          the card, is not cut off by the rounded overflow. */}
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          borderRadius: 10,
+          overflow: 'hidden',
+          border: '2px solid var(--cpd-color-bg-canvas-default)',
+          boxShadow: '0 6px 16px rgba(0,0,0,0.5)',
+          background: 'var(--cpd-color-bg-subtle-secondary)',
+          boxSizing: 'border-box',
+        }}
+      >
+        <AuthedImage mxc={obj.mxc} width={180} fill alt={obj.name ?? ''} />
+      </div>
+      <MediaTags mxc={obj.mxc} roomId={roomId} variant="chip" max={8} />
     </div>
   )
 }

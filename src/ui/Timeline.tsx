@@ -9,6 +9,8 @@ import { useLightbox, type LightboxItem } from './Lightbox'
 import { linkify } from './linkify'
 import { useChatBackground } from './chatBackground'
 import { ChatBackdrop, ChatBackgroundMenu } from './ChatBackground'
+import { MediaTags } from './MediaTags'
+import { useMediaTagPrefs } from './mediaTagSettings'
 
 // Read-only timeline. Message bodies render sanitized rich HTML (via DOMPurify)
 // when present, else plaintext. Encrypted events show a placeholder until the
@@ -17,6 +19,7 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
   const { client } = useClient()
   const { items, loadOlder, loadingOlder, atStart } = useTimeline(client, room)
   const chatBg = useChatBackground()
+  const tagPrefs = useMediaTagPrefs()
   const [bgMenuOpen, setBgMenuOpen] = useState(false)
   const bg = chatBg.get(room.roomId)
   useEffect(() => {
@@ -113,6 +116,26 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
               {threadListOpen ? 'Threads X' : 'Threads'}
             </button>
           )}
+          <button
+            type="button"
+            onClick={tagPrefs.toggleGlobal}
+            title={
+              tagPrefs.enabled
+                ? 'Image tags on — click to hide everywhere'
+                : 'Image tags off — click to show everywhere'
+            }
+            aria-label="Toggle image tags"
+            aria-pressed={tagPrefs.enabled}
+            style={{
+              fontSize: 13,
+              fontWeight: 400,
+              lineHeight: 1,
+              padding: '2px 4px',
+              opacity: tagPrefs.enabled ? 1 : 0.45,
+            }}
+          >
+            {'\u{1F3F7}'}
+          </button>
           <div style={{ position: 'relative' }}>
             <button
               type="button"
@@ -265,12 +288,15 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
       // (320 snaps to the gateway's allowed sizes). Click opens the full-res
       // image in the lightbox via an authed full fetch.
       body = (
-        <AuthedImage
-          mxc={mxc}
-          width={320}
-          alt={typeof content.body === 'string' ? content.body : undefined}
-          onClick={() => open([{ mxc, ...imageMeta(event) }], 0)}
-        />
+        <div>
+          <AuthedImage
+            mxc={mxc}
+            width={320}
+            alt={typeof content.body === 'string' ? content.body : undefined}
+            onClick={() => open([{ mxc, ...imageMeta(event) }], 0)}
+          />
+          <MediaTags mxc={mxc} roomId={event.getRoomId()} />
+        </div>
       )
     } else {
     const rendered = renderMessageBody(event)
@@ -383,6 +409,9 @@ function GalleryCell({ ev, onOpen }: { ev: MatrixEvent | null; onOpen?: () => vo
             transparentLoading
             onClick={onOpen}
           />
+          {/* Gallery cells are small and tile tightly -- a count chip, not a
+              strip, so the batch's geometry is untouched. */}
+          <MediaTags mxc={mxc} roomId={ev?.getRoomId()} variant="chip" />
         </div>
       )}
     </div>

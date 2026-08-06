@@ -13,6 +13,7 @@ import {
   type ThreadSort,
 } from '../client/useThreadList'
 import { AuthedImage } from './AuthedImage'
+import { MediaTags } from './MediaTags'
 import { parseMxc } from '../client/media'
 
 // UI-level order mode: the three data sorts plus a user-arranged 'custom' order.
@@ -323,7 +324,12 @@ const ThreadTile = memo(function ThreadTile({
         </div>
         <div style={{ fontSize: 10, color: 'var(--cpd-color-text-secondary)', ...ell }}>{fmt(createdTs)}</div>
         {isImage ? (
-          <AuthedImage mxc={mxc} width={180} maxHeight={90} alt={preview} />
+          // 180x90 preview: a strip would swamp the card (and fight the drag
+          // reorder), so tags ride as a count chip that expands on click.
+          <div style={{ position: 'relative' }}>
+            <AuthedImage mxc={mxc} width={180} maxHeight={90} alt={preview} />
+            <MediaTags mxc={mxc} roomId={roomId} variant="chip" max={8} />
+          </div>
         ) : (
           <div style={{ fontSize: 12, color: 'var(--cpd-color-text-secondary)', ...ell }}>{preview}</div>
         )}
