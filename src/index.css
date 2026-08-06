@@ -651,3 +651,21 @@ code {
     transition: none;
   }
 }
+
+/* Typing bar (W2.L4). Sits BETWEEN the timeline and the composer, never in
+   the message flow -- in the flow it would push messages around every time
+   someone started or stopped typing. It reserves its height permanently and
+   simply empties when nobody is typing, so appearing costs no reflow. */
+.tc-typing-bar {
+  flex-shrink: 0;
+  height: 18px;
+  line-height: 18px;
+  padding: 0 16px;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: none;
+}

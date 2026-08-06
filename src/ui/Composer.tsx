@@ -14,6 +14,7 @@ import { useComposerMode, type ComposerMode } from './composerMode'
 import { eventPreview } from '../client/eventPreview'
 import { buildReplyContent } from '../client/replyContent'
 import { buildEditContent, editableBody } from '../client/editContent'
+import { useTypingSender } from '../client/useTyping'
 
 type GalleryLayout = 'grid' | 'stack' | 'strip'
 
@@ -70,6 +71,8 @@ export function Composer({
   // ComposerModeProvider above us this is permanently normal, which is exactly
   // the pre-S3 behaviour.
   const { mode, clear: clearMode } = useComposerMode()
+  // Cheap to call per keystroke -- the throttling lives in the hook.
+  const typing = useTypingSender(client, room.roomId)
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<PendingAttachment[]>([])
   const [layout, setLayout] = useState<GalleryLayout>('grid')
@@ -198,6 +201,8 @@ export function Composer({
     if (input.length === 0 && atts.length === 0) return
 
     setSending(true)
+    // The message is going; retract the notice rather than letting it expire.
+    typing.stop()
 
     // Case 1 — text only: plain message (unchanged behavior).
     if (atts.length === 0) {
@@ -475,7 +480,10 @@ export function Composer({
         <textarea
           ref={taRef}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+              setText(e.target.value)
+              typing.notify(e.target.value.length > 0)
+            }}
           onKeyDown={onKeyDown}
           placeholder={
             attachments.length > 0

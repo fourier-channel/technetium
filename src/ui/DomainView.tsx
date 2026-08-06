@@ -5,6 +5,7 @@ import { DomainCanvas } from './DomainCanvas'
 import { Timeline } from './Timeline'
 import { Composer } from './Composer'
 import { ComposerModeProvider } from './ComposerModeProvider'
+import { TypingBar } from './TypingBar'
 import { useDomainSettings } from './domainSettings'
 import { DomainOptions } from './DomainOptions'
 import { useDomainBackground } from '../client/useDomainBackground'
@@ -188,6 +189,7 @@ export function DomainView({ room, onExit }: { room: Room; onExit: () => void })
           <Timeline room={room} />
         </div>
       </div>
+      <TypingBar client={client} room={room} />
       <Composer room={room} domainTtd={ttd} />
 
       {backdropMenu && (

@@ -5,6 +5,7 @@ import { Sidebar } from './ui/Sidebar'
 import { Timeline } from './ui/Timeline'
 import { Composer } from './ui/Composer'
 import { ComposerModeProvider } from './ui/ComposerModeProvider'
+import { TypingBar } from './ui/TypingBar'
 import { MemberList } from './ui/MemberList'
 import { ThreadPanel } from './ui/ThreadPanel'
 import { ThreadList } from './ui/ThreadList'
@@ -134,6 +135,7 @@ function App() {
               <div style={{ flex: 1, minHeight: 0 }}>
                 <Timeline room={selectedRoom} onOpenThread={(roomId, rootId) => setOpenThread({ roomId, rootId })} threadListOpen={threadListOpen} onToggleThreadList={() => setThreadListOpen((o) => !o)} />
               </div>
+              <TypingBar client={client} room={selectedRoom} />
               <Composer room={selectedRoom} />
             </ComposerModeProvider>
           )

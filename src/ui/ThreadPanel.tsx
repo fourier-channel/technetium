@@ -6,6 +6,7 @@ import { Row } from './Timeline'
 import { Composer } from './Composer'
 import { ComposerModeProvider } from './ComposerModeProvider'
 import { MessageVerbsProvider } from './MessageVerbs'
+import { TypingBar } from './TypingBar'
 
 // Thread panel: a thread's root + replies, resolved by (roomId, rootId) so it
 // stays open and correct even when the user navigates to other rooms. Renders via
@@ -124,6 +125,7 @@ export function ThreadPanel({
         )}
       </div>
 
+      {room && <TypingBar client={client} room={room} />}
       {room && <Composer room={room} threadId={rootId} />}
     </aside>
     </ComposerModeProvider>
