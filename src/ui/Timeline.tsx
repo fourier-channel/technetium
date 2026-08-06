@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ThreadEvent, type Room, type MatrixEvent } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
 import { useTimeline, type TimelineItem, type GalleryLayout } from '../client/useTimeline'
+import type { ReplyRef } from '../client/relations'
+import { eventPreview } from '../client/eventPreview'
 import { renderMessageBody } from '../client/messageBody'
 import { parseMxc } from '../client/media'
 import { AuthedImage } from './AuthedImage'
@@ -13,6 +15,11 @@ import { MediaTags } from './MediaTags'
 import { useMediaTagPrefs } from './mediaTagSettings'
 import { useMessageActions } from './messageActions'
 import { MessageActionBar } from './MessageActionBar'
+import { MessageVerbsProvider } from './MessageVerbs'
+import { JumpContext, scrollToEventInDom, useJump, type JumpApi } from './jumpToEvent'
+
+// How many pages of history a click-to-jump will paginate before giving up.
+const MAX_JUMP_PAGES = 8
 
 // Read-only timeline. Message bodies render sanitized rich HTML (via DOMPurify)
 // when present, else plaintext. Encrypted events show a placeholder until the
@@ -38,6 +45,36 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
   // up; re-engages when they return near the bottom. This makes late
   // layout shifts (async images) harmless instead of each needing a fix.
   const followRef = useRef(true)
+
+  // Click-to-jump. A target already on screen is a DOM lookup; otherwise
+  // paginate backwards a BOUNDED number of pages, retrying after each. The
+  // bound is what stops a jump to an id that is not in this room from walking
+  // a busy room back to its creation.
+  const jumpApi = useMemo<JumpApi>(
+    () => ({
+      canPaginate: !atStart,
+      jump: async (eventId: string) => {
+        if (scrollToEventInDom(eventId)) return true
+        for (let page = 0; page < MAX_JUMP_PAGES; page++) {
+          if (atStartRef.current) break
+          prependHeightRef.current = scrollRef.current?.scrollHeight ?? null
+          await loadOlder()
+          // Let the prepend paint before searching for the row.
+          await new Promise((r) => requestAnimationFrame(() => r(null)))
+          if (scrollToEventInDom(eventId)) return true
+        }
+        return false
+      },
+    }),
+    [loadOlder, atStart],
+  )
+
+  // Read inside the jump loop, where a stale `atStart` closure would keep
+  // paginating past the start of the room.
+  const atStartRef = useRef(atStart)
+  useEffect(() => {
+    atStartRef.current = atStart
+  }, [atStart])
 
   // Scroll behavior on item-count change:
   //  - after a load-older PREPEND: keep the viewport pinned to the same
@@ -185,9 +222,13 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
             </div>
           )}
 
-          {items.map((item) => (
-            <Row key={item.id} item={item} onOpenThread={onOpenThread} />
-          ))}
+          <JumpContext.Provider value={jumpApi}>
+            <MessageVerbsProvider>
+              {items.map((item) => (
+                <Row key={item.id} item={item} onOpenThread={onOpenThread} />
+              ))}
+            </MessageVerbsProvider>
+          </JumpContext.Provider>
           <div ref={bottomRef} />
         </div>
       </div>
@@ -284,7 +325,7 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
   if (kind === 'gallery' && cells) {
     body = <GalleryBody cells={cells} layout={layout ?? 'grid'} />
   } else if (kind === 'message') {
-    const content = event.getContent()
+    const content = item.content
     const mxc = typeof content.url === 'string' ? content.url : ''
     if (content.msgtype === 'm.image' && parseMxc(mxc)) {
       // Image message: render the picture inline via the gateway as a thumbnail
@@ -302,7 +343,9 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
         </div>
       )
     } else {
-    const rendered = renderMessageBody(event)
+    // item.content, not event.getContent(): the effective content with the
+    // winning edit applied (S1). isReply strips the spec's "> " fallback quote.
+    const rendered = renderMessageBody(item.content, { isReply: !!item.replyTo })
     body =
       rendered.html !== undefined ? (
         // Sanitized by DOMPurify in renderMessageBody — safe to inject.
@@ -327,10 +370,11 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
   }
 
   return (
-    <div className="tc-row" style={{ padding: '4px 0' }}>
+    // data-event-id is what click-to-jump searches for; keeping it on the row
+    // means no separate index has to stay in sync with the timeline.
+    <div className="tc-row" data-event-id={item.id} style={{ padding: '4px 0' }}>
       {/* Overlays the row's top-right; revealed by CSS on hover/focus-within so
-          no React state churns per pointer crossing. Renders nothing until a
-          verb registers a builder, so this is inert until Wave 2. */}
+          no React state churns per pointer crossing. */}
       <MessageActionBar actions={actions} />
       <SenderPill event={event} time={time} />
       <div
@@ -343,6 +387,7 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
           marginTop: 1,
         }}
       >
+        {item.replyTo && <ReplyPill replyTo={item.replyTo} />}
         <div style={{ fontSize: 14, wordBreak: 'break-word', minWidth: 0 }}>{body}</div>
         {event.isThreadRoot && <ThreadChip event={event} onOpen={onOpenThread} />}
       </div>
@@ -567,6 +612,54 @@ function ThreadChip({ event, onOpen }: { event: MatrixEvent; onOpen?: (roomId: s
       }}
     >
       💬 {count} {count === 1 ? 'reply' : 'replies'}
+    </button>
+  )
+}
+
+// W2.1 -- the reply pill above a reply's body: who was answered, a one-line
+// preview, and click-to-jump to the original.
+//
+// The preview is deliberately plain text (eventPreview), never the rendered
+// HTML -- a pill is chrome, and injecting message markup into chrome is how a
+// formatted body escapes the message area.
+function ReplyPill({ replyTo }: { replyTo: ReplyRef }) {
+  const { client } = useClient()
+  const { jump, canPaginate } = useJump()
+  const [jumping, setJumping] = useState(false)
+
+  const target = replyTo.event
+  // Unresolved: the original is outside the loaded window. Say so honestly
+  // rather than rendering a pill that looks like a real quote.
+  const senderId = target?.getSender() ?? null
+  const member = senderId
+    ? client?.getRoom(target?.getRoomId() ?? '')?.getMember(senderId) ?? null
+    : null
+  const name = member?.name || senderId || 'a message'
+  const preview = target ? eventPreview(target, 80) : 'Original not loaded'
+
+  // Nothing to jump to and no way to find it -> render inert, not a dead link.
+  const jumpable = !!target || canPaginate
+
+  const onClick = () => {
+    if (!jumpable || jumping) return
+    setJumping(true)
+    void jump(replyTo.eventId).finally(() => setJumping(false))
+  }
+
+  return (
+    <button
+      type="button"
+      className="tc-reply-pill"
+      onClick={onClick}
+      disabled={!jumpable}
+      title={jumpable ? 'Jump to the message being replied to' : 'Original message not loaded'}
+      aria-label={`Replying to ${name}: ${preview}`}
+    >
+      <span className="tc-reply-pill-arrow" aria-hidden="true">
+        {'↱'}
+      </span>
+      <span className="tc-reply-pill-name">{name}</span>
+      <span className="tc-reply-pill-text">{jumping ? 'Searching...' : preview}</span>
     </button>
   )
 }

@@ -1,5 +1,6 @@
 import { parseInline } from 'marked'
 import DOMPurify from 'dompurify'
+import { escapeHtml } from './matrixHtml'
 
 // Same strict allowlist as the receive-side sanitizer (messageBody.ts). marked
 // passes raw HTML through by default, so we MUST sanitize its output before
@@ -45,13 +46,4 @@ export function formatMessage(input: string): FormattedMessage {
   if (html === escapedPlain) return { plain }
 
   return { plain, html }
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
 }

@@ -5,6 +5,7 @@ import { toItems } from '../client/useTimeline'
 import { Row } from './Timeline'
 import { Composer } from './Composer'
 import { ComposerModeProvider } from './ComposerModeProvider'
+import { MessageVerbsProvider } from './MessageVerbs'
 
 // Thread panel: a thread's root + replies, resolved by (roomId, rootId) so it
 // stays open and correct even when the user navigates to other rooms. Renders via
@@ -113,7 +114,13 @@ export function ThreadPanel({
             {thread ? 'No messages in this thread.' : 'Loading thread\u2026'}
           </div>
         ) : (
-          items.map((item) => <Row key={item.id} item={item} />)
+          // The thread panel paginates its whole thread to exhaustion on open,
+          // so the default DOM-only jump is sufficient here -- no JumpContext.
+          <MessageVerbsProvider>
+            {items.map((item) => (
+              <Row key={item.id} item={item} />
+            ))}
+          </MessageVerbsProvider>
         )}
       </div>
 

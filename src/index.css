@@ -317,3 +317,71 @@ code {
     transition: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Reply pill (W2.1) -- the "answering X" line above a reply's body, and the
+   flash that marks the row a jump landed on.
+   --------------------------------------------------------------------------- */
+.tc-reply-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: 2px;
+  padding: 1px 8px 1px 4px;
+  border: none;
+  border-left: 2px solid rgba(128, 128, 128, 0.5);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+.tc-reply-pill:hover:not(:disabled) {
+  background: var(--cpd-color-bg-subtle-secondary, rgba(128, 128, 128, 0.12));
+}
+.tc-reply-pill:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.tc-reply-pill-arrow {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+.tc-reply-pill-name {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--cpd-color-text-primary, #e7ebf0);
+}
+.tc-reply-pill-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* Marks the row a jump landed on. Fades out on its own -- no JS cleanup beyond
+   removing the class, and no dependence on transitionend (G-04f01d). */
+.tc-row-flash {
+  animation: tc-row-flash 1.2s ease-out;
+}
+@keyframes tc-row-flash {
+  0% {
+    background: rgba(120, 160, 255, 0.28);
+  }
+  100% {
+    background: transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tc-row-flash {
+    animation: none;
+    outline: 2px solid var(--tc-link);
+    outline-offset: 2px;
+  }
+}

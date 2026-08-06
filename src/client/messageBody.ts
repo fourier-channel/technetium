@@ -1,5 +1,6 @@
 import DOMPurify from 'dompurify'
-import type { MatrixEvent } from 'matrix-js-sdk'
+import type { IContent } from 'matrix-js-sdk'
+import { stripReplyFallback } from './eventPreview'
 
 // Strict allowlist matching the Matrix spec's permitted HTML subset for
 // m.room.message formatted_body (org.matrix.custom.html). Anything not listed
@@ -18,6 +19,13 @@ const ALLOWED_TAGS = [
 // strips javascript:/data: URI schemes by default.
 const ALLOWED_ATTR = ['href', 'title', 'alt', 'colspan', 'rowspan', 'start']
 
+// NARROWING, not a widening. `mx-reply` is not in ALLOWED_TAGS, but DOMPurify
+// unwraps a disallowed tag by default -- it drops the element and KEEPS its
+// children. That is why a reply from Element renders its entire quoted
+// blockquote inline here. FORBID_CONTENTS removes the subtree with the tag,
+// which is what the spec's "clients SHOULD strip the fallback" means.
+const FORBID_CONTENTS = ['mx-reply']
+
 export interface RenderedBody {
   // When html is set, render via dangerouslySetInnerHTML (already sanitized).
   // Otherwise render `text` as a plain string.
@@ -25,11 +33,21 @@ export interface RenderedBody {
   text?: string
 }
 
-// Produce a safe renderable body for a message event. Prefers sanitized HTML
+export interface RenderOptions {
+  // Set for an event that carries a real m.in_reply_to. Only then is the
+  // leading "> " block treated as the spec's fallback quote -- otherwise a
+  // message that legitimately opens with a blockquote would be mangled.
+  isReply?: boolean
+}
+
+// Produce a safe renderable body from message content. Prefers sanitized HTML
 // from formatted_body; falls back to the plaintext body.
-export function renderMessageBody(event: MatrixEvent): RenderedBody {
-  const content = event.getContent()
-  const body = (content.body as string) ?? ''
+//
+// Takes CONTENT rather than an event so callers pass TimelineItem.content --
+// the effective content with the winning edit already applied (S1).
+export function renderMessageBody(content: IContent, opts: RenderOptions = {}): RenderedBody {
+  const rawBody = typeof content.body === 'string' ? content.body : ''
+  const body = opts.isReply ? stripReplyFallback(rawBody) : rawBody
 
   const hasHtml =
     content.format === 'org.matrix.custom.html' &&
@@ -40,6 +58,7 @@ export function renderMessageBody(event: MatrixEvent): RenderedBody {
   const clean = DOMPurify.sanitize(content.formatted_body as string, {
     ALLOWED_TAGS,
     ALLOWED_ATTR,
+    FORBID_CONTENTS,
     // Force any surviving links to be safe: no javascript:, and target handling
     // is added at render time. DOMPurify already drops dangerous URI schemes.
     ALLOW_DATA_ATTR: false,

@@ -12,6 +12,7 @@ import { formatMessage } from '../client/messageFormat'
 import { EmojiPicker } from './EmojiPicker'
 import { useComposerMode, type ComposerMode } from './composerMode'
 import { eventPreview } from '../client/eventPreview'
+import { buildReplyContent } from '../client/replyContent'
 
 type GalleryLayout = 'grid' | 'stack' | 'strip'
 
@@ -174,7 +175,21 @@ export function Composer({
       setText('') // optimistic clear; restore on failure
       try {
         const { plain, html } = formatMessage(input)
-        if (html !== undefined) {
+        if (mode.kind === 'reply') {
+          // Built by hand rather than via sendTextMessage so m.relates_to
+          // rides along. sendMessage SPREADS an existing m.relates_to when it
+          // adds a thread relation, and sets is_falling_back:false because we
+          // supplied m.in_reply_to -- so a reply inside a thread stays a real
+          // reply and does not read as the MSC3440 fallback.
+          await client.sendMessage(
+            room.roomId,
+            threadId ?? null,
+            buildReplyContent(mode.target, room.roomId, plain, html) as unknown as Parameters<
+              typeof client.sendMessage
+            >[2],
+          )
+          clearMode()
+        } else if (html !== undefined) {
           if (threadId) await client.sendHtmlMessage(room.roomId, threadId, plain, html)
           else await client.sendHtmlMessage(room.roomId, plain, html)
         } else {
