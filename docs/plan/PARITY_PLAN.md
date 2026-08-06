@@ -14,8 +14,8 @@
 | field | value |
 | --- | --- |
 | campaign | parity-v1 (30 features, 3 audit categories) |
-| current wave | Wave 2 in progress -- W2.1-W2.6 landed; next W2.7 pinned messages |
-| pure checks | 174 passing (`npm run check`) -- 6 harnesses incl. 51 sanitizer security checks |
+| current wave | Wave 2 -- lane COMPLETE + verbs 1-6 landed. Remaining: W2.7 pins, W2.8 forwarding, W2.9 mentions |
+| pure checks | 260 passing (`npm run check`) -- 7 harnesses; 61 are sanitizer/security |
 | devlog | 2 entries appended (Wave 0+1, Wave 2 part 1) |
 | branch | `parity-v1` (off `main`) |
 | base HEAD | `d4d1494` (main, "Merge branch 'chatbox-domain-v1'") |
@@ -24,7 +24,7 @@
 | lint baseline | **23 problems (22 errors, 1 warning)** -- HOLD THIS NUMBER |
 | build baseline | PASSING (`npm run build`, ~700ms, 1.38MB index chunk) |
 | deploys | NONE. Ever. tc.41chan.net is the operator's. |
-| new deps so far | `jsdom` + `@types/jsdom` (DEV ONLY, O-tp11); dompurify patched 3.4.11 -> 3.4.13 |
+| new deps so far | `jsdom`+`@types/jsdom` (DEV ONLY, O-tp11); `highlight.js` (prod, +57kB gzip); dompurify patched 3.4.11 -> 3.4.13 |
 
 ### Lint baseline detail (23 = the number to hold)
 
@@ -329,10 +329,10 @@ splitting rather than by moving the baseline.
 | W2.7 | Pinned messages (`m.room.pinned_events` + panel) | todo | | |
 | W2.8 | Forwarding (+ new `ui/RoomPicker.tsx`) | todo | | |
 | W2.9 | Mention autocomplete (`@` popup, matrix.to anchor, `m.mentions`) | todo | | |
-| W2.L1 | Syntax highlighting (`highlight.js` core + common; own commit + sanitizer note + negative tests) | todo | | dep: highlight.js PRE-APPROVED, needs DEPENDENCIES.md entry |
-| W2.L2 | Spoiler RENDERING (`span[data-mx-spoiler]`, blur + click-reveal; own commit, security rigor) | todo | | |
-| W2.L3 | Spoiler COMPOSING (`\|\|spoiler\|\|`, `\|\|reason\|text\|\|`) | todo | | must not false-trigger the plain-vs-HTML compare |
-| W2.L4 | Typing indicators (`ui/TypingBar.tsx` + `useTyping`, relocated out of timeline flow) | todo | | needs a small Composer touch -- schedule into a chain gap |
+| W2.L1 | Syntax highlighting | **landed** | `a5fb423` | 4-step shape: sanitize w/ class -> scrubClasses (deletes all but `language-*` on `<code>`) -> hljs -> re-sanitize. Pass 2's allowance is safe because its INPUT is our output. Parses via `createHTMLDocument` (inert, exists wherever `document` does). Bounded: 20k skip, 2k autodetect cap. **COST: +171kB raw / +57kB gzip** -- lib/core + explicit registerLanguage is the cheaper fallback, noted in DEPENDENCIES.md. |
+| W2.L2 | Spoiler RENDERING | **landed** | `fd4d3a9` | `data-mx-spoiler` admitted BY NAME (ALLOW_DATA_ATTR stays false). tabindex/role/aria set by US after pass 1 deleted the sender's. Delegated click/keydown (innerHTML can't carry React handlers). Blur is a filter -> revealing never reflows. **Also fixed a FORBID_CONTENTS regression I introduced in W2.1** -- see G-tp09. |
+| W2.L3 | Spoiler COMPOSING + fenced code blocks on the send side | **landed** | `310c8bc` | Masked BEFORE markdown, restored AFTER sanitize (so the span is ours, and hand-written `data-mx-spoiler` stays refused). Block parser used ONLY when a fence exists -- wholesale would wrap every message in `<p>`. Send-side class scrub added: a user CAN type literal HTML. Caught a real regex bug: `\|\|one\|\| and \|\|two\|\|` mis-parsed. |
+| W2.L4 | Typing indicators | **landed** | `fcfed38` | Bar BETWEEN timeline and composer, reserves height permanently -> no reflow. Reads sdk's `RoomMember.typing` (it owns expiry). Throttle in refs not state (keystroke setState would re-render the composer). Retracts on send + unmount. |
 
 #### W2.4 -- Row footer layout (the design note)
 
@@ -443,6 +443,11 @@ visual or interactive is claimed only as PENDING.
 | W2.5-b | **Reactions from Element no longer render as `[m.reaction]` junk rows** (was a live bug). | yes |
 | W2.5-c | A message with no reactions reserves NO footer height until hovered -- confirm no vertical jitter scrolling a busy room. | no |
 | W2.6-a | Other identity's avatar appears under the last message it has seen and advances as it reads; your own never appears; caps at 5 + N. | yes |
+| W2.L1-a | A fenced code block from Element renders highlighted, in BOTH light and dark; a very large block renders plain without stalling. | yes |
+| W2.L2-a | A spoiler from Element renders blurred; reveals on click AND on Enter/Space; the reason label shows; a link inside a revealed spoiler is clickable. | yes |
+| W2.L3-a | Typing `||secret||` sends a spoiler that renders blurred in Element; a ``` fence sends a highlighted block; ORDINARY messages are visually unchanged (regression risk: the parseInline -> parse switch). | yes |
+| W2.L4-a | Typing in one client shows the line in the other; clears on send, on emptying the box, and on leaving; never shifts the messages above it. | yes |
+| BUNDLE-a | Judgement call: is +57kB gzip acceptable for highlighting? If not, `lib/core` + explicit registerLanguage is a one-file change. | no |
 | KBD-a | Tab from the timeline reaches the composer in a sane number of stops; arrows move within a row's action bar and reaction strip. | no |
 
 Standing note: receipts, typing, reactions and presence all need a
@@ -472,7 +477,9 @@ gateway), JSX `\u` escapes invalid in raw JSX text.
 
 | dep | version | wave | rationale | DEPENDENCIES.md |
 | --- | --- | --- | --- | --- |
-| (none yet) | | | | |
+| `jsdom` + `@types/jsdom` | `^30.0.1` | 2 | **DEV ONLY.** DOMPurify cannot run without a DOM, so the mandated sanitizer negative tests had nowhere to run. Chose jsdom over happy-dom because these are SECURITY tests and spec-completeness beats speed. | recorded |
+| `highlight.js` | `^11.11.1` | 2 | Pre-approved. `lib/common` (~40 langs), not the full build. **+171kB raw / +57kB gzip.** | recorded, with the cheaper `lib/core` fallback |
+| `dompurify` | `3.4.11 -> 3.4.13` | 2 | Patch for GHSA-c2j3-45gr-mqc4. We use neither affected hook, so we were never exposed. | recorded |
 
 Pre-approved ahead of time: `highlight.js` (core build + common languages
 only) for W2.L1. Everything else needs a ledger justification first.

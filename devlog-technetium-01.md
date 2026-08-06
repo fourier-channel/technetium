@@ -2202,3 +2202,119 @@ identity (Multi-Account Containers, never a private window at the dev origin).
   happy-dom. Recorded as **O-tp11** -- an operator decision before those steps,
   since it is the first dev dependency the campaign would add.
 - Nothing deployed. Nothing outside the repo written.
+
+---
+
+## 2026-08-06 -- parity-v1 Wave 2 lane: highlighting, spoilers, typing (auto run)
+
+The operator authorised the first dependency, which unblocked the two
+sanitizer widenings. Everything in this entry is the messageBody /
+messageFormat lane; the Wave 2 verb chain (pins, forwarding, mentions) is
+still open.
+
+### The dependency call
+
+`jsdom` (dev-only), chosen over the lighter `happy-dom` that I had recommended
+the night before. These are SECURITY tests, and spec-completeness beats speed:
+DOMPurify's own suite runs against jsdom, and the parser edge cases the tests
+exist to catch -- mXSS, namespace confusion, malformed nesting -- are exactly
+where a lighter DOM diverges from a real browser. A less complete DOM could
+pass a test a browser would fail, which is the one failure mode a security
+suite must not have.
+
+Also bumped `dompurify` 3.4.11 -> 3.4.13 (GHSA-c2j3-45gr-mqc4). We use neither
+affected hook. jsdom itself added zero advisories; `npm audit` reported the
+same three pre-existing findings before and after, all now resolved.
+
+`highlight.js` was pre-approved. It costs **+171 kB raw / +57 kB gzip**, which
+is recorded rather than buried; the cheaper shape (`lib/core` plus explicit
+`registerLanguage` calls) is a one-file change if the operator judges the
+common build too expensive.
+
+### G-tp09 (gotcha, security) -- FORBID_CONTENTS REPLACES, it does not extend
+
+The one that matters. Passing `FORBID_CONTENTS` to DOMPurify replaces its
+default list rather than extending it. W2.1 passed `['mx-reply']` alone to
+strip reply fallbacks and thereby silently un-forbade the contents of
+`script`, `style`, `noscript`, `title`, `template`, `xmp`, `plaintext`,
+`iframe`, `svg` and `math`. `<b><script>alert(1)</script></b>` rendered as
+`<b>alert(1)</b>`.
+
+Not executable -- React does not re-parse what it injects, and the tags
+themselves were still stripped -- but a real weakening of a defence-in-depth
+layer, and precisely the accidental widening the standing law warns about: I
+narrowed for one tag and widened everywhere else without noticing.
+
+What hid it for four commits: the existing test only checked a BARE
+`<script>`, which DOMPurify force-removes anyway and which kept passing. Only
+the NESTED form shows the difference. **The lesson is about the test, not the
+config** -- a negative test that only exercises the easy shape gives false
+confidence. The fix vendors DOMPurify's default list; DEPENDENCIES.md now
+carries a scan-before-upgrade note, since a vendored constant drifts.
+
+### G-tp10 (gotcha) -- a security suite that passes without a DOM is worthless
+
+Without a DOM, DOMPurify's default export is built with a null window,
+`isSupported` is false, and **`sanitize()` returns its input unchanged**.
+Every negative test would have passed while sanitizing nothing.
+
+So the suite installs jsdom onto `globalThis` before importing messageBody
+(dynamic import, since static imports hoist above that) and opens with live
+proof that the sanitizer is running. Verified by deleting the DOM and
+confirming the suite fails on assertion one rather than passing vacuously.
+
+### D-tp07 -- how `class` was allowed without opening a styling hole
+
+Highlighting needs `class` to survive. Our own UI is styled by class, so a
+message able to set `class="tc-row-actions"` on its content could paint
+something that looks like part of the app. The shape:
+
+  1. sanitize WITH class, so a `language-js` hint from another client survives
+  2. `scrubClasses()` deletes every class except `language-*` on a `<code>`
+  3. highlight -- hljs reads textContent and emits its own escaped markup
+  4. sanitize again
+
+Step 2 is what makes step 4's allowance safe: its input is our output, not the
+sender's. The same scrub now runs on the SEND side too, where it matters more,
+because a user can type literal HTML straight into the composer.
+
+`data-mx-spoiler` follows the same pattern, admitted BY NAME with
+`ALLOW_DATA_ATTR` still false, and the a11y attributes (`tabindex`, `role`,
+`aria-*`) are set by us after pass 1 has deleted any the sender supplied -- a
+sender-controlled `tabindex` could reorder the page's focus.
+
+### G-tp11 (gotcha) -- substring assertions on HTML lie in both directions
+
+Three checks failed on output that was correct. `<` inside an attribute VALUE
+is legal and inert, so `includes('<img')` false-positives on an escaped
+string, and it proves nothing about what a browser would build. Those checks
+now re-PARSE the output and assert on the resulting DOM.
+
+### The regex bug the checks caught before it shipped
+
+`||one|| and ||two||` parsed as reason="one", text="| and ". The optional
+reason group happily eats the first pipe of the closing `||`. Requiring the
+reason delimiter not to be followed by another pipe forces a backtrack.
+
+### What landed
+
+- **W2.L1** syntax highlighting, bounded (20k skip, 2k autodetect cap), theme
+  hand-written against the hljs class contract rather than importing one that
+  would fight the Compound tokens.
+- **W2.L2** spoiler rendering, delegated click/keydown, blur via filter so
+  revealing never reflows.
+- **W2.L3** spoiler composing AND fenced code blocks on the send side --
+  closing the gap W2.L1 recorded, where this client could highlight code
+  blocks it received but never send one. The block parser is used only when a
+  fence is present; switching wholesale would wrap every message in `<p>`.
+- **W2.L4** typing indicators, relocated between timeline and composer.
+
+### Verification
+260 checks pass, 61 of them sanitizer/security. Everything visual is PENDING
+OPERATOR VERIFICATION; the ledger carries the list. The highest-risk
+regression to eyeball is that ORDINARY messages are unchanged by the
+parseInline -> parse switch.
+
+### Still open in Wave 2
+W2.7 pinned messages, W2.8 forwarding, W2.9 mention autocomplete. Nothing
+deployed; nothing outside the repo written.
