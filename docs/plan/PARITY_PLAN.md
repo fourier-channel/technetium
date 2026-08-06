@@ -14,8 +14,8 @@
 | field | value |
 | --- | --- |
 | campaign | parity-v1 (30 features, 3 audit categories) |
-| current wave | Wave 1 COMPLETE (`d40018d`) -- next up: Wave 2 message verbs |
-| pure checks | 64 passing (`npm run check`) -- 3 harnesses, zero deps |
+| current wave | Wave 2 in progress -- W2.1-W2.4 landed, W2.5 reactions next |
+| pure checks | 123 passing (`npm run check`) -- 5 harnesses, zero deps |
 | branch | `parity-v1` (off `main`) |
 | base HEAD | `d4d1494` (main, "Merge branch 'chatbox-domain-v1'") |
 | current HEAD | see `git log -1` |
@@ -318,10 +318,10 @@ splitting rather than by moving the baseline.
 
 | id | step | status | commit | result / pendings |
 | --- | --- | --- | --- | --- |
-| W2.1 | Reply composing (+ enriched reply pill, click-to-jump) | todo | | |
-| W2.2 | Message editing (`m.replace`, "(edited)" marker) | todo | | |
-| W2.3 | Redact / delete (two-step confirm, PL-gated) | todo | | |
-| W2.4 | Row footer design note (ledger only, NO code) | todo | | |
+| W2.1 | Reply composing (+ enriched reply pill, click-to-jump) | **landed** | `9b9e89c` | Verb registry wired (`MessageVerbs.tsx`). Sanitizer NARROWED (`FORBID_CONTENTS: mx-reply`) -- fixed a live bug where Element replies rendered their quoted text inline. Fallback quotes ESCAPED PLAIN TEXT, never the target's formatted_body (no HTML relay). Jump bounded to 8 pages. `renderMessageBody` now takes content, so edits render. |
+| W2.2 | Message editing (`m.replace`, "(edited)" marker) | **landed** | `3e0c300` | Own messages only (forged edits are rejected by S1 anyway). Seed from `item.content`, not `getContent()` -- else a 2nd edit reverts to the original. Sent with `threadId: null` (an event cannot carry both m.thread and m.replace). Draft stashed/restored around edit mode. |
+| W2.3 | Redact / delete (two-step confirm, PL-gated) | **landed** | `86e19b9` | Own OR `hasSufficientPowerLevelFor('redact')`. Verb HIDDEN when not permitted, not shown-and-403ing. Modal confirm, not click-again -- the bar is under the pointer. |
+| W2.4 | Row footer design note (ledger only, NO code) | **landed** | (this ledger) | See "Row footer layout" below. |
 | W2.5 | Reactions (strip, toggle, EmojiPicker anchored) | todo | | |
 | W2.6 | Read-receipts display (seen-by cluster, +N cap) | todo | | |
 | W2.7 | Pinned messages (`m.room.pinned_events` + panel) | todo | | |
@@ -331,6 +331,49 @@ splitting rather than by moving the baseline.
 | W2.L2 | Spoiler RENDERING (`span[data-mx-spoiler]`, blur + click-reveal; own commit, security rigor) | todo | | |
 | W2.L3 | Spoiler COMPOSING (`\|\|spoiler\|\|`, `\|\|reason\|text\|\|`) | todo | | must not false-trigger the plain-vs-HTML compare |
 | W2.L4 | Typing indicators (`ui/TypingBar.tsx` + `useTyping`, relocated out of timeline flow) | todo | | needs a small Composer touch -- schedule into a chain gap |
+
+#### W2.4 -- Row footer layout (the design note)
+
+Reactions (W2.5) and read receipts (W2.6) both want the space under the
+message body, and the thread chip is already there. Specifying the region
+once so the two do not collide.
+
+Row anatomy after Wave 2, top to bottom:
+
+```
+  [action bar]                                <- absolute overlay, top-right
+  SenderPill  time
+    |- reply pill            (W2.1, above body, own line)
+    |- body  (edited)        (W2.2 marker is INLINE, never its own line)
+    |- FOOTER  <-------------------------------- this note
+```
+
+The FOOTER is one flex row, `align-items: center`, `gap: 6px`,
+`flex-wrap: wrap`, `padding-left: 16px` (matching the body column), rendered
+only when it has at least one child. Order is fixed, left to right:
+
+1. **Reactions strip** (W2.5) -- `flex-wrap` so a heavily-reacted message
+   grows downward, never sideways past the body.
+2. **Thread chip** (existing) -- moves INTO the footer rather than keeping
+   its own line, so a threaded + reacted message costs one row, not two.
+3. **Spacer** (`margin-left: auto`).
+4. **Receipts cluster** (W2.6) -- right-aligned, so it sits in a stable
+   column down the timeline instead of jittering with reaction count.
+
+Rules the two features must both honour:
+
+- **The footer never reflows the body.** It is appended, not inserted; it has
+  no min-height, and it is absent (not empty-but-present) when there is
+  nothing to show. This is the no-forced-reflow law: adding a reaction must
+  not push the message text.
+- **Fixed heights.** Reaction pills and receipt avatars are both 20px tall so
+  a row's height does not change when one appears without the other.
+- **Nothing in the footer is a tab stop by default.** Reaction pills are
+  buttons, so the footer participates in the row's `:focus-within` and is
+  reachable, but W2.5 must use the same roving-tabindex treatment the action
+  bar uses or the timeline becomes untabbable.
+- **Grouping-safe** (W6.2). Same-sender grouping collapses the pillbox, not
+  the footer -- every grouped message keeps its own footer.
 
 ### Wave 3 -- rooms & navigation
 
