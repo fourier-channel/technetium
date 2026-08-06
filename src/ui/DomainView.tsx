@@ -16,6 +16,13 @@ import { TTD_DEFAULT } from '../client/useDomainMedia'
 // as a sizeable panel above the text input.
 // ---------------------------------------------------------------------------
 
+// Resize-bar geometry. The bar changes how much of the canvas is VISIBLE (the
+// viewport) and how tall the chat panel is -- it never changes the canvas's own
+// size, so pucks/objects don't shift under a drag.
+const MIN_CHAT = 120
+const MIN_CANVAS = 160
+const HANDLE_H = 6
+
 export function DomainView({ room, onExit }: { room: Room; onExit: () => void }) {
   const { client } = useClient()
   const settings = useDomainSettings()
@@ -25,6 +32,36 @@ export function DomainView({ room, onExit }: { room: Room; onExit: () => void })
   const [ttd, setTtd] = useState(TTD_DEFAULT)
   const { background, clearBackground } = useDomainBackground(client, room)
   const hasBackground = background !== null || settings.getBackdrop(room.roomId) !== undefined
+
+  // Measured height of the canvas-viewport + handle + chat area, so we can hold
+  // the canvas CONTENT at a fixed size while the viewport (the window into it)
+  // resizes. areaH depends only on the window, never on the drag.
+  const areaRef = useRef<HTMLDivElement>(null)
+  const [areaH, setAreaH] = useState<number | null>(null)
+  const [chatHeight, setChatHeight] = useState(260)
+
+  useEffect(() => {
+    const el = areaRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => {
+      const h = el.clientHeight
+      setAreaH(h)
+      // Keep the chat within bounds if the window shrank (setState in an RO
+      // callback is allowed; it isn't a synchronous setState in an effect body).
+      const maxChat = Math.max(MIN_CHAT, h - MIN_CANVAS - HANDLE_H)
+      setChatHeight((c) => Math.max(MIN_CHAT, Math.min(maxChat, c)))
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // Fixed canvas content height = the largest the viewport can ever be (chat at
+  // its minimum). Dragging the bar only clips this window; it does NOT rescale
+  // the canvas. Falls back to filling the viewport until first measured.
+  const canvasContentHeight: number | string =
+    areaH != null ? Math.max(MIN_CANVAS, areaH - MIN_CHAT - HANDLE_H) : '100%'
+  const clampChat = (v: number) =>
+    Math.max(MIN_CHAT, Math.min(areaH != null ? areaH - MIN_CANVAS - HANDLE_H : 9999, v))
 
   if (!client) return null
 
@@ -114,28 +151,38 @@ export function DomainView({ room, onExit }: { room: Room; onExit: () => void })
         />
       )}
 
-      <DomainCanvas
-        client={client}
-        room={room}
-        settings={settings}
-        bgEditing={bgEditing}
-        onExitBgEdit={() => setBgEditing(false)}
-        ttd={ttd}
-        onTtdChange={setTtd}
-      />
+      <div ref={areaRef} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        {/* Canvas VIEWPORT: a clipping window into the domain. The resize bar
+            changes THIS height (how much you see); the canvas content below
+            keeps a fixed size, so the domain's shape never changes on drag. */}
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
+          <div style={{ height: canvasContentHeight, display: 'flex', flexDirection: 'column' }}>
+            <DomainCanvas
+              client={client}
+              room={room}
+              settings={settings}
+              bgEditing={bgEditing}
+              onExitBgEdit={() => setBgEditing(false)}
+              ttd={ttd}
+              onTtdChange={setTtd}
+            />
+          </div>
+        </div>
 
-      {/* The normal chat log, unchanged, as a sizeable panel above the composer. */}
-      <div
-        style={{
-          height: 260,
-          flexShrink: 0,
-          minHeight: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          borderTop: '1px solid rgba(128,128,128,0.25)',
-        }}
-      >
-        <Timeline room={room} />
+        <HResizeHandle onDrag={(dy) => setChatHeight((h) => clampChat(h - dy))} />
+
+        {/* The normal chat log as a sizeable panel above the composer. */}
+        <div
+          style={{
+            height: chatHeight,
+            flexShrink: 0,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <Timeline room={room} />
+        </div>
       </div>
       <Composer room={room} domainTtd={ttd} />
 
@@ -155,6 +202,48 @@ export function DomainView({ room, onExit }: { room: Room; onExit: () => void })
           onClose={() => setBackdropMenu(null)}
         />
       )}
+    </div>
+  )
+}
+
+// Horizontal (row-resize) drag bar between the canvas viewport and the chat
+// panel. Pointer-capture drag; reports the vertical delta each move. Dragging
+// down grows the canvas view and shrinks the chat, and vice-versa.
+function HResizeHandle({ onDrag }: { onDrag: (dy: number) => void }) {
+  const startY = useRef(0)
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    startY.current = e.clientY
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
+    const dy = e.clientY - startY.current
+    startY.current = e.clientY
+    if (dy !== 0) onDrag(dy)
+  }
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
+  }
+  return (
+    <div
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      title="Drag to resize the canvas viewport"
+      style={{
+        height: HANDLE_H,
+        flexShrink: 0,
+        cursor: 'row-resize',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderTop: '1px solid rgba(128,128,128,0.25)',
+        background: 'var(--cpd-color-bg-subtle-secondary)',
+        touchAction: 'none',
+      }}
+    >
+      <div style={{ width: 40, height: 2, borderRadius: 2, background: 'rgba(128,128,128,0.55)' }} />
     </div>
   )
 }

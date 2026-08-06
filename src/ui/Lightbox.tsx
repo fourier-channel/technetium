@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { useClient } from '../client/ClientContext'
 import { fetchMediaSrc, parseMxc } from '../client/media'
+import { MediaTags } from './MediaTags'
 
 // Full-screen image viewer, mounted once at App root as a provider so any
 // descendant (timeline, thread panel) opens it via useLightbox() with no
@@ -226,8 +227,10 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
               maxWidth: '92vw',
               maxHeight: '92vh',
               display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
+              gap: 8,
             }}
           >
             {error ? (
@@ -240,7 +243,7 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
                 alt={current.name ?? 'image'}
                 style={{
                   maxWidth: '92vw',
-                  maxHeight: '92vh',
+                  maxHeight: '82vh',
                   objectFit: 'contain',
                   display: 'block',
                   borderRadius: 4,
@@ -249,6 +252,11 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
             ) : (
               <span style={{ color: 'var(--cpd-color-text-secondary)' }}>Loading...</span>
             )}
+            {/* Full strip here: the lightbox is where a user actually reads the
+                tag set, so no cap and no chip. */}
+            <div style={{ maxWidth: '92vw', display: 'flex', justifyContent: 'center' }}>
+              <MediaTags mxc={current.mxc} max={40} />
+            </div>
           </div>
 
           {hasNav && (

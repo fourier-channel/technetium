@@ -9,6 +9,7 @@ import {
 import type { Room } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
 import { formatMessage } from '../client/messageFormat'
+import { EmojiPicker } from './EmojiPicker'
 
 type GalleryLayout = 'grid' | 'stack' | 'strip'
 
@@ -66,8 +67,33 @@ export function Composer({
   const [layout, setLayout] = useState<GalleryLayout>('grid')
   const [sending, setSending] = useState(false)
   const [dragging, setDragging] = useState(false)
+  const [emojiOpen, setEmojiOpen] = useState(false)
   const taRef = useRef<HTMLTextAreaElement | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
+  // Where to restore the caret after an emoji insert (applied post-render).
+  const caretRef = useRef<number | null>(null)
+
+  // Insert an emoji at the textarea caret (or append if unfocused), keeping the
+  // picker open so several can be added; caret is restored after the re-render.
+  const insertEmoji = (emoji: string) => {
+    const ta = taRef.current
+    const start = ta ? ta.selectionStart : text.length
+    const end = ta ? ta.selectionEnd : text.length
+    setText((prev) => prev.slice(0, start) + emoji + prev.slice(end))
+    caretRef.current = start + emoji.length
+  }
+
+  // Restore focus + caret after an emoji insert changes the text.
+  useEffect(() => {
+    if (caretRef.current === null) return
+    const ta = taRef.current
+    const pos = caretRef.current
+    caretRef.current = null
+    if (ta) {
+      ta.focus()
+      ta.setSelectionRange(pos, pos)
+    }
+  }, [text])
 
   // Mirror attachments into a ref so the unmount cleanup revokes whatever is
   // still pending without re-subscribing on every change.
@@ -331,6 +357,32 @@ export function Composer({
           onChange={onFilePicked}
           style={{ display: 'none' }}
         />
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          {emojiOpen && (
+            <EmojiPicker onPick={insertEmoji} onClose={() => setEmojiOpen(false)} />
+          )}
+          <button
+            type="button"
+            onClick={() => setEmojiOpen((o) => !o)}
+            disabled={sending}
+            title="Emoji"
+            aria-label="Insert emoji"
+            style={{
+              padding: '8px 12px',
+              borderRadius: 8,
+              border: '1px solid var(--cpd-color-border-interactive-secondary, #444)',
+              cursor: sending ? 'default' : 'pointer',
+              background: emojiOpen
+                ? 'var(--cpd-color-bg-action-primary-rest)'
+                : 'var(--cpd-color-bg-subtle-secondary)',
+              color: 'var(--cpd-color-text-primary)',
+              fontSize: 16,
+              opacity: sending ? 0.5 : 1,
+            }}
+          >
+            😀
+          </button>
+        </div>
         <button
           type="button"
           onClick={() => fileRef.current?.click()}

@@ -1760,3 +1760,269 @@ person. Fixed + polished; deployed.
 - **G-ms02 (gotcha).** A lone 401 on the sliding-sync long-poll is a MAS access
   token expiring mid-poll; the SDK refreshes + reconnects (benign when a 200
   follows). Only a real fault if sync WEDGES with no follow-up 200.
+
+---
+
+## 2026-07-20 -- Chatbox overhaul + domain interactables (branch chatbox-domain-v1, auto run)
+
+A multi-goal UX pass run UNATTENDED (operator away): bring the chatbox up to
+speed (rich text, emoji, avatar+name pillbox, Discord feel), give the chat
+window a configurable background + fix the domain background "expiry", add a
+domain viewport resize bar, make canvas images detachable + interactible, and
+scaffold avatar action animations (square POC + throw arc). One dev branch,
+one commit per feature (CD-1 discipline -- shared surfaces), each self-verified
+(tsc `-p tsconfig.app.json` + full-tree eslint held at the 23 baseline + build)
+before commit. Visual/interactive checks are logged PENDING below (never
+claimed passing without eyes). NO new dependencies (emoji picker hand-rolled to
+honor the DEPENDENCIES discipline; emoji-mart-class packages are heavy).
+
+New files: `src/ui/linkify.tsx`, `src/ui/EmojiPicker.tsx`,
+`src/ui/chatBackground.ts`, `src/ui/ChatBackground.tsx`,
+`src/client/useAutoRefreshMedia.ts`, `src/client/useDomainObjects.ts`,
+`src/client/useDomainActions.ts`. Edited: `Timeline.tsx`, `Composer.tsx`,
+`index.css`, `AuthLanding.tsx`, `DomainView.tsx`, `DomainCanvas.tsx`,
+`DomainUserMenu.tsx`.
+
+### Per-feature summary
+- **Login notice.** Operator copy added to the landing home view: Technetium
+  is an alpha custom client; report anything that feels wrong/off (UI
+  satisfaction is the #1 goal).
+- **Rich text (chatbox).** `linkify.tsx` turns bare URLs in PLAINTEXT bodies
+  into safe links (http/https only, `target=_blank rel=noopener`); wired into
+  the shared `Row` + gallery caption so timeline AND thread panel get it.
+  Plaintext now renders `white-space: pre-wrap`. `.tc-message-html` / `.tc-link`
+  finally have styling (links, inline code, code blocks, blockquote, lists,
+  headings, tables) -- the class was applied since the first HTML render but
+  never themed. Markdown SEND already existed (marked -> sanitized HTML).
+- **Sender pillbox.** Message rows lead with a long rounded pill carrying the
+  sender's AVATAR + display name together (operator spec), time trailing
+  outside. Resolves the display name + mxc avatar off the room member (was the
+  raw userId); avatar via the homeserver auth-media path with a colored-initial
+  fallback.
+- **Emoji picker.** Hand-rolled, dependency-free, native-glyph picker
+  (categorized curated set + keyword search + category tabs). New composer
+  button; inserts at the textarea caret (restored post-render), stays open for
+  multiple picks.
+- **Configurable chat background.** Per-room, per-user LOCAL wallpaper
+  (`chatBackground.ts` store + `ChatBackground.tsx`): upload an image -> mxc, or
+  paste a URL, with a readability dim slider + Clear, set from a new Timeline
+  header button. Rendered behind the message list (shared Timeline => also under
+  the domain chat panel).
+- **Background "expiry" fix.** Root cause of the domain background vanishing:
+  the old layer fetched once and, on ANY failure, set the source to null -- so a
+  single transient fetch error (token refresh mid-session / heavy sync) blanked
+  it for the rest of the session. `useAutoRefreshMedia` KEEPS the last good
+  image on failure, retries with backoff, and re-fetches on interval / tab-focus
+  / online (homeserver blobs don't themselves expire; this is the defensive
+  self-heal the operator asked for). Consumed by the domain background layer +
+  chat backdrop.
+- **Domain resize bar.** A row-resize bar splits the domain area into a canvas
+  VIEWPORT (a clipping window) and the chat panel. Per spec the drag changes the
+  viewport, NOT the canvas: the canvas content is held at a fixed height (= the
+  viewport's max, chat at minimum, measured via ResizeObserver), so pucks and
+  objects never shift under a drag -- the bar only reveals more/less of the same
+  canvas.
+- **Detachable canvas objects.** Right-click a canvas media card -> "Detach to
+  canvas" (poster or admin) creates a persistent, draggable image.
+  `useDomainObjects` transports them as PL0 timeline events
+  (create/move/perm/remove ops, x/y as permyriad ints). Move permission is
+  enforced ON RECEIPT (owner / admin / everyone / whitelist), perm+remove only
+  from owner/admin -- no PL0 forgery. Owner/admin menu sets who-can-move (Anyone
+  / Only me / Mods & me / Whitelist [edit TBD scaffold]) + Remove. Hand-rolled
+  drag (capture past 5px so a plain click still opens the lightbox).
+- **Avatar action animations (scaffolding + POC).** `useDomainActions` -- PL0
+  `net.41chan.domain.action` events, age-gated so only LIVE triggers animate;
+  each self-expires. Registry is intentionally minimal (catalog TBD per
+  operator): self 'square' (pops next to you, shrinks after ~2s) and targeted
+  'throw' (item arcs sender->target on a quadratic bezier, spinning) -- the seed
+  of "target another user with an image". Triggers: self actions from the
+  own-puck Actions row; throw from the right-click-user menu.
+
+### Claudecisions (continue the project sequence; last was CD-18)
+- **CD-19 -- one dev branch, staged commits (again).** Same rationale as CD-1:
+  chatbox + domain features share Timeline/Composer/DomainCanvas, so parallel
+  branches would collide for no isolation benefit.
+- **CD-20 -- emoji picker is hand-rolled, NO new dep.** A native-glyph curated
+  picker satisfies the need without an emoji data package; keeps the bundle lean
+  and avoids a DEPENDENCIES.md rationale entry. Escalate to a package only if a
+  full searchable catalog with skin tones becomes a requirement.
+- **CD-21 -- chat background is LOCAL per-user (v1).** Mirrors the domain
+  avatar/backdrop local-override precedent: a wallpaper restyles THIS user's
+  view without touching room state. Portable (room account data) or shared
+  (room state, like the domain background) is a deliberate v2; the localStorage
+  key is namespaced to make that a move.
+- **CD-22 -- background self-heal over root-cause certainty.** The exact vanish
+  vector needs a live repro, but the blank-on-transient-failure path is a real
+  bug regardless; keep-last-good + retry + refetch-on-focus fixes every vector
+  (token churn, heavy sync, brief remount) at once. Honest: not a confirmed
+  single root cause, a robust defense.
+- **CD-23 -- resize bar holds the canvas at a FIXED size, clips the viewport.**
+  The literal reading of "resize changes the viewport, not the canvas": the
+  canvas content height = the largest viewport (chat at min), so shrinking chat
+  never letterboxes and growing chat only clips. TRADE-OFF flagged for operator:
+  at the default chat height the canvas bottom is clipped, so a puck placed near
+  y=1.0 is off-screen until the chat is shrunk (previously the canvas filled the
+  viewport and all pucks showed). Alternatives (fit-to-default + letterbox on
+  minimize; or a smaller default chat) are one-line changes if preferred.
+- **CD-24 -- detached-object default perm is 'everyone'.** Matches the fun-
+  hangout intent (images immediately interactible); owner/admin can restrict.
+  Permission is verified on RECEIPT (D-dm08 lineage), never trusted from a PL0
+  sender.
+- **CD-25 -- action catalog left EMPTY beyond POC.** Operator said do not invent
+  the list; only the transport, freshness gating, lifecycle, and two proof
+  entries (square/throw) are built. Adding an action = extend ACTION_REGISTRY +
+  the render switch.
+
+### DRAFT fourier-phase nodes (for later canonical minting)
+- **D-cb01 (decision).** Chatbox rich text is symmetric + sanitized on BOTH
+  legs: markdown->HTML on send (marked+DOMPurify), sanitized HTML on receive,
+  and plaintext bare-URL linkify at render (http/https only). No raw user text
+  ever reaches innerHTML unsanitized.
+- **D-dm09 (decision).** Detached canvas objects ride the SAME PL0 timeline
+  transport as positions/actions (create/move/perm/remove ops, last-write-wins),
+  with move/perm/remove authority verified on RECEIPT against the object's owner
+  + room PL -- never send-side. Extends D-sp01/D-dm07/D-dm08 to interactive
+  shared objects.
+- **D-dm10 (decision).** Avatar actions are ephemeral timeline events gated by
+  event AGE (only fresh = live triggers animate), so room entry never replays a
+  burst of stale actions -- the freshness analogue of the bubble mount grace
+  (G-sr02).
+- **D-dm11 (decision).** The domain resize bar resizes a VIEWPORT over a
+  fixed-size canvas, not the canvas -- one canvas, a movable window. Ties to the
+  roompos SSOT principle (D-dm01): normalized positions project onto a stable
+  canvas rect regardless of how much is currently visible.
+- **G-cb01 (gotcha).** `useAutoRefreshMedia` must not `setSrc(null)`
+  synchronously in the effect body when it has no mxc (react-hooks/
+  set-state-in-effect) -- clear via `queueMicrotask` with an `alive` guard, the
+  same pattern AuthedImage uses.
+- **G-cb02 (gotcha, standing).** A long-lived backdrop that sets its source to
+  null on a transient fetch error blanks for the whole session. Keep the last
+  good source and retry; never latch a working backdrop to empty on one failure.
+  (The self-healing-media principle, D-sr01, applied to backdrops.)
+
+### PENDING OPERATOR VERIFICATION (visual/interactive; 2nd + admin identities where noted)
+- Chatbox: bold/italic/code/links render; a bare URL in a plain message is
+  clickable; multi-line plaintext keeps its line breaks; code blocks + lists +
+  blockquotes read cleanly in light AND dark.
+- Sender pillbox: each row shows an avatar+name pill (avatar loads, else a
+  colored initial), time trailing; applies in the thread panel too.
+- Emoji: the composer emoji button opens the picker; search filters; a pick
+  inserts at the caret and the picker stays open; Escape/outside-click closes.
+- Chat background: set via the header button (upload OR URL), dim slider adjusts
+  readability, Remove clears; the wallpaper sits behind messages and text stays
+  legible. Reload -> it persists (local).
+- Background self-heal (NEEDS time / a token refresh): the domain background no
+  longer vanishes after a while; if it ever fails it returns on tab-focus.
+- Domain resize bar: drag the bar -> the chat panel grows/shrinks and the canvas
+  viewport changes, but pucks/objects do NOT move or rescale. (Review CD-23: is
+  the default-clip acceptable, or prefer a different default?)
+- Detach (NEEDS 2nd + admin): right-click a canvas media card -> Detach; the
+  image stays as a draggable object; drag moves it (others see it move); the
+  permission menu (Anyone/Only me/Mods & me) gates who can drag; a non-permitted
+  user cannot move it; Remove clears it for everyone. Whitelist is a scaffold
+  (sets the mode; no editor yet).
+- Actions (NEEDS 2nd): own-puck menu -> Actions -> Square: a square pops next to
+  you and shrinks after ~2s (and shows on the 2nd client). Right-click another
+  user -> Throw: a star arcs across to them. Reduced motion: pop->fade,
+  throw->appears at target.
+
+### Deferred / flagged
+- Whitelist editor for detached objects (mode is wired; per-user allow-list UI
+  TBD). Object scale/rotate; object persistence beyond timeline horizon.
+- The real avatar-action catalog (CD-25) + a proper action trigger UI (a
+  palette/wheel) beyond the two POC entry points.
+- Portable/shared chat background (account data or room state) -- v2.
+- Sender grouping (consecutive same-sender messages) not done; every row shows
+  its own pillbox.
+- Not merged/deployed: all on `chatbox-domain-v1`, pending operator smoke-test.
+
+---
+
+## 2026-08-06 -- Media tags: bridge tag display on every image surface
+
+The bridge began publishing per-image tag data, and the client had no idea. This
+session built the display end to end: a live tag store, one strip component, and
+attachment at every surface where an image is visible. Also written this session:
+a browser-side test checklist for the (still unverified) chatbox-domain-v1
+features, since that branch had never been through human eyes.
+
+New files: `src/client/mediaTags.ts` (wire parsing), `src/client/useMediaTags.ts`
+(live store + ingest), `src/ui/MediaTags.tsx` (the strip/chip), and
+`src/ui/mediaTagSettings.ts` (visibility prefs). Edited: `App.tsx`,
+`useTimeline.ts`, `Timeline.tsx`, `ThreadList.tsx`, `DomainCanvas.tsx`,
+`Lightbox.tsx`.
+
+### What the bridge actually sends
+`net.41chan.media.tags` as ROOM STATE, one event per image, `state_key` = the
+FULL mxc uri (`mxc://41chan.net/auARX...`). Content is flat: `{ post_id, tags:
+[strings], rating, updated_by, updated_at }` -- no categories, no source URL.
+
+### Attachment points (six)
+Inline `m.image` in the shared `Row` covers main chat, thread view, DMs, AND the
+domain chat panel in one wiring (ThreadPanel reuses `Row`). Plus gallery cells,
+the thread-card preview, the domain media card, the detached canvas object, and
+the lightbox. Avatars and room icons are deliberately EXCLUDED -- `AuthedImage`
+is shared with chrome, so the strip attaches at CONTENT sites, never in the
+primitive.
+
+### Claudecisions (last was CD-25)
+- **CD-26 -- the store is keyed by MEDIA ID, globally, not by (room, event).**
+  Tags describe the media, so the same image posted in three rooms resolves from
+  one entry, and no surface needs to know which room an image came from. The
+  bridge's full-mxc state key is normalized down to the bare media id on read.
+- **CD-27 -- three ingest paths, because none is complete alone.** currentState
+  (canonical), the live timeline (the only path that fires today), and an
+  on-demand `getStateEvent` fetch (the one that scales). See G-mt01.
+- **CD-28 -- realtime via sync, with a 250ms coalescing flush.** No polling: room
+  state already arrives over sync. The gate exists so a bridge backfilling a room
+  costs one render pass, not one per image (D1 lineage). Per-image subscriptions
+  (useSyncExternalStore) keep a tag arrival scoped to that image's strip.
+- **CD-29 -- density-aware display, one component.** Full strip on inline chat
+  and the lightbox; a count chip that expands on click for surfaces too small to
+  carry a strip (gallery cells, the 180x90 thread preview, canvas cards). A strip
+  on the thread preview would swamp the card and fight the drag-reorder work.
+- **CD-30 -- tags render as buttons with an onTagClick seam, wired but inert in
+  v1.** Operator: get them working before getting fancy. The filter/search layer
+  lands later without restyling anything.
+
+### DRAFT fourier-phase nodes
+- **D-mt01 (decision).** Image tags live in ROOM STATE keyed by media id, not in
+  the timeline. State gives random access at any age; timeline events resolve
+  only if the client has paginated to them, which would silently show tags on
+  recent images and never on old ones. Cost accepted: one state event per image,
+  which is membership-shaped (Matrix survives 50k-member rooms). Bucketed
+  sharding stays available as a later migration behind the same lookup API.
+- **G-mt01 (gotcha, standing).** Under sliding sync, `required_state` is lean --
+  custom state types are NEVER delivered in the state block, so `currentState` is
+  empty for them even though the events exist server-side. They surface only by
+  riding down the TIMELINE when written live. Any custom-state feature needs an
+  on-demand `getStateEvent` fetch to be correct for history; do not assume
+  `getStateEvents` sees what the server has.
+- **G-mt02 (gotcha).** State events also travel the timeline, so a custom state
+  type renders as `[type]` junk rows between messages unless explicitly filtered
+  in `toItems` (the spatial-event precedent).
+- **G-mt03 (gotcha).** A card with `overflow: hidden` clips any child that floats
+  outside it. The detached-object card's clipping moved to an inner layer so the
+  expanded tag list is not cut off; pointer handlers stayed on the root.
+
+### PENDING OPERATOR VERIFICATION
+- Tags appear under inline chat images, in the thread panel, in DMs, and under
+  the domain chat panel; rating badge and #post-id chip read correctly.
+- Count chips on gallery cells / thread previews / canvas cards expand on click
+  and are not clipped by the card edge.
+- The header tag button hides/shows tags everywhere; a per-image pin survives
+  reload; the `x` on a strip hides only that image.
+- Scroll back to an OLD image whose tag event is outside the loaded timeline ->
+  tags still resolve (the on-demand fetch path, G-mt01).
+- No `[net.41chan.media.tags]` junk rows remain in any timeline.
+- Drag a detached canvas object -- unchanged by the G-mt03 restructure.
+
+### Deferred / flagged
+- Tag categories: the bridge sends flat strings, so every tag renders 'general'.
+  Category coloring (artist/character/copyright/meta) is BUILT and dormant --
+  it lights up if the bridge emits `{name, category}` or a category map.
+- `post_id` renders as an inert `#N` chip; it becomes a link as soon as a source
+  base URL is configured. Not guessed.
+- Tag click behavior (filter state layer, per-room tag search) -- v2, per CD-30.
+- chatbox-domain-v1 merged to main WITHOUT the human smoke test (operator's
+  call); the test checklist stands as a post-merge exercise.

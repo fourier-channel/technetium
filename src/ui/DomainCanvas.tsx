@@ -4,10 +4,13 @@ import { useDomainPositions, type DomainPos } from '../client/useDomainPositions
 import { useDomainBubbles, type Bubble } from '../client/useDomainBubbles'
 import { useDomainBackground } from '../client/useDomainBackground'
 import { useDomainMedia, type DomainMediaObject } from '../client/useDomainMedia'
+import { useDomainObjects, type DomainObject, type MovePerm } from '../client/useDomainObjects'
+import { useDomainActions, ACTION_REGISTRY, type ActiveAction } from '../client/useDomainActions'
 import { useDomainModeration } from '../client/useDomainModeration'
-import { fetchHomeserverMedia } from '../client/media'
+import { useAutoRefreshMedia } from '../client/useAutoRefreshMedia'
 import type { DomainSettingsApi } from './domainSettings'
 import { AuthedImage } from './AuthedImage'
+import { MediaTags } from './MediaTags'
 import { DomainBackgroundEditor } from './DomainBackgroundEditor'
 import { DomainTtdControl } from './DomainTtdControl'
 import { DomainUserMenu, DomainProfileCard } from './DomainUserMenu'
@@ -70,6 +73,8 @@ export function DomainCanvas({
   const bubbles = useDomainBubbles(client, room)
   const { background } = useDomainBackground(client, room)
   const media = useDomainMedia(client, room)
+  const objects = useDomainObjects(client, room)
+  const actions = useDomainActions(client, room)
   const { collapsed, forceCollapse } = useDomainModeration(client, room)
   const { open: openLightbox } = useLightbox()
   const isAdmin = isDomainAdmin(client, room)
@@ -77,6 +82,9 @@ export function DomainCanvas({
   const [avatarMenu, setAvatarMenu] = useState<{ x: number; y: number } | null>(null)
   const [userMenu, setUserMenu] = useState<{ x: number; y: number; userId: string } | null>(null)
   const [profile, setProfile] = useState<{ x: number; y: number; userId: string } | null>(null)
+  // Right-click menus for canvas media (detach) and detached objects (perm/remove).
+  const [mediaMenu, setMediaMenu] = useState<{ x: number; y: number; obj: DomainMediaObject; px: number; py: number } | null>(null)
+  const [objectMenu, setObjectMenu] = useState<{ x: number; y: number; obj: DomainObject } | null>(null)
   // A puck is hidden when an admin force-collapse is at least as new as the
   // user's latest position (they reappear by re-placing -> newer position ts).
   const isHidden = (userId: string, ts: number) => {
@@ -144,6 +152,18 @@ export function DomainCanvas({
         @keyframes domainCardIn {
           from { opacity: 0; transform: scale(0.4); }
           to   { opacity: 1; transform: scale(1); }
+        }
+        @keyframes domainActionPop {
+          0%   { transform: scale(0);   opacity: 0; }
+          14%  { transform: scale(1);   opacity: 1; }
+          68%  { transform: scale(1);   opacity: 1; }
+          100% { transform: scale(0);   opacity: 0; }
+        }
+        @keyframes domainActionFade {
+          0%   { opacity: 0; }
+          15%  { opacity: 1; }
+          70%  { opacity: 1; }
+          100% { opacity: 0; }
         }
       `}</style>
       {/* Shared domain background (room state) + its transform, beneath the
@@ -230,11 +250,49 @@ export function DomainCanvas({
               x={pos.x}
               y={pos.y}
               index={i}
+              roomId={room.roomId}
               onOpen={() => openLightbox([{ mxc: obj.mxc, name: obj.name, mimetype: obj.mimetype }], 0)}
+              onContext={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setMediaMenu({ x: e.clientX, y: e.clientY, obj, px: pos.x, py: pos.y })
+              }}
             />
           )
         })
       })()}
+
+      {/* Detached canvas objects: images left on the canvas, draggable by whoever
+          is permitted. Rendered above the grid; right-click for perm/remove. */}
+      {objects.objects.map((obj) => (
+        <DomainObjectCard
+          key={obj.id}
+          obj={obj}
+          containerRef={ref}
+          canMove={objects.canMove(obj)}
+          roomId={room.roomId}
+          onMove={(x, y) => objects.move(obj.id, x, y)}
+          onOpen={() => openLightbox([{ mxc: obj.mxc, name: obj.name, mimetype: obj.mimetype }], 0)}
+          onContext={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            setObjectMenu({ x: e.clientX, y: e.clientY, obj })
+          }}
+        />
+      ))}
+
+      {/* Ephemeral avatar actions: self effects anchored to a puck; thrown items
+          arc from sender to target. Scaffolding + POC (square / throw). */}
+      {actions.actions.map((a) => {
+        const from = positions.get(a.sender)
+        if (!from) return null
+        if (a.def.kind === 'throw') {
+          const to = a.target ? positions.get(a.target) : undefined
+          if (!to) return null
+          return <ThrownProjectile key={a.key} action={a} from={{ x: from.x, y: from.y }} to={{ x: to.x, y: to.y }} />
+        }
+        return <SelfActionEffect key={a.key} action={a} pos={{ x: from.x, y: from.y }} />
+      })}
 
       {/* TTD control (top-left), hidden during background editing. */}
       {!bgEditing && (
@@ -246,6 +304,76 @@ export function DomainCanvas({
       {bgEditing && (
         <DomainBackgroundEditor client={client} room={room} onExit={() => onExitBgEdit?.()} />
       )}
+      {mediaMenu && (
+        <CanvasMenu
+          x={mediaMenu.x}
+          y={mediaMenu.y}
+          onClose={() => setMediaMenu(null)}
+          items={[
+            {
+              label: 'Open image',
+              onClick: () => {
+                openLightbox([{ mxc: mediaMenu.obj.mxc, name: mediaMenu.obj.name, mimetype: mediaMenu.obj.mimetype }], 0)
+                setMediaMenu(null)
+              },
+            },
+            ...(mediaMenu.obj.sender === myUserId || isAdmin
+              ? [
+                  {
+                    label: 'Detach to canvas',
+                    onClick: () => {
+                      objects.create({
+                        mxc: mediaMenu.obj.mxc,
+                        x: Math.min(1, mediaMenu.px + 0.05),
+                        y: mediaMenu.py,
+                        name: mediaMenu.obj.name,
+                        mimetype: mediaMenu.obj.mimetype,
+                      })
+                      setMediaMenu(null)
+                    },
+                  },
+                ]
+              : []),
+          ]}
+        />
+      )}
+      {objectMenu &&
+        (() => {
+          const o = objectMenu.obj
+          const admin = objects.isOwnerOrAdmin(o)
+          const items: CanvasMenuItem[] = [
+            {
+              label: 'Open image',
+              onClick: () => {
+                openLightbox([{ mxc: o.mxc, name: o.name, mimetype: o.mimetype }], 0)
+                setObjectMenu(null)
+              },
+            },
+          ]
+          if (admin) {
+            const permItem = (perm: MovePerm, label: string): CanvasMenuItem => ({
+              label: (o.perm === perm ? '• ' : '  ') + label,
+              onClick: () => {
+                objects.setPerm(o.id, perm, perm === 'whitelist' ? o.allow : undefined)
+                setObjectMenu(null)
+              },
+            })
+            items.push({ label: 'Who can move:', header: true, onClick: () => {} })
+            items.push(permItem('everyone', 'Anyone'))
+            items.push(permItem('owner', 'Only me'))
+            items.push(permItem('mods', 'Mods & me'))
+            items.push(permItem('whitelist', 'Whitelist (edit TBD)'))
+            items.push({
+              label: 'Remove from canvas',
+              danger: true,
+              onClick: () => {
+                objects.remove(o.id)
+                setObjectMenu(null)
+              },
+            })
+          }
+          return <CanvasMenu x={objectMenu.x} y={objectMenu.y} onClose={() => setObjectMenu(null)} items={items} />
+        })()}
       {userMenu && (
         <DomainUserMenu
           x={userMenu.x}
@@ -259,6 +387,10 @@ export function DomainCanvas({
           }}
           onForceCollapse={() => {
             forceCollapse(userMenu.userId)
+            setUserMenu(null)
+          }}
+          onThrow={() => {
+            actions.trigger('throw', userMenu.userId)
             setUserMenu(null)
           }}
           onClose={() => setUserMenu(null)}
@@ -286,6 +418,10 @@ export function DomainCanvas({
             settings.clearAvatar(myUserId)
             setAvatarMenu(null)
           }}
+          onAction={(action) => {
+            actions.trigger(action)
+            setAvatarMenu(null)
+          }}
           onClose={() => setAvatarMenu(null)}
         />
       )}
@@ -301,6 +437,7 @@ function AvatarMenu({
   onPick,
   onClear,
   onClose,
+  onAction,
 }: {
   x: number
   y: number
@@ -308,7 +445,9 @@ function AvatarMenu({
   onPick: (emoji: string) => void
   onClear: () => void
   onClose: () => void
+  onAction: (action: string) => void
 }) {
+  const selfActions = Object.entries(ACTION_REGISTRY).filter(([, d]) => d.kind === 'self')
   const [draft, setDraft] = useState('')
   const ref = useRef<HTMLDivElement>(null)
   const left = Math.max(6, Math.min(x, window.innerWidth - 220))
@@ -412,6 +551,34 @@ function AvatarMenu({
           </button>
         )}
       </div>
+
+      {selfActions.length > 0 && (
+        <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid rgba(128,128,128,0.2)' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--cpd-color-text-secondary)', marginBottom: 4 }}>
+            Actions
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {selfActions.map(([key, def]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => onAction(key)}
+                style={{
+                  fontSize: 12,
+                  padding: '3px 8px',
+                  borderRadius: 6,
+                  border: '1px solid rgba(128,128,128,0.35)',
+                  background: 'var(--cpd-color-bg-subtle-secondary)',
+                  color: 'var(--cpd-color-text-primary)',
+                  cursor: 'pointer',
+                }}
+              >
+                {def.glyph} {def.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -551,26 +718,10 @@ function DomainBackgroundLayer({
   mxc: string
   transform: Transform
 }) {
-  const [src, setSrc] = useState<string | null>(null)
-
-  useEffect(() => {
-    let revoke: (() => void) | null = null
-    let alive = true
-    fetchHomeserverMedia(client, mxc)
-      .then((r) => {
-        if (!alive) {
-          r.revoke()
-          return
-        }
-        revoke = r.revoke
-        setSrc(r.src)
-      })
-      .catch(() => setSrc(null))
-    return () => {
-      alive = false
-      if (revoke) revoke()
-    }
-  }, [client, mxc])
+  // Auto-refreshing source: keeps the last good image on transient failures and
+  // re-fetches on interval / focus / online, so the background self-heals rather
+  // than vanishing for the session on one bad fetch (see useAutoRefreshMedia).
+  const src = useAutoRefreshMedia(client, mxc)
 
   if (!src) return null
   return (
@@ -591,13 +742,17 @@ function DomainMediaCard({
   x,
   y,
   index,
+  roomId,
   onOpen,
+  onContext,
 }: {
   obj: DomainMediaObject
   x: number
   y: number
   index: number
+  roomId: string
   onOpen: () => void
+  onContext: (e: React.MouseEvent) => void
 }) {
   const off = 26 + index * 16
   const rm = reduceMotion()
@@ -617,6 +772,7 @@ function DomainMediaCard({
           e.stopPropagation()
           onOpen()
         }}
+        onContextMenu={onContext}
         title={obj.name}
         style={{
           width: CARD_SIZE,
@@ -634,6 +790,309 @@ function DomainMediaCard({
       >
         <AuthedImage mxc={obj.mxc} width={180} fill alt={obj.name ?? ''} />
       </div>
+      {/* Outside the clipping card: the expanded tag list floats above it and
+          would be cut off by the card's own overflow: hidden. */}
+      <MediaTags mxc={obj.mxc} roomId={roomId} variant="chip" max={8} />
+    </div>
+  )
+}
+
+// A detached canvas object: a persistent image left on the canvas. Draggable by
+// permitted users (hand-rolled pointer drag; capture only past the 5px threshold
+// so a plain click still opens the lightbox, G-bf01). Right-click -> perm/remove
+// menu (owner/admin). Others' moves arrive via timeline and travel smoothly.
+function DomainObjectCard({
+  obj,
+  containerRef,
+  canMove,
+  roomId,
+  onMove,
+  onOpen,
+  onContext,
+}: {
+  obj: DomainObject
+  containerRef: React.RefObject<HTMLDivElement | null>
+  canMove: boolean
+  roomId: string
+  onMove: (x: number, y: number) => void
+  onOpen: () => void
+  onContext: (e: React.MouseEvent) => void
+}) {
+  const rm = reduceMotion()
+  const dragRef = useRef<{ startX: number; startY: number; moved: boolean; pointerId: number } | null>(null)
+  const movedRef = useRef(false)
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0 || !canMove) return
+    e.stopPropagation()
+    dragRef.current = { startX: e.clientX, startY: e.clientY, moved: false, pointerId: e.pointerId }
+  }
+  const onPointerMove = (e: React.PointerEvent) => {
+    const d = dragRef.current
+    if (!d) return
+    if (!d.moved) {
+      if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 5) return
+      d.moved = true
+      // Capture only once a real drag engages (capture-on-down suppresses click).
+      try {
+        e.currentTarget.setPointerCapture(d.pointerId)
+      } catch {
+        // ignore: capture can fail if the pointer already released
+      }
+    }
+    const el = containerRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    onMove(
+      Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)),
+      Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)),
+    )
+  }
+  const onPointerUp = (e: React.PointerEvent) => {
+    const d = dragRef.current
+    if (d) {
+      movedRef.current = d.moved
+      if (e.currentTarget.hasPointerCapture(d.pointerId)) e.currentTarget.releasePointerCapture(d.pointerId)
+    }
+    dragRef.current = null
+  }
+  const onClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (movedRef.current) {
+      movedRef.current = false
+      return // was a drag, not a click
+    }
+    onOpen()
+  }
+
+  return (
+    <div
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onClick={onClick}
+      onContextMenu={onContext}
+      title={canMove ? 'Drag to move · right-click for options' : obj.name ?? ''}
+      style={{
+        position: 'absolute',
+        left: `${obj.x * 100}%`,
+        top: `${obj.y * 100}%`,
+        transform: 'translate(-50%, -50%)',
+        transition: rm ? undefined : 'left 140ms ease-out, top 140ms ease-out',
+        width: CARD_SIZE,
+        height: CARD_SIZE,
+        zIndex: 4,
+        cursor: canMove ? 'grab' : 'pointer',
+        pointerEvents: 'auto',
+        touchAction: 'none',
+      }}
+    >
+      {/* Clipping lives on an inner layer so the tag strip, which floats above
+          the card, is not cut off by the rounded overflow. */}
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          borderRadius: 10,
+          overflow: 'hidden',
+          border: '2px solid var(--cpd-color-bg-canvas-default)',
+          boxShadow: '0 6px 16px rgba(0,0,0,0.5)',
+          background: 'var(--cpd-color-bg-subtle-secondary)',
+          boxSizing: 'border-box',
+        }}
+      >
+        <AuthedImage mxc={obj.mxc} width={180} fill alt={obj.name ?? ''} />
+      </div>
+      <MediaTags mxc={obj.mxc} roomId={roomId} variant="chip" max={8} />
+    </div>
+  )
+}
+
+// A self-anchored action effect: the glyph pops in next to the sender's puck
+// and shrinks away over the action's duration. POC = 'square' (a black-square
+// glyph). Reduced motion -> a fade instead of a scale pop.
+function SelfActionEffect({ action, pos }: { action: ActiveAction; pos: { x: number; y: number } }) {
+  const rm = reduceMotion()
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: `${pos.x * 100}%`,
+        top: `${pos.y * 100}%`,
+        transform: 'translate(calc(-50% + 46px), -50%)',
+        zIndex: 5,
+        pointerEvents: 'none',
+      }}
+    >
+      <div
+        style={{
+          fontSize: 30,
+          lineHeight: 1,
+          filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))',
+          animation: `${rm ? 'domainActionFade' : 'domainActionPop'} ${action.def.durationMs}ms ease-in-out both`,
+        }}
+      >
+        {action.def.glyph}
+      </div>
+    </div>
+  )
+}
+
+// A thrown item: the glyph flies from the sender's puck to the target's along a
+// quadratic-bezier ARC (control point lifted up), spinning as it goes -- the
+// seed of the "target another user with an image" goal. Driven by rAF writing
+// left/top/transform directly (no per-frame re-render). Reduced motion -> it
+// just appears at the target.
+function ThrownProjectile({
+  action,
+  from,
+  to,
+}: {
+  action: ActiveAction
+  from: { x: number; y: number }
+  to: { x: number; y: number }
+}) {
+  const elRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = elRef.current
+    if (!el) return
+    if (reduceMotion()) {
+      el.style.left = `${to.x * 100}%`
+      el.style.top = `${to.y * 100}%`
+      return
+    }
+    const dur = action.def.durationMs
+    const start = performance.now()
+    const cx = (from.x + to.x) / 2
+    const cy = Math.max(0, Math.min(from.y, to.y) - 0.22) // control point lifted up = the arc
+    let raf = 0
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / dur)
+      const mt = 1 - t
+      const x = mt * mt * from.x + 2 * mt * t * cx + t * t * to.x
+      const y = mt * mt * from.y + 2 * mt * t * cy + t * t * to.y
+      el.style.left = `${x * 100}%`
+      el.style.top = `${y * 100}%`
+      el.style.transform = `translate(-50%, -50%) rotate(${t * 540}deg) scale(${1 + 0.3 * Math.sin(t * Math.PI)})`
+      if (t < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [action.def.durationMs, from.x, from.y, to.x, to.y])
+
+  return (
+    <div
+      ref={elRef}
+      style={{
+        position: 'absolute',
+        left: `${from.x * 100}%`,
+        top: `${from.y * 100}%`,
+        transform: 'translate(-50%, -50%)',
+        zIndex: 6,
+        pointerEvents: 'none',
+        fontSize: 34,
+        lineHeight: 1,
+        filter: 'drop-shadow(0 3px 8px rgba(0,0,0,0.6))',
+      }}
+    >
+      {action.def.glyph}
+    </div>
+  )
+}
+
+export interface CanvasMenuItem {
+  label: string
+  onClick: () => void
+  danger?: boolean
+  header?: boolean
+}
+
+// A small fixed-position popover menu (shared by the media-detach and object
+// perm/remove menus). Closes on outside-click / Escape.
+function CanvasMenu({
+  x,
+  y,
+  items,
+  onClose,
+}: {
+  x: number
+  y: number
+  items: CanvasMenuItem[]
+  onClose: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const left = Math.max(6, Math.min(x, window.innerWidth - 210))
+  const top = Math.max(6, Math.min(y, window.innerHeight - (items.length * 30 + 16)))
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('mousedown', onDown)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('mousedown', onDown)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [onClose])
+
+  return (
+    <div
+      ref={ref}
+      onClick={(e) => e.stopPropagation()}
+      onContextMenu={(e) => e.preventDefault()}
+      style={{
+        position: 'fixed',
+        left,
+        top,
+        width: 200,
+        zIndex: 1000,
+        padding: 4,
+        borderRadius: 8,
+        fontFamily: 'var(--tc-ui-font, inherit)',
+        color: 'var(--cpd-color-text-primary)',
+        background: 'var(--cpd-color-bg-canvas-default)',
+        border: '1px solid rgba(128,128,128,0.35)',
+        boxShadow: '0 8px 28px rgba(0,0,0,0.45)',
+      }}
+    >
+      {items.map((it, i) =>
+        it.header ? (
+          <div
+            key={i}
+            style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--cpd-color-text-secondary)', padding: '6px 8px 2px' }}
+          >
+            {it.label}
+          </div>
+        ) : (
+          <button
+            key={i}
+            type="button"
+            onClick={it.onClick}
+            style={{
+              display: 'block',
+              width: '100%',
+              textAlign: 'left',
+              fontSize: 13,
+              padding: '6px 8px',
+              borderRadius: 6,
+              border: 'none',
+              background: 'transparent',
+              color: it.danger ? 'var(--cpd-color-text-critical-primary, #ff6b6b)' : 'var(--cpd-color-text-primary)',
+              cursor: 'pointer',
+              whiteSpace: 'pre',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--cpd-color-bg-subtle-secondary)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+          >
+            {it.label}
+          </button>
+        ),
+      )}
     </div>
   )
 }

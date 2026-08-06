@@ -10,6 +10,7 @@ import { ThreadList } from './ui/ThreadList'
 import { LightboxProvider } from './ui/Lightbox'
 import { RoomListSettingsProvider } from './ui/RoomListSettingsProvider'
 import { useReadMarker } from './client/useReadMarker'
+import { useMediaTagSync } from './client/useMediaTags'
 import { DomainView } from './ui/DomainView'
 import { AuthLanding } from './onboarding/AuthLanding'
 import { BootScreen } from './onboarding/BootScreen'
@@ -28,6 +29,9 @@ function App() {
   // Mark the viewed room read so its unread glow/ping clears (base client sent
   // no read receipts). Called before any early return to keep hook order stable.
   useReadMarker(client, selectedRoom)
+  // Keep the media-tag store fed from room state for every room, so any image
+  // anywhere in the tree can resolve its tags without props being threaded.
+  useMediaTagSync(client)
 
   if (status === 'awaiting_login') {
     // Every door (log in, advanced create, or finishing the guided walkthrough)

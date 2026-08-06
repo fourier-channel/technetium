@@ -5,6 +5,7 @@ import {
   type Room,
   type MatrixEvent,
 } from 'matrix-js-sdk'
+import { MEDIA_TAGS_EVENT } from './mediaTags'
 
 // Classification the renderer switches on, so it never re-parses event shape.
 export type TimelineItemKind = 'message' | 'encrypted' | 'redacted' | 'other' | 'gallery'
@@ -71,6 +72,10 @@ export function toItems(events: MatrixEvent[]): TimelineItem[] {
     // Spatial-mode presence/position events ride the timeline (so they work at
     // PL0) but are never chat -- keep them out of every message log.
     if (ev.getType().startsWith('net.41chan.spatial.')) continue
+    // Bridge tag writes are STATE events, but state events also travel down the
+    // timeline -- without this they render as `[net.41chan.media.tags]` junk
+    // rows between messages. The tag store reads them from the same stream.
+    if (ev.getType() === MEDIA_TAGS_EVENT) continue
 
     const tag = galleryTag(ev)
     if (tag) {

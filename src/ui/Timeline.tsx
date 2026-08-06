@@ -6,6 +6,11 @@ import { renderMessageBody } from '../client/messageBody'
 import { parseMxc } from '../client/media'
 import { AuthedImage } from './AuthedImage'
 import { useLightbox, type LightboxItem } from './Lightbox'
+import { linkify } from './linkify'
+import { useChatBackground } from './chatBackground'
+import { ChatBackdrop, ChatBackgroundMenu } from './ChatBackground'
+import { MediaTags } from './MediaTags'
+import { useMediaTagPrefs } from './mediaTagSettings'
 
 // Read-only timeline. Message bodies render sanitized rich HTML (via DOMPurify)
 // when present, else plaintext. Encrypted events show a placeholder until the
@@ -13,6 +18,10 @@ import { useLightbox, type LightboxItem } from './Lightbox'
 export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadList }: { room: Room; onOpenThread?: (roomId: string, rootId: string) => void; threadListOpen?: boolean; onToggleThreadList?: () => void }) {
   const { client } = useClient()
   const { items, loadOlder, loadingOlder, atStart } = useTimeline(client, room)
+  const chatBg = useChatBackground()
+  const tagPrefs = useMediaTagPrefs()
+  const [bgMenuOpen, setBgMenuOpen] = useState(false)
+  const bg = chatBg.get(room.roomId)
   useEffect(() => {
     followRef.current = true
   }, [room])
@@ -107,28 +116,155 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
               {threadListOpen ? 'Threads X' : 'Threads'}
             </button>
           )}
+          <button
+            type="button"
+            onClick={tagPrefs.toggleGlobal}
+            title={
+              tagPrefs.enabled
+                ? 'Image tags on — click to hide everywhere'
+                : 'Image tags off — click to show everywhere'
+            }
+            aria-label="Toggle image tags"
+            aria-pressed={tagPrefs.enabled}
+            style={{
+              fontSize: 13,
+              fontWeight: 400,
+              lineHeight: 1,
+              padding: '2px 4px',
+              opacity: tagPrefs.enabled ? 1 : 0.45,
+            }}
+          >
+            {'\u{1F3F7}'}
+          </button>
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              onClick={() => setBgMenuOpen((o) => !o)}
+              title="Chat background"
+              aria-label="Chat background"
+              style={{ fontSize: 13, fontWeight: 400, lineHeight: 1, padding: '2px 4px' }}
+            >
+              🖼
+            </button>
+            {bgMenuOpen && client && (
+              <ChatBackgroundMenu
+                client={client}
+                current={bg}
+                onApply={(next) => {
+                  chatBg.set(room.roomId, next)
+                  setBgMenuOpen(false)
+                }}
+                onClear={() => {
+                  chatBg.clear(room.roomId)
+                  setBgMenuOpen(false)
+                }}
+                onClose={() => setBgMenuOpen(false)}
+              />
+            )}
+          </div>
         </div>
       </header>
-      <div
-        ref={scrollRef}
+      <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        {bg && client && <ChatBackdrop client={client} bg={bg} />}
+        <div
+          ref={scrollRef}
+          style={{
+            position: 'relative',
+            zIndex: 1,
+            flex: 1,
+            overflowY: 'auto',
+            padding: '12px 16px',
+            color: 'var(--cpd-color-text-primary)',
+          }}
+        >
+          {atStart && (
+            <div style={{ fontSize: 12, color: 'var(--cpd-color-text-secondary)', padding: '4px 0', marginBottom: 8 }}>
+              Beginning of the room.
+            </div>
+          )}
+
+          {items.map((item) => (
+            <Row key={item.id} item={item} onOpenThread={onOpenThread} />
+          ))}
+          <div ref={bottomRef} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Deterministic avatar-disc color from a user id (fallback when no avatar image).
+function colorFor(userId: string): string {
+  let h = 0
+  for (let i = 0; i < userId.length; i++) h = (h * 31 + userId.charCodeAt(i)) % 360
+  return `hsl(${h}, 55%, 45%)`
+}
+
+function initialsFor(name: string): string {
+  const cleaned = name.replace(/^[@#!]/, '').trim()
+  return cleaned.slice(0, 2).toUpperCase() || '?'
+}
+
+// The sender identity shown at the top of a message row: a long rounded pill
+// carrying the sender's avatar AND display name together, with the timestamp
+// trailing outside it. Avatars load via the homeserver authenticated-media path
+// (the content gate 403s them), degrading to a colored initial.
+function SenderPill({ event, time }: { event: MatrixEvent; time: string }) {
+  const { client } = useClient()
+  const senderId = event.getSender() ?? '(unknown)'
+  const member = client?.getRoom(event.getRoomId() ?? '')?.getMember(senderId) ?? null
+  const name = member?.name || senderId
+  const avatarMxc = member?.getMxcAvatarUrl() ?? null
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+      <span
         style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: '12px 16px',
-          color: 'var(--cpd-color-text-primary)',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          maxWidth: 260,
+          padding: '2px 12px 2px 2px',
+          borderRadius: 999,
+          background: 'var(--cpd-color-bg-subtle-secondary)',
+          border: '1px solid rgba(128,128,128,0.18)',
         }}
       >
-        {atStart && (
-          <div style={{ fontSize: 12, color: 'var(--cpd-color-text-secondary)', padding: '4px 0', marginBottom: 8 }}>
-            Beginning of the room.
-          </div>
-        )}
-
-        {items.map((item) => (
-          <Row key={item.id} item={item} onOpenThread={onOpenThread} />
-        ))}
-        <div ref={bottomRef} />
-      </div>
+        <span
+          style={{
+            width: 22,
+            height: 22,
+            flexShrink: 0,
+            borderRadius: '50%',
+            overflow: 'hidden',
+            display: 'grid',
+            placeItems: 'center',
+            fontSize: 10,
+            fontWeight: 700,
+            color: '#fff',
+            background: colorFor(senderId),
+          }}
+        >
+          {avatarMxc ? (
+            <AuthedImage mxc={avatarMxc} width={180} fill transparentLoading alt="" fallback={initialsFor(name)} viaHomeserver />
+          ) : (
+            initialsFor(name)
+          )}
+        </span>
+        <span
+          style={{
+            fontFamily: 'var(--tc-ui-font, inherit)',
+            fontWeight: 600,
+            fontSize: 13,
+            color: 'var(--cpd-color-text-primary)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {name}
+        </span>
+      </span>
+      <span style={{ fontSize: 11, color: 'var(--cpd-color-text-secondary)', flexShrink: 0 }}>{time}</span>
     </div>
   )
 }
@@ -136,7 +272,6 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
 export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?: (roomId: string, rootId: string) => void }) {
   const { event, kind, cells, layout } = item
   const { open } = useLightbox()
-  const sender = event.getSender() ?? '(unknown)'
   const time = new Date(event.getTs()).toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit',
@@ -153,12 +288,15 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
       // (320 snaps to the gateway's allowed sizes). Click opens the full-res
       // image in the lightbox via an authed full fetch.
       body = (
-        <AuthedImage
-          mxc={mxc}
-          width={320}
-          alt={typeof content.body === 'string' ? content.body : undefined}
-          onClick={() => open([{ mxc, ...imageMeta(event) }], 0)}
-        />
+        <div>
+          <AuthedImage
+            mxc={mxc}
+            width={320}
+            alt={typeof content.body === 'string' ? content.body : undefined}
+            onClick={() => open([{ mxc, ...imageMeta(event) }], 0)}
+          />
+          <MediaTags mxc={mxc} roomId={event.getRoomId()} />
+        </div>
       )
     } else {
     const rendered = renderMessageBody(event)
@@ -170,7 +308,7 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
           dangerouslySetInnerHTML={{ __html: rendered.html }}
         />
       ) : (
-        <span>{rendered.text}</span>
+        <span style={{ whiteSpace: 'pre-wrap' }}>{linkify(rendered.text ?? '')}</span>
       )
     }
   } else if (kind === 'encrypted') {
@@ -187,20 +325,7 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
 
   return (
     <div style={{ padding: '4px 0' }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-        <span
-          style={{
-            fontWeight: 600,
-            fontSize: 13,
-            color: 'var(--cpd-color-text-primary)',
-          }}
-        >
-          {sender}
-        </span>
-        <span style={{ fontSize: 11, color: 'var(--cpd-color-text-secondary)', flexShrink: 0 }}>
-          {time}
-        </span>
-      </div>
+      <SenderPill event={event} time={time} />
       <div
         style={{
           display: 'flex',
@@ -284,6 +409,9 @@ function GalleryCell({ ev, onOpen }: { ev: MatrixEvent | null; onOpen?: () => vo
             transparentLoading
             onClick={onOpen}
           />
+          {/* Gallery cells are small and tile tightly -- a count chip, not a
+              strip, so the batch's geometry is untouched. */}
+          <MediaTags mxc={mxc} roomId={ev?.getRoomId()} variant="chip" />
         </div>
       )}
     </div>
@@ -384,7 +512,7 @@ function GalleryBody({ cells, layout }: { cells: (MatrixEvent | null)[]; layout:
           {caption.html !== undefined ? (
             <span className="tc-message-html" dangerouslySetInnerHTML={{ __html: caption.html }} />
           ) : (
-            <span>{caption.text}</span>
+            <span style={{ whiteSpace: 'pre-wrap' }}>{linkify(caption.text ?? '')}</span>
           )}
         </div>
       )}
