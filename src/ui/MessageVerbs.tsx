@@ -1,4 +1,6 @@
 import { useMemo, type ReactNode } from 'react'
+import { useClient } from '../client/ClientContext'
+import { isEditableContent } from '../client/editContent'
 import { MessageActionsProvider } from './MessageActionBar'
 import { useComposerMode } from './composerMode'
 import type { MessageActionBuilder } from './messageActions'
@@ -21,7 +23,9 @@ function isActionable(kind: string): boolean {
 }
 
 export function MessageVerbsProvider({ children }: { children: ReactNode }) {
-  const { reply } = useComposerMode()
+  const { client } = useClient()
+  const { reply, edit } = useComposerMode()
+  const myUserId = client?.getUserId() ?? null
 
   const builders = useMemo<MessageActionBuilder[]>(
     () => [
@@ -34,8 +38,24 @@ export function MessageVerbsProvider({ children }: { children: ReactNode }) {
           onSelect: () => reply(item.event),
         }
       },
+      (item) => {
+        // Matrix lets you send an m.replace for anyone's event; the server
+        // accepts it and only well-behaved clients ignore it. Our own reader
+        // rejects a forged edit (relations.ts), so offering Edit on someone
+        // else's message would produce an event that changes nothing here and
+        // may change something elsewhere. Own messages only.
+        if (!isActionable(item.kind)) return null
+        if (!myUserId || item.event.getSender() !== myUserId) return null
+        if (!isEditableContent(item.content)) return null
+        return {
+          id: 'edit',
+          label: 'Edit',
+          icon: '✎', // lower right pencil
+          onSelect: () => edit(item.event, item.content),
+        }
+      },
     ],
-    [reply],
+    [reply, edit, myUserId],
   )
 
   return <MessageActionsProvider builders={builders}>{children}</MessageActionsProvider>

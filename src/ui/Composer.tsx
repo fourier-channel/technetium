@@ -13,6 +13,7 @@ import { EmojiPicker } from './EmojiPicker'
 import { useComposerMode, type ComposerMode } from './composerMode'
 import { eventPreview } from '../client/eventPreview'
 import { buildReplyContent } from '../client/replyContent'
+import { buildEditContent, editableBody } from '../client/editContent'
 
 type GalleryLayout = 'grid' | 'stack' | 'strip'
 
@@ -102,6 +103,34 @@ export function Composer({
     }
   }, [text])
 
+  // Entering edit mode seeds the composer with the message's current text and
+  // stashes whatever draft was there; cancelling puts the draft back, so an
+  // accidental Edit does not eat what someone was typing.
+  //
+  // The seed lands in a microtask rather than in the effect body: a synchronous
+  // setState inside an effect is what G-tc01 forbids, and this is the same
+  // dodge useTimeline already uses.
+  const preEditDraftRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (mode.kind === 'edit') {
+      const isReply = !!mode.content['m.relates_to']?.['m.in_reply_to']
+      const seed = editableBody(mode.content, isReply)
+      queueMicrotask(() => {
+        setText((prev) => {
+          if (preEditDraftRef.current === null) preEditDraftRef.current = prev
+          return seed
+        })
+        caretRef.current = seed.length
+      })
+      return
+    }
+    // Left edit mode (cancelled, or the send completed and cleared it).
+    const stashed = preEditDraftRef.current
+    if (stashed === null) return
+    preEditDraftRef.current = null
+    queueMicrotask(() => setText(stashed))
+  }, [mode])
+
   // Mirror attachments into a ref so the unmount cleanup revokes whatever is
   // still pending without re-subscribing on every change.
   const attachmentsRef = useRef<PendingAttachment[]>([])
@@ -175,7 +204,19 @@ export function Composer({
       setText('') // optimistic clear; restore on failure
       try {
         const { plain, html } = formatMessage(input)
-        if (mode.kind === 'reply') {
+        if (mode.kind === 'edit') {
+          // An edit is a NEW event relating to the original, so it is sent to
+          // the room, never to the thread -- passing threadId would put an
+          // m.thread relation on it and the m.replace would be ignored.
+          await client.sendMessage(
+            room.roomId,
+            null,
+            buildEditContent(mode.target, mode.content, plain, html) as unknown as Parameters<
+              typeof client.sendMessage
+            >[2],
+          )
+          clearMode()
+        } else if (mode.kind === 'reply') {
           // Built by hand rather than via sendTextMessage so m.relates_to
           // rides along. sendMessage SPREADS an existing m.relates_to when it
           // adds a thread relation, and sets is_falling_back:false because we

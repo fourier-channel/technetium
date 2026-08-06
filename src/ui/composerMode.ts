@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { MatrixEvent } from 'matrix-js-sdk'
+import type { IContent, MatrixEvent } from 'matrix-js-sdk'
 
 // ---------------------------------------------------------------------------
 // S3 -- composer modes.
@@ -17,17 +17,21 @@ import type { MatrixEvent } from 'matrix-js-sdk'
 // non-component exports (react-refresh/only-export-components).
 // ---------------------------------------------------------------------------
 
+// Edit carries the EFFECTIVE content (TimelineItem.content, with the winning
+// edit already applied). Seeding the composer from target.getContent() would
+// depend on whether the sdk happened to aggregate the replacement, so editing
+// a message twice could silently revert it to the original text.
 export type ComposerMode =
   | { kind: 'normal' }
   | { kind: 'reply'; target: MatrixEvent }
-  | { kind: 'edit'; target: MatrixEvent }
+  | { kind: 'edit'; target: MatrixEvent; content: IContent }
 
 export const NORMAL_MODE: ComposerMode = { kind: 'normal' }
 
 export interface ComposerModeApi {
   mode: ComposerMode
   reply: (target: MatrixEvent) => void
-  edit: (target: MatrixEvent) => void
+  edit: (target: MatrixEvent, content: IContent) => void
   clear: () => void
 }
 

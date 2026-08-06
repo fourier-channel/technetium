@@ -385,3 +385,14 @@ code {
     outline-offset: 2px;
   }
 }
+
+/* The "(edited)" marker (W2.2). Inline and quiet -- it trails the body rather
+   than taking a line, so an edit does not re-flow the message. */
+.tc-edited-marker {
+  margin-left: 5px;
+  font-size: 10px;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  opacity: 0.75;
+  user-select: none;
+  white-space: nowrap;
+}

@@ -388,7 +388,17 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
         }}
       >
         {item.replyTo && <ReplyPill replyTo={item.replyTo} />}
-        <div style={{ fontSize: 14, wordBreak: 'break-word', minWidth: 0 }}>{body}</div>
+        <div style={{ fontSize: 14, wordBreak: 'break-word', minWidth: 0 }}>
+          {body}
+          {item.editedTs !== undefined && (
+            <span
+              className="tc-edited-marker"
+              title={`Edited ${new Date(item.editedTs).toLocaleString()}`}
+            >
+              (edited)
+            </span>
+          )}
+        </div>
         {event.isThreadRoot && <ThreadChip event={event} onOpen={onOpenThread} />}
       </div>
     </div>
