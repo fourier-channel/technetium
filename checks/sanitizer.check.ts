@@ -107,7 +107,64 @@ console.log('\n-- data attributes stay off (ALLOW_DATA_ATTR: false) --')
   // permitted, and this check is what makes that widening visible in a diff.
   check('data-mx-spoiler NOT yet allowed', !render('<span data-mx-spoiler="">x</span>').includes('data-mx-spoiler'))
   check('arbitrary data-* not allowed', !render('<b data-evil="1">x</b>').includes('data-evil'))
-  check('class NOT yet allowed', !render('<code class="language-js">x</code>').includes('class'))
+}
+
+console.log('\n-- class survives ONLY as a code-block language hint (W2.L1) --')
+{
+  // `class` is permitted in the highlighting path, so these are the checks
+  // that stop it becoming a general-purpose styling hole. Our own UI is styled
+  // by class: a message able to set class="tc-row-actions" on its content
+  // could paint something that looks like part of the app.
+  check('class on a bold is deleted', !render('<b class="anything">x</b>').includes('class'))
+  check('class on a span is deleted', !render('<span class="anything">x</span>').includes('class'))
+  check('class on a link is deleted', !render('<a href="https://x.test" class="anything">x</a>').includes('class'))
+  check(
+    'an app class cannot be applied to message content',
+    !render('<span class="tc-row-actions">x</span>').includes('tc-row-actions'),
+  )
+  check(
+    'a non-language class on <code> is deleted',
+    !render('<code class="tc-row-actions">x</code>').includes('tc-row-actions'),
+  )
+  check(
+    'a language hint on <code> is honoured',
+    render('<pre><code class="language-js">const a = 1</code></pre>').includes('language-js'),
+  )
+  check(
+    'mixed classes on <code> keep only the language token',
+    (() => {
+      const out = render('<pre><code class="tc-evil language-js other">const a = 1</code></pre>')
+      return out.includes('language-js') && !out.includes('tc-evil') && !out.includes('other')
+    })(),
+  )
+}
+
+console.log('\n-- syntax highlighting (W2.L1) --')
+{
+  const out = render('<pre><code class="language-js">const a = 1</code></pre>')
+  check('code block is highlighted', out.includes('hljs'), out)
+  check('highlighting emits spans', out.includes('<span'), out)
+  check('only hljs-* classes are emitted inside the block', !/class="(?!hljs)[^"]*"/.test(out.replace(/class="hljs language-js"/g, '')), out)
+  check('the code text survives', out.includes('const') && out.includes('1'))
+
+  // The code TEXT is attacker-controlled. It must come out as text, never markup.
+  const nasty = render('<pre><code class="language-js">&lt;img src=x onerror=alert(1)&gt;</code></pre>')
+  // The literal text "onerror=" DOES appear -- inside &lt;...&gt;, which is
+  // inert. The property that matters is that the angle brackets stay escaped,
+  // so no element is ever constructed from code text.
+  check('angle brackets in code text stay escaped', nasty.includes('&lt;img'), nasty)
+  check('no img element is created from code text', !nasty.includes('<img'), nasty)
+  check(
+    'the only tags present are our own pre/code/span',
+    (nasty.match(/<([a-z]+)/gi) ?? []).every((t) => ['<pre', '<code', '<span'].includes(t.toLowerCase())),
+    nasty,
+  )
+
+  const nastyUnknown = render('<pre><code class="language-notareallanguage">x</code></pre>')
+  check('an unknown language does not throw or inject', !nastyUnknown.includes('notareallanguage'))
+
+  check('inline code is left alone', render('<code>x</code>') === '<code>x</code>')
+  check('a pre without code is left alone', render('<pre>x</pre>') === '<pre>x</pre>')
 }
 
 console.log('\n-- mx-reply fallback is removed WITH its contents --')

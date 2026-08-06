@@ -525,3 +525,84 @@ code {
   color: var(--cpd-color-text-secondary, #a8b0bd);
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------------------------------------------------------------------------
+   Syntax highlighting (W2.L1). Hand-written against the hljs class contract
+   rather than importing one of the shipped themes: the themes set their own
+   background and colors, which would fight the Compound tokens and the chat
+   backdrop. Only the token classes hljs actually emits from the common
+   language set are styled; anything unstyled simply inherits.
+   --------------------------------------------------------------------------- */
+:root {
+  --tc-hl-keyword: #c678dd;
+  --tc-hl-string: #98c379;
+  --tc-hl-number: #d19a66;
+  --tc-hl-comment: #7f848e;
+  --tc-hl-function: #61afef;
+  --tc-hl-type: #e5c07b;
+  --tc-hl-literal: #56b6c2;
+  --tc-hl-deleted: #e06c75;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --tc-hl-keyword: #a626a4;
+    --tc-hl-string: #50a14f;
+    --tc-hl-number: #986801;
+    --tc-hl-comment: #a0a1a7;
+    --tc-hl-function: #4078f2;
+    --tc-hl-type: #c18401;
+    --tc-hl-literal: #0184bc;
+    --tc-hl-deleted: #e45649;
+  }
+}
+
+.tc-message-html code.hljs {
+  display: block;
+  color: var(--cpd-color-text-primary, #e7ebf0);
+}
+.tc-message-html .hljs-keyword,
+.tc-message-html .hljs-selector-tag,
+.tc-message-html .hljs-built_in,
+.tc-message-html .hljs-doctag {
+  color: var(--tc-hl-keyword);
+}
+.tc-message-html .hljs-string,
+.tc-message-html .hljs-regexp,
+.tc-message-html .hljs-symbol,
+.tc-message-html .hljs-addition {
+  color: var(--tc-hl-string);
+}
+.tc-message-html .hljs-number,
+.tc-message-html .hljs-meta {
+  color: var(--tc-hl-number);
+}
+.tc-message-html .hljs-comment,
+.tc-message-html .hljs-quote {
+  color: var(--tc-hl-comment);
+  font-style: italic;
+}
+.tc-message-html .hljs-title,
+.tc-message-html .hljs-section,
+.tc-message-html .hljs-name {
+  color: var(--tc-hl-function);
+}
+.tc-message-html .hljs-type,
+.tc-message-html .hljs-class .hljs-title,
+.tc-message-html .hljs-attr,
+.tc-message-html .hljs-attribute {
+  color: var(--tc-hl-type);
+}
+.tc-message-html .hljs-literal,
+.tc-message-html .hljs-variable,
+.tc-message-html .hljs-template-variable {
+  color: var(--tc-hl-literal);
+}
+.tc-message-html .hljs-deletion {
+  color: var(--tc-hl-deleted);
+}
+.tc-message-html .hljs-emphasis {
+  font-style: italic;
+}
+.tc-message-html .hljs-strong {
+  font-weight: 700;
+}
