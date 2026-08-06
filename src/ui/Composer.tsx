@@ -10,6 +10,8 @@ import type { Room } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
 import { formatMessage } from '../client/messageFormat'
 import { EmojiPicker } from './EmojiPicker'
+import { useComposerMode, type ComposerMode } from './composerMode'
+import { eventPreview } from '../client/eventPreview'
 
 type GalleryLayout = 'grid' | 'stack' | 'strip'
 
@@ -62,6 +64,10 @@ export function Composer({
   domainTtd?: number
 }) {
   const { client } = useClient()
+  // Reply/edit target, set by the message action bar (Wave 2). Without a
+  // ComposerModeProvider above us this is permanently normal, which is exactly
+  // the pre-S3 behaviour.
+  const { mode, clear: clearMode } = useComposerMode()
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<PendingAttachment[]>([])
   const [layout, setLayout] = useState<GalleryLayout>('grid')
@@ -240,6 +246,13 @@ export function Composer({
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Esc leaves reply/edit mode. Scoped to the textarea rather than the
+    // window so it cannot steal Escape from an open menu or the lightbox.
+    if (e.key === 'Escape' && mode.kind !== 'normal') {
+      e.preventDefault()
+      clearMode()
+      return
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       void send()
@@ -273,6 +286,8 @@ export function Composer({
         outlineOffset: -2,
       }}
     >
+      <ComposerModeBanner mode={mode} onCancel={clearMode} />
+
       {attachments.length > 1 && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'center' }}>
           <span style={{ fontSize: 12, color: 'var(--cpd-color-text-secondary)' }}>Layout:</span>
@@ -446,6 +461,78 @@ export function Composer({
           Send
         </button>
       </div>
+    </div>
+  )
+}
+
+// S3 -- the reply/edit banner. Sits above the input so the target is visible
+// while typing, and carries its own cancel (Esc also works from the textarea).
+// Renders nothing in normal mode, so the composer is untouched until a verb
+// sets a target.
+function ComposerModeBanner({
+  mode,
+  onCancel,
+}: {
+  mode: ComposerMode
+  onCancel: () => void
+}) {
+  if (mode.kind === 'normal') return null
+
+  const isEdit = mode.kind === 'edit'
+  const sender = mode.target.getSender() ?? '(unknown)'
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 8,
+        padding: '6px 10px',
+        borderRadius: 8,
+        fontSize: 12,
+        background: 'var(--cpd-color-bg-subtle-secondary)',
+        // A left rule reads as "attached to something above", which is what
+        // both modes mean.
+        borderLeft: '3px solid var(--cpd-color-text-action-accent, #1d8a64)',
+        minWidth: 0,
+      }}
+    >
+      <span style={{ fontWeight: 600, flexShrink: 0, color: 'var(--cpd-color-text-primary)' }}>
+        {isEdit ? 'Editing' : 'Replying to'}
+      </span>
+      {!isEdit && (
+        <span style={{ flexShrink: 0, color: 'var(--cpd-color-text-secondary)' }}>{sender}</span>
+      )}
+      <span
+        style={{
+          color: 'var(--cpd-color-text-secondary)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          minWidth: 0,
+        }}
+      >
+        {eventPreview(mode.target)}
+      </span>
+      <button
+        type="button"
+        onClick={onCancel}
+        title="Cancel (Esc)"
+        aria-label="Cancel"
+        style={{
+          marginLeft: 'auto',
+          flexShrink: 0,
+          border: 'none',
+          background: 'transparent',
+          color: 'var(--cpd-color-text-secondary)',
+          cursor: 'pointer',
+          fontSize: 14,
+          lineHeight: 1,
+          padding: '2px 4px',
+        }}
+      >
+        {'×'}
+      </button>
     </div>
   )
 }

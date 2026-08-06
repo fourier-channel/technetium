@@ -4,6 +4,7 @@ import { useClient } from '../client/ClientContext'
 import { DomainCanvas } from './DomainCanvas'
 import { Timeline } from './Timeline'
 import { Composer } from './Composer'
+import { ComposerModeProvider } from './ComposerModeProvider'
 import { useDomainSettings } from './domainSettings'
 import { DomainOptions } from './DomainOptions'
 import { useDomainBackground } from '../client/useDomainBackground'
@@ -66,6 +67,9 @@ export function DomainView({ room, onExit }: { room: Room; onExit: () => void })
   if (!client) return null
 
   return (
+    // Domain mode has its own timeline + composer pair, so it gets its own
+    // composer-mode scope like the room view and the thread panel.
+    <ComposerModeProvider>
     <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       <div
         style={{
@@ -203,6 +207,7 @@ export function DomainView({ room, onExit }: { room: Room; onExit: () => void })
         />
       )}
     </div>
+    </ComposerModeProvider>
   )
 }
 

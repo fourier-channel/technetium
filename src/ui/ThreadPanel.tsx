@@ -4,6 +4,7 @@ import { useClient } from '../client/ClientContext'
 import { toItems } from '../client/useTimeline'
 import { Row } from './Timeline'
 import { Composer } from './Composer'
+import { ComposerModeProvider } from './ComposerModeProvider'
 
 // Thread panel: a thread's root + replies, resolved by (roomId, rootId) so it
 // stays open and correct even when the user navigates to other rooms. Renders via
@@ -75,6 +76,9 @@ export function ThreadPanel({
   const items = toItems(events, { myUserId: client?.getUserId() ?? null })
 
   return (
+    // Its own composer-mode scope: a reply started in the thread panel must not
+    // retarget the room composer.
+    <ComposerModeProvider>
     <aside
       style={{
         width,
@@ -115,5 +119,6 @@ export function ThreadPanel({
 
       {room && <Composer room={room} threadId={rootId} />}
     </aside>
+    </ComposerModeProvider>
   )
 }
