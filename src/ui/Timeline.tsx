@@ -19,6 +19,7 @@ import { MessageVerbsProvider } from './MessageVerbs'
 import { JumpContext, scrollToEventInDom, useJump, type JumpApi } from './jumpToEvent'
 import { ReactionStrip } from './Reactions'
 import { ReceiptCluster } from './ReceiptCluster'
+import { SPOILER_ATTR, toggleSpoiler } from '../client/spoilers'
 import { useRoomReceipts } from '../client/useReceipts'
 import { ReceiptsContext, useReceipts } from './receiptsContext'
 
@@ -27,6 +28,27 @@ const MAX_JUMP_PAGES = 8
 
 // Stable empty array: a fresh [] per render would re-render every footer.
 const EMPTY_SEEN: string[] = []
+
+// Delegated spoiler handlers, shared by every row rather than allocated per
+// row: they resolve their target from the event, so they need no closure.
+function onSpoilerClick(e: React.MouseEvent) {
+  const el = (e.target as Element | null)?.closest?.(`[${SPOILER_ATTR}]`)
+  // A revealed spoiler must stay clickable as ordinary text -- a link inside
+  // one should work once it is visible.
+  if (el && !el.classList.contains('tc-spoiler-revealed')) {
+    e.preventDefault()
+    toggleSpoiler(el)
+  }
+}
+
+function onSpoilerKey(e: React.KeyboardEvent) {
+  if (e.key !== 'Enter' && e.key !== ' ') return
+  const el = (e.target as Element | null)?.closest?.(`[${SPOILER_ATTR}]`)
+  if (el && !el.classList.contains('tc-spoiler-revealed')) {
+    e.preventDefault()
+    toggleSpoiler(el)
+  }
+}
 
 // Read-only timeline. Message bodies render sanitized rich HTML (via DOMPurify)
 // when present, else plaintext. Encrypted events show a placeholder until the
@@ -359,8 +381,13 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
     body =
       rendered.html !== undefined ? (
         // Sanitized by DOMPurify in renderMessageBody — safe to inject.
+        // The click/key handlers are DELEGATED: an innerHTML subtree cannot
+        // carry React handlers, so spoiler reveal is resolved by walking up
+        // from the event target (W2.L2).
         <span
           className="tc-message-html"
+          onClick={onSpoilerClick}
+          onKeyDown={onSpoilerKey}
           dangerouslySetInnerHTML={{ __html: rendered.html }}
         />
       ) : (

@@ -107,6 +107,22 @@ client-specific deps so a later extraction is a move, not a rewrite.
 
 ---
 
+## Vendored upstream constant (SCAN BEFORE ANY dompurify UPGRADE)
+
+`src/client/messageBody.ts` vendors DOMPurify's default `FORBID_CONTENTS`
+list verbatim and appends `mx-reply`. This is necessary because passing the
+option REPLACES the default rather than extending it -- passing `['mx-reply']`
+alone silently un-forbids the contents of `script`, `style`, `noscript`,
+`title` and the rest, so `<b><script>alert(1)</script></b>` renders as
+`<b>alert(1)</b>`.
+
+**On any dompurify upgrade: re-extract the upstream list and diff it against
+ours.** `checks/sanitizer.check.ts` exercises the important entries in their
+NESTED form (the bare-tag form passes either way, which is what hid the
+regression originally), so drift surfaces as a test failure.
+
+---
+
 ## Fragile internal imports (SCAN BEFORE ANY matrix-js-sdk UPGRADE)
 
 - **`matrix-js-sdk/lib/sliding-sync`** — `src/client/slidingSync.ts` deep-imports

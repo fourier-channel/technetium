@@ -63,6 +63,25 @@ console.log('\n-- scripts and script-like elements --')
   check('meta stripped', !render('<meta http-equiv="refresh" content="0;url=x">').includes('<meta'))
 }
 
+console.log('\n-- forbidden contents: the text inside a stripped tag must go too --')
+{
+  // REGRESSION GUARD. Passing FORBID_CONTENTS to DOMPurify REPLACES its
+  // default list rather than extending it. W2.1 passed ['mx-reply'] alone and
+  // silently un-forbade all of these -- `<b><script>alert(1)</script></b>`
+  // rendered as `<b>alert(1)</b>`. The bare-tag cases below kept passing
+  // throughout, which is why the nested form is what is tested here.
+  check('nested script contents gone', render('<b><script>alert(1)</script></b>') === '<b></b>')
+  check('nested style contents gone', render('<b><style>x{y:z}</style></b>') === '<b></b>')
+  check('nested noscript contents gone', render('<b><noscript>hidden</noscript></b>') === '<b></b>')
+  check('nested title contents gone', render('<b><title>hidden</title></b>') === '<b></b>')
+  check('nested template contents gone', render('<b><template>hidden</template></b>') === '<b></b>')
+  check('nested xmp contents gone', render('<b><xmp>hidden</xmp></b>') === '<b></b>')
+  check('nested plaintext contents gone', render('<b><plaintext>hidden</plaintext></b>') === '<b></b>')
+  check('nested iframe contents gone', !render('<b><iframe>hidden</iframe></b>').includes('hidden'))
+  check('nested svg contents gone', !render('<b><svg><desc>hidden</desc></svg></b>').includes('hidden'))
+  check('nested math contents gone', !render('<b><math><mtext>hidden</mtext></math></b>').includes('hidden'))
+}
+
 console.log('\n-- event handler attributes --')
 {
   check('onerror stripped', !render('<img src=x onerror=alert(1)>').includes('onerror'))
@@ -101,12 +120,53 @@ console.log('\n-- style attribute and CSS injection --')
   )
 }
 
-console.log('\n-- data attributes stay off (ALLOW_DATA_ATTR: false) --')
+console.log('\n-- data attributes: ONLY data-mx-spoiler, by name (W2.L2) --')
 {
-  // W2.L2 will deliberately allow data-mx-spoiler. Until then NOTHING data-* is
-  // permitted, and this check is what makes that widening visible in a diff.
-  check('data-mx-spoiler NOT yet allowed', !render('<span data-mx-spoiler="">x</span>').includes('data-mx-spoiler'))
+  // ALLOW_DATA_ATTR stays FALSE. data-mx-spoiler is admitted by name; the
+  // data-* family is not. These checks are what keep that distinction real.
   check('arbitrary data-* not allowed', !render('<b data-evil="1">x</b>').includes('data-evil'))
+  check('data-mx-anything-else not allowed', !render('<b data-mx-evil="1">x</b>').includes('data-mx-evil'))
+  check('data-mx-color not allowed', !render('<span data-mx-color="red">x</span>').includes('data-mx-color'))
+  check('data-mx-spoiler IS allowed', render('<span data-mx-spoiler="">x</span>').includes('data-mx-spoiler'))
+}
+
+console.log('\n-- spoilers (W2.L2) --')
+{
+  const out = render('<span data-mx-spoiler="">hidden</span>')
+  check('spoiler class applied', out.includes('tc-spoiler'), out)
+  check('keyboard reachable', out.includes('tabindex="0"'), out)
+  check('announced as a button', out.includes('role="button"'), out)
+  check('collapsed state announced', out.includes('aria-expanded="false"'), out)
+  check('the hidden text survives to be revealed', out.includes('hidden'))
+
+  const reasoned = render('<span data-mx-spoiler="ending">hidden</span>')
+  check('reason preserved for the CSS label', reasoned.includes('data-mx-spoiler="ending"'), reasoned)
+
+  // A sender-supplied reason is rendered by CSS content: attr(). It must stay
+  // an attribute VALUE and never become markup.
+  // Re-PARSE the output rather than string-matching it. `<` inside an attribute
+  // VALUE is legal and inert, so a substring test both false-positives and
+  // proves nothing about what a browser would build.
+  const nastyReason = render('<span data-mx-spoiler="&lt;img src=x onerror=alert(1)&gt;">hidden</span>')
+  const reparsed = dom.window.document.implementation.createHTMLDocument('')
+  reparsed.body.innerHTML = nastyReason
+  check('hostile reason builds no element', reparsed.body.querySelectorAll('img').length === 0, nastyReason)
+  check(
+    'hostile reason stays an attribute value',
+    reparsed.body.querySelector('[data-mx-spoiler]')?.getAttribute('data-mx-spoiler') === '<img src=x onerror=alert(1)>',
+    nastyReason,
+  )
+
+  // tabindex/role are OURS. A sender's must be dropped in pass 1 -- a
+  // sender-controlled tabindex could reorder the page's focus order.
+  const senderAttrs = render('<b tabindex="5" role="alert">x</b>')
+  check('sender tabindex dropped on a non-spoiler', !senderAttrs.includes('tabindex'), senderAttrs)
+  check('sender role dropped on a non-spoiler', !senderAttrs.includes('role'), senderAttrs)
+  const senderSpoilerAttrs = render('<span data-mx-spoiler="" tabindex="99" role="alert">x</span>')
+  check('sender tabindex on a spoiler is replaced by ours', senderSpoilerAttrs.includes('tabindex="0"'), senderSpoilerAttrs)
+  check('sender role on a spoiler is replaced by ours', !senderSpoilerAttrs.includes('alert'), senderSpoilerAttrs)
+
+  check('a script inside a spoiler still dies', !render('<span data-mx-spoiler=""><script>alert(1)</script></span>').includes('alert(1)'))
 }
 
 console.log('\n-- class survives ONLY as a code-block language hint (W2.L1) --')

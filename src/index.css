@@ -606,3 +606,48 @@ code {
 .tc-message-html .hljs-strong {
   font-weight: 700;
 }
+
+/* ---------------------------------------------------------------------------
+   Spoilers (W2.L2, MSC2010). Blurred until clicked or activated by keyboard.
+
+   The blur is a filter, not a color swap, so the text's LAYOUT is unchanged
+   and revealing one never reflows the message around it. The reason label is
+   rendered with content: attr(), so a sender-supplied reason can only ever be
+   text -- it is never parsed as markup.
+   --------------------------------------------------------------------------- */
+.tc-spoiler {
+  border-radius: 3px;
+  background: rgba(128, 128, 128, 0.28);
+  color: transparent;
+  filter: blur(4px);
+  cursor: pointer;
+  transition: filter 120ms ease-out, color 120ms ease-out;
+  user-select: none;
+}
+.tc-spoiler:focus-visible {
+  outline: 2px solid var(--tc-link);
+  outline-offset: 2px;
+  filter: none;
+}
+.tc-spoiler[data-mx-spoiler]:not([data-mx-spoiler=''])::before {
+  content: attr(data-mx-spoiler) ': ';
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  filter: none;
+  font-size: 11px;
+  font-style: italic;
+}
+.tc-spoiler.tc-spoiler-revealed {
+  background: transparent;
+  color: inherit;
+  filter: none;
+  cursor: auto;
+  user-select: auto;
+}
+.tc-spoiler.tc-spoiler-revealed::before {
+  content: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tc-spoiler {
+    transition: none;
+  }
+}
