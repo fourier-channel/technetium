@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MatrixClient, Room } from 'matrix-js-sdk'
 import { describeBackgroundError, useDomainBackground } from '../client/useDomainBackground'
+import { uploadAndPostBackground } from '../client/backgroundPost'
 import {
   IDENTITY_TRANSFORM,
   nudge,
@@ -139,8 +140,11 @@ export function DomainBackgroundEditor({
     setBusy(true)
     setError(null)
     try {
-      const { content_uri } = await client.uploadContent(file, { name: file.name, type: file.type })
-      await setBackground(content_uri, tRef.current)
+      // POST it, then reference it. The gate authorizes media that has a
+      // message behind it, so posting is what makes the background fetchable
+      // by everyone in the room -- see client/backgroundPost.ts.
+      const post = await uploadAndPostBackground(client, room.roomId, file, 'domain')
+      await setBackground(post.mxc, tRef.current, post.eventId)
       onExit()
     } catch (err) {
       // The write used to swallow its own failure and this closed the editor

@@ -9,6 +9,7 @@ import {
 } from 'matrix-js-sdk'
 import { MEDIA_TAGS_EVENT } from './mediaTags'
 import { getIgnoredUsers } from './ignoredUsers'
+import { isBackgroundPost } from './backgroundPost'
 import {
   buildRelationIndex,
   effectiveContent,
@@ -192,6 +193,10 @@ export function toItems(events: MatrixEvent[], opts: ToItemsOptions = {}): Timel
     // timeline -- without this they render as `[net.41chan.media.tags]` junk
     // rows between messages. The tag store reads them from the same stream.
     if (ev.getType() === MEDIA_TAGS_EVENT) continue
+    // A background is POSTED so the media gate can authorize it (the gate
+    // authorizes media with a message behind it), but it is wallpaper, not
+    // something someone said -- so it stays out of the chat log.
+    if (isBackgroundPost(ev.getOriginalContent())) continue
 
     const tag = galleryTag(ev)
     if (tag) {

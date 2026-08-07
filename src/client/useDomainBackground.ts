@@ -28,6 +28,10 @@ export const DOMAIN_BACKGROUND_EVENT = 'net.41chan.domain.background'
 export interface DomainBackground {
   mxc: string
   transform: Transform
+  // The m.image post that authorizes these bytes. Kept for provenance: it
+  // records who set the background, and it is the event whose existence makes
+  // the media fetchable through the gate.
+  eventId?: string
 }
 
 export interface DomainBackgroundApi {
@@ -35,7 +39,7 @@ export interface DomainBackgroundApi {
   // False when the local user's power level cannot write this state event.
   canSet: boolean
   // REJECT on failure -- callers must surface it.
-  setBackground: (mxc: string, transform: Transform) => Promise<void>
+  setBackground: (mxc: string, transform: Transform, eventId?: string) => Promise<void>
   clearBackground: () => Promise<void>
 }
 
@@ -45,7 +49,11 @@ function read(room: Room | null): DomainBackground | null {
   if (!ev) return null
   const c = ev.getContent()
   if (typeof c.url !== 'string' || !c.url) return null
-  return { mxc: c.url, transform: decodeTransform(c) }
+  return {
+    mxc: c.url,
+    transform: decodeTransform(c),
+    eventId: typeof c.event_id === 'string' ? c.event_id : undefined,
+  }
 }
 
 export function useDomainBackground(
@@ -92,8 +100,12 @@ export function useDomainBackground(
   )
 
   const setBackground = useCallback(
-    (mxc: string, transform: Transform) =>
-      writeState({ url: mxc, ...encodeTransform(transform) }),
+    (mxc: string, transform: Transform, eventId?: string) =>
+      writeState({
+        url: mxc,
+        ...(eventId ? { event_id: eventId } : {}),
+        ...encodeTransform(transform),
+      }),
     [writeState],
   )
 

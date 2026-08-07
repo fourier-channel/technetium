@@ -260,6 +260,7 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
             {bgMenuOpen && client && (
               <ChatBackgroundMenu
                 client={client}
+                roomId={room.roomId}
                 current={bg}
                 onApply={(next) => {
                   chatBg.set(room.roomId, next)

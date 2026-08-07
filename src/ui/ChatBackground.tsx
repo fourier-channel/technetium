@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import type { MatrixClient } from 'matrix-js-sdk'
 import { useAutoRefreshMedia } from '../client/useAutoRefreshMedia'
+import { uploadAndPostBackground } from '../client/backgroundPost'
 import type { ChatBg } from './chatBackground'
 
 // ---------------------------------------------------------------------------
@@ -44,12 +45,16 @@ export function ChatBackdrop({ client, bg }: { client: MatrixClient; bg: ChatBg 
 
 export function ChatBackgroundMenu({
   client,
+  roomId,
   current,
   onApply,
   onClear,
   onClose,
 }: {
   client: MatrixClient
+  // The room the background image is POSTED to. The setting stays per-user;
+  // only the bytes become a room post, which is what makes them fetchable.
+  roomId: string
   current: ChatBg | undefined
   onApply: (bg: ChatBg) => void
   onClose: () => void
@@ -84,7 +89,10 @@ export function ChatBackgroundMenu({
     setUploading(true)
     setError(null)
     try {
-      const { content_uri } = await client.uploadContent(file, { name: file.name, type: file.type })
+      // Posted for the same reason the domain background is: the gate
+      // authorizes media with a message behind it. The SETTING stays local --
+      // only the bytes become a room post.
+      const { mxc: content_uri } = await uploadAndPostBackground(client, roomId, file, 'chat')
       onApply({ mxc: content_uri, dim })
     } catch {
       setError('Upload failed. Try again or use a URL.')
