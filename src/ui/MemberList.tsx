@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { Room } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
+import { startDm } from '../client/dm'
+import { describeInviteError } from '../client/userDirectory'
+import { UserPicker } from './UserPicker'
 import { useMembers } from '../client/useMembers'
 import { useMemberBackfill } from '../client/useMemberBackfill'
 import { honorificFor, maxPower, type MergedMember } from '../client/members'
@@ -20,6 +23,10 @@ export function MemberList({ room }: { room: Room | null }) {
   const { client } = useClient()
   const members = useMembers(client)
   const [mode, setMode] = useState<Mode>('all-highlight')
+  const [picker, setPicker] = useState<'dm' | 'invite' | null>(null)
+  // One-line result of the last invite/DM. Errors here are the server's own
+  // words -- a 403 means insufficient power level and should say so.
+  const [notice, setNotice] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
   // Background-hydrate the community roster so All / Nearby fill in (sliding sync
@@ -75,6 +82,84 @@ export function MemberList({ room }: { room: Room | null }) {
         <ModeBtn active={mode === 'all'} onClick={() => setMode('all')}>All</ModeBtn>
         <ModeBtn active={mode === 'all-highlight'} onClick={() => setMode('all-highlight')}>Nearby</ModeBtn>
       </div>
+
+      <div style={{ display: 'flex', gap: 4, padding: '0 6px 6px' }}>
+        <button
+          type="button"
+          onClick={() => setPicker('dm')}
+          title="Start a direct message"
+          style={miniBtn}
+        >
+          + DM
+        </button>
+        {room && (
+          <button
+            type="button"
+            onClick={() => setPicker('invite')}
+            title="Invite someone to this room"
+            style={miniBtn}
+          >
+            + Invite
+          </button>
+        )}
+      </div>
+
+      {picker && client && (
+        <UserPicker
+          client={client}
+          title={picker === 'dm' ? 'Start a direct message' : 'Invite to this room'}
+          actionLabel={picker === 'dm' ? 'Opening' : 'Inviting'}
+          excludeFromRoom={picker === 'invite' ? room : null}
+          onPick={(userId) => {
+            const run = async () => {
+              try {
+                if (picker === 'dm') {
+                  const result = await startDm(client, userId)
+                  setNotice(
+                    result.existing
+                      ? 'You already have a direct message with them -- opening it.'
+                      : 'Direct message created.',
+                  )
+                } else if (room) {
+                  await client.invite(room.roomId, userId)
+                  setNotice('Invite sent.')
+                }
+                setPicker(null)
+              } catch (err) {
+                // Surface the server's own reason rather than "it failed".
+                setNotice(describeInviteError(err))
+                setPicker(null)
+              }
+            }
+            void run()
+          }}
+          onClose={() => setPicker(null)}
+        />
+      )}
+
+      {notice && (
+        <div
+          style={{
+            fontSize: 11,
+            padding: '4px 8px',
+            margin: '0 6px 6px',
+            borderRadius: 6,
+            background: 'var(--cpd-color-bg-subtle-secondary)',
+            color: 'var(--cpd-color-text-secondary)',
+          }}
+          role="status"
+        >
+          {notice}{' '}
+          <button
+            type="button"
+            onClick={() => setNotice(null)}
+            style={{ border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer' }}
+            aria-label="Dismiss"
+          >
+            {'×'}
+          </button>
+        </div>
+      )}
 
       <div ref={listRef} style={{ flex: 1, overflowY: 'auto', padding: '2px 4px' }}>
         <div style={{ fontSize: 11, color: 'var(--cpd-color-text-secondary)', padding: '2px 8px' }}>
@@ -202,4 +287,15 @@ function ModeBtn({
       {children}
     </button>
   )
+}
+
+const miniBtn: CSSProperties = {
+  flex: 1,
+  fontSize: 11,
+  padding: '3px 6px',
+  borderRadius: 6,
+  border: '1px solid rgba(128,128,128,0.3)',
+  background: 'transparent',
+  color: 'var(--cpd-color-text-secondary)',
+  cursor: 'pointer',
 }
