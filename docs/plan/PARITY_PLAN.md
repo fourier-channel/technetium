@@ -14,8 +14,8 @@
 | field | value |
 | --- | --- |
 | campaign | parity-v1 (30 features, 3 audit categories) |
-| current wave | Wave 3 -- 8 of 9 landed. **W3.4 room ordering deliberately deferred** (analysis below). Next: Wave 4 members & presence |
-| pure checks | 339 passing (`npm run check`) -- 11 harnesses; 61 are sanitizer/security |
+| current wave | **Wave 4 COMPLETE** (`6c3a219`). Outstanding: W3.4 room ordering (analysis below), then Wave 5 heavy independents |
+| pure checks | 356 passing (`npm run check`) -- 12 harnesses; 61 are sanitizer/security |
 | devlog | 2 entries appended (Wave 0+1, Wave 2 part 1) |
 | branch | `parity-v1` (off `main`) |
 | base HEAD | `d4d1494` (main, "Merge branch 'chatbox-domain-v1'") |
@@ -393,6 +393,8 @@ Rules the two features must both honour:
 | W3.8 | Start-a-DM | **landed** | `f897bec` | Detection FIRST. `m.direct` is not self-cleaning (keeps left rooms), so a hit is verified against membership before reuse. `trusted_private_chat` -- neither party moderates the other. `m.direct` write awaited: if it fails the room is a DM nowhere. |
 | W3.9 | Create room / space | **landed** | `9e2327d` | `m.space.child` is written INTO THE SPACE, needing power there, not in the new room -- so creation can succeed while parenting fails. That case keeps the dialog open and prints the room id to adopt by hand. Join rules = the 3 house rules; `knock` via initial_state (no preset). Visibility Private regardless -- publishing is a separate decision. |
 
+**Wave 4 COMPLETE.**
+
 #### W3.4 -- why room ordering is deferred, and what the next session faces
 
 The store half shipped with W3.3: `roomOrder: Record<string, string[]>` keyed
@@ -428,11 +430,11 @@ rushed.
 
 | id | step | status | commit | result / pendings |
 | --- | --- | --- | --- | --- |
-| W4.1 | Honorific-based sorting (tier then alpha) -- tiny, do first | todo | | |
-| W4.2 | ProfileCard wiring (member row + sender pillbox) | todo | | ONE coordinated Row touch -- after the Wave 2 chain closes |
-| W4.3 | Edit own profile (`setDisplayName`, avatar upload -> `setAvatarUrl`) | todo | | CHROME media = homeserver path (D-bf01), NOT the gateway |
-| W4.4 | Block / ignore (`setIgnoredUsers`, timeline filtering at toItems) | todo | | |
-| W4.5 | Presence display (`useUserPresence`) | todo | | SERVER-GATED: render nothing when the server sends nothing -- no fake "offline" |
+| W4.1 | Honorific-based sorting | **landed** | `6c3a219` | TIER then alpha -- not raw PL. 50 and 99 are both `@` and must rank equally, else list order disagrees with the glyphs shown. FLIP/pop animates it free. |
+| W4.2 | ProfileCard wiring | **landed** | `6c3a219` | Member row + sender pillbox, both keyboard-reachable. Card owned ABOVE the rows per surface (two rows can't each open one); reaches Row via `profileOpener` context since Row is shared with the thread panel. |
+| W4.3 | Edit own profile | **landed** | `6c3a219` | Avatar via HOMESERVER upload (D-bf01), not the gateway which 403s avatars. Empty display name ALLOWED -- in Matrix it legitimately means 'fall back to MXID'. 8MB guard fails with a sentence, not a bare 413. |
+| W4.4 | Block / ignore | **landed** | `6c3a219` | Account data -> follows every device. Server stops sending ignored events but NOT retroactively, so `toItems` filters too -- there rather than in the renderer, so no gap, no 'hidden' row, no orphaned reaction/receipt. Repaints on account-data change. Self-ignore refused (reads as data loss). |
+| W4.5 | Presence display | **landed** | `6c3a219` | **Expected to render NOTHING until the operator enables presence** -- that is correct behaviour, not a bug. Unknown != offline; a grey dot everywhere would be a client-invented claim. |
 | -- | Server-wide member list | **EXCLUDED** | -- | O-tp1 confirmed by operator 2026-08-06. Closed. |
 
 ### Wave 5 -- heavy independents
@@ -492,6 +494,11 @@ visual or interactive is claimed only as PENDING.
 | W3.7-a | Invite sends and the other identity sees it; inviting without permission shows the PERMISSION message, not a generic failure. | yes |
 | W3.8-a | "+ DM" opens a conversation; a SECOND attempt reuses the same room rather than creating a duplicate; the room shows as a DM in Element. | yes |
 | W3.9-a | New room appears in the nav without reload; nesting works; creating in a space you lack rights in reports the room id instead of vanishing. | no |
+| W4.1-a | Member list groups by tier (~ then @ then + then plain), alphabetical inside each; the reorder animates. | no |
+| W4.2-a | Clicking a member row OR a message sender pill opens ONE card; Escape and outside-click close it. | no |
+| W4.3-a | Own card changes display name and avatar; both propagate to Element; "Remove avatar" works. | yes |
+| W4.4-a | Block hides that user's messages everywhere immediately (no gap, no placeholder row); Unblock restores them; the block is visible in Element's ignore list. | yes |
+| W4.5-a | **Presence renders NOTHING** until `presence.enabled: true` is set server-side (section 4). Absence here is the correct result, not a failure. | operator/server |
 | KBD-a | Tab from the timeline reaches the composer in a sane number of stops; arrows move within a row's action bar and reaction strip. | no |
 
 Standing note: receipts, typing, reactions and presence all need a

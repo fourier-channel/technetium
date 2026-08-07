@@ -2465,3 +2465,63 @@ working file -- so it is recorded rather than rushed. Full analysis in the
 ledger.
 
 Nothing deployed; nothing outside the repo written.
+
+---
+
+## 2026-08-07 -- parity-v1 Wave 4: members & presence (auto run)
+
+All five items. Honorific sorting, profile-card wiring, own-profile editing,
+block/ignore, presence.
+
+### D-tp12 -- sort by TIER, not by power level
+
+Two moderators at PL 50 and PL 99 are both "@". Ranking them by raw power
+level would split them apart in a list that is showing the same glyph for
+both, so the order would visibly disagree with the labels. The comparator
+buckets by tier and then sorts alphabetically inside it.
+
+### D-tp13 -- presence renders nothing, and that is the feature
+
+Synapse ships with presence disabled on many deployments. When it is off the
+server simply never sends `m.presence`, and there is no such thing as
+"offline" -- only "unknown". Drawing a grey dot for unknown would tell every
+member of a room that everyone is offline: a claim the client invented rather
+than anything the server said.
+
+So an unknown user gets no dot and no status line. **This feature is expected
+to render nothing until the operator enables presence server-side**, and that
+absence is the correct result rather than a bug to chase.
+
+### G-tp14 (gotcha) -- ignoring is not retroactive
+
+`m.ignored_user_list` is account data, so the server stops sending an ignored
+user's events -- but not the ones already in a loaded timeline. Those stay
+until a reload. The renderer therefore has to filter as well, and it does so
+in `toItems` rather than in the row: filtering at the fold point means an
+ignored sender leaves no gap, no "message hidden" placeholder, and no orphaned
+reaction or read receipt pointing at a message nobody can see.
+
+Ignoring yourself is refused outright. The server would accept it, and a
+client that hides its own messages reads as data loss.
+
+### G-tp15 (gotcha) -- the harness could not load half the tree
+
+`import.meta.env` is injected by Vite at build time; Node has none, so any
+module reading it threw on import. That had been quietly limiting what could
+be tested to modules avoiding `media.ts` -- a constraint I had been working
+around without noticing it was a constraint.
+
+`import.meta` cannot be patched from outside a module, so `checks/_hooks.mjs`
+now rewrites the source as it loads. `toItems` became directly testable, which
+is how the ignore filter is covered.
+
+Worth stating as a lesson rather than a fix: when a harness quietly refuses a
+whole class of module, the temptation is to keep choosing testable modules.
+The cost is invisible until something important sits on the wrong side of the
+line.
+
+### Wave 4 leaves nothing deferred
+The only outstanding Wave 3 item remains W3.4 (room ordering), whose analysis
+is in the ledger. Next is Wave 5: search, link previews, polls, custom emoji.
+
+Nothing deployed; nothing outside the repo written.
