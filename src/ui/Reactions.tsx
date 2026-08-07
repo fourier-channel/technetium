@@ -5,6 +5,8 @@ import type { ReactionTally } from '../client/relations'
 import { EmojiPicker } from './EmojiPicker'
 import { useReactTarget } from './reactTarget'
 import { useRoving } from './roving'
+import { isCustomEmojiKey } from '../client/emojiPacks'
+import { AuthedImage } from './AuthedImage'
 
 // ---------------------------------------------------------------------------
 // W2.5 -- the reactions strip in the row footer.
@@ -86,7 +88,15 @@ export function ReactionStrip({
           onClick={() => void toggle(t.key, t)}
           {...roving.itemProps(i)}
         >
-          <span className="tc-reaction-key">{t.key}</span>
+          {/* A custom-emoji reaction's KEY is an mxc uri (MSC2545), so it
+              renders as an image rather than as literal "mxc://..." text. */}
+          <span className="tc-reaction-key">
+            {isCustomEmojiKey(t.key) ? (
+              <AuthedImage mxc={t.key} width={180} fill transparentLoading alt="" fallback="?" />
+            ) : (
+              t.key
+            )}
+          </span>
           <span className="tc-reaction-count">{t.count}</span>
         </button>
       ))}

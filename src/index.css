@@ -853,3 +853,93 @@ code {
 .tc-presence-dot[data-presence='offline'] {
   background: rgba(140, 150, 170, 0.55);
 }
+
+/* Link preview (W5.2). Absent entirely unless the server returned something
+   useful -- no skeleton and no empty frame, so a link never shoves the
+   timeline around while a preview resolves. */
+.tc-link-preview {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  max-width: 420px;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border-left: 3px solid var(--tc-link);
+  background: var(--cpd-color-bg-subtle-secondary, rgba(128, 128, 128, 0.12));
+  text-decoration: none;
+  color: inherit;
+}
+.tc-link-preview:hover {
+  background: var(--cpd-color-bg-subtle-primary, rgba(128, 128, 128, 0.2));
+}
+.tc-link-preview-img {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+.tc-link-preview-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tc-link-preview-title {
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tc-link-preview-desc {
+  font-size: 11px;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Polls (W5.3). Options are fixed-height so a tally changing never re-lays-out
+   the message; the fill is a background layer, not a sized sibling. */
+.tc-poll { max-width: 380px; display: flex; flex-direction: column; gap: 4px; }
+.tc-poll-question { font-weight: 600; margin-bottom: 2px; }
+.tc-poll-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+.tc-poll-option:disabled { cursor: default; }
+.tc-poll-option[data-mine='true'] { border-color: var(--tc-link); }
+.tc-poll-option:focus-visible { outline: 2px solid var(--tc-link); outline-offset: 1px; }
+.tc-poll-fill {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: color-mix(in srgb, var(--tc-link) 22%, transparent);
+  transition: width 180ms ease-out;
+  pointer-events: none;
+}
+.tc-poll-label { position: relative; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-poll-count { position: relative; font-variant-numeric: tabular-nums; color: var(--cpd-color-text-secondary, #a8b0bd); }
+.tc-poll-footer { font-size: 11px; color: var(--cpd-color-text-secondary, #a8b0bd); }
+@media (prefers-reduced-motion: reduce) { .tc-poll-fill { transition: none; } }
+
+/* A custom-emoji reaction renders its mxc as an image inside the pill; fixed
+   box so a custom and a unicode reaction are the same height (W5.4). */
+.tc-reaction-key { display: inline-grid; place-items: center; min-width: 16px; height: 16px; }

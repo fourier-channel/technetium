@@ -22,6 +22,12 @@ import { ReceiptCluster } from './ReceiptCluster'
 import { SPOILER_ATTR, toggleSpoiler } from '../client/spoilers'
 import { usePinnedEvents } from '../client/usePinnedEvents'
 import { PinnedPanel } from './PinnedPanel'
+import { SearchPanel } from './SearchPanel'
+import { LinkPreview } from './LinkPreview'
+import { firstLink } from '../client/urlPreview'
+import { isPollStart } from '../client/polls'
+import { PollBody } from './PollBody'
+import { useLinkPreviewPref } from './linkPreviewPref'
 import { RoomHeaderInfo } from './RoomHeaderInfo'
 import { ProfileOpenerContext, useProfileOpener } from './profileOpener'
 import { ProfileCard } from './ProfileCard'
@@ -66,6 +72,7 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
   const receipts = useRoomReceipts(client, room)
   const pins = usePinnedEvents(client, room)
   const [pinnedOpen, setPinnedOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   // W4.2 -- one card for the whole timeline, owned here so two rows cannot
   // each open their own.
   const [profile, setProfile] = useState<{ userId: string; x: number; y: number } | null>(null)
@@ -191,6 +198,15 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
               {loadingOlder ? 'Loading...' : 'Load older'}
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => setSearchOpen((o) => !o)}
+            title="Search messages"
+            aria-expanded={searchOpen}
+            style={{ fontSize: 12, fontWeight: 400 }}
+          >
+            {'\u{1F50D}'}
+          </button>
           {pins.pinned.length > 0 && (
             <button
               type="button"
@@ -282,6 +298,9 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
             value={(userId, x, y) => setProfile({ userId, x, y })}
           >
           <JumpContext.Provider value={jumpApi}>
+            {searchOpen && client && (
+              <SearchPanel client={client} room={room} onClose={() => setSearchOpen(false)} />
+            )}
             {pinnedOpen && (
               <PinnedPanel
                 client={client}
@@ -429,8 +448,17 @@ function SenderPill({
 export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?: (roomId: string, rootId: string) => void }) {
   const { event, kind, cells, layout } = item
   const { open } = useLightbox()
+  const { client } = useClient()
   const actions = useMessageActions(item)
   const openProfile = useProfileOpener()
+  // One preview per message: a wall of cards under a link-heavy message is its
+  // own problem. Opt-in, because a preview makes the SERVER fetch a third-party
+  // URL on the reader's behalf.
+  const linkPreviewsEnabled = useLinkPreviewPref()
+  const previewUrl =
+    item.kind === 'message' && typeof item.content.body === 'string'
+      ? firstLink(item.content.body)
+      : null
   const time = new Date(event.getTs()).toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit',
@@ -477,6 +505,10 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
         <span style={{ whiteSpace: 'pre-wrap' }}>{linkify(rendered.text ?? '')}</span>
       )
     }
+  } else if (isPollStart(event)) {
+    // A poll arrives as its own event type, so it is classified 'other' by
+    // toItems and would otherwise render as `[m.poll.start]`.
+    body = <PollBody client={client} room={client?.getRoom(event.getRoomId() ?? '') ?? null} event={event} />
   } else if (kind === 'encrypted') {
     body = <span style={{ fontStyle: 'italic', opacity: 0.7 }}>🔒 Encrypted (decryption coming later)</span>
   } else if (kind === 'redacted') {
@@ -510,6 +542,9 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
         {item.replyTo && <ReplyPill replyTo={item.replyTo} />}
         <div style={{ fontSize: 14, wordBreak: 'break-word', minWidth: 0 }}>
           {body}
+          {previewUrl && (
+            <LinkPreview client={client} url={previewUrl} enabled={linkPreviewsEnabled} />
+          )}
           {item.editedTs !== undefined && (
             <span
               className="tc-edited-marker"
