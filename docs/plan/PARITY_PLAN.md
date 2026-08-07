@@ -14,8 +14,8 @@
 | field | value |
 | --- | --- |
 | campaign | parity-v1 (30 features, 3 audit categories) |
-| current wave | **Wave 2 COMPLETE** (`0dfb608`) -- next up: Wave 3 rooms & navigation |
-| pure checks | 306 passing (`npm run check`) -- 9 harnesses; 61 are sanitizer/security |
+| current wave | Wave 3 -- 8 of 9 landed. **W3.4 room ordering deliberately deferred** (analysis below). Next: Wave 4 members & presence |
+| pure checks | 339 passing (`npm run check`) -- 11 harnesses; 61 are sanitizer/security |
 | devlog | 2 entries appended (Wave 0+1, Wave 2 part 1) |
 | branch | `parity-v1` (off `main`) |
 | base HEAD | `d4d1494` (main, "Merge branch 'chatbox-domain-v1'") |
@@ -383,15 +383,46 @@ Rules the two features must both honour:
 
 | id | step | status | commit | result / pendings |
 | --- | --- | --- | --- | --- |
-| W3.1 | Mark-as-read (context menu, S4 helper, space-descendant iteration bounded) | todo | | |
-| W3.2 | Room header: topic + joined member count | todo | | touches `App.tsx` toolbar -- coordinate with Wave 2 chain owner |
-| W3.3 | Local room rename override (display-only, local) | todo | | |
-| W3.4 | Custom room ordering (reuse threadDrag + G-bf01 capture fix) | todo | | O-tp5 |
-| W3.5 | Server-side mute via push rules (`client/pushRules.ts`) | todo | | O-tp2 |
-| W3.6 | UserPicker primitive (`ui/UserPicker.tsx`) | todo | | |
-| W3.7 | Send invites (403 = insufficient PL, surfaced honestly) | todo | | |
-| W3.8 | Start-a-DM (`m.direct` detection first, then createRoom) | todo | | |
-| W3.9 | Create room / space (parent `m.space.child`, PL-gated, honest partial-failure message) | todo | | |
+| W3.1 | Mark-as-read | **landed** | `ac5a2e0` | Uses the S4 helper so it cannot drift from the auto-marker. Space walk: joined non-spaces only, deduped (a room can sit under 2 spaces), depth-first, SEQUENTIAL (50 concurrent writes to save a second is a bad trade), capped at 200 and logged. |
+| W3.2 | Room header: topic + joined member count | **landed** | `ac5a2e0` | Landed in the Timeline header, not App.tsx. Topic ellipsises inside a fixed shape so a paragraph topic never pushes the timeline. |
+| W3.3 | Local room rename override | **landed** | `ac5a2e0` | NOT a state rename -- renaming for everyone is a moderator action. One resolution point so nav + header cannot disagree. Empty override = removal, else a room could be renamed to nothing and become unfindable. |
+| W3.4 | Custom room ordering | **DEFERRED -- start here** | | O-tp5. Store side is DONE (`roomOrder` keyed by parent scope, in settings + loader validation, shipped in `ac5a2e0`). The UI is deferred on analysis, not reluctance -- see below. |
+| W3.5 | Server-side mute via push rules | **landed** | `3fdf6dc` | Wraps sdk `setRoomMutePushRule` (carries the SYN-590 delete-then-add workaround). Local map survives as read-fallback, migrates on first toggle-touch. **Snooze stays local**: a push rule has no expiry, and a timer in a closable tab is a promise the client can't keep. `isMutedNow` shape preserved -> zero consumer changes. |
+| W3.6 | UserPicker primitive | **landed** | `f897bec` | local members -> directory -> raw MXID (the directory only indexes users who share a room or are published, so a valid id can be missing entirely). Raw id LAST so a typo can't outrank a real match. Debounced; a disabled directory degrades to local members. |
+| W3.7 | Send invites | **landed** | `f897bec` | `describeInviteError` surfaces the server's own reason; 403 says 'you do not have permission' rather than 'invite failed'. |
+| W3.8 | Start-a-DM | **landed** | `f897bec` | Detection FIRST. `m.direct` is not self-cleaning (keeps left rooms), so a hit is verified against membership before reuse. `trusted_private_chat` -- neither party moderates the other. `m.direct` write awaited: if it fails the room is a DM nowhere. |
+| W3.9 | Create room / space | **landed** | `9e2327d` | `m.space.child` is written INTO THE SPACE, needing power there, not in the new room -- so creation can succeed while parenting fails. That case keeps the dialog open and prints the room id to adopt by hand. Join rules = the 3 house rules; `knock` via initial_state (no preset). Visibility Private regardless -- publishing is a separate decision. |
+
+#### W3.4 -- why room ordering is deferred, and what the next session faces
+
+The store half shipped with W3.3: `roomOrder: Record<string, string[]>` keyed
+by PARENT scope (`''` = root/orphans), with loader validation and a
+`setRoomOrder` mutator. Only the drag UI remains.
+
+`useThreadDrag` IS reusable in principle -- it is generic over
+`[data-flip-id]` descendants of a container plus an `orderedIds` array. Four
+concrete obstacles, none fatal, all needing browser verification:
+
+1. **Nav rows carry no `data-flip-id`.** `measureCards` finds nothing today.
+   MemberList rows have it; nav rows do not.
+2. **The tree needs PER-SIBLING-GROUP containers.** `measureCards` grabs every
+   descendant, so one container over the whole tree would let a room be
+   dragged into another space's slot and produce a meaningless order. Each
+   parent's children wrapper (`NavTree.tsx` ~:658) has to be its own drag
+   scope, i.e. the hook is called per group.
+3. **The scroll container is not the drag container.** `measureCards` uses
+   `container.scrollTop` and the edge-autoscroll drives the container it is
+   given, but the nav scrolls on `Sidebar.tsx:61`'s `<aside>` while the
+   children wrapper is a non-scrolling div inside a `grid-template-rows`
+   collapse animation. Autoscroll would drive the wrong element.
+4. **Favourited descendants render OUTSIDE their group.** `NavTree.tsx:~678`
+   hoists them as siblings of the container when a space is collapsed, so the
+   dragged set and the rendered set disagree in exactly that state.
+
+None of this is hard; all of it is drag geometry that cannot be verified from
+a headless box, and it lands in a large working file. Doing it half-checked
+risks a nav that is worse than one without the feature. Recorded rather than
+rushed.
 
 ### Wave 4 -- members & presence
 
@@ -453,6 +484,14 @@ visual or interactive is claimed only as PENDING.
 | W2.7-a | Pin absent at PL0, present for a moderator; header count; panel lists newest-first and jumps; unpin from panel AND action bar; a pin made in Element appears. | yes |
 | W2.8-a | Forwarding text and an image both land in the chosen room; the image needs no re-upload and creates NO second booru post (O-tp6 is the related flag); forwarding a reply carries no quote. | yes |
 | W2.9-a | `@` opens/filters the picker; arrows/Enter/Tab/Escape behave; the sent mention renders as a pill in Element and links back; the mentioned user is NOTIFIED; a reply notifies the person replied to. | yes |
+| W3.1-a | "Mark as read" clears a room's glow; on a SPACE it clears every child. | no |
+| W3.2-a | Header shows topic + joined count; a very long topic ellipsises and does NOT push the timeline. | no |
+| W3.3-a | A renamed room shows the override in BOTH nav and header, survives reload, and "Reset to server name" restores it. | no |
+| W3.5-a | Muting here silences the room in Element too, and vice versa; unmute clears both; a snooze still expires locally; a pre-existing local mute still reads muted and migrates on toggle. | yes |
+| W3.6-a | Picker finds local members instantly, directory users after a pause, and accepts a raw `@user:server` the directory does not surface. | yes |
+| W3.7-a | Invite sends and the other identity sees it; inviting without permission shows the PERMISSION message, not a generic failure. | yes |
+| W3.8-a | "+ DM" opens a conversation; a SECOND attempt reuses the same room rather than creating a duplicate; the room shows as a DM in Element. | yes |
+| W3.9-a | New room appears in the nav without reload; nesting works; creating in a space you lack rights in reports the room id instead of vanishing. | no |
 | KBD-a | Tab from the timeline reaches the composer in a sane number of stops; arrows move within a row's action bar and reaction strip. | no |
 
 Standing note: receipts, typing, reactions and presence all need a

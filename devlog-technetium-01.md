@@ -2388,3 +2388,80 @@ list with the second-identity items marked.
 ### Next
 Wave 3 -- rooms and navigation. Nothing deployed; nothing outside the repo
 written.
+
+---
+
+## 2026-08-07 -- parity-v1 Wave 3: rooms & navigation (auto run)
+
+Eight of nine. W3.4 (custom room ordering) is deferred on analysis and the
+analysis is in the ledger, not here -- the next session should start from it
+rather than rediscover it.
+
+### What landed
+
+Mark-as-read, room header topic + member count, local rename override,
+server-backed mute, the user picker, invites, start-a-DM, create room/space.
+
+### D-tp10 -- mute moves to the server, snooze deliberately does not
+
+A local mute only silenced this browser. A push rule silences the account,
+including push to a phone, which is what people mean by muting a room. So the
+push rule became the source of truth, with the local map surviving as a
+read-fallback that migrates forward on the first toggle-touch rather than by a
+silent mass rewrite (O-tp2 as recorded).
+
+Snooze stays local, and this is the deliberate half. A push rule has no
+expiry, so "mute for 8 hours" would need a timer to remove it -- and a timer
+in a browser tab that may be closed is a promise the client cannot keep. A
+snooze that silently became permanent is worse than one that only applies
+here.
+
+`isMutedNow` kept its exact shape, so the nav's name suppression, its
+space-level notification aggregation and the context menu all inherited this
+with no edits at all.
+
+### D-tp11 -- partial success must be reported, not swallowed
+
+Two features in this wave can half-succeed, and both say so:
+
+- **Creating a parented room.** `m.space.child` is written INTO THE SPACE, so
+  it needs power in the SPACE, not in the new room. Creation can succeed while
+  parenting fails, leaving a real room the user cannot see anywhere. The
+  dialog stays open, explains why, and prints the room id so it can be adopted
+  by hand.
+- **Starting a DM.** The `m.direct` write is awaited after creation, because
+  if it fails the room exists but is a DM nowhere, including in Element.
+
+Related: invite failures report the SERVER's reason. A 403 means insufficient
+power level and now says so, instead of "invite failed" -- the kind of
+vagueness that makes people retry pointlessly.
+
+### G-tp13 (gotcha) -- m.direct is not self-cleaning
+
+It keeps rooms the user has left. A DM-detection hit therefore has to be
+verified against actual membership before being reused, or the client
+cheerfully "reuses" a room nobody is in. Detection runs first regardless:
+opening a second DM with someone you already have one with is the most common
+way this feature goes wrong, and the room list then shows two identical
+entries with the history split between them.
+
+### G-tc01 again (twice)
+
+The debounce effect in the user picker set state in its body for the
+short-query case, and the pinned-row list was briefly held in state with an
+effect to sync it. Both fixed at source rather than absorbed into the lint
+baseline, which has now held at 23 across the whole campaign. The pattern is
+consistent enough to state plainly: **if it can be computed from what is
+already in hand, it is not state; if it must be set, set it from a handler or
+a timeout, never an effect body.**
+
+### Deferred
+W3.4 custom room ordering. The store half is done and shipped; the drag UI
+needs per-sibling-group containers, `data-flip-id` on nav rows, a scroll
+container that is not the drag container, and a decision about favourited
+descendants that render outside their group when a space is collapsed. All
+tractable, none verifiable from a headless box, and it lands in a large
+working file -- so it is recorded rather than rushed. Full analysis in the
+ledger.
+
+Nothing deployed; nothing outside the repo written.
