@@ -23,6 +23,14 @@ export interface RoomListSettings {
   animationsEnabled: boolean
   favorites: string[]
   icons: Record<string, string>
+  // W3.3 -- LOCAL display-only room name overrides. Deliberately not written
+  // to room state: renaming a room for everyone is a moderator action, and
+  // this is "call it what I like in my own client".
+  renames: Record<string, string>
+  // W3.4 -- custom sibling order, keyed by PARENT scope. '' is the root/orphan
+  // list. Ids not present fall back to the server order (O-tp5: local for v1,
+  // account-data portability is v2, same path as thread order).
+  roomOrder: Record<string, string[]>
   mutes: Record<string, number | null>
   soundEnabled: boolean
   soundVolume: number // 0..100
@@ -35,6 +43,8 @@ export function defaultRoomListSettings(): RoomListSettings {
     animationsEnabled: true,
     favorites: [],
     icons: {},
+    renames: {},
+    roomOrder: {},
     mutes: {},
     soundEnabled: false,
     soundVolume: 5,
@@ -59,6 +69,12 @@ export interface RoomListSettingsApi {
   getIcon: (roomId: string) => string | undefined
   setIcon: (roomId: string, icon: string) => void
   clearIcon: (roomId: string) => void
+  // undefined = use the server name.
+  getRename: (roomId: string) => string | undefined
+  setRename: (roomId: string, name: string) => void
+  clearRename: (roomId: string) => void
+  getRoomOrder: (scopeKey: string) => string[] | undefined
+  setRoomOrder: (scopeKey: string, ids: string[]) => void
   // undefined = active; null = muted indefinitely; number = snooze-until ts.
   getMute: (roomId: string) => number | null | undefined
   isMutedNow: (roomId: string) => boolean

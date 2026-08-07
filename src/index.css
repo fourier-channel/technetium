@@ -796,3 +796,40 @@ code {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Room header info (W3.2): name, joined count, topic on ONE line. A room with
+   a paragraph-long topic must not push the timeline down, so the topic
+   ellipsises inside the header's fixed shape and the full text is the title. */
+.tc-room-header-info {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.tc-room-header-name {
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40%;
+}
+.tc-room-header-count {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--cpd-color-bg-subtle-secondary, rgba(128, 128, 128, 0.16));
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  font-variant-numeric: tabular-nums;
+}
+.tc-room-header-topic {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+}

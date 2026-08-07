@@ -16,6 +16,8 @@ function loadSettings(): RoomListSettings {
       animationsEnabled: typeof p.animationsEnabled === 'boolean' ? p.animationsEnabled : true,
       favorites: Array.isArray(p.favorites) ? p.favorites.filter((x) => typeof x === 'string') : [],
       icons: p.icons && typeof p.icons === 'object' ? p.icons : {},
+      renames: p.renames && typeof p.renames === 'object' ? p.renames : {},
+      roomOrder: p.roomOrder && typeof p.roomOrder === 'object' ? p.roomOrder : {},
       mutes: p.mutes && typeof p.mutes === 'object' ? p.mutes : {},
       soundEnabled: p.soundEnabled === true,
       soundVolume: typeof p.soundVolume === 'number' ? Math.max(0, Math.min(100, p.soundVolume)) : 5,
@@ -85,6 +87,28 @@ export function RoomListSettingsProvider({ children }: { children: ReactNode }) 
       }),
     [],
   )
+
+  const setRename = useCallback((roomId: string, name: string) => {
+    const trimmed = name.trim()
+    setSettings((s) => {
+      // An empty override is a removal, not an empty name -- otherwise a room
+      // could be renamed to nothing and become unfindable in the nav.
+      const renames = { ...s.renames }
+      if (trimmed) renames[roomId] = trimmed
+      else delete renames[roomId]
+      return { ...s, renames }
+    })
+  }, [])
+  const clearRename = useCallback((roomId: string) => {
+    setSettings((s) => {
+      const renames = { ...s.renames }
+      delete renames[roomId]
+      return { ...s, renames }
+    })
+  }, [])
+  const setRoomOrder = useCallback((scopeKey: string, ids: string[]) => {
+    setSettings((s) => ({ ...s, roomOrder: { ...s.roomOrder, [scopeKey]: ids } }))
+  }, [])
   const setMute = useCallback(
     (roomId: string, until: number | null) =>
       setSettings((s) => ({ ...s, mutes: { ...s.mutes, [roomId]: until } })),
@@ -117,6 +141,11 @@ export function RoomListSettingsProvider({ children }: { children: ReactNode }) 
       getIcon: (roomId) => settings.icons[roomId],
       setIcon,
       clearIcon,
+      getRename: (roomId) => settings.renames[roomId],
+      setRename,
+      clearRename,
+      getRoomOrder: (scopeKey) => settings.roomOrder[scopeKey],
+      setRoomOrder,
       getMute: (roomId) => (roomId in settings.mutes ? settings.mutes[roomId] : undefined),
       isMutedNow: (roomId) => {
         if (!(roomId in settings.mutes)) return false
@@ -137,6 +166,9 @@ export function RoomListSettingsProvider({ children }: { children: ReactNode }) 
       toggleFavorite,
       setIcon,
       clearIcon,
+      setRename,
+      clearRename,
+      setRoomOrder,
       setMute,
       clearMute,
     ],

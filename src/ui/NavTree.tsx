@@ -447,8 +447,10 @@ function TreeRow({
   onIntroInteract: () => void
 }) {
   const { client } = useClient()
-  const { isFavorite, isMutedNow } = useRoomListSettings()
-  const label = node.name || node.roomId
+  const { isFavorite, isMutedNow, getRename } = useRoomListSettings()
+  // W3.3 -- a local override wins over the server name, everywhere the name is
+  // shown, so the nav and the room header never disagree.
+  const label = getRename(node.roomId) ?? node.name ?? node.roomId
   const isCollapsed = collapsed.has(node.roomId)
   const isSelected = !node.isSpace && node.roomId === selectedRoomId
   const indent = 6 + depth * 12

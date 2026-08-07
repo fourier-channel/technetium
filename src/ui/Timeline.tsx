@@ -22,6 +22,7 @@ import { ReceiptCluster } from './ReceiptCluster'
 import { SPOILER_ATTR, toggleSpoiler } from '../client/spoilers'
 import { usePinnedEvents } from '../client/usePinnedEvents'
 import { PinnedPanel } from './PinnedPanel'
+import { RoomHeaderInfo } from './RoomHeaderInfo'
 import { useRoomReceipts } from '../client/useReceipts'
 import { ReceiptsContext, useReceipts } from './receiptsContext'
 
@@ -162,10 +163,12 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          gap: 12,
+          minWidth: 0,
           flexShrink: 0,
         }}
       >
-        <span>{room.name || room.roomId}</span>
+        <RoomHeaderInfo client={client} room={room} />
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {!atStart && (
             <button
