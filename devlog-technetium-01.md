@@ -2525,3 +2525,97 @@ The only outstanding Wave 3 item remains W3.4 (room ordering), whose analysis
 is in the ledger. Next is Wave 5: search, link previews, polls, custom emoji.
 
 Nothing deployed; nothing outside the repo written.
+
+---
+
+## 2026-08-07 -- parity-v1 CLOSEOUT: Wave 5, Wave 6, W3.4, and a media-routing fix
+
+The campaign is feature-complete: 30 of 30 audit items. This entry covers the
+final run and the closeout.
+
+### The bug that turned into an architecture fix
+
+Reported as "backgrounds don't reach other users, and domain backgrounds don't
+even show for the setter". Two different situations, and only one was a bug.
+
+CHAT backgrounds are per-user by design and always have been -- the header
+comment in `ui/chatBackground.ts` records a shared variant as a deliberate v2.
+They were not failing to send; they were never sent.
+
+DOMAIN backgrounds were genuinely broken, in two layers:
+
+**G-tp16 (gotcha).** `setBackground` caught every write rejection and resolved
+anyway, under a comment claiming "local UI already reflects the choice". It
+does not -- the background is read back from room state, so a failed write
+means it exists nowhere. And because the promise resolved, the editor's
+`await` passed and it called `onExit()`. **A failed save was pixel-identical
+to a successful one.** Third instance of D-tp11 this campaign.
+
+**D-tp14 -- backdrops belong on the R2 gateway.** With the failure finally
+visible it read `M_MISSING_TOKEN`, which is a MEDIA error, not a state one.
+Both backdrops were fetched direct from the homeserver's
+`/_matrix/client/v1/media/download`. That was never intentional. They are
+user-uploaded CONTENT, uploaded by the very same `client.uploadContent` call
+as a chat image -- the divergence was only ever on the READ side.
+
+This client does send an Authorization header on that route, so the header was
+being LOST in transit: a cross-origin redirect strips it, and so does a proxy
+that does not forward it on a media path. Either way the gateway avoids the
+whole class, because its ORIGINAL response is a presigned URL delivered as
+JSON rather than a redirect -- which is exactly why `fetchMediaSrc` exists.
+
+Backdrops now route through the gateway with NO fallback. A fallback would
+have hidden the remaining work; a visible 403 is worth more than a background
+that loads by a means nobody chose. `fetchHomeserverMedia` was deleted rather
+than left unused -- an exported helper that routes media the wrong way is a
+footgun someone reaches for later.
+
+The other half is the operator's: the fourier-auth gateway must authorize
+backdrop media by ROOM MEMBERSHIP. If a user can see the room in Matrix, the
+same token should fetch its background anywhere in the suite.
+
+### Wave 5
+
+Search, link previews, polls, MSC2545 custom emoji. The recurring theme is
+refusing to overclaim: search labels its local fallback as partial rather than
+answering "not found" about a room it has barely read; previews render nothing
+at all when the server declines; presence and previews are both opt-in or
+server-gated and say so.
+
+Poll tallying is enforced by the READER, not trusted from the wire --
+last-vote-wins, post-close votes discarded, over-selection trimmed, and only
+the poll's creator may end it. That last one is the same forged-authority hole
+S1 closes for edits, and it would have been easy to miss.
+
+### Wave 6 -- and why it was correctly scheduled last
+
+Day separators and same-sender grouping re-lay-out the Row that every Wave 2
+feature decorates. Both live in `applyLayout`, a SECOND pass over the folded
+items: the fold decides what exists, the layout pass decides how it looks.
+Keeping them apart is precisely why grouping landed without revisiting a
+single Wave 2 feature -- it collapses the HEADER and touches nothing else, and
+six checks assert exactly that.
+
+**G-tp17 (gotcha).** The day separator started as an early return inside Row,
+above its hooks -- a rules-of-hooks violation worth five lint errors. It
+belongs at the call site, which is what the design note said in the first
+place ("Row untouched"). The note was right and I had to be told so by the
+linter.
+
+### W3.4, un-deferred
+
+The four obstacles recorded when this was deferred all closed, and one closed
+better than expected: passing the sibling GROUP as the drag container is
+geometrically correct, because the group does not scroll and `scrollTop` stays
+0. The only real cost is edge-autoscroll. Deferring it was still right -- the
+analysis is what made the second attempt quick.
+
+### Closing note on the lint baseline
+
+23 problems at Wave 0; 23 at closeout, across ~40 new files. It moved five
+times mid-work and was pushed back down each time by restructuring rather than
+by moving the line. Every one of those five was G-tc01 or a sibling of it, and
+they are worth reading as a set: React Compiler rules do not bend, and each
+time the fix was better code than the version that tripped them.
+
+### Nothing deployed. Nothing outside this repo written.

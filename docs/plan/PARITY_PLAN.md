@@ -14,8 +14,8 @@
 | field | value |
 | --- | --- |
 | campaign | parity-v1 (30 features, 3 audit categories) |
-| current wave | **Wave 4 COMPLETE** (`6c3a219`). Outstanding: W3.4 room ordering (analysis below), then Wave 5 heavy independents |
-| pure checks | 356 passing (`npm run check`) -- 12 harnesses; 61 are sanitizer/security |
+| current wave | **CAMPAIGN FEATURE-COMPLETE** -- all 30 features landed. Awaiting operator verification + merge. |
+| pure checks | 425 passing (`npm run check`) -- 16 harnesses; 61 are sanitizer/security |
 | devlog | 2 entries appended (Wave 0+1, Wave 2 part 1) |
 | branch | `parity-v1` (off `main`) |
 | base HEAD | `d4d1494` (main, "Merge branch 'chatbox-domain-v1'") |
@@ -386,7 +386,7 @@ Rules the two features must both honour:
 | W3.1 | Mark-as-read | **landed** | `ac5a2e0` | Uses the S4 helper so it cannot drift from the auto-marker. Space walk: joined non-spaces only, deduped (a room can sit under 2 spaces), depth-first, SEQUENTIAL (50 concurrent writes to save a second is a bad trade), capped at 200 and logged. |
 | W3.2 | Room header: topic + joined member count | **landed** | `ac5a2e0` | Landed in the Timeline header, not App.tsx. Topic ellipsises inside a fixed shape so a paragraph topic never pushes the timeline. |
 | W3.3 | Local room rename override | **landed** | `ac5a2e0` | NOT a state rename -- renaming for everyone is a moderator action. One resolution point so nav + header cannot disagree. Empty override = removal, else a room could be renamed to nothing and become unfindable. |
-| W3.4 | Custom room ordering | **DEFERRED -- start here** | | O-tp5. Store side is DONE (`roomOrder` keyed by parent scope, in settings + loader validation, shipped in `ac5a2e0`). The UI is deferred on analysis, not reluctance -- see below. |
+| W3.4 | Custom room ordering | **landed** | `c610ffc` | Deferred once, then closed. Per-parent drag scopes (one container over the tree would allow cross-space drops). Group-as-container is geometrically correct (scrollTop stays 0); cost is edge-autoscroll only. Drag offered only while EXPANDED -- collapsed spaces hoist favourites outside the group. Reuses `useThreadDrag` + FLIP + unknown-ids-first. |
 | W3.5 | Server-side mute via push rules | **landed** | `3fdf6dc` | Wraps sdk `setRoomMutePushRule` (carries the SYN-590 delete-then-add workaround). Local map survives as read-fallback, migrates on first toggle-touch. **Snooze stays local**: a push rule has no expiry, and a timer in a closable tab is a promise the client can't keep. `isMutedNow` shape preserved -> zero consumer changes. |
 | W3.6 | UserPicker primitive | **landed** | `f897bec` | local members -> directory -> raw MXID (the directory only indexes users who share a room or are published, so a valid id can be missing entirely). Raw id LAST so a typo can't outrank a real match. Debounced; a disabled directory degrades to local members. |
 | W3.7 | Send invites | **landed** | `f897bec` | `describeInviteError` surfaces the server's own reason; 403 says 'you do not have permission' rather than 'invite failed'. |
@@ -395,7 +395,17 @@ Rules the two features must both honour:
 
 **Wave 4 COMPLETE.**
 
-#### W3.4 -- why room ordering is deferred, and what the next session faces
+#### W3.4 -- RESOLVED (`c610ffc`). Kept for the record: the four obstacles and how each closed.
+
+Obstacle 3 turned out better than recorded -- passing the GROUP as the drag
+container is geometrically correct, because the group does not scroll, so
+`container.scrollTop` stays 0 and the arithmetic holds. The only real cost is
+edge-autoscroll, which writes to a scrollTop that never moves. Sibling groups
+are short, so that gap is small -- and it is stated rather than hidden.
+
+Original analysis follows.
+
+#### W3.4 -- why room ordering was deferred
 
 The store half shipped with W3.3: `roomOrder: Record<string, string[]>` keyed
 by PARENT scope (`''` = root/orphans), with loader validation and a
@@ -441,19 +451,93 @@ rushed.
 
 | id | step | status | commit | result / pendings |
 | --- | --- | --- | --- | --- |
-| W5.1 | Message search (`client/search.ts`, results panel, capability probe + honest partial fallback) | todo | | |
-| W5.2 | Link previews (opt-in, authenticated endpoint, absent when server declines) | todo | | |
-| W5.3 | Polls (`ui/PollBody.tsx`, live tallies, composer "+" create) | todo | | O-tp4 |
-| W5.4 | Custom emoji + stickers (MSC2545 packs, custom-emote reactions, `m.sticker`) | todo | | O-tp3; depends on W2.5 |
+| W5.1 | Message search | **landed** | `1a85d41` | Capability probed once + cached; only a CAPABILITY failure (404/501/M_UNRECOGNIZED) disables it -- a rate limit must not convince the client the server can't search. Local fallback labelled PARTIAL everywhere. |
+| W5.2 | Link previews | **landed** | `1a85d41` | Opt-IN: a preview makes the HOMESERVER fetch a third-party URL for the reader. Only http(s) sent (SSRF surface; the ip-range blacklist is the operator's half). Renders NOTHING when declined -- no skeleton, no reflow. |
+| W5.3 | Polls | **landed** | `1a85d41` | O-tp4: sdk `M_POLL_*` matchers decide the wire name (reads both prefixes). Tally rules enforced by the READER: last-vote-wins, post-close votes discarded, redactions ignored, max_selections trimmed, **only the creator may end it**. Undisclosed renders no fill (a 0-width bar leaks that nobody voted). |
+| W5.4 | Custom emoji (MSC2545) | **landed (partial -- see note)** | `1a85d41` | O-tp3. Reads room-state + account-data packs; custom-emoji REACTIONS render their mxc key as an image. **NOT done: `im.ponies.emote_rooms`** (packs in other rooms) and `m.sticker` SENDING -- deliberately, since half-doing the pointer list would show some of a user's packs and silently omit the rest. |
 
 ### Wave 6 -- layout finale + closeout (serial, single agent)
 
 | id | step | status | commit | result / pendings |
 | --- | --- | --- | --- | --- |
-| W6.1 | Day separators (toItems marker items; Row untouched) | todo | | |
-| W6.2 | Same-sender grouping (verify EVERY Wave 2 decoration survives) | todo | | this is why it is last |
-| W6.3 | Full regression sweep (read-only agents: gates, stray debug, ledger truth, devlog completeness) | todo | | |
-| W6.4 | Closeout: consolidated PENDING list, draft-NN register, DEPENDENCIES.md deltas, merge-readiness note | todo | | NO deploy -- state plainly it is the operator's |
+| W6.1 | Day separators | **landed** | `16fe956` | Marker items from `applyLayout`, branched at the CALL SITE -- Row untouched, as the design note required (an early return above Row's hooks broke rules-of-hooks). |
+| W6.2 | Same-sender grouping | **landed** | `16fe956` | Second pass over folded items, so grouping collapses the HEADER and nothing else. Breaks on sender change, >5min gap, day boundary, and REPLY. Grouped rows show their time in the gutter on hover. 6 explicit regression checks: reactions/edited/content/event/id all survive. |
+| W6.3 | Regression sweep | **landed** | (this ledger) | No stray debug in campaign code (the one `console.log` is pre-existing, `tokenRefresher.ts`, from Phase 1). All non-ASCII is UI glyph literals (the allowed functional-literal exception). All 24 commit hashes cited in this ledger resolve. Gates green. |
+| W6.4 | Closeout | **landed** | (this ledger) | Consolidated PENDING list below; draft node register below; DEPENDENCIES.md current; merge-readiness stated. **Nothing deployed -- tc.41chan.net is the operator's.** |
+
+---
+
+## CLOSEOUT
+
+### Merge readiness
+
+`parity-v1` is feature-complete against the audit: **30 of 30**. Gates have
+held on every commit -- tsc clean, **lint at exactly 23** (the Wave 0
+baseline, never moved), build passing, 425 pure checks passing, `npm audit`
+clean (3 pre-existing advisories resolved along the way).
+
+**Nothing has been deployed. Nothing outside this repo has been written.**
+Deployment is the operator's, via `./deploy.sh`, when the operator says so.
+
+### BLOCKING on someone else (not code)
+
+| what | who | detail |
+| --- | --- | --- |
+| Backdrop media in R2 | operator / fourier-auth | The gateway must authorize backdrop media by ROOM MEMBERSHIP. It authorizes booru content today and 403s the rest, so domain + chat backgrounds will 403 VISIBLY until it does. Client side is done and correct (`2c497f5`). |
+| Presence | operator / homeserver | `presence.enabled: true`. Until then presence renders NOTHING, which is the designed behaviour, not a fault. |
+| Link previews | operator / homeserver | `url_preview_enabled: true` **plus** a correct `url_preview_ip_range_blacklist` (SSRF guard -- not optional). Previews stay absent until both that and the per-user opt-in are on. |
+| Message search | operator / homeserver | Server-side `/search`. The client probes and degrades to a labelled partial search if absent. |
+
+### Known gaps, stated rather than hidden
+
+- **W5.4 partial**: `im.ponies.emote_rooms` (packs in OTHER rooms) is not
+  followed, and `m.sticker` sending is not implemented. Reading room + user
+  packs and rendering custom-emoji reactions IS done. Half-doing the pointer
+  list would show some of a user's packs and silently omit the rest.
+- **W3.4**: no edge-autoscroll while dragging a room (the drag container is
+  the sibling group, which does not scroll). Groups are short; the reorder
+  itself is correct.
+- **Server-wide member list**: EXCLUDED, O-tp1, confirmed by the operator.
+- **Keyboard reorder** for drag surfaces: still deferred, as recorded in the
+  Thread Cards mission.
+- **Chat backgrounds are per-user by design** (`ui/chatBackground.ts`). They
+  are not "failing to share"; a shared variant is a recorded v2 and a real
+  design decision, not a bug fix.
+
+### Draft phase-node register (for the operator's next fourier-basis pass)
+
+Decisions: **D-tp01** zero-dep check harness - **D-tp02** CLAUDE.md mission
+replaced - **D-tp03** devlog stays at repo root - **D-tp04** reply fallbacks
+quote escaped plain text, never the target's HTML - **D-tp05** edit offered on
+own messages only - **D-tp06** delete hidden when not permitted - **D-tp07**
+`class` allowed only as a code-block language hint - **D-tp08** a forward
+strips context, `m.mentions` above all - **D-tp09** mentions masked before
+markdown - **D-tp10** mute to the server, snooze deliberately not - **D-tp11**
+partial success reported, never swallowed - **D-tp12** sort by tier not power
+level - **D-tp13** presence renders nothing by design.
+
+Gotchas: **G-tp01** react-refresh mixed exports - **G-tp02** a ref returned
+from a hook trips refs-during-render - **G-tp03** Node cannot load
+extensionless relative imports - **G-tp04** an event carries ONE
+`m.relates_to` - **G-tp05** MSC3440 thread replies carry a FALLBACK
+`m.in_reply_to` - **G-tp06** an `m.replace` must be honoured only from the
+original sender - **G-tp07** seed edits from effective content, not
+`getContent()` - **G-tp08** `sendEvent` rejects the string `'m.reaction'` -
+**G-tp09** `FORBID_CONTENTS` REPLACES DOMPurify's default, it does not extend
+it - **G-tp10** a security suite that passes without a DOM is worthless -
+**G-tp11** substring assertions on HTML lie in both directions - **G-tp12**
+derived data does not belong in state - **G-tp13** `m.direct` keeps rooms the
+user has left - **G-tp14** ignoring is not retroactive - **G-tp15** the
+harness could not load modules reading `import.meta.env`.
+
+### O-tp dispositions
+
+O-tp1 CLOSED (operator confirmed) - O-tp2 through O-tp5 proceeded as recorded -
+O-tp6 remains a flag for the bmb/chanbooru side (redacting an image does not
+remove its booru post) - O-tp7/O-tp8 proceeded - O-tp9 proceeded, then
+SUPERSEDED in part by O-tp11 - O-tp10 still the operator's call (thread replies
+appear both inline and in the panel) - O-tp11 RESOLVED by the operator: jsdom
+added.
 
 ---
 
