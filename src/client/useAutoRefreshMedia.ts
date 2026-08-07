@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { MatrixClient } from 'matrix-js-sdk'
-import { fetchHomeserverMedia } from './media'
+import { fetchMediaSrc } from './media'
 
 // ---------------------------------------------------------------------------
 // Auto-refreshing full-resolution media for LONG-LIVED backdrops (domain
@@ -22,9 +22,19 @@ import { fetchHomeserverMedia } from './media'
 // so the backdrop self-heals. It swaps to the fresh blob only once loaded, then
 // revokes the previous one, so there is no flash to empty.
 //
-// (Root-cause note: domain backgrounds are homeserver blobs, which don't expire
-// on their own; the observed vanishing was the blank-on-transient-failure path
-// above, plus token churn. This is the defensive fix the operator asked for.)
+// ROUTING (corrected): backdrops resolve through the fourier-auth gateway, the
+// same read path as every other uploaded image. They were previously fetched
+// direct from the homeserver's /_matrix/client/v1/media/download, which was not
+// intentional -- and which produced M_MISSING_TOKEN, because the Authorization
+// header this client sends is lost in transit on that route (a cross-origin
+// redirect strips it, as does a proxy that does not forward it on its media
+// path). The gateway's ORIGINAL response is a presigned URL delivered as JSON
+// rather than a redirect, so there is no header to lose.
+//
+// The gateway must authorize backdrop media by ROOM MEMBERSHIP for this to
+// serve: if a user can see the room in Matrix, the same token must fetch its
+// background anywhere in the suite. Until it does, a backdrop 403s VISIBLY
+// rather than falling back to a path that was never meant to carry it.
 // ---------------------------------------------------------------------------
 
 const DEFAULT_INTERVAL_MS = 4 * 60 * 1000 // gentle periodic re-fetch
@@ -55,7 +65,10 @@ export function useAutoRefreshMedia(
     let retryTimer: ReturnType<typeof setTimeout> | undefined
 
     const load = () => {
-      fetchHomeserverMedia(client, mxc)
+      // Through the GATEWAY, like every other uploaded image. Backdrops are
+      // user-uploaded content, not chrome, and they are uploaded by the very
+      // same call as a chat image -- so they belong on the same read path.
+      fetchMediaSrc(client, mxc)
         .then((r) => {
           if (!alive) {
             r.revoke()
@@ -68,8 +81,9 @@ export function useAutoRefreshMedia(
           // Revoke the previous blob after the swap so there is no flash.
           if (prev) setTimeout(prev, 1500)
         })
-        .catch(() => {
+        .catch((err) => {
           if (!alive) return
+          if (import.meta.env.DEV) console.warn('[tc] backdrop fetch failed:', err)
           // Keep the last good src (do NOT blank). Retry with backoff.
           retryTimer = setTimeout(load, retryDelay)
           retryDelay = Math.min(retryDelay * 2, RETRY_MAX_MS)
