@@ -4,7 +4,7 @@ Deliberate version choices and the dependency structure of the Technetium client
 Companion to the Fourier `DEPENDENCIES.md`; same "record decisions, not the whole
 resolved tree" discipline (`package-lock.json` is authoritative for the full tree).
 
-Last verified: 2026-06-20.
+Last verified: 2026-08-06.
 
 ---
 
@@ -85,18 +85,41 @@ client-specific deps so a later extraction is a move, not a rewrite.
 | `react` / `react-dom` | `19.2.6` | Satisfies Compound's `^18 \|\| ^19` peer range. |
 | `@vector-im/compound-web` | `^9.4.1` | Element's design system — UI primitives. |
 | `@vector-im/compound-design-tokens` | `^10.2.2` | Theme CSS vars (`--cpd-*`); light/dark via prefers-color-scheme. |
-| `dompurify` | `^3.4.11` | Mandatory HTML sanitizer before rendering any message HTML. Ships its OWN types since v3, so no `@types/dompurify` (that stub is deprecated for v3 and was removed 2026-07-18). |
+| `dompurify` | `^3.4.13` | Mandatory HTML sanitizer before rendering any message HTML. Ships its OWN types since v3, so no `@types/dompurify` (that stub is deprecated for v3 and was removed 2026-07-18). Bumped 3.4.11 -> 3.4.13 on 2026-08-06 for GHSA-c2j3-45gr-mqc4 (`CUSTOM_ELEMENT_HANDLING` bypassing `afterSanitizeElements`); we use neither hook, so we were not exposed, but this is the security-critical component and the fix was a patch bump. |
 | `marked` | `^18.0.5` | Markdown -> HTML for the composer (`messageFormat.ts`); its output is ALWAYS piped through `dompurify` before render. Chosen for its small, sync, zero-dep core. |
+| `highlight.js` | `^11.11.1` | Syntax highlighting for received code blocks (`codeHighlight.ts`). Pre-approved for parity-v1 W2.L1. Imported as `highlight.js/lib/common` -- the core plus ~40 common languages, NOT the full ~190-language build. **Costs +171 kB raw / +57 kB gzip** (index chunk 1382 -> 1553 kB, gzip 404 -> 461). If that is judged too much, the cheaper option is `highlight.js/lib/core` plus explicit `registerLanguage` calls for the handful the community actually posts; that is a one-file change in `codeHighlight.ts`. Its output is re-sanitized before render regardless. BSD-3-Clause. |
 | `@fontsource/inter` | `^5.2.8` | UI font. Weights 400/500/600/700 imported. |
 | `@fontsource/inconsolata` | `^5.2.8` | Mono font. Weight 400 imported. |
 | `@fontsource/space-grotesk` | `^5.2.10` | Techy-but-readable room-list face. Weights 400/500/600/700 imported; surfaced as CSS var `--tc-ui-font` (user-swappable via settings UI). OFL. |
 | `vite` | `8.0.14` | Dev server + build. |
 | `typescript` | (scaffold) | — |
 
+### Dev-only
+
+| Package | Version | Constraint / reason |
+|---|---|---|
+| `jsdom` + `@types/jsdom` | `^30.0.1` | **DEV ONLY — never bundled.** Added 2026-08-06 (parity-v1, O-tp11). DOMPurify cannot run without a DOM, so the sanitizer's security tests (`checks/sanitizer.check.ts`) had nowhere to run, and the standing law requires a negative test proving script/style/on*/`javascript:` still die before ANY allowlist widening. Chosen over the lighter `happy-dom` deliberately: these are security tests, and spec-completeness beats speed. DOMPurify's own suite runs against jsdom, and the parser edge cases the tests exist to catch (mXSS, namespace confusion) are exactly where a lighter DOM diverges from a real browser -- a less complete DOM could pass a test that a browser would fail. Added zero new advisories (`npm audit` reported the same 3 pre-existing findings before and after; all since resolved). |
+
 ### Deferred (install when the phase needs them)
 - `@matrix-org/matrix-wysiwyg` — rich composer (Phase: composer). Still deferred;
   the current composer uses `marked` + `dompurify` (both now installed, above).
 - `matrix-widget-api` — only if widgets are embedded (later/maybe).
+
+---
+
+## Vendored upstream constant (SCAN BEFORE ANY dompurify UPGRADE)
+
+`src/client/messageBody.ts` vendors DOMPurify's default `FORBID_CONTENTS`
+list verbatim and appends `mx-reply`. This is necessary because passing the
+option REPLACES the default rather than extending it -- passing `['mx-reply']`
+alone silently un-forbids the contents of `script`, `style`, `noscript`,
+`title` and the rest, so `<b><script>alert(1)</script></b>` renders as
+`<b>alert(1)</b>`.
+
+**On any dompurify upgrade: re-extract the upstream list and diff it against
+ours.** `checks/sanitizer.check.ts` exercises the important entries in their
+NESTED form (the bare-tag form passes either way, which is what hid the
+regression originally), so drift surfaces as a test failure.
 
 ---
 

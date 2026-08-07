@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import type { Room } from 'matrix-js-sdk'
 import { NavTree } from './NavTree'
 import { useRoomListSettings } from './roomListSettings'
+import { useClient } from '../client/ClientContext'
+import { CreateRoomDialog } from './CreateRoomDialog'
 
 // ---------------------------------------------------------------------------
 // The room-list sidebar: header + NavTree in a resizable, persisted panel.
@@ -28,6 +30,8 @@ export function Sidebar({
   const { panelWidth, setPanelWidth, panelLocked, setPanelLocked } = useRoomListSettings()
   const [defaultWidth, setDefaultWidth] = useState<number | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
+  const [createOpen, setCreateOpen] = useState(false)
+  const { client } = useClient()
   const width = panelWidth ?? defaultWidth ?? FALLBACK_W
 
   const onDefaultWidth = useCallback((w: number) => setDefaultWidth(w), [])
@@ -62,8 +66,42 @@ export function Sidebar({
         }}
       >
         {header}
+        {client && (
+          <button
+            type="button"
+            onClick={() => setCreateOpen(true)}
+            title="Create a room or space"
+            style={{
+              width: '100%',
+              fontSize: 12,
+              padding: '4px 8px',
+              marginBottom: 6,
+              borderRadius: 6,
+              border: '1px dashed rgba(128,128,128,0.4)',
+              background: 'transparent',
+              color: 'var(--cpd-color-text-secondary)',
+              cursor: 'pointer',
+            }}
+          >
+            + New room or space
+          </button>
+        )}
         <NavTree selectedRoomId={selectedRoomId} onSelectRoom={onSelectRoom} onDefaultWidth={onDefaultWidth} />
       </aside>
+
+      {createOpen && client && (
+        <CreateRoomDialog
+          client={client}
+          onCreated={(roomId) => {
+            setCreateOpen(false)
+            // The nav refreshes itself off ClientEvent.Room / m.space.child, so
+            // there is nothing to invalidate here -- just select the result.
+            const room = client.getRoom(roomId)
+            if (room) onSelectRoom?.(room)
+          }}
+          onClose={() => setCreateOpen(false)}
+        />
+      )}
 
       {/* Right-edge strip (by the scrollbar): drag to resize, right-click for Lock/Reset. */}
       <div

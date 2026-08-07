@@ -2026,3 +2026,659 @@ primitive.
 - Tag click behavior (filter state layer, per-room tag search) -- v2, per CD-30.
 - chatbox-domain-v1 merged to main WITHOUT the human smoke test (operator's
   call); the test checklist stands as a post-merge exercise.
+
+---
+
+## 2026-08-06 -- parity-v1 Wave 0 + Wave 1 substrate (branch parity-v1, auto run)
+
+Opening the parity campaign: every non-Yes row of the 2026-08-05 feature audit
+across core messaging, rooms/navigation, and members/presence -- 30 features,
+ordered so prerequisites land first. The campaign ledger is
+`docs/plan/PARITY_PLAN.md` and it, not this devlog, is what a fresh session
+boots from.
+
+Operator confirmed the server-wide member list stays excluded (O-tp1 closed).
+
+### Baselines held all wave
+
+tsc clean; **lint 23 problems (22 errors, 1 warning)**; build passing. The lint
+number is a hold-the-line figure with a per-file breakdown in the ledger. One
+intermediate violation appeared and was fixed by restructuring rather than by
+moving the baseline (see G-tp01).
+
+Correction to the handoff: it names `useThreadList.ts` set-state-in-effect as
+the known pre-existing offender. It is not in the current output. The live 23
+are spread across ClientContext (7), members.ts (6), spaces.ts (3),
+tokenRefresher, useMembers, useNavTree (2), Composer, Lightbox (2).
+
+### Recon findings that changed the plan
+
+- **`useTimeline` read no relations at all** and subscribed to exactly one sdk
+  event. The handoff assumed threads had already forced the relations plumbing
+  on and S1 could "extend, don't fork" -- they had not; thread awareness was
+  UI-only, in ThreadChip. S1 was new plumbing.
+- **Row was not memoized and had no hover state**, and its root lacked
+  `position: relative`.
+- **The sanitizer allowed no `class`, no `data-mx-*`, no `mx-reply`**, so
+  replies, spoilers and syntax highlighting each need their own reviewed pass.
+- **`messageFormat` uses `parseInline`**, so fenced code blocks never produce
+  `<pre><code>` -- W2.L1 will have nothing to highlight until that is faced.
+- Lane C's entire write side (invite, createRoom, m.direct, ignore list,
+  profile setters, uploads) is greenfield.
+
+### What landed
+
+- **S1 relations read layer** (`client/relations.ts`). A pure single-pass index
+  over the loaded window resolving the winning `m.replace`, aggregated
+  `m.annotation` tallies, and user-authored `m.in_reply_to` targets.
+  TimelineItem gained `content` / `editedTs` / `reactions` / `replyTo`.
+  Live via Redaction + LocalEchoUpdated + TimelineReset, coalesced.
+- **S2 action bar shell** (`messageActions.ts`, `MessageActionBar.tsx`). A slot
+  registry, not props. Visibility is CSS; keyboard reach is an ARIA toolbar.
+- **S3 composer modes** (`composerMode.ts`, `ComposerModeProvider.tsx`).
+  One provider per composer scope; unprovided reads a frozen inert context.
+- **S4 receipts helper** (`client/receipts.ts`). `findReceiptableEvent` lifted
+  out of useReadMarker so Wave 3's mark-as-read cannot drift from it.
+- **S5 shared ProfileCard** (`ui/ProfileCard.tsx`). Two identity sources
+  (RoomMember, else MergedMember + maxPower) and an `actions` slot.
+
+### Claudecisions
+
+- **D-tp01 -- test path with zero new dependencies.** The standing law requires
+  sanitizer negative tests, so a test path had to exist. Rather than add
+  vitest, `checks/*.check.ts` are standalone harnesses run by `npm run check`
+  under Node's native type stripping -- the project already compiles with
+  `erasableSyntaxOnly`, so its sources are directly runnable. A module under
+  check must import matrix-js-sdk TYPES only. Cheap to reverse if the operator
+  prefers a real runner.
+- **D-tp02 -- CLAUDE.md mission block replaced, not appended.** Thread Cards v1
+  is shipped. Standing rules and environment facts preserved verbatim. Note
+  CLAUDE.md is gitignored here by design, so the ledger is the only tracked
+  campaign artifact and is written client-clean.
+- **D-tp03 -- devlog stays at repo root.** The handoff's `docs/devlogs/` path is
+  wrong for this repo; moving a 122KB tracked file to match a typo is churn.
+
+### Gotchas
+
+- **G-tp01 (gotcha).** `react-refresh/only-export-components` fires when one
+  file exports both components and non-components. It bit twice: the action
+  registry beside its components, and the composer-mode context beside its
+  provider. The fix is always the same -- context/hook/types in a `.ts`,
+  components in the `.tsx`.
+- **G-tp02 (gotcha).** Returning a `ref` from a custom hook trips the React
+  Compiler's refs-during-render rule the moment a caller spreads the returned
+  object -- 8 lint errors from one `useRoving` that held a `containerRef`.
+  A keydown handler on the container already has the container as
+  `e.currentTarget`; no ref was needed. Related to G-tc01.
+- **G-tp03 (gotcha).** Node cannot load this tree's bundler-style extensionless
+  relative imports. Rather than put `.ts` on source imports to satisfy a
+  harness, `checks/_hooks.mjs` registers a resolve hook.
+
+### PENDING OPERATOR VERIFICATION
+See the ledger's running list -- Wave 1 is substrate and mostly invisible.
+The observable claims are: the profile card renders identically from the domain
+canvas; the composer is unchanged in all three mounts; hovering a message shows
+an empty bar; and remote edits/reactions no longer render as junk rows.
+
+---
+
+## 2026-08-06 -- parity-v1 Wave 2 message verbs, part 1 (branch parity-v1, auto run)
+
+Reply, edit, delete, reactions and read receipts. Each verb plugs into the S2
+registry, so the thread panel inherits all of them for free.
+
+### Three live bugs fixed on the way past
+
+These were not planned work; they were what the relations layer exposed.
+
+1. **Remote edits rendered as duplicate messages.** An `m.replace` travels down
+   the timeline as an ordinary event and `toItems` made a row of it.
+2. **Remote reactions rendered as `[m.reaction]` junk rows.** Same cause.
+3. **Replies from Element showed their quoted text inline.** `mx-reply` was
+   already absent from ALLOWED_TAGS, but **DOMPurify UNWRAPS a disallowed tag**
+   -- it drops the element and keeps the children. `FORBID_CONTENTS` removes
+   the subtree. This is a sanitizer NARROWING, so it did not need its own
+   commit; the Wave 2 lane's widenings still do.
+
+### What landed
+
+- **W2.1 replies.** Reply pill with sender, preview and click-to-jump.
+- **W2.2 editing.** Own messages only, `(edited)` marker, draft stashing.
+- **W2.3 redaction.** Modal confirm, PL-gated, verb hidden when not permitted.
+- **W2.4 row footer design note.** Ledger only -- specified once so reactions
+  and receipts did not collide in the same region.
+- **W2.5 reactions.** Pills, toggle, one shared picker, roving tabindex.
+- **W2.6 read receipts.** Capped seen-by cluster, member-walk not event-walk.
+
+### Claudecisions
+
+- **D-tp04 -- reply fallbacks quote ESCAPED PLAIN TEXT, never the target's
+  `formatted_body`.** Re-emitting another user's HTML inside our own event
+  makes us a relay for whatever they wrote, and buys nothing: the block is
+  fallback, and any client that renders replies natively strips it first.
+  Losing bold inside a quote nobody renders is the right trade.
+- **D-tp05 -- Edit is offered on own messages only.** Matrix accepts an
+  `m.replace` for anyone's event; only well-behaved clients ignore it. Our own
+  reader rejects a forged edit, so the verb would produce an event that changes
+  nothing here and might change something elsewhere.
+- **D-tp06 -- Delete is HIDDEN when not permitted, not shown-and-403ing.** A
+  button that always fails teaches people to distrust the whole bar.
+
+### Gotchas
+
+- **G-tp04 (gotcha).** An event carries only ONE `m.relates_to`. An edit must
+  be sent with `threadId: null` -- passing a thread id makes the sdk add an
+  `m.thread` relation and the `m.replace` is silently ignored, so the edit
+  arrives as a new thread reply. Same for annotations.
+- **G-tp05 (gotcha).** `MSC3440` thread replies carry an `m.in_reply_to`
+  FALLBACK pointing at the thread's previous message, flagged
+  `is_falling_back: true`. Treating it as a reply puts a spurious reply pill on
+  every threaded message.
+- **G-tp06 (gotcha, security).** An `m.replace` must be honoured only from the
+  ORIGINAL sender. Without that check any room member can rewrite anyone's
+  message in the renderer. Checked in `relations.ts`, with a test.
+- **G-tp07 (gotcha).** Seeding an edit from `event.getContent()` depends on
+  whether the sdk aggregated the replacement, so editing a message twice can
+  silently revert it. Seed from the effective content the relations layer
+  computed.
+- **G-tp08 (gotcha).** `client.sendEvent`'s typed overloads reject the string
+  `'m.reaction'`; it wants `EventType.Reaction`. The failure is a confusing
+  "no overload matches" naming `keyof TimelineEvents`.
+
+### Verification
+123 pure checks pass (`npm run check`), covering edit precedence and
+tie-breaking, forged-edit rejection, per-sender annotation dedupe, own-reaction
+identification, reply-chain non-accumulation, hostile-input escaping, the
+refusal to relay a target's `formatted_body`, and the receipt walk-back rules.
+
+Every visual and interactive claim is PENDING OPERATOR VERIFICATION -- this box
+is headless. The ledger carries the list, marking which items need a second
+identity (Multi-Account Containers, never a private window at the dev origin).
+
+### Deferred / flagged
+- **Sanitizer negative tests need a DOM.** DOMPurify cannot run in bare Node,
+  so the allowlist widenings in W2.L1 (syntax highlighting) and W2.L2
+  (spoilers) cannot be tested by the current harness without jsdom or
+  happy-dom. Recorded as **O-tp11** -- an operator decision before those steps,
+  since it is the first dev dependency the campaign would add.
+- Nothing deployed. Nothing outside the repo written.
+
+---
+
+## 2026-08-06 -- parity-v1 Wave 2 lane: highlighting, spoilers, typing (auto run)
+
+The operator authorised the first dependency, which unblocked the two
+sanitizer widenings. Everything in this entry is the messageBody /
+messageFormat lane; the Wave 2 verb chain (pins, forwarding, mentions) is
+still open.
+
+### The dependency call
+
+`jsdom` (dev-only), chosen over the lighter `happy-dom` that I had recommended
+the night before. These are SECURITY tests, and spec-completeness beats speed:
+DOMPurify's own suite runs against jsdom, and the parser edge cases the tests
+exist to catch -- mXSS, namespace confusion, malformed nesting -- are exactly
+where a lighter DOM diverges from a real browser. A less complete DOM could
+pass a test a browser would fail, which is the one failure mode a security
+suite must not have.
+
+Also bumped `dompurify` 3.4.11 -> 3.4.13 (GHSA-c2j3-45gr-mqc4). We use neither
+affected hook. jsdom itself added zero advisories; `npm audit` reported the
+same three pre-existing findings before and after, all now resolved.
+
+`highlight.js` was pre-approved. It costs **+171 kB raw / +57 kB gzip**, which
+is recorded rather than buried; the cheaper shape (`lib/core` plus explicit
+`registerLanguage` calls) is a one-file change if the operator judges the
+common build too expensive.
+
+### G-tp09 (gotcha, security) -- FORBID_CONTENTS REPLACES, it does not extend
+
+The one that matters. Passing `FORBID_CONTENTS` to DOMPurify replaces its
+default list rather than extending it. W2.1 passed `['mx-reply']` alone to
+strip reply fallbacks and thereby silently un-forbade the contents of
+`script`, `style`, `noscript`, `title`, `template`, `xmp`, `plaintext`,
+`iframe`, `svg` and `math`. `<b><script>alert(1)</script></b>` rendered as
+`<b>alert(1)</b>`.
+
+Not executable -- React does not re-parse what it injects, and the tags
+themselves were still stripped -- but a real weakening of a defence-in-depth
+layer, and precisely the accidental widening the standing law warns about: I
+narrowed for one tag and widened everywhere else without noticing.
+
+What hid it for four commits: the existing test only checked a BARE
+`<script>`, which DOMPurify force-removes anyway and which kept passing. Only
+the NESTED form shows the difference. **The lesson is about the test, not the
+config** -- a negative test that only exercises the easy shape gives false
+confidence. The fix vendors DOMPurify's default list; DEPENDENCIES.md now
+carries a scan-before-upgrade note, since a vendored constant drifts.
+
+### G-tp10 (gotcha) -- a security suite that passes without a DOM is worthless
+
+Without a DOM, DOMPurify's default export is built with a null window,
+`isSupported` is false, and **`sanitize()` returns its input unchanged**.
+Every negative test would have passed while sanitizing nothing.
+
+So the suite installs jsdom onto `globalThis` before importing messageBody
+(dynamic import, since static imports hoist above that) and opens with live
+proof that the sanitizer is running. Verified by deleting the DOM and
+confirming the suite fails on assertion one rather than passing vacuously.
+
+### D-tp07 -- how `class` was allowed without opening a styling hole
+
+Highlighting needs `class` to survive. Our own UI is styled by class, so a
+message able to set `class="tc-row-actions"` on its content could paint
+something that looks like part of the app. The shape:
+
+  1. sanitize WITH class, so a `language-js` hint from another client survives
+  2. `scrubClasses()` deletes every class except `language-*` on a `<code>`
+  3. highlight -- hljs reads textContent and emits its own escaped markup
+  4. sanitize again
+
+Step 2 is what makes step 4's allowance safe: its input is our output, not the
+sender's. The same scrub now runs on the SEND side too, where it matters more,
+because a user can type literal HTML straight into the composer.
+
+`data-mx-spoiler` follows the same pattern, admitted BY NAME with
+`ALLOW_DATA_ATTR` still false, and the a11y attributes (`tabindex`, `role`,
+`aria-*`) are set by us after pass 1 has deleted any the sender supplied -- a
+sender-controlled `tabindex` could reorder the page's focus.
+
+### G-tp11 (gotcha) -- substring assertions on HTML lie in both directions
+
+Three checks failed on output that was correct. `<` inside an attribute VALUE
+is legal and inert, so `includes('<img')` false-positives on an escaped
+string, and it proves nothing about what a browser would build. Those checks
+now re-PARSE the output and assert on the resulting DOM.
+
+### The regex bug the checks caught before it shipped
+
+`||one|| and ||two||` parsed as reason="one", text="| and ". The optional
+reason group happily eats the first pipe of the closing `||`. Requiring the
+reason delimiter not to be followed by another pipe forces a backtrack.
+
+### What landed
+
+- **W2.L1** syntax highlighting, bounded (20k skip, 2k autodetect cap), theme
+  hand-written against the hljs class contract rather than importing one that
+  would fight the Compound tokens.
+- **W2.L2** spoiler rendering, delegated click/keydown, blur via filter so
+  revealing never reflows.
+- **W2.L3** spoiler composing AND fenced code blocks on the send side --
+  closing the gap W2.L1 recorded, where this client could highlight code
+  blocks it received but never send one. The block parser is used only when a
+  fence is present; switching wholesale would wrap every message in `<p>`.
+- **W2.L4** typing indicators, relocated between timeline and composer.
+
+### Verification
+260 checks pass, 61 of them sanitizer/security. Everything visual is PENDING
+OPERATOR VERIFICATION; the ledger carries the list. The highest-risk
+regression to eyeball is that ORDINARY messages are unchanged by the
+parseInline -> parse switch.
+
+### Still open in Wave 2
+W2.7 pinned messages, W2.8 forwarding, W2.9 mention autocomplete. Nothing
+deployed; nothing outside the repo written.
+
+---
+
+## 2026-08-07 -- parity-v1 Wave 2 COMPLETE: pins, forwarding, mentions (auto run)
+
+Closes the Wave 2 verb chain. All 9 chain steps and all 4 lane items are in.
+
+### What landed
+
+- **W2.7 pinned messages.** `m.room.pinned_events` is room state, so it is
+  power-level gated like any state write and the verb is hidden when
+  unwritable. Writing REPLACES the whole list, so pin/unpin is
+  read-modify-write; the list is re-read from state immediately before writing
+  rather than trusting a render-time value, which makes the concurrent-pin
+  window as small as it can be without a server-side patch operation.
+- **W2.8 forwarding**, with a deliberately generic `RoomPicker` that Wave 3's
+  invite and DM flows will reuse.
+- **W2.9 mention autocomplete.**
+
+### D-tp08 -- a forward strips context, and m.mentions is the one that matters
+
+A forward is a NEW message carrying the same payload, not a copy of the event.
+Off come `m.relates_to`, `m.new_content`, the gallery batch hint, the domain
+TTD, and both reply fallbacks. The one with consequences for a person rather
+than for rendering is **`m.mentions`**: forwarding a message must not ping
+people who were mentioned in a conversation they were part of somewhere else.
+
+Images forward by MXC REFERENCE -- the same content URI named again. No
+re-upload, so no second copy on the homeserver and, worth noting against
+O-tp6, no duplicate booru post from the bridge.
+
+### D-tp09 -- mentions are masked before markdown, restored after sanitizing
+
+The same shape spoilers use, for a sharper reason. Substituting a display name
+into the FINISHED HTML means searching for that name inside markup, where it
+can match inside an `href` and corrupt it: a user called "test" would rewrite
+half the links in their own message. Masking first makes the substitution
+positional instead of textual.
+
+Three details that each earned a test: longest-match-first (with "@sab" and
+"@saber" both pending, masking the short one first leaves a stray "er");
+only mentions whose text SURVIVED in the draft are sent (picking a name then
+deleting it must not ping them); and split/join rather than `replace()`,
+because a `$` in a display name is read as a replacement pattern.
+
+The sanitizer was NOT widened for this -- anchors and `href` were already
+allowed, and a check asserts a matrix.to permalink survives. A reply now also
+adds the answered sender to `m.mentions` per MSC3952, which is what makes
+replies actually notify.
+
+### G-tp12 (gotcha) -- derived data does not belong in state
+
+The pinned-row list was briefly held in `useState` with an effect to keep it
+in sync with props, which is a setState-in-an-effect-body and cost a lint
+error (G-tc01 again). It is derived entirely from props, so it is a `useMemo`.
+The rule generalises: reach for state only when something cannot be computed
+from what is already in hand.
+
+### Verification
+306 pure checks pass. The ordinary send path is deliberately byte-identical
+when no mentions are present -- explicit content is only constructed when
+`m.mentions` has to ride along -- because Wave 2 has touched the composer's
+send path five times now and the no-op case is the one worth protecting.
+
+Everything visual is PENDING OPERATOR VERIFICATION; the ledger carries the
+list with the second-identity items marked.
+
+### Next
+Wave 3 -- rooms and navigation. Nothing deployed; nothing outside the repo
+written.
+
+---
+
+## 2026-08-07 -- parity-v1 Wave 3: rooms & navigation (auto run)
+
+Eight of nine. W3.4 (custom room ordering) is deferred on analysis and the
+analysis is in the ledger, not here -- the next session should start from it
+rather than rediscover it.
+
+### What landed
+
+Mark-as-read, room header topic + member count, local rename override,
+server-backed mute, the user picker, invites, start-a-DM, create room/space.
+
+### D-tp10 -- mute moves to the server, snooze deliberately does not
+
+A local mute only silenced this browser. A push rule silences the account,
+including push to a phone, which is what people mean by muting a room. So the
+push rule became the source of truth, with the local map surviving as a
+read-fallback that migrates forward on the first toggle-touch rather than by a
+silent mass rewrite (O-tp2 as recorded).
+
+Snooze stays local, and this is the deliberate half. A push rule has no
+expiry, so "mute for 8 hours" would need a timer to remove it -- and a timer
+in a browser tab that may be closed is a promise the client cannot keep. A
+snooze that silently became permanent is worse than one that only applies
+here.
+
+`isMutedNow` kept its exact shape, so the nav's name suppression, its
+space-level notification aggregation and the context menu all inherited this
+with no edits at all.
+
+### D-tp11 -- partial success must be reported, not swallowed
+
+Two features in this wave can half-succeed, and both say so:
+
+- **Creating a parented room.** `m.space.child` is written INTO THE SPACE, so
+  it needs power in the SPACE, not in the new room. Creation can succeed while
+  parenting fails, leaving a real room the user cannot see anywhere. The
+  dialog stays open, explains why, and prints the room id so it can be adopted
+  by hand.
+- **Starting a DM.** The `m.direct` write is awaited after creation, because
+  if it fails the room exists but is a DM nowhere, including in Element.
+
+Related: invite failures report the SERVER's reason. A 403 means insufficient
+power level and now says so, instead of "invite failed" -- the kind of
+vagueness that makes people retry pointlessly.
+
+### G-tp13 (gotcha) -- m.direct is not self-cleaning
+
+It keeps rooms the user has left. A DM-detection hit therefore has to be
+verified against actual membership before being reused, or the client
+cheerfully "reuses" a room nobody is in. Detection runs first regardless:
+opening a second DM with someone you already have one with is the most common
+way this feature goes wrong, and the room list then shows two identical
+entries with the history split between them.
+
+### G-tc01 again (twice)
+
+The debounce effect in the user picker set state in its body for the
+short-query case, and the pinned-row list was briefly held in state with an
+effect to sync it. Both fixed at source rather than absorbed into the lint
+baseline, which has now held at 23 across the whole campaign. The pattern is
+consistent enough to state plainly: **if it can be computed from what is
+already in hand, it is not state; if it must be set, set it from a handler or
+a timeout, never an effect body.**
+
+### Deferred
+W3.4 custom room ordering. The store half is done and shipped; the drag UI
+needs per-sibling-group containers, `data-flip-id` on nav rows, a scroll
+container that is not the drag container, and a decision about favourited
+descendants that render outside their group when a space is collapsed. All
+tractable, none verifiable from a headless box, and it lands in a large
+working file -- so it is recorded rather than rushed. Full analysis in the
+ledger.
+
+Nothing deployed; nothing outside the repo written.
+
+---
+
+## 2026-08-07 -- parity-v1 Wave 4: members & presence (auto run)
+
+All five items. Honorific sorting, profile-card wiring, own-profile editing,
+block/ignore, presence.
+
+### D-tp12 -- sort by TIER, not by power level
+
+Two moderators at PL 50 and PL 99 are both "@". Ranking them by raw power
+level would split them apart in a list that is showing the same glyph for
+both, so the order would visibly disagree with the labels. The comparator
+buckets by tier and then sorts alphabetically inside it.
+
+### D-tp13 -- presence renders nothing, and that is the feature
+
+Synapse ships with presence disabled on many deployments. When it is off the
+server simply never sends `m.presence`, and there is no such thing as
+"offline" -- only "unknown". Drawing a grey dot for unknown would tell every
+member of a room that everyone is offline: a claim the client invented rather
+than anything the server said.
+
+So an unknown user gets no dot and no status line. **This feature is expected
+to render nothing until the operator enables presence server-side**, and that
+absence is the correct result rather than a bug to chase.
+
+### G-tp14 (gotcha) -- ignoring is not retroactive
+
+`m.ignored_user_list` is account data, so the server stops sending an ignored
+user's events -- but not the ones already in a loaded timeline. Those stay
+until a reload. The renderer therefore has to filter as well, and it does so
+in `toItems` rather than in the row: filtering at the fold point means an
+ignored sender leaves no gap, no "message hidden" placeholder, and no orphaned
+reaction or read receipt pointing at a message nobody can see.
+
+Ignoring yourself is refused outright. The server would accept it, and a
+client that hides its own messages reads as data loss.
+
+### G-tp15 (gotcha) -- the harness could not load half the tree
+
+`import.meta.env` is injected by Vite at build time; Node has none, so any
+module reading it threw on import. That had been quietly limiting what could
+be tested to modules avoiding `media.ts` -- a constraint I had been working
+around without noticing it was a constraint.
+
+`import.meta` cannot be patched from outside a module, so `checks/_hooks.mjs`
+now rewrites the source as it loads. `toItems` became directly testable, which
+is how the ignore filter is covered.
+
+Worth stating as a lesson rather than a fix: when a harness quietly refuses a
+whole class of module, the temptation is to keep choosing testable modules.
+The cost is invisible until something important sits on the wrong side of the
+line.
+
+### Wave 4 leaves nothing deferred
+The only outstanding Wave 3 item remains W3.4 (room ordering), whose analysis
+is in the ledger. Next is Wave 5: search, link previews, polls, custom emoji.
+
+Nothing deployed; nothing outside the repo written.
+
+---
+
+## 2026-08-07 -- parity-v1 CLOSEOUT: Wave 5, Wave 6, W3.4, and a media-routing fix
+
+The campaign is feature-complete: 30 of 30 audit items. This entry covers the
+final run and the closeout.
+
+### The bug that turned into an architecture fix
+
+Reported as "backgrounds don't reach other users, and domain backgrounds don't
+even show for the setter". Two different situations, and only one was a bug.
+
+CHAT backgrounds are per-user by design and always have been -- the header
+comment in `ui/chatBackground.ts` records a shared variant as a deliberate v2.
+They were not failing to send; they were never sent.
+
+DOMAIN backgrounds were genuinely broken, in two layers:
+
+**G-tp16 (gotcha).** `setBackground` caught every write rejection and resolved
+anyway, under a comment claiming "local UI already reflects the choice". It
+does not -- the background is read back from room state, so a failed write
+means it exists nowhere. And because the promise resolved, the editor's
+`await` passed and it called `onExit()`. **A failed save was pixel-identical
+to a successful one.** Third instance of D-tp11 this campaign.
+
+**D-tp14 -- backdrops belong on the R2 gateway.** With the failure finally
+visible it read `M_MISSING_TOKEN`, which is a MEDIA error, not a state one.
+Both backdrops were fetched direct from the homeserver's
+`/_matrix/client/v1/media/download`. That was never intentional. They are
+user-uploaded CONTENT, uploaded by the very same `client.uploadContent` call
+as a chat image -- the divergence was only ever on the READ side.
+
+This client does send an Authorization header on that route, so the header was
+being LOST in transit: a cross-origin redirect strips it, and so does a proxy
+that does not forward it on a media path. Either way the gateway avoids the
+whole class, because its ORIGINAL response is a presigned URL delivered as
+JSON rather than a redirect -- which is exactly why `fetchMediaSrc` exists.
+
+Backdrops now route through the gateway with NO fallback. A fallback would
+have hidden the remaining work; a visible 403 is worth more than a background
+that loads by a means nobody chose. `fetchHomeserverMedia` was deleted rather
+than left unused -- an exported helper that routes media the wrong way is a
+footgun someone reaches for later.
+
+The other half is the operator's: the fourier-auth gateway must authorize
+backdrop media by ROOM MEMBERSHIP. If a user can see the room in Matrix, the
+same token should fetch its background anywhere in the suite.
+
+### Wave 5
+
+Search, link previews, polls, MSC2545 custom emoji. The recurring theme is
+refusing to overclaim: search labels its local fallback as partial rather than
+answering "not found" about a room it has barely read; previews render nothing
+at all when the server declines; presence and previews are both opt-in or
+server-gated and say so.
+
+Poll tallying is enforced by the READER, not trusted from the wire --
+last-vote-wins, post-close votes discarded, over-selection trimmed, and only
+the poll's creator may end it. That last one is the same forged-authority hole
+S1 closes for edits, and it would have been easy to miss.
+
+### Wave 6 -- and why it was correctly scheduled last
+
+Day separators and same-sender grouping re-lay-out the Row that every Wave 2
+feature decorates. Both live in `applyLayout`, a SECOND pass over the folded
+items: the fold decides what exists, the layout pass decides how it looks.
+Keeping them apart is precisely why grouping landed without revisiting a
+single Wave 2 feature -- it collapses the HEADER and touches nothing else, and
+six checks assert exactly that.
+
+**G-tp17 (gotcha).** The day separator started as an early return inside Row,
+above its hooks -- a rules-of-hooks violation worth five lint errors. It
+belongs at the call site, which is what the design note said in the first
+place ("Row untouched"). The note was right and I had to be told so by the
+linter.
+
+### W3.4, un-deferred
+
+The four obstacles recorded when this was deferred all closed, and one closed
+better than expected: passing the sibling GROUP as the drag container is
+geometrically correct, because the group does not scroll and `scrollTop` stays
+0. The only real cost is edge-autoscroll. Deferring it was still right -- the
+analysis is what made the second attempt quick.
+
+### Closing note on the lint baseline
+
+23 problems at Wave 0; 23 at closeout, across ~40 new files. It moved five
+times mid-work and was pushed back down each time by restructuring rather than
+by moving the line. Every one of those five was G-tc01 or a sibling of it, and
+they are worth reading as a set: React Compiler rules do not bend, and each
+time the fix was better code than the version that tripped them.
+
+### Nothing deployed. Nothing outside this repo written.
+
+---
+
+## 2026-08-07 -- backgrounds: post it, then reference it
+
+Operator asked the right question: what is gating every other piece of media
+that a background cannot use the same way? The answer is that nothing about
+the media differs -- **the gate keys on the media having been POSTED**.
+
+fourier-auth authorizes booru CONTENT: media that exists behind an `m.image`
+message. A background was uploaded with `client.uploadContent` and then
+referenced only from a STATE event, so no post ever existed, the gate had
+nothing to authorize against, and it 403d for precisely the reason avatars do
+(D-bf01). The upload was never the problem; the missing post was.
+
+### D-tp15 -- make the media the thing the gate already authorizes
+
+Rather than teaching the gateway a new case (authorize by room membership),
+upload the file, POST it as a real `m.image` carrying a
+`net.41chan.background` flag, and reference that mxc from the state event.
+
+The permission model then falls straight out instead of being implemented: the
+post lives in the room, so anyone who can see the room can fetch its bytes
+anywhere the token is accepted. That is exactly the rule wanted, now enforced
+by the same machinery as every other image.
+
+It also deletes an infra dependency. The blocking item raised at closeout --
+"the gateway must authorize backdrops by room membership" -- is gone. No
+gateway change is needed at all.
+
+The state event carries the post's `event_id` as well, so a background records
+which post authorizes it and therefore who set it.
+
+Background posts are filtered out of the chat log: they are wallpaper, not
+something someone said. The filter keys on the flag alone, so an ordinary
+image is untouched.
+
+Chat backgrounds get the same treatment, which also repairs them -- routing
+backdrops to the gateway would otherwise have left them 403ing too, since
+their mxc was uploaded-but-never-posted for the same reason. Their SETTING
+stays per-user and local, as designed; only the bytes become a room post.
+
+### The lesson worth keeping
+
+I had reached for the harder half of the problem. The failure was real and my
+diagnosis of the routing was right, but the fix I proposed -- change the
+gateway's authorization model -- was the expensive way to reach a state the
+existing model already describes. The cheaper move was to satisfy the rule
+that was already there. Worth remembering when a component "needs a new
+permission": check first whether the thing can simply be made to fit the
+permission that exists.
+
+### The booru side is a non-issue (corrected)
+I recorded "bmb must be taught to skip background posts" as an open item. It is
+not one. The booru can filter or hide posts by flag on its own side, so a
+flagged background reaching it is a display decision there, not a constraint
+here. Carrying `net.41chan.background` on the post IS the entire requirement,
+and it already ships.
+
+Worth keeping as a pattern rather than a one-off: emitting a well-named flag is
+usually the whole obligation an upstream owes a downstream. Deciding what the
+downstream does with it is not this repo's call, and filing it as a blocking
+question was me inventing a dependency that did not exist.

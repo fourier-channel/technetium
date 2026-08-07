@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
 import { EventTimeline, ThreadEvent } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
-import { toItems } from '../client/useTimeline'
-import { Row } from './Timeline'
+import { applyLayout, toItems } from '../client/useTimeline'
+import { DaySeparator, Row } from './Timeline'
 import { Composer } from './Composer'
+import { ComposerModeProvider } from './ComposerModeProvider'
+import { MessageVerbsProvider } from './MessageVerbs'
+import { TypingBar } from './TypingBar'
 
 // Thread panel: a thread's root + replies, resolved by (roomId, rootId) so it
 // stays open and correct even when the user navigates to other rooms. Renders via
@@ -69,9 +72,15 @@ export function ThreadPanel({
   const tl = thread?.timeline ?? []
   const events =
     rootEv && !tl.some((e) => e.getId() === rootEv.getId()) ? [rootEv, ...tl] : tl
-  const items = toItems(events)
+  // myUserId is what marks own reactions and finds the annotation to redact
+  // when toggling one off -- the thread panel shares the Row, so it needs the
+  // same item model the main timeline gets.
+  const items = applyLayout(toItems(events, { myUserId: client?.getUserId() ?? null }))
 
   return (
+    // Its own composer-mode scope: a reply started in the thread panel must not
+    // retarget the room composer.
+    <ComposerModeProvider>
     <aside
       style={{
         width,
@@ -106,11 +115,23 @@ export function ThreadPanel({
             {thread ? 'No messages in this thread.' : 'Loading thread\u2026'}
           </div>
         ) : (
-          items.map((item) => <Row key={item.id} item={item} />)
+          // The thread panel paginates its whole thread to exhaustion on open,
+          // so the default DOM-only jump is sufficient here -- no JumpContext.
+          <MessageVerbsProvider room={room}>
+            {items.map((item) =>
+              item.kind === 'day' ? (
+                <DaySeparator key={item.id} item={item} />
+              ) : (
+                <Row key={item.id} item={item} />
+              ),
+            )}
+          </MessageVerbsProvider>
         )}
       </div>
 
+      {room && <TypingBar client={client} room={room} />}
       {room && <Composer room={room} threadId={rootId} />}
     </aside>
+    </ComposerModeProvider>
   )
 }

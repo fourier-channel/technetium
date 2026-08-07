@@ -6,7 +6,9 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // checks/ holds standalone pure-helper harnesses run by `npm run check`.
+  // They are not shipped code and are deliberately loose (fake sdk objects).
+  globalIgnores(['dist', 'checks']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

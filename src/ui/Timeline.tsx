@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ThreadEvent, type Room, type MatrixEvent } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
 import { useTimeline, type TimelineItem, type GalleryLayout } from '../client/useTimeline'
+import type { ReplyRef } from '../client/relations'
+import { eventPreview } from '../client/eventPreview'
 import { renderMessageBody } from '../client/messageBody'
 import { parseMxc } from '../client/media'
 import { AuthedImage } from './AuthedImage'
@@ -11,6 +13,55 @@ import { useChatBackground } from './chatBackground'
 import { ChatBackdrop, ChatBackgroundMenu } from './ChatBackground'
 import { MediaTags } from './MediaTags'
 import { useMediaTagPrefs } from './mediaTagSettings'
+import { useMessageActions } from './messageActions'
+import { MessageActionBar } from './MessageActionBar'
+import { MessageVerbsProvider } from './MessageVerbs'
+import { JumpContext, scrollToEventInDom, useJump, type JumpApi } from './jumpToEvent'
+import { ReactionStrip } from './Reactions'
+import { ReceiptCluster } from './ReceiptCluster'
+import { SPOILER_ATTR, toggleSpoiler } from '../client/spoilers'
+import { usePinnedEvents } from '../client/usePinnedEvents'
+import { PinnedPanel } from './PinnedPanel'
+import { SearchPanel } from './SearchPanel'
+import { LinkPreview } from './LinkPreview'
+import { firstLink } from '../client/urlPreview'
+import { isPollStart } from '../client/polls'
+import { PollBody } from './PollBody'
+import { useLinkPreviewPref } from './linkPreviewPref'
+import { RoomHeaderInfo } from './RoomHeaderInfo'
+import { ProfileOpenerContext, useProfileOpener } from './profileOpener'
+import { ProfileCard } from './ProfileCard'
+import { ProfileActions } from './ProfileActions'
+import { usePresence } from '../client/usePresence'
+import { useRoomReceipts } from '../client/useReceipts'
+import { ReceiptsContext, useReceipts } from './receiptsContext'
+
+// How many pages of history a click-to-jump will paginate before giving up.
+const MAX_JUMP_PAGES = 8
+
+// Stable empty array: a fresh [] per render would re-render every footer.
+const EMPTY_SEEN: string[] = []
+
+// Delegated spoiler handlers, shared by every row rather than allocated per
+// row: they resolve their target from the event, so they need no closure.
+function onSpoilerClick(e: React.MouseEvent) {
+  const el = (e.target as Element | null)?.closest?.(`[${SPOILER_ATTR}]`)
+  // A revealed spoiler must stay clickable as ordinary text -- a link inside
+  // one should work once it is visible.
+  if (el && !el.classList.contains('tc-spoiler-revealed')) {
+    e.preventDefault()
+    toggleSpoiler(el)
+  }
+}
+
+function onSpoilerKey(e: React.KeyboardEvent) {
+  if (e.key !== 'Enter' && e.key !== ' ') return
+  const el = (e.target as Element | null)?.closest?.(`[${SPOILER_ATTR}]`)
+  if (el && !el.classList.contains('tc-spoiler-revealed')) {
+    e.preventDefault()
+    toggleSpoiler(el)
+  }
+}
 
 // Read-only timeline. Message bodies render sanitized rich HTML (via DOMPurify)
 // when present, else plaintext. Encrypted events show a placeholder until the
@@ -18,6 +69,14 @@ import { useMediaTagPrefs } from './mediaTagSettings'
 export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadList }: { room: Room; onOpenThread?: (roomId: string, rootId: string) => void; threadListOpen?: boolean; onToggleThreadList?: () => void }) {
   const { client } = useClient()
   const { items, loadOlder, loadingOlder, atStart } = useTimeline(client, room)
+  const receipts = useRoomReceipts(client, room)
+  const pins = usePinnedEvents(client, room)
+  const [pinnedOpen, setPinnedOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  // W4.2 -- one card for the whole timeline, owned here so two rows cannot
+  // each open their own.
+  const [profile, setProfile] = useState<{ userId: string; x: number; y: number } | null>(null)
+  const profilePresence = usePresence(client, profile ? [profile.userId] : [])
   const chatBg = useChatBackground()
   const tagPrefs = useMediaTagPrefs()
   const [bgMenuOpen, setBgMenuOpen] = useState(false)
@@ -36,6 +95,36 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
   // up; re-engages when they return near the bottom. This makes late
   // layout shifts (async images) harmless instead of each needing a fix.
   const followRef = useRef(true)
+
+  // Click-to-jump. A target already on screen is a DOM lookup; otherwise
+  // paginate backwards a BOUNDED number of pages, retrying after each. The
+  // bound is what stops a jump to an id that is not in this room from walking
+  // a busy room back to its creation.
+  const jumpApi = useMemo<JumpApi>(
+    () => ({
+      canPaginate: !atStart,
+      jump: async (eventId: string) => {
+        if (scrollToEventInDom(eventId)) return true
+        for (let page = 0; page < MAX_JUMP_PAGES; page++) {
+          if (atStartRef.current) break
+          prependHeightRef.current = scrollRef.current?.scrollHeight ?? null
+          await loadOlder()
+          // Let the prepend paint before searching for the row.
+          await new Promise((r) => requestAnimationFrame(() => r(null)))
+          if (scrollToEventInDom(eventId)) return true
+        }
+        return false
+      },
+    }),
+    [loadOlder, atStart],
+  )
+
+  // Read inside the jump loop, where a stale `atStart` closure would keep
+  // paginating past the start of the room.
+  const atStartRef = useRef(atStart)
+  useEffect(() => {
+    atStartRef.current = atStart
+  }, [atStart])
 
   // Scroll behavior on item-count change:
   //  - after a load-older PREPEND: keep the viewport pinned to the same
@@ -89,10 +178,12 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          gap: 12,
+          minWidth: 0,
           flexShrink: 0,
         }}
       >
-        <span>{room.name || room.roomId}</span>
+        <RoomHeaderInfo client={client} room={room} />
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {!atStart && (
             <button
@@ -105,6 +196,26 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
               style={{ fontSize: 12, fontWeight: 400 }}
             >
               {loadingOlder ? 'Loading...' : 'Load older'}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setSearchOpen((o) => !o)}
+            title="Search messages"
+            aria-expanded={searchOpen}
+            style={{ fontSize: 12, fontWeight: 400 }}
+          >
+            {'\u{1F50D}'}
+          </button>
+          {pins.pinned.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setPinnedOpen((o) => !o)}
+              title="Pinned messages"
+              aria-expanded={pinnedOpen}
+              style={{ fontSize: 12, fontWeight: 400 }}
+            >
+              {'\u{1F4CC}'} {pins.pinned.length}
             </button>
           )}
           {onToggleThreadList && (
@@ -149,6 +260,7 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
             {bgMenuOpen && client && (
               <ChatBackgroundMenu
                 client={client}
+                roomId={room.roomId}
                 current={bg}
                 onApply={(next) => {
                   chatBg.set(room.roomId, next)
@@ -183,9 +295,54 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
             </div>
           )}
 
-          {items.map((item) => (
-            <Row key={item.id} item={item} onOpenThread={onOpenThread} />
-          ))}
+          <ProfileOpenerContext.Provider
+            value={(userId, x, y) => setProfile({ userId, x, y })}
+          >
+          <JumpContext.Provider value={jumpApi}>
+            {searchOpen && client && (
+              <SearchPanel client={client} room={room} onClose={() => setSearchOpen(false)} />
+            )}
+            {pinnedOpen && (
+              <PinnedPanel
+                client={client}
+                room={room}
+                pinned={pins.pinned}
+                canPin={pins.canPin}
+                onUnpin={(id) => void pins.toggle(id)}
+                onClose={() => setPinnedOpen(false)}
+              />
+            )}
+            <ReceiptsContext.Provider value={receipts}>
+            <MessageVerbsProvider room={room}>
+              {items.map((item) =>
+                item.kind === 'day' ? (
+                  <DaySeparator key={item.id} item={item} />
+                ) : (
+                  <Row key={item.id} item={item} onOpenThread={onOpenThread} />
+                ),
+              )}
+            </MessageVerbsProvider>
+            </ReceiptsContext.Provider>
+          </JumpContext.Provider>
+          </ProfileOpenerContext.Provider>
+          {profile && client && (
+            <ProfileCard
+              x={profile.x}
+              y={profile.y}
+              userId={profile.userId}
+              room={room}
+              presence={profilePresence.get(profile.userId)}
+              actions={
+                <ProfileActions
+                  client={client}
+                  userId={profile.userId}
+                  room={room}
+                  onClose={() => setProfile(null)}
+                />
+              }
+              onClose={() => setProfile(null)}
+            />
+          )}
           <div ref={bottomRef} />
         </div>
       </div>
@@ -209,7 +366,15 @@ function initialsFor(name: string): string {
 // carrying the sender's avatar AND display name together, with the timestamp
 // trailing outside it. Avatars load via the homeserver authenticated-media path
 // (the content gate 403s them), degrading to a colored initial.
-function SenderPill({ event, time }: { event: MatrixEvent; time: string }) {
+function SenderPill({
+  event,
+  time,
+  onOpenProfile,
+}: {
+  event: MatrixEvent
+  time: string
+  onOpenProfile?: (userId: string, x: number, y: number) => void
+}) {
   const { client } = useClient()
   const senderId = event.getSender() ?? '(unknown)'
   const member = client?.getRoom(event.getRoomId() ?? '')?.getMember(senderId) ?? null
@@ -218,6 +383,21 @@ function SenderPill({ event, time }: { event: MatrixEvent; time: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
       <span
+        role={onOpenProfile ? 'button' : undefined}
+        tabIndex={onOpenProfile ? 0 : undefined}
+        onClick={onOpenProfile ? (e) => onOpenProfile(senderId, e.clientX, e.clientY) : undefined}
+        onKeyDown={
+          onOpenProfile
+            ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  const r = e.currentTarget.getBoundingClientRect()
+                  onOpenProfile(senderId, r.left, r.bottom)
+                }
+              }
+            : undefined
+        }
+        title={onOpenProfile ? name : undefined}
         style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -227,6 +407,7 @@ function SenderPill({ event, time }: { event: MatrixEvent; time: string }) {
           borderRadius: 999,
           background: 'var(--cpd-color-bg-subtle-secondary)',
           border: '1px solid rgba(128,128,128,0.18)',
+          cursor: onOpenProfile ? 'pointer' : undefined,
         }}
       >
         <span
@@ -272,6 +453,17 @@ function SenderPill({ event, time }: { event: MatrixEvent; time: string }) {
 export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?: (roomId: string, rootId: string) => void }) {
   const { event, kind, cells, layout } = item
   const { open } = useLightbox()
+  const { client } = useClient()
+  const actions = useMessageActions(item)
+  const openProfile = useProfileOpener()
+  // One preview per message: a wall of cards under a link-heavy message is its
+  // own problem. Opt-in, because a preview makes the SERVER fetch a third-party
+  // URL on the reader's behalf.
+  const linkPreviewsEnabled = useLinkPreviewPref()
+  const previewUrl =
+    item.kind === 'message' && typeof item.content.body === 'string'
+      ? firstLink(item.content.body)
+      : null
   const time = new Date(event.getTs()).toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit',
@@ -281,7 +473,7 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
   if (kind === 'gallery' && cells) {
     body = <GalleryBody cells={cells} layout={layout ?? 'grid'} />
   } else if (kind === 'message') {
-    const content = event.getContent()
+    const content = item.content
     const mxc = typeof content.url === 'string' ? content.url : ''
     if (content.msgtype === 'm.image' && parseMxc(mxc)) {
       // Image message: render the picture inline via the gateway as a thumbnail
@@ -299,18 +491,29 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
         </div>
       )
     } else {
-    const rendered = renderMessageBody(event)
+    // item.content, not event.getContent(): the effective content with the
+    // winning edit applied (S1). isReply strips the spec's "> " fallback quote.
+    const rendered = renderMessageBody(item.content, { isReply: !!item.replyTo })
     body =
       rendered.html !== undefined ? (
         // Sanitized by DOMPurify in renderMessageBody — safe to inject.
+        // The click/key handlers are DELEGATED: an innerHTML subtree cannot
+        // carry React handlers, so spoiler reveal is resolved by walking up
+        // from the event target (W2.L2).
         <span
           className="tc-message-html"
+          onClick={onSpoilerClick}
+          onKeyDown={onSpoilerKey}
           dangerouslySetInnerHTML={{ __html: rendered.html }}
         />
       ) : (
         <span style={{ whiteSpace: 'pre-wrap' }}>{linkify(rendered.text ?? '')}</span>
       )
     }
+  } else if (isPollStart(event)) {
+    // A poll arrives as its own event type, so it is classified 'other' by
+    // toItems and would otherwise render as `[m.poll.start]`.
+    body = <PollBody client={client} room={client?.getRoom(event.getRoomId() ?? '') ?? null} event={event} />
   } else if (kind === 'encrypted') {
     body = <span style={{ fontStyle: 'italic', opacity: 0.7 }}>🔒 Encrypted (decryption coming later)</span>
   } else if (kind === 'redacted') {
@@ -324,8 +527,28 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
   }
 
   return (
-    <div style={{ padding: '4px 0' }}>
-      <SenderPill event={event} time={time} />
+    // data-event-id is what click-to-jump searches for; keeping it on the row
+    // means no separate index has to stay in sync with the timeline.
+    <div
+      className="tc-row"
+      data-event-id={item.id}
+      data-grouped={item.showHeader === false ? 'true' : undefined}
+      style={{ padding: '4px 0' }}
+    >
+      {/* A grouped message loses its pillbox, so its time is shown in the
+          gutter on hover -- otherwise the timestamp becomes unreachable for
+          every message after the first in a run. */}
+      {item.showHeader === false && <span className="tc-row-gutter-time">{time}</span>}
+      {/* Overlays the row's top-right; revealed by CSS on hover/focus-within so
+          no React state churns per pointer crossing. */}
+      <MessageActionBar actions={actions} />
+      {/* Grouping hides the HEADER only. Every decoration below -- reply
+          pill, body, edited marker, reactions, receipts, thread chip -- is
+          untouched, which is why grouping could land last without revisiting
+          any of them. */}
+      {item.showHeader !== false && (
+        <SenderPill event={event} time={time} onOpenProfile={openProfile} />
+      )}
       <div
         style={{
           display: 'flex',
@@ -336,9 +559,65 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
           marginTop: 1,
         }}
       >
-        <div style={{ fontSize: 14, wordBreak: 'break-word', minWidth: 0 }}>{body}</div>
-        {event.isThreadRoot && <ThreadChip event={event} onOpen={onOpenThread} />}
+        {item.replyTo && <ReplyPill replyTo={item.replyTo} />}
+        <div style={{ fontSize: 14, wordBreak: 'break-word', minWidth: 0 }}>
+          {body}
+          {previewUrl && (
+            <LinkPreview client={client} url={previewUrl} enabled={linkPreviewsEnabled} />
+          )}
+          {item.editedTs !== undefined && (
+            <span
+              className="tc-edited-marker"
+              title={`Edited ${new Date(item.editedTs).toLocaleString()}`}
+            >
+              (edited)
+            </span>
+          )}
+        </div>
+        <RowFooter item={item} onOpenThread={onOpenThread} />
       </div>
+    </div>
+  )
+}
+
+// W2.4's designed footer region: one wrapping flex row under the body, holding
+// the reactions strip, the thread chip, and (W2.6) the receipts cluster.
+//
+// It renders NOTHING when it has no children -- no empty box with a min-height
+// -- so adding the first reaction to a message does not push the body. That is
+// the no-forced-reflow rule: the footer is appended, never inserted.
+function RowFooter({
+  item,
+  onOpenThread,
+}: {
+  item: TimelineItem
+  onOpenThread?: (roomId: string, rootId: string) => void
+}) {
+  const { client } = useClient()
+  const receipts = useReceipts()
+  const roomId = item.event.getRoomId() ?? ''
+  const isThreadRoot = item.event.isThreadRoot
+  const canReact = item.kind === 'message' || item.kind === 'gallery'
+  const hasReactions = (item.reactions?.length ?? 0) > 0
+  const seenBy = receipts.get(item.id) ?? EMPTY_SEEN
+
+  // The strip renders its own "+" affordance, so it is present whenever the
+  // message can be reacted to -- CSS keeps it hidden until the row is hovered
+  // or focused when there is nothing tallied yet.
+  if (!isThreadRoot && !canReact && !hasReactions && seenBy.length === 0) return null
+
+  return (
+    <div
+      className="tc-row-footer"
+      data-empty={!hasReactions && !isThreadRoot && seenBy.length === 0 ? 'true' : undefined}
+    >
+      {canReact && roomId && <ReactionStrip item={item} client={client} roomId={roomId} />}
+      {isThreadRoot && <ThreadChip event={item.event} onOpen={onOpenThread} />}
+      {seenBy.length > 0 && (
+        <span style={{ marginLeft: 'auto', display: 'inline-flex' }}>
+          <ReceiptCluster room={client?.getRoom(roomId) ?? null} userIds={seenBy} />
+        </span>
+      )}
     </div>
   )
 }
@@ -560,6 +839,74 @@ function ThreadChip({ event, onOpen }: { event: MatrixEvent; onOpen?: (roomId: s
       }}
     >
       💬 {count} {count === 1 ? 'reply' : 'replies'}
+    </button>
+  )
+}
+
+// W6.1 -- a date marker. A separate component branched at the CALL SITE, not a
+// branch inside Row: an early return above Row's hooks would break the
+// rules-of-hooks order, and a separator is not a message anyway -- it has no
+// pillbox, no action bar, no footer, and is not a target for any verb.
+export function DaySeparator({ item }: { item: TimelineItem }) {
+  const ts = item.dayTs ?? item.event.getTs()
+  return (
+    <div className="tc-day-separator" role="separator">
+      <span>
+        {new Date(ts).toLocaleDateString(undefined, {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+        })}
+      </span>
+    </div>
+  )
+}
+
+// W2.1 -- the reply pill above a reply's body: who was answered, a one-line
+// preview, and click-to-jump to the original.
+//
+// The preview is deliberately plain text (eventPreview), never the rendered
+// HTML -- a pill is chrome, and injecting message markup into chrome is how a
+// formatted body escapes the message area.
+function ReplyPill({ replyTo }: { replyTo: ReplyRef }) {
+  const { client } = useClient()
+  const { jump, canPaginate } = useJump()
+  const [jumping, setJumping] = useState(false)
+
+  const target = replyTo.event
+  // Unresolved: the original is outside the loaded window. Say so honestly
+  // rather than rendering a pill that looks like a real quote.
+  const senderId = target?.getSender() ?? null
+  const member = senderId
+    ? client?.getRoom(target?.getRoomId() ?? '')?.getMember(senderId) ?? null
+    : null
+  const name = member?.name || senderId || 'a message'
+  const preview = target ? eventPreview(target, 80) : 'Original not loaded'
+
+  // Nothing to jump to and no way to find it -> render inert, not a dead link.
+  const jumpable = !!target || canPaginate
+
+  const onClick = () => {
+    if (!jumpable || jumping) return
+    setJumping(true)
+    void jump(replyTo.eventId).finally(() => setJumping(false))
+  }
+
+  return (
+    <button
+      type="button"
+      className="tc-reply-pill"
+      onClick={onClick}
+      disabled={!jumpable}
+      title={jumpable ? 'Jump to the message being replied to' : 'Original message not loaded'}
+      aria-label={`Replying to ${name}: ${preview}`}
+    >
+      <span className="tc-reply-pill-arrow" aria-hidden="true">
+        {'↱'}
+      </span>
+      <span className="tc-reply-pill-name">{name}</span>
+      <span className="tc-reply-pill-text">{jumping ? 'Searching...' : preview}</span>
     </button>
   )
 }

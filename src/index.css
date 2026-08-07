@@ -248,3 +248,745 @@ code {
   background: rgba(140, 150, 170, 0.8);
   background-clip: content-box;
 }
+
+/* ---------------------------------------------------------------------------
+   Message action bar (S2). Visibility is CSS on purpose: driving row hover
+   from React state would re-render a row on every pointer crossing, and Row is
+   not memoized. The bar stays in the DOM (opacity, not display) so that
+   :focus-within can reveal it for keyboard users -- it is an ARIA toolbar with
+   one tab stop and arrow-key movement inside.
+
+   The bar overlays the row's top-right rather than occupying layout, so
+   revealing it never reflows the message under the pointer.
+   --------------------------------------------------------------------------- */
+.tc-row {
+  position: relative;
+}
+
+.tc-row-actions {
+  position: absolute;
+  top: -6px;
+  right: 6px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--cpd-color-bg-canvas-default, #16181d);
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 90ms ease-out;
+}
+.tc-row:hover > .tc-row-actions,
+.tc-row:focus-within > .tc-row-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.tc-row-action {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.tc-row-action:hover {
+  background: var(--cpd-color-bg-subtle-secondary, rgba(128, 128, 128, 0.18));
+  color: var(--cpd-color-text-primary, #e7ebf0);
+}
+.tc-row-action:focus-visible {
+  outline: 2px solid var(--tc-link);
+  outline-offset: -2px;
+}
+.tc-row-action[data-danger='true']:hover {
+  color: var(--cpd-color-text-critical-primary, #ff6b6b);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tc-row-actions {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Reply pill (W2.1) -- the "answering X" line above a reply's body, and the
+   flash that marks the row a jump landed on.
+   --------------------------------------------------------------------------- */
+.tc-reply-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: 2px;
+  padding: 1px 8px 1px 4px;
+  border: none;
+  border-left: 2px solid rgba(128, 128, 128, 0.5);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+.tc-reply-pill:hover:not(:disabled) {
+  background: var(--cpd-color-bg-subtle-secondary, rgba(128, 128, 128, 0.12));
+}
+.tc-reply-pill:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.tc-reply-pill-arrow {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+.tc-reply-pill-name {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--cpd-color-text-primary, #e7ebf0);
+}
+.tc-reply-pill-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* Marks the row a jump landed on. Fades out on its own -- no JS cleanup beyond
+   removing the class, and no dependence on transitionend (G-04f01d). */
+.tc-row-flash {
+  animation: tc-row-flash 1.2s ease-out;
+}
+@keyframes tc-row-flash {
+  0% {
+    background: rgba(120, 160, 255, 0.28);
+  }
+  100% {
+    background: transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tc-row-flash {
+    animation: none;
+    outline: 2px solid var(--tc-link);
+    outline-offset: 2px;
+  }
+}
+
+/* The "(edited)" marker (W2.2). Inline and quiet -- it trails the body rather
+   than taking a line, so an edit does not re-flow the message. */
+.tc-edited-marker {
+  margin-left: 5px;
+  font-size: 10px;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  opacity: 0.75;
+  user-select: none;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+   Row footer (W2.4 design note): reactions strip + thread chip + (W2.6)
+   receipts cluster, in one wrapping flex row under the body.
+
+   The footer is ABSENT when it has nothing to show, never present-but-empty,
+   so the first reaction on a message does not push the body down. Fixed 20px
+   control heights keep a row's height stable whether or not it has reactions.
+   --------------------------------------------------------------------------- */
+.tc-row-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+/* A footer holding only the (hidden) add-reaction button takes no vertical
+   space until the row is hovered or focused -- otherwise every message would
+   reserve a footer's worth of height for a button nobody can see. */
+.tc-row-footer[data-empty='true'] {
+  margin-top: 0;
+  height: 0;
+  overflow: hidden;
+}
+.tc-row:hover > * .tc-row-footer[data-empty='true'],
+.tc-row:focus-within > * .tc-row-footer[data-empty='true'] {
+  height: auto;
+  margin-top: 2px;
+  overflow: visible;
+}
+
+.tc-reactions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tc-reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 10px;
+  background: var(--cpd-color-bg-subtle-secondary, rgba(128, 128, 128, 0.14));
+  color: var(--cpd-color-text-primary, #e7ebf0);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+.tc-reaction:hover:not(:disabled) {
+  border-color: rgba(128, 128, 128, 0.6);
+}
+.tc-reaction:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.tc-reaction:focus-visible {
+  outline: 2px solid var(--tc-link);
+  outline-offset: 1px;
+}
+/* Own reaction: the accent border is the signal, so it reads without relying
+   on color alone at a glance. */
+.tc-reaction[data-mine='true'] {
+  border-color: var(--tc-link);
+  background: color-mix(in srgb, var(--tc-link) 18%, transparent);
+}
+.tc-reaction-key {
+  font-size: 13px;
+}
+.tc-reaction-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+}
+
+/* The "+" only shows on hover/focus when the message has no reactions yet;
+   once there are pills it stays visible so the strip does not reflow. */
+.tc-reaction-add {
+  opacity: 0;
+  transition: opacity 90ms ease-out;
+}
+.tc-row:hover .tc-reaction-add,
+.tc-row:focus-within .tc-reaction-add,
+.tc-reactions:hover .tc-reaction-add {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tc-reaction-add {
+    transition: none;
+  }
+}
+
+/* Read-receipt "seen by" cluster (W2.6). Right-aligned in the footer so it
+   sits in a stable column down the timeline instead of jittering with the
+   reaction count. Avatars overlap slightly, capped with a +N. */
+.tc-receipts {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+}
+.tc-receipt-avatar {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  font-size: 8px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--cpd-color-bg-subtle-primary, #4a5568);
+  margin-right: -6px;
+  border: 1px solid var(--cpd-color-bg-canvas-default, #16181d);
+}
+.tc-receipt-avatar:last-of-type {
+  margin-right: 0;
+}
+.tc-receipt-more {
+  margin-left: 8px;
+  font-size: 10px;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------------------
+   Syntax highlighting (W2.L1). Hand-written against the hljs class contract
+   rather than importing one of the shipped themes: the themes set their own
+   background and colors, which would fight the Compound tokens and the chat
+   backdrop. Only the token classes hljs actually emits from the common
+   language set are styled; anything unstyled simply inherits.
+   --------------------------------------------------------------------------- */
+:root {
+  --tc-hl-keyword: #c678dd;
+  --tc-hl-string: #98c379;
+  --tc-hl-number: #d19a66;
+  --tc-hl-comment: #7f848e;
+  --tc-hl-function: #61afef;
+  --tc-hl-type: #e5c07b;
+  --tc-hl-literal: #56b6c2;
+  --tc-hl-deleted: #e06c75;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --tc-hl-keyword: #a626a4;
+    --tc-hl-string: #50a14f;
+    --tc-hl-number: #986801;
+    --tc-hl-comment: #a0a1a7;
+    --tc-hl-function: #4078f2;
+    --tc-hl-type: #c18401;
+    --tc-hl-literal: #0184bc;
+    --tc-hl-deleted: #e45649;
+  }
+}
+
+.tc-message-html code.hljs {
+  display: block;
+  color: var(--cpd-color-text-primary, #e7ebf0);
+}
+.tc-message-html .hljs-keyword,
+.tc-message-html .hljs-selector-tag,
+.tc-message-html .hljs-built_in,
+.tc-message-html .hljs-doctag {
+  color: var(--tc-hl-keyword);
+}
+.tc-message-html .hljs-string,
+.tc-message-html .hljs-regexp,
+.tc-message-html .hljs-symbol,
+.tc-message-html .hljs-addition {
+  color: var(--tc-hl-string);
+}
+.tc-message-html .hljs-number,
+.tc-message-html .hljs-meta {
+  color: var(--tc-hl-number);
+}
+.tc-message-html .hljs-comment,
+.tc-message-html .hljs-quote {
+  color: var(--tc-hl-comment);
+  font-style: italic;
+}
+.tc-message-html .hljs-title,
+.tc-message-html .hljs-section,
+.tc-message-html .hljs-name {
+  color: var(--tc-hl-function);
+}
+.tc-message-html .hljs-type,
+.tc-message-html .hljs-class .hljs-title,
+.tc-message-html .hljs-attr,
+.tc-message-html .hljs-attribute {
+  color: var(--tc-hl-type);
+}
+.tc-message-html .hljs-literal,
+.tc-message-html .hljs-variable,
+.tc-message-html .hljs-template-variable {
+  color: var(--tc-hl-literal);
+}
+.tc-message-html .hljs-deletion {
+  color: var(--tc-hl-deleted);
+}
+.tc-message-html .hljs-emphasis {
+  font-style: italic;
+}
+.tc-message-html .hljs-strong {
+  font-weight: 700;
+}
+
+/* ---------------------------------------------------------------------------
+   Spoilers (W2.L2, MSC2010). Blurred until clicked or activated by keyboard.
+
+   The blur is a filter, not a color swap, so the text's LAYOUT is unchanged
+   and revealing one never reflows the message around it. The reason label is
+   rendered with content: attr(), so a sender-supplied reason can only ever be
+   text -- it is never parsed as markup.
+   --------------------------------------------------------------------------- */
+.tc-spoiler {
+  border-radius: 3px;
+  background: rgba(128, 128, 128, 0.28);
+  color: transparent;
+  filter: blur(4px);
+  cursor: pointer;
+  transition: filter 120ms ease-out, color 120ms ease-out;
+  user-select: none;
+}
+.tc-spoiler:focus-visible {
+  outline: 2px solid var(--tc-link);
+  outline-offset: 2px;
+  filter: none;
+}
+.tc-spoiler[data-mx-spoiler]:not([data-mx-spoiler=''])::before {
+  content: attr(data-mx-spoiler) ': ';
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  filter: none;
+  font-size: 11px;
+  font-style: italic;
+}
+.tc-spoiler.tc-spoiler-revealed {
+  background: transparent;
+  color: inherit;
+  filter: none;
+  cursor: auto;
+  user-select: auto;
+}
+.tc-spoiler.tc-spoiler-revealed::before {
+  content: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tc-spoiler {
+    transition: none;
+  }
+}
+
+/* Typing bar (W2.L4). Sits BETWEEN the timeline and the composer, never in
+   the message flow -- in the flow it would push messages around every time
+   someone started or stopped typing. It reserves its height permanently and
+   simply empties when nobody is typing, so appearing costs no reflow. */
+.tc-typing-bar {
+  flex-shrink: 0;
+  height: 18px;
+  line-height: 18px;
+  padding: 0 16px;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* Pinned-message panel (W2.7). Overlays the top of the timeline rather than
+   taking layout, so opening it never reflows the message list underneath. */
+.tc-pinned-panel {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: -12px -16px 8px;
+  padding: 8px 12px;
+  background: var(--cpd-color-bg-canvas-default, #16181d);
+  border-bottom: 1px solid rgba(128, 128, 128, 0.35);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  font-size: 12px;
+}
+.tc-pinned-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.tc-pinned-empty {
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  padding: 4px 0;
+}
+.tc-pinned-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.tc-pinned-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.tc-pinned-jump {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.tc-pinned-jump:hover {
+  background: var(--cpd-color-bg-subtle-secondary, rgba(128, 128, 128, 0.16));
+}
+.tc-pinned-sender {
+  flex-shrink: 0;
+  font-weight: 600;
+}
+.tc-pinned-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+}
+.tc-pinned-unpin {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 6px;
+}
+.tc-pinned-unpin:hover {
+  color: var(--cpd-color-text-critical-primary, #ff6b6b);
+}
+
+/* Mention autocomplete (W2.9). Overlays ABOVE the composer rather than
+   occupying layout, so opening it never pushes the input down or shifts the
+   timeline -- the same no-forced-reflow rule the typing bar follows. */
+.tc-mention-picker {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 16px;
+  right: 16px;
+  max-width: 340px;
+  max-height: 240px;
+  overflow-y: auto;
+  z-index: 1000;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--cpd-color-bg-canvas-default, #16181d);
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+.tc-mention-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cpd-color-text-primary, #e7ebf0);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.tc-mention-item[data-active='true'],
+.tc-mention-item:hover {
+  background: var(--cpd-color-bg-subtle-secondary, rgba(128, 128, 128, 0.18));
+}
+.tc-mention-name {
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.tc-mention-id {
+  font-size: 11px;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Room header info (W3.2): name, joined count, topic on ONE line. A room with
+   a paragraph-long topic must not push the timeline down, so the topic
+   ellipsises inside the header's fixed shape and the full text is the title. */
+.tc-room-header-info {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.tc-room-header-name {
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40%;
+}
+.tc-room-header-count {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--cpd-color-bg-subtle-secondary, rgba(128, 128, 128, 0.16));
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  font-variant-numeric: tabular-nums;
+}
+.tc-room-header-topic {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+}
+
+/* Presence dot (W4.5). Rendered ONLY when the server actually told us a state
+   -- unknown draws nothing at all, because a grey "offline" dot on every row
+   would be a claim the client invented rather than something the server said. */
+.tc-presence-dot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--cpd-color-text-secondary, #a8b0bd);
+}
+.tc-presence-dot[data-presence='online'] {
+  background: #3ba776;
+}
+.tc-presence-dot[data-presence='unavailable'] {
+  background: #d6a13c;
+}
+.tc-presence-dot[data-presence='offline'] {
+  background: rgba(140, 150, 170, 0.55);
+}
+
+/* Link preview (W5.2). Absent entirely unless the server returned something
+   useful -- no skeleton and no empty frame, so a link never shoves the
+   timeline around while a preview resolves. */
+.tc-link-preview {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  max-width: 420px;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border-left: 3px solid var(--tc-link);
+  background: var(--cpd-color-bg-subtle-secondary, rgba(128, 128, 128, 0.12));
+  text-decoration: none;
+  color: inherit;
+}
+.tc-link-preview:hover {
+  background: var(--cpd-color-bg-subtle-primary, rgba(128, 128, 128, 0.2));
+}
+.tc-link-preview-img {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+.tc-link-preview-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tc-link-preview-title {
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tc-link-preview-desc {
+  font-size: 11px;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Polls (W5.3). Options are fixed-height so a tally changing never re-lays-out
+   the message; the fill is a background layer, not a sized sibling. */
+.tc-poll { max-width: 380px; display: flex; flex-direction: column; gap: 4px; }
+.tc-poll-question { font-weight: 600; margin-bottom: 2px; }
+.tc-poll-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+.tc-poll-option:disabled { cursor: default; }
+.tc-poll-option[data-mine='true'] { border-color: var(--tc-link); }
+.tc-poll-option:focus-visible { outline: 2px solid var(--tc-link); outline-offset: 1px; }
+.tc-poll-fill {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: color-mix(in srgb, var(--tc-link) 22%, transparent);
+  transition: width 180ms ease-out;
+  pointer-events: none;
+}
+.tc-poll-label { position: relative; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-poll-count { position: relative; font-variant-numeric: tabular-nums; color: var(--cpd-color-text-secondary, #a8b0bd); }
+.tc-poll-footer { font-size: 11px; color: var(--cpd-color-text-secondary, #a8b0bd); }
+@media (prefers-reduced-motion: reduce) { .tc-poll-fill { transition: none; } }
+
+/* A custom-emoji reaction renders its mxc as an image inside the pill; fixed
+   box so a custom and a unicode reaction are the same height (W5.4). */
+.tc-reaction-key { display: inline-grid; place-items: center; min-width: 16px; height: 16px; }
+
+/* Day separators (W6.1). A rule with the date centred on it. */
+.tc-day-separator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  user-select: none;
+}
+.tc-day-separator::before,
+.tc-day-separator::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(128, 128, 128, 0.25);
+}
+
+/* Same-sender grouping (W6.2). A grouped row keeps the body column's indent
+   and drops only the pillbox, so the text stays in the same column as the
+   message above it. Its timestamp moves to the gutter, revealed on hover. */
+.tc-row[data-grouped='true'] {
+  padding-top: 0 !important;
+}
+.tc-row-gutter-time {
+  position: absolute;
+  left: 0;
+  top: 2px;
+  width: 44px;
+  text-align: right;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  opacity: 0;
+  pointer-events: none;
+  user-select: none;
+  transition: opacity 90ms ease-out;
+}
+.tc-row:hover > .tc-row-gutter-time,
+.tc-row:focus-within > .tc-row-gutter-time {
+  opacity: 0.75;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tc-row-gutter-time { transition: none; }
+}

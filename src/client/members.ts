@@ -11,6 +11,55 @@ export function honorificFor(powerLevel: number): Honorific {
   return null
 }
 
+// Human-readable standing for an honorific tier. Hoisted here (from
+// DomainUserMenu) so the shared ProfileCard, the member list and the domain
+// menu all name a tier the same way.
+export const HONORIFIC_LABEL: Record<string, string> = {
+  '~': 'Owner',
+  '@': 'Moderator',
+  '+': 'Voice',
+}
+
+export function standingLabel(powerLevel: number): string {
+  const h = honorificFor(powerLevel)
+  return h ? HONORIFIC_LABEL[h] : 'Member'
+}
+
+// Avatar placeholder text. Strips a leading sigil so "@saber:x.net" reads as
+// "SA", not "@S".
+export function initials(name: string): string {
+  const cleaned = name.replace(/^[@#!]/, '').trim()
+  return cleaned.slice(0, 2).toUpperCase() || '?'
+}
+
+// Sort key for the member list (W4.1): honorific TIER first, then name.
+//
+// Tier, not raw power level. Two moderators at PL 50 and PL 60 are both "@"
+// and should sit together alphabetically rather than being split by a number
+// nobody sees. Ranking by raw PL would make the list order disagree with the
+// glyphs it is showing.
+const TIER_RANK: Record<string, number> = { '~': 0, '@': 1, '+': 2 }
+
+export function honorificRank(powerLevel: number): number {
+  const h = honorificFor(powerLevel)
+  return h ? TIER_RANK[h] : 3
+}
+
+export function compareByStanding(a: MergedMember, b: MergedMember): number {
+  const ra = honorificRank(maxPower(a))
+  const rb = honorificRank(maxPower(b))
+  if (ra !== rb) return ra - rb
+  return a.displayName.toLowerCase().localeCompare(b.displayName.toLowerCase())
+}
+
+// Split "@user:server" for two-tone display. Returns the bare localpart and
+// the server (empty when the id has no colon).
+export function splitUserId(userId: string): { uname: string; server: string } {
+  const bare = userId.replace(/^@/, '')
+  const [uname, ...rest] = bare.split(':')
+  return { uname, server: rest.join(':') }
+}
+
 // A member, normalized across all sources. Identity is the canonical key (the
 // Matrix user id for now). powerByRoom carries the member's PL in each
 // SPACE-STRUCTURED room they're in (DMs/orphans are excluded from power — see

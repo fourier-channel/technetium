@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import type { TreeNode } from '../client/spaces'
 import { useClient } from '../client/ClientContext'
 import { useRoomListSettings } from './roomListSettings'
+import { markNodeRead } from '../client/markRead'
 
 const PRESET_ICONS = ['💬', '📌', '🎮', '🎨', '🔥', '⭐', '🛠️', '📁', '🤖', '👾', '🧪', '📷']
 
@@ -28,6 +29,11 @@ export function RoomContextMenu({
   const ref = useRef<HTMLDivElement>(null)
   const [confirmLeave, setConfirmLeave] = useState(false)
   const [iconDraft, setIconDraft] = useState('')
+  // Non-null while a space-wide mark-as-read is running, so the row can say
+  // what it is doing instead of looking like a dead click.
+  const [markingRead, setMarkingRead] = useState(false)
+  const [renaming, setRenaming] = useState(false)
+  const [renameDraft, setRenameDraft] = useState('')
 
   const isRoom = !node.isSpace
   const joined = node.membership === 'join'
@@ -58,6 +64,22 @@ export function RoomContextMenu({
     if (trimmed) settings.setIcon(node.roomId, trimmed)
     onClose()
   }
+  const markRead = async () => {
+    if (!client || markingRead) return
+    setMarkingRead(true)
+    try {
+      const result = await markNodeRead(client, node)
+      if (result.truncated) {
+        console.warn(
+          `Mark as read: stopped after ${result.attempted} rooms; this space has more.`,
+        )
+      }
+    } finally {
+      setMarkingRead(false)
+      onClose()
+    }
+  }
+
   const snooze = (ms: number) => {
     settings.setMute(node.roomId, Date.now() + ms)
     onClose()
@@ -110,6 +132,75 @@ export function RoomContextMenu({
       {isRoom && joined && (
         <MenuItem onClick={() => { settings.toggleFavorite(node.roomId); onClose() }}>
           {favorite ? '★ Unfavorite' : '☆ Favorite'}
+        </MenuItem>
+      )}
+
+      {joined && (
+        <>
+          <Divider label="Name" />
+          {renaming ? (
+            <div style={{ display: 'flex', gap: 4, padding: '2px 6px 6px' }}>
+              <input
+                type="text"
+                value={renameDraft}
+                onChange={(e) => setRenameDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    settings.setRename(node.roomId, renameDraft)
+                    onClose()
+                  }
+                  if (e.key === 'Escape') setRenaming(false)
+                }}
+                placeholder={node.name || node.roomId}
+                aria-label="Custom room name"
+                autoFocus
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  fontSize: 12,
+                  padding: '3px 6px',
+                  borderRadius: 5,
+                  border: '1px solid rgba(128,128,128,0.35)',
+                  background: 'transparent',
+                  color: 'inherit',
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  settings.setRename(node.roomId, renameDraft)
+                  onClose()
+                }}
+                style={{ fontSize: 12 }}
+              >
+                Set
+              </button>
+            </div>
+          ) : (
+            <MenuItem
+              onClick={() => {
+                setRenameDraft(settings.getRename(node.roomId) ?? '')
+                setRenaming(true)
+              }}
+            >
+              ✎ Customize name
+            </MenuItem>
+          )}
+          {settings.getRename(node.roomId) !== undefined && !renaming && (
+            <MenuItem onClick={() => { settings.clearRename(node.roomId); onClose() }}>
+              ↩ Reset to server name
+            </MenuItem>
+          )}
+        </>
+      )}
+
+      {joined && (
+        <MenuItem onClick={() => void markRead()}>
+          {markingRead
+            ? '✓ Marking...'
+            : node.isSpace
+              ? '✓ Mark space as read'
+              : '✓ Mark as read'}
         </MenuItem>
       )}
 

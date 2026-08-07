@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Room } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
 import { computeRevealOrder, type TreeNode } from '../client/spaces'
 import { useNavTree } from '../client/useNavTree'
 import { useRoomNotifications, type NotifMap, type NotifCounts } from '../client/useRoomNotifications'
 import { useRoomListSettings } from './roomListSettings'
+import { useFlipList, type FlipControl } from './flip'
+import { useThreadDrag } from './threadDrag'
+import { arrangeSiblings, roomOrderScope } from './roomOrder'
 import { useReducedMotion } from './reducedMotion'
 import { AuthedImage } from './AuthedImage'
 import { RoomContextMenu } from './RoomContextMenu'
@@ -430,6 +433,7 @@ function TreeRow({
   appeared,
   introActive,
   onIntroInteract,
+  dragHandlers,
 }: {
   node: TreeNode
   depth: number
@@ -445,10 +449,15 @@ function TreeRow({
   appeared: Set<string>
   introActive: boolean
   onIntroInteract: () => void
+  // W3.4 -- pointer handlers from the parent SiblingGroup's drag layer.
+  // Absent for rows that are not part of a reorderable group.
+  dragHandlers?: Record<string, unknown>
 }) {
   const { client } = useClient()
-  const { isFavorite, isMutedNow } = useRoomListSettings()
-  const label = node.name || node.roomId
+  const { isFavorite, isMutedNow, getRename, getRoomOrder } = useRoomListSettings()
+  // W3.3 -- a local override wins over the server name, everywhere the name is
+  // shown, so the nav and the room header never disagree.
+  const label = getRename(node.roomId) ?? node.name ?? node.roomId
   const isCollapsed = collapsed.has(node.roomId)
   const isSelected = !node.isSpace && node.roomId === selectedRoomId
   const indent = 6 + depth * 12
@@ -528,13 +537,21 @@ function TreeRow({
   // Favorited descendant rooms stay visible when the space is collapsed.
   const favChildren = node.isSpace && isCollapsed ? collectFavoriteRooms(node, isFavorite) : []
 
+  // W3.4 -- a saved custom order for THIS space's children, applied over the
+  // server order. Rooms the order does not know about sort first, so a newly
+  // joined room is noticeable rather than appended out of sight.
+  const orderedChildren = arrangeSiblings(node.children, getRoomOrder(node.roomId))
+
   // Intro: this row is hidden (height 0) until it's its turn to spawn.
   const shown = !introActive || appeared.has(node.roomId)
 
   return (
     <>
-      {/* Intro appear-grid: grows this row in when its turn arrives. */}
+      {/* Intro appear-grid: grows this row in when its turn arrives.
+          data-flip-id is what the shared drag layer measures (W3.4). */}
       <div
+        data-flip-id={node.roomId}
+        {...dragHandlers}
         style={{
           display: 'grid',
           gridTemplateRows: shown ? '1fr' : '0fr',
@@ -653,8 +670,8 @@ function TreeRow({
             transition: animate ? 'grid-template-rows 240ms ease' : undefined,
           }}
         >
-          <div style={{ overflow: 'hidden', minHeight: 0 }}>
-            {node.children.map((child) => (
+          <SiblingGroup parentId={node.roomId} childIds={orderedChildren.map((c) => c.roomId)}>
+            {orderedChildren.map((child) => (
               <TreeRow
                 key={child.roomId}
                 node={child}
@@ -671,7 +688,7 @@ function TreeRow({
                 onIntroInteract={onIntroInteract}
               />
             ))}
-          </div>
+          </SiblingGroup>
         </div>
       )}
       {/* Favorited descendant rooms stay pinned/visible while collapsed. */}
@@ -954,5 +971,49 @@ function RoomIcon({ node, size = 20 }: { node: TreeNode; size?: number }) {
     <span style={frame} aria-hidden>
       {initial}
     </span>
+  )
+}
+
+// W3.4 -- one reorderable sibling group (a space's children, or the root list).
+//
+// The drag container is the GROUP, not the sidebar's scroll element. That is
+// deliberate: measureCards takes every [data-flip-id] under its container, so a
+// single container over the whole tree would let a room be dropped into another
+// space's slot and produce an order that means nothing. Scoping per parent
+// costs edge-autoscroll -- the group does not scroll, so the autoscroll writes
+// to a scrollTop that stays 0 -- but the geometry stays correct, which is the
+// half that matters.
+//
+// Dragging is only offered while the space is EXPANDED. When collapsed, its
+// favourited descendants are hoisted OUTSIDE this container, so the dragged set
+// and the rendered set would disagree in exactly that state.
+function SiblingGroup({
+  parentId,
+  childIds,
+  children,
+}: {
+  parentId: string | null
+  childIds: string[]
+  children: ReactNode
+}) {
+  const settings = useRoomListSettings()
+  const containerRef = useRef<HTMLDivElement>(null)
+  const flipControlRef = useRef<FlipControl | null>(null)
+  const scope = roomOrderScope(parentId)
+
+  const orderedIds = childIds
+  useFlipList(containerRef, orderedIds.join(','), flipControlRef)
+
+  const onReorder = useCallback(
+    (finalIds: string[]) => settings.setRoomOrder(scope, finalIds),
+    [settings, scope],
+  )
+
+  useThreadDrag({ containerRef, orderedIds, onReorder, flipControlRef })
+
+  return (
+    <div ref={containerRef} style={{ overflow: 'hidden', minHeight: 0 }}>
+      {children}
+    </div>
   )
 }

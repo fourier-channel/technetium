@@ -1,9 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { Room } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
+import { startDm } from '../client/dm'
+import { describeInviteError } from '../client/userDirectory'
+import { UserPicker } from './UserPicker'
+import { ProfileCard } from './ProfileCard'
+import { ProfileActions } from './ProfileActions'
+import { usePresence, type PresenceState } from '../client/usePresence'
 import { useMembers } from '../client/useMembers'
 import { useMemberBackfill } from '../client/useMemberBackfill'
-import { honorificFor, maxPower, type MergedMember } from '../client/members'
+import { compareByStanding, honorificFor, maxPower, type MergedMember } from '../client/members'
 import { useFlipList } from './flip'
 import { usePopEnter } from './pop'
 
@@ -20,6 +26,12 @@ export function MemberList({ room }: { room: Room | null }) {
   const { client } = useClient()
   const members = useMembers(client)
   const [mode, setMode] = useState<Mode>('all-highlight')
+  const [picker, setPicker] = useState<'dm' | 'invite' | null>(null)
+  // One-line result of the last invite/DM. Errors here are the server's own
+  // words -- a 403 means insufficient power level and should say so.
+  const [notice, setNotice] = useState<string | null>(null)
+  // W4.2 -- the open profile card, anchored where the row was clicked.
+  const [profile, setProfile] = useState<{ x: number; y: number; userId: string } | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
   // Background-hydrate the community roster so All / Nearby fill in (sliding sync
@@ -47,9 +59,13 @@ export function MemberList({ room }: { room: Room | null }) {
     shown = members
   }
 
-  shown = [...shown].sort((a, b) =>
-    a.displayName.toLowerCase().localeCompare(b.displayName.toLowerCase()),
-  )
+  // Honorific tier first, then alphabetical within a tier (W4.1). The FLIP +
+  // pop machinery below animates the reorder for free.
+  shown = [...shown].sort(compareByStanding)
+
+  // Presence for exactly the rows on screen. Absent = the server said nothing,
+  // which is NOT offline (W4.5).
+  const presence = usePresence(client, shown.map((m) => m.id))
 
   // One animation system for every order/membership change: the rows that MOVED
   // slide to their new slot (useFlipList -- the "push"), and rows that just
@@ -76,12 +92,117 @@ export function MemberList({ room }: { room: Room | null }) {
         <ModeBtn active={mode === 'all-highlight'} onClick={() => setMode('all-highlight')}>Nearby</ModeBtn>
       </div>
 
+      <div style={{ display: 'flex', gap: 4, padding: '0 6px 6px' }}>
+        <button
+          type="button"
+          onClick={() => setPicker('dm')}
+          title="Start a direct message"
+          style={miniBtn}
+        >
+          + DM
+        </button>
+        {room && (
+          <button
+            type="button"
+            onClick={() => setPicker('invite')}
+            title="Invite someone to this room"
+            style={miniBtn}
+          >
+            + Invite
+          </button>
+        )}
+      </div>
+
+      {profile && client && (
+        <ProfileCard
+          x={profile.x}
+          y={profile.y}
+          userId={profile.userId}
+          room={room}
+          member={members.find((m) => m.id === profile.userId)}
+          presence={presence.get(profile.userId)}
+          actions={
+            <ProfileActions
+              client={client}
+              userId={profile.userId}
+              room={room}
+              onClose={() => setProfile(null)}
+            />
+          }
+          onClose={() => setProfile(null)}
+        />
+      )}
+
+      {picker && client && (
+        <UserPicker
+          client={client}
+          title={picker === 'dm' ? 'Start a direct message' : 'Invite to this room'}
+          actionLabel={picker === 'dm' ? 'Opening' : 'Inviting'}
+          excludeFromRoom={picker === 'invite' ? room : null}
+          onPick={(userId) => {
+            const run = async () => {
+              try {
+                if (picker === 'dm') {
+                  const result = await startDm(client, userId)
+                  setNotice(
+                    result.existing
+                      ? 'You already have a direct message with them -- opening it.'
+                      : 'Direct message created.',
+                  )
+                } else if (room) {
+                  await client.invite(room.roomId, userId)
+                  setNotice('Invite sent.')
+                }
+                setPicker(null)
+              } catch (err) {
+                // Surface the server's own reason rather than "it failed".
+                setNotice(describeInviteError(err))
+                setPicker(null)
+              }
+            }
+            void run()
+          }}
+          onClose={() => setPicker(null)}
+        />
+      )}
+
+      {notice && (
+        <div
+          style={{
+            fontSize: 11,
+            padding: '4px 8px',
+            margin: '0 6px 6px',
+            borderRadius: 6,
+            background: 'var(--cpd-color-bg-subtle-secondary)',
+            color: 'var(--cpd-color-text-secondary)',
+          }}
+          role="status"
+        >
+          {notice}{' '}
+          <button
+            type="button"
+            onClick={() => setNotice(null)}
+            style={{ border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer' }}
+            aria-label="Dismiss"
+          >
+            {'×'}
+          </button>
+        </div>
+      )}
+
       <div ref={listRef} style={{ flex: 1, overflowY: 'auto', padding: '2px 4px' }}>
         <div style={{ fontSize: 11, color: 'var(--cpd-color-text-secondary)', padding: '2px 8px' }}>
           {shown.length} {shown.length === 1 ? 'member' : 'members'}
         </div>
         {shown.map((m) => (
-          <MemberRow key={m.id} member={m} room={room} mode={mode} />
+          <MemberRow
+            key={m.id}
+            member={m}
+            room={room}
+            mode={mode}
+            presence={presence.get(m.id)}
+            onOpenProfile={(x, y) => setProfile({ x, y, userId: m.id })}
+          />
         ))}
       </div>
     </div>
@@ -90,10 +211,14 @@ export function MemberList({ room }: { room: Room | null }) {
 
 function MemberRow({
   member,
+  presence,
+  onOpenProfile,
   room,
   mode,
 }: {
   member: MergedMember
+  presence: PresenceState | undefined
+  onOpenProfile: (x: number, y: number) => void
   room: Room | null
   mode: Mode
 }) {
@@ -133,6 +258,16 @@ function MemberRow({
   return (
     <div
       data-flip-id={member.id}
+      role="button"
+      tabIndex={0}
+      onClick={(e) => onOpenProfile(e.clientX, e.clientY)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          const r = e.currentTarget.getBoundingClientRect()
+          onOpenProfile(r.left, r.bottom)
+        }
+      }}
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -140,6 +275,7 @@ function MemberRow({
         height: 26,
         padding: '0 8px',
         borderRadius: 6,
+        cursor: 'pointer',
         color: nameDimmed
           ? 'var(--cpd-color-text-secondary)'
           : 'var(--cpd-color-text-primary)',
@@ -147,6 +283,14 @@ function MemberRow({
       }}
       title={member.id}
     >
+      {presence && (
+        <span
+          className="tc-presence-dot"
+          data-presence={presence}
+          title={presence === 'online' ? 'Online' : presence === 'unavailable' ? 'Away' : 'Offline'}
+          aria-hidden="true"
+        />
+      )}
       <span
         style={{
           width: 12,
@@ -202,4 +346,15 @@ function ModeBtn({
       {children}
     </button>
   )
+}
+
+const miniBtn: CSSProperties = {
+  flex: 1,
+  fontSize: 11,
+  padding: '3px 6px',
+  borderRadius: 6,
+  border: '1px solid rgba(128,128,128,0.3)',
+  background: 'transparent',
+  color: 'var(--cpd-color-text-secondary)',
+  cursor: 'pointer',
 }

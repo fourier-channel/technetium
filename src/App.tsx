@@ -4,6 +4,8 @@ import { useClient } from './client/ClientContext'
 import { Sidebar } from './ui/Sidebar'
 import { Timeline } from './ui/Timeline'
 import { Composer } from './ui/Composer'
+import { ComposerModeProvider } from './ui/ComposerModeProvider'
+import { TypingBar } from './ui/TypingBar'
 import { MemberList } from './ui/MemberList'
 import { ThreadPanel } from './ui/ThreadPanel'
 import { ThreadList } from './ui/ThreadList'
@@ -102,7 +104,10 @@ function App() {
           domainExpanded ? (
             <DomainView room={selectedRoom} onExit={() => setDomainExpanded(false)} />
           ) : (
-            <>
+            // One composer-mode scope per composer: the room timeline and its
+            // composer share a reply/edit target, and the thread panel keeps
+            // its own so replying in a thread cannot hijack the room composer.
+            <ComposerModeProvider>
               <div
                 style={{
                   display: 'flex',
@@ -130,8 +135,9 @@ function App() {
               <div style={{ flex: 1, minHeight: 0 }}>
                 <Timeline room={selectedRoom} onOpenThread={(roomId, rootId) => setOpenThread({ roomId, rootId })} threadListOpen={threadListOpen} onToggleThreadList={() => setThreadListOpen((o) => !o)} />
               </div>
+              <TypingBar client={client} room={selectedRoom} />
               <Composer room={selectedRoom} />
-            </>
+            </ComposerModeProvider>
           )
         ) : (
           <div style={{ padding: 24, opacity: 0.6 }}>Select a room from the left.</div>

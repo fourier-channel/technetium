@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "check": "for f in checks/*.check.ts; do echo \"== $f\"; node --import ./checks/_hooks.mjs \"$f\" || exit 1; done",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -16,6 +17,7 @@
     "@vector-im/compound-design-tokens": "^10.2.2",
     "@vector-im/compound-web": "^9.4.1",
     "dompurify": "^3.4.11",
+    "highlight.js": "^11.11.1",
     "marked": "^18.0.5",
     "matrix-js-sdk": "^41.6.0",
     "react": "^19.2.6",
@@ -23,6 +25,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/jsdom": "^28.0.3",
     "@types/node": "^24.12.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
@@ -31,6 +34,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
+    "jsdom": "^30.0.1",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
     "vite": "^8.0.12"

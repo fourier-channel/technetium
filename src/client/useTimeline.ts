@@ -1,14 +1,33 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import {
+  ClientEvent,
   RoomEvent,
+  type IContent,
   type MatrixClient,
   type Room,
   type MatrixEvent,
 } from 'matrix-js-sdk'
 import { MEDIA_TAGS_EVENT } from './mediaTags'
+import { getIgnoredUsers } from './ignoredUsers'
+import { isBackgroundPost } from './backgroundPost'
+import {
+  buildRelationIndex,
+  effectiveContent,
+  isRelationOnlyEvent,
+  resolveReply,
+  type ReactionTally,
+  type ReplyRef,
+} from './relations'
 
 // Classification the renderer switches on, so it never re-parses event shape.
-export type TimelineItemKind = 'message' | 'encrypted' | 'redacted' | 'other' | 'gallery'
+export type TimelineItemKind =
+  | 'message'
+  | 'encrypted'
+  | 'redacted'
+  | 'other'
+  | 'gallery'
+  // W6.1 -- a date marker inserted BETWEEN items. Carries no event of its own.
+  | 'day'
 
 export type GalleryLayout = 'grid' | 'stack' | 'strip'
 
@@ -22,6 +41,95 @@ export interface TimelineItem {
   cells?: (MatrixEvent | null)[]
   // kind 'gallery' only: the sender's chosen layout (defaults to 'grid').
   layout?: GalleryLayout
+
+  // --- S1 relations read layer ---
+  // Effective content with the winning m.replace applied. Renderers must read
+  // THIS, never event.getContent(), so an edit shows without depending on
+  // whether the sdk happened to aggregate the replacement.
+  content: IContent
+  // Set when an edit was applied; carries the edit's timestamp for the marker.
+  editedTs?: number
+  // Aggregated m.annotation reactions, in first-seen key order. Absent when
+  // the event has none, so the footer renders nothing.
+  reactions?: ReactionTally[]
+  // A user-authored reply target (thread fallbacks are excluded). `event` is
+  // null when the target is outside the loaded window.
+  replyTo?: ReplyRef
+
+  // --- W6 layout ---
+  // False when this message continues a run from the same sender, so the Row
+  // hides the pillbox. Every other decoration (action bar, reactions,
+  // receipts, edited marker, reply pill) is unaffected -- grouping collapses
+  // the HEADER, never the footer.
+  showHeader?: boolean
+  // kind 'day' only: the timestamp the separator labels.
+  dayTs?: number
+}
+
+// How long a gap breaks a same-sender run. Beyond this, two messages are
+// separate thoughts even from one person, and collapsing them reads as one.
+const GROUP_WINDOW_MS = 5 * 60 * 1000
+
+function sameDay(a: number, b: number): boolean {
+  const da = new Date(a)
+  const db = new Date(b)
+  return (
+    da.getFullYear() === db.getFullYear() &&
+    da.getMonth() === db.getMonth() &&
+    da.getDate() === db.getDate()
+  )
+}
+
+// Insert day separators and mark same-sender continuations.
+//
+// A SECOND pass over the folded items rather than logic inside the fold: the
+// fold decides what exists, this decides how it is laid out, and keeping them
+// apart is why every Wave 2 decoration survives grouping untouched.
+export function applyLayout(items: TimelineItem[]): TimelineItem[] {
+  const out: TimelineItem[] = []
+  let prev: TimelineItem | null = null
+
+  for (const item of items) {
+    const ts = item.event.getTs()
+
+    if (!prev || !sameDay(prev.event.getTs(), ts)) {
+      out.push({
+        event: item.event,
+        kind: 'day',
+        // Distinct from any event id, and stable across rebuilds.
+        id: `day-${new Date(ts).toDateString()}`,
+        content: {},
+        dayTs: ts,
+      })
+      // A day break always starts a new run, whoever sent it.
+      out.push({ ...item, showHeader: true })
+      prev = item
+      continue
+    }
+
+    const continues =
+      prev.event.getSender() === item.event.getSender() &&
+      ts - prev.event.getTs() < GROUP_WINDOW_MS &&
+      // A reply opens a new thought: hiding the sender above a reply pill
+      // reads as the pill belonging to the message before it.
+      !item.replyTo &&
+      prev.kind !== 'day'
+
+    out.push({ ...item, showHeader: !continues })
+    prev = item
+  }
+
+  return out
+}
+
+export interface ToItemsOptions {
+  // Needed to mark own reactions and to find the annotation to redact when
+  // toggling one off.
+  myUserId?: string | null
+  // W4.4 -- senders whose events are hidden. The server stops sending an
+  // ignored user's events, but NOT retroactively: anything already in a loaded
+  // timeline stays, so the renderer has to filter too.
+  ignoredUsers?: readonly string[]
 }
 
 function classify(ev: MatrixEvent): TimelineItemKind {
@@ -61,14 +169,23 @@ function galleryTag(ev: MatrixEvent): GalleryTag | null {
   }
 }
 
-export function toItems(events: MatrixEvent[]): TimelineItem[] {
+export function toItems(events: MatrixEvent[], opts: ToItemsOptions = {}): TimelineItem[] {
   const out: TimelineItem[] = []
   const consumed = new Set<string>()
+  const ignored = opts.ignoredUsers?.length ? new Set(opts.ignoredUsers) : null
+  const rel = buildRelationIndex(events, opts.myUserId)
 
   for (let i = 0; i < events.length; i++) {
     const ev = events[i]
     const evId = ev.getId() ?? ''
     if (!evId || consumed.has(evId)) continue
+    // Edits and reactions modify another event; they are never rows of their
+    // own. Without this they render as duplicate messages and `[m.reaction]`
+    // junk -- which is exactly what the client does today.
+    if (isRelationOnlyEvent(ev)) continue
+    // Filtered here rather than in the renderer so an ignored sender leaves no
+    // gap, no "message hidden" row, and no reaction or receipt behind.
+    if (ignored && ignored.has(ev.getSender() ?? '')) continue
     // Spatial-mode presence/position events ride the timeline (so they work at
     // PL0) but are never chat -- keep them out of every message log.
     if (ev.getType().startsWith('net.41chan.spatial.')) continue
@@ -76,6 +193,10 @@ export function toItems(events: MatrixEvent[]): TimelineItem[] {
     // timeline -- without this they render as `[net.41chan.media.tags]` junk
     // rows between messages. The tag store reads them from the same stream.
     if (ev.getType() === MEDIA_TAGS_EVENT) continue
+    // A background is POSTED so the media gate can authorize it (the gate
+    // authorizes media with a message behind it), but it is wallpaper, not
+    // something someone said -- so it stays out of the chat log.
+    if (isBackgroundPost(ev.getOriginalContent())) continue
 
     const tag = galleryTag(ev)
     if (tag) {
@@ -105,12 +226,36 @@ export function toItems(events: MatrixEvent[]): TimelineItem[] {
           }
           if (slot >= 0) cells[slot] = m
         }
-        out.push({ event: ev, kind: 'gallery', id: evId, cells, layout: tag.layout ?? 'grid' })
+        out.push({
+          event: ev,
+          kind: 'gallery',
+          id: evId,
+          cells,
+          layout: tag.layout ?? 'grid',
+          content: ev.getOriginalContent(),
+        })
         continue
       }
     }
 
-    out.push({ event: ev, kind: classify(ev), id: evId })
+    const kind = classify(ev)
+    const edit = rel.edits.get(evId)
+    const item: TimelineItem = {
+      event: ev,
+      kind,
+      id: evId,
+      content: effectiveContent(ev, edit),
+    }
+    // A redacted event has no content left to decorate, and its reactions are
+    // gone with it.
+    if (kind !== 'redacted') {
+      if (edit) item.editedTs = edit.ts
+      const reactions = rel.reactions.get(evId)
+      if (reactions && reactions.length > 0) item.reactions = reactions
+      const replyTo = resolveReply(ev, rel.byId)
+      if (replyTo) item.replyTo = replyTo
+    }
+    out.push(item)
   }
 
   return out
@@ -132,12 +277,33 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
       setItems([])
       return
     }
-    setItems(toItems(room.getLiveTimeline().getEvents()))
-  }, [room])
+    const myUserId = client?.getUserId() ?? null
+    setItems(
+      applyLayout(
+        toItems(room.getLiveTimeline().getEvents(), {
+          myUserId,
+          ignoredUsers: client ? getIgnoredUsers(client) : undefined,
+        }),
+      ),
+    )
+  }, [client, room])
 
   useEffect(() => {
     roomRef.current = room
     let cancelled = false
+    // Relation traffic is bursty -- a single message can draw a dozen
+    // reactions inside one sync. Coalesce a burst into ONE rebuild on the next
+    // macrotask instead of rebuilding the whole window per event. Driven from
+    // handlers and timeouts only, so no setState lands in an effect body
+    // (G-tc01).
+    let pending: ReturnType<typeof setTimeout> | null = null
+    const scheduleRefresh = () => {
+      if (pending !== null) return
+      pending = setTimeout(() => {
+        pending = null
+        if (!cancelled) refresh()
+      }, 0)
+    }
     // Reset the view for the new room off the effect body (a microtask, so it's
     // not a synchronous setState-in-effect but still lands the same frame).
     queueMicrotask(() => {
@@ -160,12 +326,39 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
 
     // Fire on any timeline change in THIS room (new messages, etc.).
     const onTimeline = (_ev: MatrixEvent, evRoom: Room | undefined) => {
-      if (evRoom?.roomId === roomRef.current?.roomId) refresh()
+      if (evRoom?.roomId === roomRef.current?.roomId) scheduleRefresh()
     }
+    // A redaction removes a message OR takes back a reaction. Both change what
+    // toItems produces, and neither necessarily emits a Timeline event.
+    const onRedaction = (_ev: MatrixEvent, evRoom: Room | undefined) => {
+      if (evRoom?.roomId === roomRef.current?.roomId) scheduleRefresh()
+    }
+    // Local echo -> real event: the event id changes, which is exactly the id
+    // our own-reaction toggle needs to redact by.
+    const onLocalEcho = (_ev: MatrixEvent, evRoom: Room | undefined) => {
+      if (evRoom?.roomId === roomRef.current?.roomId) scheduleRefresh()
+    }
+    // A gappy sync swaps the live timeline object out from under us; without
+    // this the view keeps rendering a timeline the room no longer owns.
+    const onReset = (evRoom: Room | undefined) => {
+      if (evRoom?.roomId === roomRef.current?.roomId) scheduleRefresh()
+    }
+    // The ignore list is account data; changing it must repaint immediately
+    // rather than waiting for the next message.
+    const onAccountData = () => scheduleRefresh()
+    client.on(ClientEvent.AccountData, onAccountData)
     client.on(RoomEvent.Timeline, onTimeline)
+    client.on(RoomEvent.Redaction, onRedaction)
+    client.on(RoomEvent.LocalEchoUpdated, onLocalEcho)
+    client.on(RoomEvent.TimelineReset, onReset)
     return () => {
       cancelled = true
+      if (pending !== null) clearTimeout(pending)
+      client.off(ClientEvent.AccountData, onAccountData)
       client.off(RoomEvent.Timeline, onTimeline)
+      client.off(RoomEvent.Redaction, onRedaction)
+      client.off(RoomEvent.LocalEchoUpdated, onLocalEcho)
+      client.off(RoomEvent.TimelineReset, onReset)
     }
   }, [client, room, refresh])
 

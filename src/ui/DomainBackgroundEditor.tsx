@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MatrixClient, Room } from 'matrix-js-sdk'
-import { useDomainBackground } from '../client/useDomainBackground'
+import { describeBackgroundError, useDomainBackground } from '../client/useDomainBackground'
+import { uploadAndPostBackground } from '../client/backgroundPost'
 import {
   IDENTITY_TRANSFORM,
   nudge,
@@ -32,7 +33,7 @@ export function DomainBackgroundEditor({
   room: Room
   onExit: () => void
 }) {
-  const { setBackground } = useDomainBackground(client, room)
+  const { setBackground, canSet } = useDomainBackground(client, room)
   const [imgUrl, setImgUrl] = useState<string | null>(null)
   const fileRef = useRef<File | null>(null)
   const [transform, setTransform] = useState<Transform>(IDENTITY_TRANSFORM)
@@ -40,6 +41,7 @@ export function DomainBackgroundEditor({
   const [naturalAspect, setNaturalAspect] = useState(1)
   const [busy, setBusy] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const captureRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   // Latest transform for window key handlers that close over stale state.
@@ -127,12 +129,28 @@ export function DomainBackgroundEditor({
   const commit = async () => {
     const file = fileRef.current
     if (!file || busy) return
+    // Checked BEFORE the upload: without this the user waits for a file to
+    // upload and only then discovers they were never allowed to save it.
+    if (!canSet) {
+      setError(
+        'You do not have permission to set the background for this domain.',
+      )
+      return
+    }
     setBusy(true)
+    setError(null)
     try {
-      const { content_uri } = await client.uploadContent(file, { name: file.name, type: file.type })
-      await setBackground(content_uri, tRef.current)
+      // POST it, then reference it. The gate authorizes media that has a
+      // message behind it, so posting is what makes the background fetchable
+      // by everyone in the room -- see client/backgroundPost.ts.
+      const post = await uploadAndPostBackground(client, room.roomId, file, 'domain')
+      await setBackground(post.mxc, tRef.current, post.eventId)
       onExit()
-    } catch {
+    } catch (err) {
+      // The write used to swallow its own failure and this closed the editor
+      // regardless, so a failed save looked exactly like a successful one --
+      // and the background then appeared for nobody, including the setter.
+      setError(describeBackgroundError(err))
       setBusy(false) // leave the editor open so the user can retry
     }
   }
@@ -242,14 +260,57 @@ export function DomainBackgroundEditor({
         {mode === 'interact' && (
           <div
             onPointerDown={(e) => e.stopPropagation()}
-            style={{ position: 'absolute', right: 12, bottom: 12, display: 'flex', gap: 8 }}
+            style={{
+              position: 'absolute',
+              right: 12,
+              bottom: 12,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-end',
+              gap: 8,
+            }}
           >
-            <FloatBtn onClick={onExit} disabled={busy}>
-              Cancel
-            </FloatBtn>
-            <FloatBtn onClick={commit} disabled={!imgUrl || busy} accent>
-              {busy ? 'Setting…' : 'Set Background'}
-            </FloatBtn>
+            {/* A save that fails must SAY so. This used to close silently on
+                failure, which looked identical to success. */}
+            {error && (
+              <div
+                role="alert"
+                style={{
+                  maxWidth: 320,
+                  fontSize: 12,
+                  padding: '6px 10px',
+                  borderRadius: 8,
+                  background: 'var(--cpd-color-bg-canvas-default)',
+                  border: '1px solid var(--cpd-color-text-critical-primary, #ff6b6b)',
+                  color: 'var(--cpd-color-text-critical-primary, #ff6b6b)',
+                }}
+              >
+                {error}
+              </div>
+            )}
+            {!canSet && !error && (
+              <div
+                style={{
+                  maxWidth: 320,
+                  fontSize: 12,
+                  padding: '6px 10px',
+                  borderRadius: 8,
+                  background: 'var(--cpd-color-bg-canvas-default)',
+                  border: '1px solid rgba(128,128,128,0.35)',
+                  color: 'var(--cpd-color-text-secondary)',
+                }}
+              >
+                You do not have permission to set this domain's background.
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <FloatBtn onClick={onExit} disabled={busy}>
+                Cancel
+              </FloatBtn>
+              <FloatBtn onClick={commit} disabled={!imgUrl || busy || !canSet} accent>
+                {busy ? 'Setting...' : 'Set Background'}
+              </FloatBtn>
+            </div>
           </div>
         )}
       </div>
