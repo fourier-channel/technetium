@@ -2619,3 +2619,59 @@ they are worth reading as a set: React Compiler rules do not bend, and each
 time the fix was better code than the version that tripped them.
 
 ### Nothing deployed. Nothing outside this repo written.
+
+---
+
+## 2026-08-07 -- backgrounds: post it, then reference it
+
+Operator asked the right question: what is gating every other piece of media
+that a background cannot use the same way? The answer is that nothing about
+the media differs -- **the gate keys on the media having been POSTED**.
+
+fourier-auth authorizes booru CONTENT: media that exists behind an `m.image`
+message. A background was uploaded with `client.uploadContent` and then
+referenced only from a STATE event, so no post ever existed, the gate had
+nothing to authorize against, and it 403d for precisely the reason avatars do
+(D-bf01). The upload was never the problem; the missing post was.
+
+### D-tp15 -- make the media the thing the gate already authorizes
+
+Rather than teaching the gateway a new case (authorize by room membership),
+upload the file, POST it as a real `m.image` carrying a
+`net.41chan.background` flag, and reference that mxc from the state event.
+
+The permission model then falls straight out instead of being implemented: the
+post lives in the room, so anyone who can see the room can fetch its bytes
+anywhere the token is accepted. That is exactly the rule wanted, now enforced
+by the same machinery as every other image.
+
+It also deletes an infra dependency. The blocking item raised at closeout --
+"the gateway must authorize backdrops by room membership" -- is gone. No
+gateway change is needed at all.
+
+The state event carries the post's `event_id` as well, so a background records
+which post authorizes it and therefore who set it.
+
+Background posts are filtered out of the chat log: they are wallpaper, not
+something someone said. The filter keys on the flag alone, so an ordinary
+image is untouched.
+
+Chat backgrounds get the same treatment, which also repairs them -- routing
+backdrops to the gateway would otherwise have left them 403ing too, since
+their mxc was uploaded-but-never-posted for the same reason. Their SETTING
+stays per-user and local, as designed; only the bytes become a room post.
+
+### The lesson worth keeping
+
+I had reached for the harder half of the problem. The failure was real and my
+diagnosis of the routing was right, but the fix I proposed -- change the
+gateway's authorization model -- was the expensive way to reach a state the
+existing model already describes. The cheaper move was to satisfy the rule
+that was already there. Worth remembering when a component "needs a new
+permission": check first whether the thing can simply be made to fit the
+permission that exists.
+
+### Still the operator's, outside this repo
+bmb picks up `m.image` messages for the booru, so a posted background becomes
+a booru post unless the bridge is taught to skip `net.41chan.background`. The
+flag exists for it to key on. Related to O-tp6.
