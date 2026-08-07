@@ -37,16 +37,41 @@ export function isBackgroundPost(content: IContent): boolean {
 // Returns both the mxc and the event id: the mxc is what gets rendered, and the
 // event id is kept alongside it so the reference has provenance -- who set it,
 // and which post authorizes the bytes.
+// Errors are tagged with the STAGE that failed. Three server round-trips hide
+// behind one button, and "it failed" does not say which -- an errcode alone is
+// ambiguous between an upload, a post and a state write.
+export class BackgroundStageError extends Error {
+  // A plain field, not a constructor parameter property: the project compiles
+  // under erasableSyntaxOnly, which is also what lets checks/ run under Node.
+  stage: 'upload' | 'post'
+
+  constructor(stage: 'upload' | 'post', cause: unknown) {
+    const e = cause as { errcode?: string; httpStatus?: number; message?: string }
+    super(
+      `background ${stage} failed` +
+        (e?.httpStatus ? ` (HTTP ${e.httpStatus})` : '') +
+        (e?.errcode ? ` ${e.errcode}` : '') +
+        (e?.message ? `: ${e.message}` : ''),
+      { cause },
+    )
+    this.name = 'BackgroundStageError'
+    this.stage = stage
+  }
+}
+
 export async function uploadAndPostBackground(
   client: MatrixClient,
   roomId: string,
   file: File,
   kind: BackgroundKind,
 ): Promise<BackgroundPost> {
-  const { content_uri: mxc } = await client.uploadContent(file, {
-    name: file.name,
-    type: file.type,
-  })
+  let mxc: string
+  try {
+    const res = await client.uploadContent(file, { name: file.name, type: file.type })
+    mxc = res.content_uri
+  } catch (err) {
+    throw new BackgroundStageError('upload', err)
+  }
 
   const content: IContent = {
     msgtype: 'm.image',
@@ -59,11 +84,14 @@ export async function uploadAndPostBackground(
   }
 
   // threadId null: a background is not part of any conversation.
-  const { event_id: eventId } = await client.sendMessage(
-    roomId,
-    null,
-    content as unknown as Parameters<typeof client.sendMessage>[2],
-  )
-
-  return { mxc, eventId }
+  try {
+    const { event_id: eventId } = await client.sendMessage(
+      roomId,
+      null,
+      content as unknown as Parameters<typeof client.sendMessage>[2],
+    )
+    return { mxc, eventId }
+  } catch (err) {
+    throw new BackgroundStageError('post', err)
+  }
 }

@@ -74,7 +74,12 @@ export async function fetchMediaObjectUrl(
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!resp.ok) {
-    throw new Error(`media fetch failed (${resp.status}) for ${mxc}`)
+    // Keep the body. Discarding it is why a media failure could only ever be
+    // diagnosed from the browser's network tab.
+    const detail = await resp.text().catch(() => '')
+    throw new Error(
+      `media fetch failed (${resp.status}) ${url} :: ${detail.slice(0, 200)}`,
+    )
   }
   return URL.createObjectURL(await resp.blob())
 }
@@ -119,7 +124,10 @@ export async function fetchMediaSrc(
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!resp.ok) {
-    throw new Error(`media fetch failed (${resp.status}) for ${mxc}`)
+    const detail = await resp.text().catch(() => '')
+    throw new Error(
+      `media fetch failed (${resp.status}) ${url} :: ${detail.slice(0, 200)}`,
+    )
   }
   const data = (await resp.json()) as { url?: string; expiresIn?: number }
   if (!data.url) throw new Error(`gateway returned no url for ${mxc}`)
@@ -154,7 +162,12 @@ export async function fetchHomeserverThumb(
     `?width=${size}&height=${size}&method=scale`
 
   const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-  if (!resp.ok) throw new Error(`homeserver media fetch failed (${resp.status}) for ${mxc}`)
+  if (!resp.ok) {
+    const detail = await resp.text().catch(() => '')
+    throw new Error(
+      `homeserver media fetch failed (${resp.status}) ${url} :: ${detail.slice(0, 200)}`,
+    )
+  }
   const objUrl = URL.createObjectURL(await resp.blob())
   return { src: objUrl, revoke: () => URL.revokeObjectURL(objUrl) }
 }

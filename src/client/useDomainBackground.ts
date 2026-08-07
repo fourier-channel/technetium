@@ -119,7 +119,17 @@ export function useDomainBackground(
 // means the room's state_default outranks the user, which is a permission
 // problem and not a transient one worth retrying.
 export function describeBackgroundError(err: unknown): string {
-  const e = err as { httpStatus?: number; errcode?: string; message?: string }
+  const e = err as { httpStatus?: number; errcode?: string; message?: string; name?: string }
+  // A stage-tagged error already says which of the three round-trips failed;
+  // pass it through rather than flattening it to a generic sentence.
+  if (e?.name === 'BackgroundStageError') return e.message ?? 'The background could not be saved.'
+  if (e?.errcode || e?.httpStatus) {
+    const tag = `state write${e.httpStatus ? ` (HTTP ${e.httpStatus})` : ''}${e.errcode ? ` ${e.errcode}` : ''}`
+    if (e.errcode === 'M_FORBIDDEN' || e.httpStatus === 403) {
+      return `You do not have permission to set the background for this domain. [${tag}]`
+    }
+    return `Background not saved -- ${tag}: ${e.message ?? 'no detail'}`
+  }
   if (e?.httpStatus === 403 || e?.errcode === 'M_FORBIDDEN') {
     return 'You do not have permission to set the background for this domain.'
   }
