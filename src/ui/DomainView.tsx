@@ -8,7 +8,7 @@ import { ComposerModeProvider } from './ComposerModeProvider'
 import { TypingBar } from './TypingBar'
 import { useDomainSettings } from './domainSettings'
 import { DomainOptions } from './DomainOptions'
-import { useDomainBackground } from '../client/useDomainBackground'
+import { describeBackgroundError, useDomainBackground } from '../client/useDomainBackground'
 import { TTD_DEFAULT } from '../client/useDomainMedia'
 
 // ---------------------------------------------------------------------------
@@ -32,6 +32,7 @@ export function DomainView({ room, onExit }: { room: Room; onExit: () => void })
   const [optionsOpen, setOptionsOpen] = useState(false)
   const [bgEditing, setBgEditing] = useState(false)
   const [ttd, setTtd] = useState(TTD_DEFAULT)
+  const [bgError, setBgError] = useState<string | null>(null)
   const { background, clearBackground } = useDomainBackground(client, room)
   const hasBackground = background !== null || settings.getBackdrop(room.roomId) !== undefined
 
@@ -138,6 +139,32 @@ export function DomainView({ room, onExit }: { room: Room; onExit: () => void })
         </div>
       </div>
 
+      {bgError && (
+        <div
+          role="alert"
+          style={{
+            flexShrink: 0,
+            fontSize: 12,
+            padding: '6px 12px',
+            background: 'var(--cpd-color-bg-subtle-secondary)',
+            color: 'var(--cpd-color-text-critical-primary, #ff6b6b)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            gap: 8,
+          }}
+        >
+          <span>{bgError}</span>
+          <button
+            type="button"
+            onClick={() => setBgError(null)}
+            aria-label="Dismiss"
+            style={{ border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer' }}
+          >
+            {'×'}
+          </button>
+        </div>
+      )}
+
       {optionsOpen && (
         <DomainOptions
           client={client}
@@ -149,7 +176,10 @@ export function DomainView({ room, onExit }: { room: Room; onExit: () => void })
             setBgEditing(true)
           }}
           onRemoveBackground={() => {
-            void clearBackground()
+            // Rejects on failure now; an unhandled rejection here would be a
+            // silent no-op, which is the bug this change exists to remove.
+            setBgError(null)
+            void clearBackground().catch((err) => setBgError(describeBackgroundError(err)))
             settings.clearBackdrop(room.roomId)
           }}
           onClose={() => setOptionsOpen(false)}
