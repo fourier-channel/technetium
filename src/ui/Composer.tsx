@@ -2,11 +2,12 @@ import {
   useState,
   useRef,
   useEffect,
+  useMemo,
   type KeyboardEvent,
   type ChangeEvent,
   type DragEvent,
 } from 'react'
-import type { Room } from 'matrix-js-sdk'
+import type { Room, RoomMember } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
 import { formatMessage } from '../client/messageFormat'
 import { EmojiPicker } from './EmojiPicker'
@@ -15,6 +16,8 @@ import { eventPreview } from '../client/eventPreview'
 import { buildReplyContent } from '../client/replyContent'
 import { buildEditContent, editableBody } from '../client/editContent'
 import { useTypingSender } from '../client/useTyping'
+import { mentionQueryAt, type MentionTarget } from '../client/mentions'
+import { MentionPicker } from './MentionPicker'
 
 type GalleryLayout = 'grid' | 'stack' | 'strip'
 
@@ -79,10 +82,54 @@ export function Composer({
   const [sending, setSending] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [emojiOpen, setEmojiOpen] = useState(false)
+  // W2.9 -- the `@` autocomplete. `mentionQuery` is null when the popup is
+  // closed; `pickedMentions` maps the literal draft text back to a user id so
+  // the send path can build the anchor and m.mentions.
+  const [mentionQuery, setMentionQuery] = useState<{ query: string; start: number } | null>(null)
+  const [mentionIndex, setMentionIndex] = useState(0)
+  const [pickedMentions, setPickedMentions] = useState<MentionTarget[]>([])
   const taRef = useRef<HTMLTextAreaElement | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
   // Where to restore the caret after an emoji insert (applied post-render).
   const caretRef = useRef<number | null>(null)
+
+  // Room members matching the current `@` query. Capped: a popup taller than
+  // the composer is worse than one that asks for another letter.
+  const mentionMatches = useMemo(() => {
+    if (!mentionQuery) return []
+    const q = mentionQuery.query.toLowerCase()
+    const me = client?.getUserId()
+    return room
+      .getJoinedMembers()
+      .filter((m) => m.userId !== me)
+      .filter((m) => {
+        if (q.length === 0) return true
+        return (
+          (m.name ?? '').toLowerCase().includes(q) || m.userId.toLowerCase().includes(q)
+        )
+      })
+      .sort((a, b) => (a.name || a.userId).localeCompare(b.name || b.userId))
+      .slice(0, 8)
+  }, [room, client, mentionQuery])
+
+  // Replace the `@query` under the caret with the member's display name.
+  const pickMention = (member: RoomMember) => {
+    if (!mentionQuery) return
+    const label = `@${member.name || member.userId}`
+    const before = text.slice(0, mentionQuery.start)
+    const after = text.slice(mentionQuery.start + 1 + mentionQuery.query.length)
+    // A trailing space so the next word does not merge into the mention.
+    const next = `${before}${label} ${after}`
+    setText(next)
+    setPickedMentions((prev) =>
+      prev.some((p) => p.userId === member.userId && p.text === label)
+        ? prev
+        : [...prev, { text: label, userId: member.userId }],
+    )
+    caretRef.current = before.length + label.length + 1
+    setMentionQuery(null)
+    setMentionIndex(0)
+  }
 
   // Insert an emoji at the textarea caret (or append if unfocused), keeping the
   // picker open so several can be added; caret is restored after the re-render.
@@ -203,12 +250,24 @@ export function Composer({
     setSending(true)
     // The message is going; retract the notice rather than letting it expire.
     typing.stop()
+    setMentionQuery(null)
 
     // Case 1 — text only: plain message (unchanged behavior).
     if (atts.length === 0) {
       setText('') // optimistic clear; restore on failure
       try {
-        const { plain, html } = formatMessage(input)
+        const { plain, html, mentionedUserIds } = formatMessage(input, { mentions: pickedMentions })
+        // MSC3952 intentional mentions. Only the ids whose text survived in
+        // the draft (formatMessage decides that), plus -- for a reply -- the
+        // person being answered, which is what makes a reply notify them.
+        const mentionIds = new Set(mentionedUserIds ?? [])
+        if (mode.kind === 'reply') {
+          const target = mode.target.getSender()
+          if (target && target !== client.getUserId()) mentionIds.add(target)
+        }
+        const mentions =
+          mentionIds.size > 0 ? { 'm.mentions': { user_ids: [...mentionIds] } } : {}
+
         if (mode.kind === 'edit') {
           // An edit is a NEW event relating to the original, so it is sent to
           // the room, never to the thread -- passing threadId would put an
@@ -216,9 +275,10 @@ export function Composer({
           await client.sendMessage(
             room.roomId,
             null,
-            buildEditContent(mode.target, mode.content, plain, html) as unknown as Parameters<
-              typeof client.sendMessage
-            >[2],
+            {
+              ...buildEditContent(mode.target, mode.content, plain, html),
+              ...mentions,
+            } as unknown as Parameters<typeof client.sendMessage>[2],
           )
           clearMode()
         } else if (mode.kind === 'reply') {
@@ -230,11 +290,27 @@ export function Composer({
           await client.sendMessage(
             room.roomId,
             threadId ?? null,
-            buildReplyContent(mode.target, room.roomId, plain, html) as unknown as Parameters<
-              typeof client.sendMessage
-            >[2],
+            {
+              ...buildReplyContent(mode.target, room.roomId, plain, html),
+              ...mentions,
+            } as unknown as Parameters<typeof client.sendMessage>[2],
           )
           clearMode()
+        } else if (mentionIds.size > 0) {
+          // Explicit content only when m.mentions has to ride along, so the
+          // ordinary send path stays byte-for-byte what it was.
+          await client.sendMessage(
+            room.roomId,
+            threadId ?? null,
+            {
+              msgtype: 'm.text',
+              body: plain,
+              ...(html !== undefined
+                ? { format: 'org.matrix.custom.html', formatted_body: html }
+                : {}),
+              ...mentions,
+            } as unknown as Parameters<typeof client.sendMessage>[2],
+          )
         } else if (html !== undefined) {
           if (threadId) await client.sendHtmlMessage(room.roomId, threadId, plain, html)
           else await client.sendHtmlMessage(room.roomId, plain, html)
@@ -242,6 +318,7 @@ export function Composer({
           if (threadId) await client.sendTextMessage(room.roomId, threadId, plain)
           else await client.sendTextMessage(room.roomId, plain)
         }
+        setPickedMentions([])
       } catch (err) {
         console.error('Send failed:', err)
         setText(input)
@@ -307,6 +384,32 @@ export function Composer({
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // The mention popup owns these keys FIRST -- otherwise Enter sends the
+    // message instead of accepting the highlighted name, and Escape leaves
+    // reply mode instead of closing the popup.
+    if (mentionQuery && mentionMatches.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setMentionIndex((i) => (i + 1) % mentionMatches.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setMentionIndex((i) => (i - 1 + mentionMatches.length) % mentionMatches.length)
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        pickMention(mentionMatches[Math.min(mentionIndex, mentionMatches.length - 1)])
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setMentionQuery(null)
+        return
+      }
+    }
+
     // Esc leaves reply/edit mode. Scoped to the textarea rather than the
     // window so it cannot steal Escape from an open menu or the lightbox.
     if (e.key === 'Escape' && mode.kind !== 'normal') {
@@ -339,6 +442,7 @@ export function Composer({
       onDragOver={onDragOver}
       onDragLeave={() => setDragging(false)}
       style={{
+        position: 'relative',
         borderTop: '1px solid rgba(128,128,128,0.25)',
         padding: '10px 16px',
         outline: dragging
@@ -347,6 +451,14 @@ export function Composer({
         outlineOffset: -2,
       }}
     >
+      {/* Overlays ABOVE the composer, anchored to the root (position:relative)
+          so it never pushes the input or the timeline when it opens. */}
+      <MentionPicker
+        matches={mentionMatches}
+        activeIndex={Math.min(mentionIndex, Math.max(0, mentionMatches.length - 1))}
+        onPick={pickMention}
+      />
+
       <ComposerModeBanner mode={mode} onCancel={clearMode} />
 
       {attachments.length > 1 && (
@@ -481,8 +593,11 @@ export function Composer({
           ref={taRef}
           value={text}
           onChange={(e) => {
-              setText(e.target.value)
-              typing.notify(e.target.value.length > 0)
+              const value = e.target.value
+              setText(value)
+              typing.notify(value.length > 0)
+              setMentionQuery(mentionQueryAt(value, e.target.selectionStart ?? value.length))
+              setMentionIndex(0)
             }}
           onKeyDown={onKeyDown}
           placeholder={

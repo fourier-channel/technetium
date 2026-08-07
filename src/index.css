@@ -747,3 +747,52 @@ code {
 .tc-pinned-unpin:hover {
   color: var(--cpd-color-text-critical-primary, #ff6b6b);
 }
+
+/* Mention autocomplete (W2.9). Overlays ABOVE the composer rather than
+   occupying layout, so opening it never pushes the input down or shifts the
+   timeline -- the same no-forced-reflow rule the typing bar follows. */
+.tc-mention-picker {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 16px;
+  right: 16px;
+  max-width: 340px;
+  max-height: 240px;
+  overflow-y: auto;
+  z-index: 1000;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--cpd-color-bg-canvas-default, #16181d);
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+.tc-mention-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cpd-color-text-primary, #e7ebf0);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.tc-mention-item[data-active='true'],
+.tc-mention-item:hover {
+  background: var(--cpd-color-bg-subtle-secondary, rgba(128, 128, 128, 0.18));
+}
+.tc-mention-name {
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.tc-mention-id {
+  font-size: 11px;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

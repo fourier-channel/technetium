@@ -2,6 +2,7 @@ import { parse, parseInline } from 'marked'
 import DOMPurify from 'dompurify'
 import { escapeHtml } from './matrixHtml'
 import { maskSpoilers, restoreSpoilers } from './composeSpoilers'
+import { maskMentions, restoreMentions, type MentionTarget } from './mentions'
 import { scrubClasses } from './codeHighlight'
 
 // Same strict allowlist as the receive-side sanitizer (messageBody.ts). marked
@@ -42,17 +43,31 @@ export interface FormattedMessage {
   // The sanitized HTML body — set ONLY when markdown actually produced formatting.
   // When undefined, send as plain text (no pointless formatted_body).
   html?: string
+  // User ids actually mentioned in the final text, for m.mentions. Only ones
+  // whose text survived in the draft -- picking a mention and then deleting it
+  // must not ping anyone.
+  mentionedUserIds?: string[]
+}
+
+export interface FormatOptions {
+  // Mentions the composer has picked, mapping draft text -> user id.
+  mentions?: MentionTarget[]
 }
 
 // Convert composer input (markdown) to a Matrix message. Decides whether to send
 // formatted HTML or plain text by checking if conversion actually changed anything.
-export function formatMessage(input: string): FormattedMessage {
+export function formatMessage(input: string, opts: FormatOptions = {}): FormattedMessage {
   const plain = input.trim()
   if (!plain) return { plain }
 
   // Spoiler markers come out before markdown so emphasis parsing cannot chew
   // through the `||`, and go back in after sanitizing so the span is ours.
-  const { masked, spoilers } = maskSpoilers(plain)
+  const { masked: spoilerMasked, spoilers } = maskSpoilers(plain)
+
+  // Mentions are masked AFTER spoilers so a mention inside a spoiler stays
+  // hidden: the spoiler's contents are escaped wholesale, and a token inside
+  // them would be escaped along with the rest rather than becoming a link.
+  const { masked, used: mentions } = maskMentions(spoilerMasked, opts.mentions ?? [])
 
   // parseInline gives no wrapping <p>, which is right for a chat line -- but it
   // also means a fenced block never becomes <pre><code>. Use the block parser
@@ -85,11 +100,17 @@ export function formatMessage(input: string): FormattedMessage {
     })
   }
 
+  html = restoreMentions(html, mentions)
   html = restoreSpoilers(html, spoilers)
 
-  // A spoiler or a code fence IS formatting, so the plain-vs-HTML comparison
-  // below would be meaningless -- the masked text never equals the output.
-  if (spoilers.length > 0 || fenced) return { plain, html }
+  const mentionedUserIds = mentions.length > 0 ? mentions.map((m) => m.userId) : undefined
+
+  // A spoiler, a mention or a code fence IS formatting, so the plain-vs-HTML
+  // comparison below would be meaningless -- the masked text never equals the
+  // output.
+  if (spoilers.length > 0 || mentions.length > 0 || fenced) {
+    return { plain, html, mentionedUserIds }
+  }
 
   // If sanitized HTML differs from the original text, formatting happened ->
   // send HTML. If it's identical (plus any &-escaping), it's plain -> send plain.
