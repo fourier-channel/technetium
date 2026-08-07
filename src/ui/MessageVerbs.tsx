@@ -4,6 +4,7 @@ import type { MatrixEvent, Room } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
 import { isEditableContent } from '../client/editContent'
 import { eventPreview } from '../client/eventPreview'
+import { usePinnedEvents } from '../client/usePinnedEvents'
 import { MessageActionsProvider } from './MessageActionBar'
 import { useComposerMode } from './composerMode'
 import { ReactTargetContext } from './reactTarget'
@@ -36,6 +37,8 @@ export function MessageVerbsProvider({ room, children }: { room: Room | null; ch
   // Which message has the emoji picker open. Owned here so the action bar's
   // React verb and each strip's "+" cannot both open one.
   const [reactTarget, setReactTarget] = useState<string | null>(null)
+  // Pinning is room state, so it is power-level gated like any state write.
+  const { pinned, canPin, toggle: togglePin } = usePinnedEvents(client, room)
 
   // May the local user redact OTHER people's messages here? Own messages are
   // always redactable by their sender.
@@ -86,6 +89,18 @@ export function MessageVerbsProvider({ room, children }: { room: Room | null; ch
       },
       (item) => {
         if (!isActionable(item.kind)) return null
+        if (!canPin) return null
+        if (item.id.startsWith('~')) return null
+        const isPinned = pinned.includes(item.id)
+        return {
+          id: 'pin',
+          label: isPinned ? 'Unpin' : 'Pin',
+          icon: isPinned ? '📌' : '📍',
+          onSelect: () => void togglePin(item.id),
+        }
+      },
+      (item) => {
+        if (!isActionable(item.kind)) return null
         const isMine = !!myUserId && item.event.getSender() === myUserId
         // Hidden rather than shown-and-failing: a Delete that always 403s
         // teaches people to distrust the whole bar.
@@ -99,7 +114,7 @@ export function MessageVerbsProvider({ room, children }: { room: Room | null; ch
         }
       },
     ],
-    [reply, edit, myUserId, canRedactOthers],
+    [reply, edit, myUserId, canRedactOthers, canPin, pinned, togglePin],
   )
 
   const confirmDelete = async () => {

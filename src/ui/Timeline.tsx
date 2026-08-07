@@ -20,6 +20,8 @@ import { JumpContext, scrollToEventInDom, useJump, type JumpApi } from './jumpTo
 import { ReactionStrip } from './Reactions'
 import { ReceiptCluster } from './ReceiptCluster'
 import { SPOILER_ATTR, toggleSpoiler } from '../client/spoilers'
+import { usePinnedEvents } from '../client/usePinnedEvents'
+import { PinnedPanel } from './PinnedPanel'
 import { useRoomReceipts } from '../client/useReceipts'
 import { ReceiptsContext, useReceipts } from './receiptsContext'
 
@@ -57,6 +59,8 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
   const { client } = useClient()
   const { items, loadOlder, loadingOlder, atStart } = useTimeline(client, room)
   const receipts = useRoomReceipts(client, room)
+  const pins = usePinnedEvents(client, room)
+  const [pinnedOpen, setPinnedOpen] = useState(false)
   const chatBg = useChatBackground()
   const tagPrefs = useMediaTagPrefs()
   const [bgMenuOpen, setBgMenuOpen] = useState(false)
@@ -176,6 +180,17 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
               {loadingOlder ? 'Loading...' : 'Load older'}
             </button>
           )}
+          {pins.pinned.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setPinnedOpen((o) => !o)}
+              title="Pinned messages"
+              aria-expanded={pinnedOpen}
+              style={{ fontSize: 12, fontWeight: 400 }}
+            >
+              {'\u{1F4CC}'} {pins.pinned.length}
+            </button>
+          )}
           {onToggleThreadList && (
             <button
               type="button"
@@ -253,6 +268,16 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
           )}
 
           <JumpContext.Provider value={jumpApi}>
+            {pinnedOpen && (
+              <PinnedPanel
+                client={client}
+                room={room}
+                pinned={pins.pinned}
+                canPin={pins.canPin}
+                onUnpin={(id) => void pins.toggle(id)}
+                onClose={() => setPinnedOpen(false)}
+              />
+            )}
             <ReceiptsContext.Provider value={receipts}>
             <MessageVerbsProvider room={room}>
               {items.map((item) => (

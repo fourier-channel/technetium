@@ -669,3 +669,81 @@ code {
   white-space: nowrap;
   user-select: none;
 }
+
+/* Pinned-message panel (W2.7). Overlays the top of the timeline rather than
+   taking layout, so opening it never reflows the message list underneath. */
+.tc-pinned-panel {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: -12px -16px 8px;
+  padding: 8px 12px;
+  background: var(--cpd-color-bg-canvas-default, #16181d);
+  border-bottom: 1px solid rgba(128, 128, 128, 0.35);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  font-size: 12px;
+}
+.tc-pinned-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.tc-pinned-empty {
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  padding: 4px 0;
+}
+.tc-pinned-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.tc-pinned-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.tc-pinned-jump {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.tc-pinned-jump:hover {
+  background: var(--cpd-color-bg-subtle-secondary, rgba(128, 128, 128, 0.16));
+}
+.tc-pinned-sender {
+  flex-shrink: 0;
+  font-weight: 600;
+}
+.tc-pinned-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+}
+.tc-pinned-unpin {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 6px;
+}
+.tc-pinned-unpin:hover {
+  color: var(--cpd-color-text-critical-primary, #ff6b6b);
+}
