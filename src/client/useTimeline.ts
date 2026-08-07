@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import {
+  ClientEvent,
   RoomEvent,
   type IContent,
   type MatrixClient,
@@ -7,6 +8,7 @@ import {
   type MatrixEvent,
 } from 'matrix-js-sdk'
 import { MEDIA_TAGS_EVENT } from './mediaTags'
+import { getIgnoredUsers } from './ignoredUsers'
 import {
   buildRelationIndex,
   effectiveContent,
@@ -51,6 +53,10 @@ export interface ToItemsOptions {
   // Needed to mark own reactions and to find the annotation to redact when
   // toggling one off.
   myUserId?: string | null
+  // W4.4 -- senders whose events are hidden. The server stops sending an
+  // ignored user's events, but NOT retroactively: anything already in a loaded
+  // timeline stays, so the renderer has to filter too.
+  ignoredUsers?: readonly string[]
 }
 
 function classify(ev: MatrixEvent): TimelineItemKind {
@@ -93,6 +99,7 @@ function galleryTag(ev: MatrixEvent): GalleryTag | null {
 export function toItems(events: MatrixEvent[], opts: ToItemsOptions = {}): TimelineItem[] {
   const out: TimelineItem[] = []
   const consumed = new Set<string>()
+  const ignored = opts.ignoredUsers?.length ? new Set(opts.ignoredUsers) : null
   const rel = buildRelationIndex(events, opts.myUserId)
 
   for (let i = 0; i < events.length; i++) {
@@ -103,6 +110,9 @@ export function toItems(events: MatrixEvent[], opts: ToItemsOptions = {}): Timel
     // own. Without this they render as duplicate messages and `[m.reaction]`
     // junk -- which is exactly what the client does today.
     if (isRelationOnlyEvent(ev)) continue
+    // Filtered here rather than in the renderer so an ignored sender leaves no
+    // gap, no "message hidden" row, and no reaction or receipt behind.
+    if (ignored && ignored.has(ev.getSender() ?? '')) continue
     // Spatial-mode presence/position events ride the timeline (so they work at
     // PL0) but are never chat -- keep them out of every message log.
     if (ev.getType().startsWith('net.41chan.spatial.')) continue
@@ -191,7 +201,12 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
       return
     }
     const myUserId = client?.getUserId() ?? null
-    setItems(toItems(room.getLiveTimeline().getEvents(), { myUserId }))
+    setItems(
+      toItems(room.getLiveTimeline().getEvents(), {
+        myUserId,
+        ignoredUsers: client ? getIgnoredUsers(client) : undefined,
+      }),
+    )
   }, [client, room])
 
   useEffect(() => {
@@ -249,6 +264,10 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
     const onReset = (evRoom: Room | undefined) => {
       if (evRoom?.roomId === roomRef.current?.roomId) scheduleRefresh()
     }
+    // The ignore list is account data; changing it must repaint immediately
+    // rather than waiting for the next message.
+    const onAccountData = () => scheduleRefresh()
+    client.on(ClientEvent.AccountData, onAccountData)
     client.on(RoomEvent.Timeline, onTimeline)
     client.on(RoomEvent.Redaction, onRedaction)
     client.on(RoomEvent.LocalEchoUpdated, onLocalEcho)
@@ -256,6 +275,7 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
     return () => {
       cancelled = true
       if (pending !== null) clearTimeout(pending)
+      client.off(ClientEvent.AccountData, onAccountData)
       client.off(RoomEvent.Timeline, onTimeline)
       client.off(RoomEvent.Redaction, onRedaction)
       client.off(RoomEvent.LocalEchoUpdated, onLocalEcho)

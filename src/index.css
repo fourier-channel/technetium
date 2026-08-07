@@ -833,3 +833,23 @@ code {
   font-weight: 400;
   color: var(--cpd-color-text-secondary, #a8b0bd);
 }
+
+/* Presence dot (W4.5). Rendered ONLY when the server actually told us a state
+   -- unknown draws nothing at all, because a grey "offline" dot on every row
+   would be a claim the client invented rather than something the server said. */
+.tc-presence-dot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--cpd-color-text-secondary, #a8b0bd);
+}
+.tc-presence-dot[data-presence='online'] {
+  background: #3ba776;
+}
+.tc-presence-dot[data-presence='unavailable'] {
+  background: #d6a13c;
+}
+.tc-presence-dot[data-presence='offline'] {
+  background: rgba(140, 150, 170, 0.55);
+}

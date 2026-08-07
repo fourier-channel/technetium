@@ -32,6 +32,26 @@ export function initials(name: string): string {
   return cleaned.slice(0, 2).toUpperCase() || '?'
 }
 
+// Sort key for the member list (W4.1): honorific TIER first, then name.
+//
+// Tier, not raw power level. Two moderators at PL 50 and PL 60 are both "@"
+// and should sit together alphabetically rather than being split by a number
+// nobody sees. Ranking by raw PL would make the list order disagree with the
+// glyphs it is showing.
+const TIER_RANK: Record<string, number> = { '~': 0, '@': 1, '+': 2 }
+
+export function honorificRank(powerLevel: number): number {
+  const h = honorificFor(powerLevel)
+  return h ? TIER_RANK[h] : 3
+}
+
+export function compareByStanding(a: MergedMember, b: MergedMember): number {
+  const ra = honorificRank(maxPower(a))
+  const rb = honorificRank(maxPower(b))
+  if (ra !== rb) return ra - rb
+  return a.displayName.toLowerCase().localeCompare(b.displayName.toLowerCase())
+}
+
 // Split "@user:server" for two-tone display. Returns the bare localpart and
 // the server (empty when the id has no colon).
 export function splitUserId(userId: string): { uname: string; server: string } {

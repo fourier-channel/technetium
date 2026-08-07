@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { Room } from 'matrix-js-sdk'
 import { AuthedImage } from './AuthedImage'
+import { presenceLabel, type PresenceState } from '../client/usePresence'
 import {
   initials,
   maxPower,
@@ -41,6 +42,7 @@ export function ProfileCard({
   userId,
   room = null,
   member,
+  presence,
   actions,
   onClose,
 }: {
@@ -49,6 +51,9 @@ export function ProfileCard({
   userId: string
   room?: Room | null
   member?: MergedMember
+  // W4.5 -- undefined means the server told us nothing, which is NOT offline.
+  // The status line is then absent rather than claiming a state.
+  presence?: PresenceState
   actions?: ReactNode
   onClose: () => void
 }) {
@@ -156,9 +161,23 @@ export function ProfileCard({
         </div>
       </div>
 
-      <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <Tag>{standing}</Tag>
         <Tag>PL {pl}</Tag>
+        {presenceLabel(presence) && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              fontSize: 11,
+              color: 'var(--cpd-color-text-secondary)',
+            }}
+          >
+            <span className="tc-presence-dot" data-presence={presence} aria-hidden="true" />
+            {presenceLabel(presence)}
+          </span>
+        )}
       </div>
 
       {actions ? (

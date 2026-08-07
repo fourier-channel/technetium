@@ -23,6 +23,10 @@ import { SPOILER_ATTR, toggleSpoiler } from '../client/spoilers'
 import { usePinnedEvents } from '../client/usePinnedEvents'
 import { PinnedPanel } from './PinnedPanel'
 import { RoomHeaderInfo } from './RoomHeaderInfo'
+import { ProfileOpenerContext, useProfileOpener } from './profileOpener'
+import { ProfileCard } from './ProfileCard'
+import { ProfileActions } from './ProfileActions'
+import { usePresence } from '../client/usePresence'
 import { useRoomReceipts } from '../client/useReceipts'
 import { ReceiptsContext, useReceipts } from './receiptsContext'
 
@@ -62,6 +66,10 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
   const receipts = useRoomReceipts(client, room)
   const pins = usePinnedEvents(client, room)
   const [pinnedOpen, setPinnedOpen] = useState(false)
+  // W4.2 -- one card for the whole timeline, owned here so two rows cannot
+  // each open their own.
+  const [profile, setProfile] = useState<{ userId: string; x: number; y: number } | null>(null)
+  const profilePresence = usePresence(client, profile ? [profile.userId] : [])
   const chatBg = useChatBackground()
   const tagPrefs = useMediaTagPrefs()
   const [bgMenuOpen, setBgMenuOpen] = useState(false)
@@ -270,6 +278,9 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
             </div>
           )}
 
+          <ProfileOpenerContext.Provider
+            value={(userId, x, y) => setProfile({ userId, x, y })}
+          >
           <JumpContext.Provider value={jumpApi}>
             {pinnedOpen && (
               <PinnedPanel
@@ -289,6 +300,25 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
             </MessageVerbsProvider>
             </ReceiptsContext.Provider>
           </JumpContext.Provider>
+          </ProfileOpenerContext.Provider>
+          {profile && client && (
+            <ProfileCard
+              x={profile.x}
+              y={profile.y}
+              userId={profile.userId}
+              room={room}
+              presence={profilePresence.get(profile.userId)}
+              actions={
+                <ProfileActions
+                  client={client}
+                  userId={profile.userId}
+                  room={room}
+                  onClose={() => setProfile(null)}
+                />
+              }
+              onClose={() => setProfile(null)}
+            />
+          )}
           <div ref={bottomRef} />
         </div>
       </div>
@@ -312,7 +342,15 @@ function initialsFor(name: string): string {
 // carrying the sender's avatar AND display name together, with the timestamp
 // trailing outside it. Avatars load via the homeserver authenticated-media path
 // (the content gate 403s them), degrading to a colored initial.
-function SenderPill({ event, time }: { event: MatrixEvent; time: string }) {
+function SenderPill({
+  event,
+  time,
+  onOpenProfile,
+}: {
+  event: MatrixEvent
+  time: string
+  onOpenProfile?: (userId: string, x: number, y: number) => void
+}) {
   const { client } = useClient()
   const senderId = event.getSender() ?? '(unknown)'
   const member = client?.getRoom(event.getRoomId() ?? '')?.getMember(senderId) ?? null
@@ -321,6 +359,21 @@ function SenderPill({ event, time }: { event: MatrixEvent; time: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
       <span
+        role={onOpenProfile ? 'button' : undefined}
+        tabIndex={onOpenProfile ? 0 : undefined}
+        onClick={onOpenProfile ? (e) => onOpenProfile(senderId, e.clientX, e.clientY) : undefined}
+        onKeyDown={
+          onOpenProfile
+            ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  const r = e.currentTarget.getBoundingClientRect()
+                  onOpenProfile(senderId, r.left, r.bottom)
+                }
+              }
+            : undefined
+        }
+        title={onOpenProfile ? name : undefined}
         style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -330,6 +383,7 @@ function SenderPill({ event, time }: { event: MatrixEvent; time: string }) {
           borderRadius: 999,
           background: 'var(--cpd-color-bg-subtle-secondary)',
           border: '1px solid rgba(128,128,128,0.18)',
+          cursor: onOpenProfile ? 'pointer' : undefined,
         }}
       >
         <span
@@ -376,6 +430,7 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
   const { event, kind, cells, layout } = item
   const { open } = useLightbox()
   const actions = useMessageActions(item)
+  const openProfile = useProfileOpener()
   const time = new Date(event.getTs()).toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit',
@@ -441,7 +496,7 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
       {/* Overlays the row's top-right; revealed by CSS on hover/focus-within so
           no React state churns per pointer crossing. */}
       <MessageActionBar actions={actions} />
-      <SenderPill event={event} time={time} />
+      <SenderPill event={event} time={time} onOpenProfile={openProfile} />
       <div
         style={{
           display: 'flex',
