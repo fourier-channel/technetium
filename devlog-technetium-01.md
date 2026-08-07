@@ -2671,7 +2671,14 @@ that was already there. Worth remembering when a component "needs a new
 permission": check first whether the thing can simply be made to fit the
 permission that exists.
 
-### Still the operator's, outside this repo
-bmb picks up `m.image` messages for the booru, so a posted background becomes
-a booru post unless the bridge is taught to skip `net.41chan.background`. The
-flag exists for it to key on. Related to O-tp6.
+### The booru side is a non-issue (corrected)
+I recorded "bmb must be taught to skip background posts" as an open item. It is
+not one. The booru can filter or hide posts by flag on its own side, so a
+flagged background reaching it is a display decision there, not a constraint
+here. Carrying `net.41chan.background` on the post IS the entire requirement,
+and it already ships.
+
+Worth keeping as a pattern rather than a one-off: emitting a well-named flag is
+usually the whole obligation an upstream owes a downstream. Deciding what the
+downstream does with it is not this repo's call, and filing it as a blocking
+question was me inventing a dependency that did not exist.

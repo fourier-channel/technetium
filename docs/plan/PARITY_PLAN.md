@@ -484,7 +484,7 @@ Deployment is the operator's, via `./deploy.sh`, when the operator says so.
 | what | who | detail |
 | --- | --- | --- |
 | ~~Backdrop media in R2~~ | ~~fourier-auth~~ | **RESOLVED, no gateway change needed** (`465b0e2`). The gate authorizes media with a POST behind it; backgrounds had none because they were referenced only from state. They are now posted as a flagged `m.image` and the state event references that mxc, so they authorize exactly like every other image. |
-| Booru: skip background posts | operator / bmb | A posted background will become a BOORU POST unless the bridge skips `net.41chan.background`. The flag exists for it to key on. Related to O-tp6. |
+| ~~Booru: skip background posts~~ | ~~bmb~~ | **NOT BLOCKING.** Background posts carry `net.41chan.background`, and the booru can filter or hide anything by flag on its own side. The flag is the whole requirement and it already ships. No action needed anywhere. |
 | Presence | operator / homeserver | `presence.enabled: true`. Until then presence renders NOTHING, which is the designed behaviour, not a fault. |
 | Link previews | operator / homeserver | `url_preview_enabled: true` **plus** a correct `url_preview_ip_range_blacklist` (SSRF guard -- not optional). Previews stay absent until both that and the per-user opt-in are on. |
 | Message search | operator / homeserver | Server-side `/search`. The client probes and degrades to a labelled partial search if absent. |
