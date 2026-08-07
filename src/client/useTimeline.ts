@@ -19,7 +19,14 @@ import {
 } from './relations'
 
 // Classification the renderer switches on, so it never re-parses event shape.
-export type TimelineItemKind = 'message' | 'encrypted' | 'redacted' | 'other' | 'gallery'
+export type TimelineItemKind =
+  | 'message'
+  | 'encrypted'
+  | 'redacted'
+  | 'other'
+  | 'gallery'
+  // W6.1 -- a date marker inserted BETWEEN items. Carries no event of its own.
+  | 'day'
 
 export type GalleryLayout = 'grid' | 'stack' | 'strip'
 
@@ -47,6 +54,71 @@ export interface TimelineItem {
   // A user-authored reply target (thread fallbacks are excluded). `event` is
   // null when the target is outside the loaded window.
   replyTo?: ReplyRef
+
+  // --- W6 layout ---
+  // False when this message continues a run from the same sender, so the Row
+  // hides the pillbox. Every other decoration (action bar, reactions,
+  // receipts, edited marker, reply pill) is unaffected -- grouping collapses
+  // the HEADER, never the footer.
+  showHeader?: boolean
+  // kind 'day' only: the timestamp the separator labels.
+  dayTs?: number
+}
+
+// How long a gap breaks a same-sender run. Beyond this, two messages are
+// separate thoughts even from one person, and collapsing them reads as one.
+const GROUP_WINDOW_MS = 5 * 60 * 1000
+
+function sameDay(a: number, b: number): boolean {
+  const da = new Date(a)
+  const db = new Date(b)
+  return (
+    da.getFullYear() === db.getFullYear() &&
+    da.getMonth() === db.getMonth() &&
+    da.getDate() === db.getDate()
+  )
+}
+
+// Insert day separators and mark same-sender continuations.
+//
+// A SECOND pass over the folded items rather than logic inside the fold: the
+// fold decides what exists, this decides how it is laid out, and keeping them
+// apart is why every Wave 2 decoration survives grouping untouched.
+export function applyLayout(items: TimelineItem[]): TimelineItem[] {
+  const out: TimelineItem[] = []
+  let prev: TimelineItem | null = null
+
+  for (const item of items) {
+    const ts = item.event.getTs()
+
+    if (!prev || !sameDay(prev.event.getTs(), ts)) {
+      out.push({
+        event: item.event,
+        kind: 'day',
+        // Distinct from any event id, and stable across rebuilds.
+        id: `day-${new Date(ts).toDateString()}`,
+        content: {},
+        dayTs: ts,
+      })
+      // A day break always starts a new run, whoever sent it.
+      out.push({ ...item, showHeader: true })
+      prev = item
+      continue
+    }
+
+    const continues =
+      prev.event.getSender() === item.event.getSender() &&
+      ts - prev.event.getTs() < GROUP_WINDOW_MS &&
+      // A reply opens a new thought: hiding the sender above a reply pill
+      // reads as the pill belonging to the message before it.
+      !item.replyTo &&
+      prev.kind !== 'day'
+
+    out.push({ ...item, showHeader: !continues })
+    prev = item
+  }
+
+  return out
 }
 
 export interface ToItemsOptions {
@@ -202,10 +274,12 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
     }
     const myUserId = client?.getUserId() ?? null
     setItems(
-      toItems(room.getLiveTimeline().getEvents(), {
-        myUserId,
-        ignoredUsers: client ? getIgnoredUsers(client) : undefined,
-      }),
+      applyLayout(
+        toItems(room.getLiveTimeline().getEvents(), {
+          myUserId,
+          ignoredUsers: client ? getIgnoredUsers(client) : undefined,
+        }),
+      ),
     )
   }, [client, room])
 

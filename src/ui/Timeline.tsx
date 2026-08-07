@@ -313,9 +313,13 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
             )}
             <ReceiptsContext.Provider value={receipts}>
             <MessageVerbsProvider room={room}>
-              {items.map((item) => (
-                <Row key={item.id} item={item} onOpenThread={onOpenThread} />
-              ))}
+              {items.map((item) =>
+                item.kind === 'day' ? (
+                  <DaySeparator key={item.id} item={item} />
+                ) : (
+                  <Row key={item.id} item={item} onOpenThread={onOpenThread} />
+                ),
+              )}
             </MessageVerbsProvider>
             </ReceiptsContext.Provider>
           </JumpContext.Provider>
@@ -524,11 +528,26 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
   return (
     // data-event-id is what click-to-jump searches for; keeping it on the row
     // means no separate index has to stay in sync with the timeline.
-    <div className="tc-row" data-event-id={item.id} style={{ padding: '4px 0' }}>
+    <div
+      className="tc-row"
+      data-event-id={item.id}
+      data-grouped={item.showHeader === false ? 'true' : undefined}
+      style={{ padding: '4px 0' }}
+    >
+      {/* A grouped message loses its pillbox, so its time is shown in the
+          gutter on hover -- otherwise the timestamp becomes unreachable for
+          every message after the first in a run. */}
+      {item.showHeader === false && <span className="tc-row-gutter-time">{time}</span>}
       {/* Overlays the row's top-right; revealed by CSS on hover/focus-within so
           no React state churns per pointer crossing. */}
       <MessageActionBar actions={actions} />
-      <SenderPill event={event} time={time} onOpenProfile={openProfile} />
+      {/* Grouping hides the HEADER only. Every decoration below -- reply
+          pill, body, edited marker, reactions, receipts, thread chip -- is
+          untouched, which is why grouping could land last without revisiting
+          any of them. */}
+      {item.showHeader !== false && (
+        <SenderPill event={event} time={time} onOpenProfile={openProfile} />
+      )}
       <div
         style={{
           display: 'flex',
@@ -820,6 +839,26 @@ function ThreadChip({ event, onOpen }: { event: MatrixEvent; onOpen?: (roomId: s
     >
       💬 {count} {count === 1 ? 'reply' : 'replies'}
     </button>
+  )
+}
+
+// W6.1 -- a date marker. A separate component branched at the CALL SITE, not a
+// branch inside Row: an early return above Row's hooks would break the
+// rules-of-hooks order, and a separator is not a message anyway -- it has no
+// pillbox, no action bar, no footer, and is not a target for any verb.
+export function DaySeparator({ item }: { item: TimelineItem }) {
+  const ts = item.dayTs ?? item.event.getTs()
+  return (
+    <div className="tc-day-separator" role="separator">
+      <span>
+        {new Date(ts).toLocaleDateString(undefined, {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+        })}
+      </span>
+    </div>
   )
 }
 

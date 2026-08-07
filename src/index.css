@@ -943,3 +943,50 @@ code {
 /* A custom-emoji reaction renders its mxc as an image inside the pill; fixed
    box so a custom and a unicode reaction are the same height (W5.4). */
 .tc-reaction-key { display: inline-grid; place-items: center; min-width: 16px; height: 16px; }
+
+/* Day separators (W6.1). A rule with the date centred on it. */
+.tc-day-separator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  user-select: none;
+}
+.tc-day-separator::before,
+.tc-day-separator::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(128, 128, 128, 0.25);
+}
+
+/* Same-sender grouping (W6.2). A grouped row keeps the body column's indent
+   and drops only the pillbox, so the text stays in the same column as the
+   message above it. Its timestamp moves to the gutter, revealed on hover. */
+.tc-row[data-grouped='true'] {
+  padding-top: 0 !important;
+}
+.tc-row-gutter-time {
+  position: absolute;
+  left: 0;
+  top: 2px;
+  width: 44px;
+  text-align: right;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  opacity: 0;
+  pointer-events: none;
+  user-select: none;
+  transition: opacity 90ms ease-out;
+}
+.tc-row:hover > .tc-row-gutter-time,
+.tc-row:focus-within > .tc-row-gutter-time {
+  opacity: 0.75;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tc-row-gutter-time { transition: none; }
+}
