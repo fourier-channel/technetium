@@ -1,10 +1,12 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import type { MatrixEvent, Room } from 'matrix-js-sdk'
+import type { IContent, MatrixEvent, Room } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
 import { isEditableContent } from '../client/editContent'
 import { eventPreview } from '../client/eventPreview'
 import { usePinnedEvents } from '../client/usePinnedEvents'
+import { buildForwardContent, isForwardable } from '../client/forwardContent'
+import { RoomPicker } from './RoomPicker'
 import { MessageActionsProvider } from './MessageActionBar'
 import { useComposerMode } from './composerMode'
 import { ReactTargetContext } from './reactTarget'
@@ -39,6 +41,8 @@ export function MessageVerbsProvider({ room, children }: { room: Room | null; ch
   const [reactTarget, setReactTarget] = useState<string | null>(null)
   // Pinning is room state, so it is power-level gated like any state write.
   const { pinned, canPin, toggle: togglePin } = usePinnedEvents(client, room)
+  // The item whose content is being forwarded, while the room picker is open.
+  const [forwarding, setForwarding] = useState<{ content: IContent } | null>(null)
 
   // May the local user redact OTHER people's messages here? Own messages are
   // always redactable by their sender.
@@ -85,6 +89,16 @@ export function MessageVerbsProvider({ room, children }: { room: Room | null; ch
           label: 'React',
           icon: '☺', // white smiling face
           onSelect: () => setReactTarget(item.id),
+        }
+      },
+      (item) => {
+        if (!isActionable(item.kind)) return null
+        if (!isForwardable(item.content)) return null
+        return {
+          id: 'forward',
+          label: 'Forward',
+          icon: '➦',
+          onSelect: () => setForwarding({ content: item.content }),
         }
       },
       (item) => {
@@ -140,6 +154,28 @@ export function MessageVerbsProvider({ room, children }: { room: Room | null; ch
   return (
     <MessageActionsProvider builders={builders}>
       <ReactTargetContext.Provider value={reactApi}>{children}</ReactTargetContext.Provider>
+      {forwarding && (
+        <RoomPicker
+          client={client}
+          title="Forward to..."
+          confirmLabel="Forwarding"
+          excludeRoomId={room?.roomId}
+          onPick={(target) => {
+            const content = buildForwardContent(forwarding.content)
+            setForwarding(null)
+            if (!client) return
+            // threadId null: a forward starts fresh in the target room.
+            void client
+              .sendMessage(
+                target.roomId,
+                null,
+                content as unknown as Parameters<typeof client.sendMessage>[2],
+              )
+              .catch((err) => console.error('Forward failed:', err))
+          }}
+          onClose={() => setForwarding(null)}
+        />
+      )}
       {pendingDelete && (
         <ConfirmDelete
           target={pendingDelete}
