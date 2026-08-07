@@ -14,8 +14,8 @@
 | field | value |
 | --- | --- |
 | campaign | parity-v1 (30 features, 3 audit categories) |
-| current wave | Wave 2 -- lane COMPLETE + verbs 1-6 landed. Remaining: W2.7 pins, W2.8 forwarding, W2.9 mentions |
-| pure checks | 260 passing (`npm run check`) -- 7 harnesses; 61 are sanitizer/security |
+| current wave | **Wave 2 COMPLETE** (`0dfb608`) -- next up: Wave 3 rooms & navigation |
+| pure checks | 306 passing (`npm run check`) -- 9 harnesses; 61 are sanitizer/security |
 | devlog | 2 entries appended (Wave 0+1, Wave 2 part 1) |
 | branch | `parity-v1` (off `main`) |
 | base HEAD | `d4d1494` (main, "Merge branch 'chatbox-domain-v1'") |
@@ -311,6 +311,8 @@ PENDING = needs operator eyes in a browser (headless box cannot verify).
 | S4 | Receipts helper extraction -> `client/receipts.ts`; useReadMarker becomes a caller | `useReadMarker.ts`, new `receipts.ts` | **landed** | `504a852` | `findReceiptableEvent(room)` + `markRoomRead()`. No behaviour change. Hook keeps only visibility gate + dedupe + listeners. |
 | S5 | ProfileCard promotion -> shared `ui/ProfileCard.tsx`; domain mode consumes it | `DomainUserMenu.tsx`, `DomainCanvas.tsx`, `members.ts`, new `ProfileCard.tsx` | **landed** | `1d6832e` | Two identity sources: RoomMember, else MergedMember + maxPower (member list All/Nearby has no room PL). `actions` slot for Wave 3/4. `initials`/`HONORIFIC_LABEL`/`standingLabel`/`splitUserId` hoisted to members.ts -- HONORIFIC_LABEL was duplicated. |
 
+**Wave 2 COMPLETE** -- all 9 chain steps + all 4 lane items landed.
+
 **Wave 1 COMPLETE.** All five substrate tracks landed. Lint held at 23
 throughout; one intermediate violation (react-refresh/only-export-components
 from mixing the registry and its components in one file) was fixed by
@@ -326,9 +328,9 @@ splitting rather than by moving the baseline.
 | W2.4 | Row footer design note (ledger only, NO code) | **landed** | (this ledger) | See "Row footer layout" below. |
 | W2.5 | Reactions (strip, toggle, EmojiPicker anchored) | **landed** | `0111379` | Tallies from S1. Built the W2.4 footer; thread chip moved in. Footer ABSENT when empty (no-forced-reflow). ONE picker keyed by event id across the action bar's React verb + each strip's `+`. Local echoes (`~` ids) excluded. Shared `useRoving` -- and it owns NO ref: returning a ref from a hook trips the React-Compiler refs-during-render rule when spread (cost 8 lint errors before rework). |
 | W2.6 | Read-receipts display (seen-by cluster, +N cap) | **landed** | `74156b5` | Walks MEMBERS not events -> O(members), independent of scrollback. Self excluded. Capped at 5 + N. Right-aligned for a stable column. 250ms debounce. Reaches the footer by context (thread panel shares Row, computes none). |
-| W2.7 | Pinned messages (`m.room.pinned_events` + panel) | todo | | |
-| W2.8 | Forwarding (+ new `ui/RoomPicker.tsx`) | todo | | |
-| W2.9 | Mention autocomplete (`@` popup, matrix.to anchor, `m.mentions`) | todo | | |
+| W2.7 | Pinned messages | **landed** | `42d6aba` | State, so PL-gated via `maySendStateEvent`; verb HIDDEN when unwritable. Whole-list replace -> read-modify-write, re-read from state immediately before writing to narrow the lost-pin window. Panel previews only LOADED events (no fetch-per-pin), says so honestly, jump still works. Sticky overlay -> no reflow. |
+| W2.8 | Forwarding | **landed** | `2739400` | Strips `m.relates_to`/`m.new_content`/**`m.mentions`**/gallery/domain_ttd + both reply fallbacks -- forwarding must not ping people from another conversation. Images by MXC REFERENCE: no re-upload, no duplicate booru post. `RoomPicker` built generic for Wave 3's invite/DM. |
+| W2.9 | Mention autocomplete | **landed** | `0dfb608` | Masked before markdown / restored after sanitize (substituting into finished HTML would corrupt hrefs). Longest-match-first; deleted mentions don't ping; split/join for `$`. Reply adds the answered sender (MSC3952). **Sanitizer NOT widened** -- anchors already allowed, asserted. Ordinary send path byte-identical. |
 | W2.L1 | Syntax highlighting | **landed** | `a5fb423` | 4-step shape: sanitize w/ class -> scrubClasses (deletes all but `language-*` on `<code>`) -> hljs -> re-sanitize. Pass 2's allowance is safe because its INPUT is our output. Parses via `createHTMLDocument` (inert, exists wherever `document` does). Bounded: 20k skip, 2k autodetect cap. **COST: +171kB raw / +57kB gzip** -- lib/core + explicit registerLanguage is the cheaper fallback, noted in DEPENDENCIES.md. |
 | W2.L2 | Spoiler RENDERING | **landed** | `fd4d3a9` | `data-mx-spoiler` admitted BY NAME (ALLOW_DATA_ATTR stays false). tabindex/role/aria set by US after pass 1 deleted the sender's. Delegated click/keydown (innerHTML can't carry React handlers). Blur is a filter -> revealing never reflows. **Also fixed a FORBID_CONTENTS regression I introduced in W2.1** -- see G-tp09. |
 | W2.L3 | Spoiler COMPOSING + fenced code blocks on the send side | **landed** | `310c8bc` | Masked BEFORE markdown, restored AFTER sanitize (so the span is ours, and hand-written `data-mx-spoiler` stays refused). Block parser used ONLY when a fence exists -- wholesale would wrap every message in `<p>`. Send-side class scrub added: a user CAN type literal HTML. Caught a real regex bug: `\|\|one\|\| and \|\|two\|\|` mis-parsed. |
@@ -448,6 +450,9 @@ visual or interactive is claimed only as PENDING.
 | W2.L3-a | Typing `||secret||` sends a spoiler that renders blurred in Element; a ``` fence sends a highlighted block; ORDINARY messages are visually unchanged (regression risk: the parseInline -> parse switch). | yes |
 | W2.L4-a | Typing in one client shows the line in the other; clears on send, on emptying the box, and on leaving; never shifts the messages above it. | yes |
 | BUNDLE-a | Judgement call: is +57kB gzip acceptable for highlighting? If not, `lib/core` + explicit registerLanguage is a one-file change. | no |
+| W2.7-a | Pin absent at PL0, present for a moderator; header count; panel lists newest-first and jumps; unpin from panel AND action bar; a pin made in Element appears. | yes |
+| W2.8-a | Forwarding text and an image both land in the chosen room; the image needs no re-upload and creates NO second booru post (O-tp6 is the related flag); forwarding a reply carries no quote. | yes |
+| W2.9-a | `@` opens/filters the picker; arrows/Enter/Tab/Escape behave; the sent mention renders as a pill in Element and links back; the mentioned user is NOTIFIED; a reply notifies the person replied to. | yes |
 | KBD-a | Tab from the timeline reaches the composer in a sane number of stops; arrows move within a row's action bar and reaction strip. | no |
 
 Standing note: receipts, typing, reactions and presence all need a

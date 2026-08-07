@@ -2318,3 +2318,73 @@ parseInline -> parse switch.
 ### Still open in Wave 2
 W2.7 pinned messages, W2.8 forwarding, W2.9 mention autocomplete. Nothing
 deployed; nothing outside the repo written.
+
+---
+
+## 2026-08-07 -- parity-v1 Wave 2 COMPLETE: pins, forwarding, mentions (auto run)
+
+Closes the Wave 2 verb chain. All 9 chain steps and all 4 lane items are in.
+
+### What landed
+
+- **W2.7 pinned messages.** `m.room.pinned_events` is room state, so it is
+  power-level gated like any state write and the verb is hidden when
+  unwritable. Writing REPLACES the whole list, so pin/unpin is
+  read-modify-write; the list is re-read from state immediately before writing
+  rather than trusting a render-time value, which makes the concurrent-pin
+  window as small as it can be without a server-side patch operation.
+- **W2.8 forwarding**, with a deliberately generic `RoomPicker` that Wave 3's
+  invite and DM flows will reuse.
+- **W2.9 mention autocomplete.**
+
+### D-tp08 -- a forward strips context, and m.mentions is the one that matters
+
+A forward is a NEW message carrying the same payload, not a copy of the event.
+Off come `m.relates_to`, `m.new_content`, the gallery batch hint, the domain
+TTD, and both reply fallbacks. The one with consequences for a person rather
+than for rendering is **`m.mentions`**: forwarding a message must not ping
+people who were mentioned in a conversation they were part of somewhere else.
+
+Images forward by MXC REFERENCE -- the same content URI named again. No
+re-upload, so no second copy on the homeserver and, worth noting against
+O-tp6, no duplicate booru post from the bridge.
+
+### D-tp09 -- mentions are masked before markdown, restored after sanitizing
+
+The same shape spoilers use, for a sharper reason. Substituting a display name
+into the FINISHED HTML means searching for that name inside markup, where it
+can match inside an `href` and corrupt it: a user called "test" would rewrite
+half the links in their own message. Masking first makes the substitution
+positional instead of textual.
+
+Three details that each earned a test: longest-match-first (with "@sab" and
+"@saber" both pending, masking the short one first leaves a stray "er");
+only mentions whose text SURVIVED in the draft are sent (picking a name then
+deleting it must not ping them); and split/join rather than `replace()`,
+because a `$` in a display name is read as a replacement pattern.
+
+The sanitizer was NOT widened for this -- anchors and `href` were already
+allowed, and a check asserts a matrix.to permalink survives. A reply now also
+adds the answered sender to `m.mentions` per MSC3952, which is what makes
+replies actually notify.
+
+### G-tp12 (gotcha) -- derived data does not belong in state
+
+The pinned-row list was briefly held in `useState` with an effect to keep it
+in sync with props, which is a setState-in-an-effect-body and cost a lint
+error (G-tc01 again). It is derived entirely from props, so it is a `useMemo`.
+The rule generalises: reach for state only when something cannot be computed
+from what is already in hand.
+
+### Verification
+306 pure checks pass. The ordinary send path is deliberately byte-identical
+when no mentions are present -- explicit content is only constructed when
+`m.mentions` has to ride along -- because Wave 2 has touched the composer's
+send path five times now and the no-op case is the one worth protecting.
+
+Everything visual is PENDING OPERATOR VERIFICATION; the ledger carries the
+list with the second-identity items marked.
+
+### Next
+Wave 3 -- rooms and navigation. Nothing deployed; nothing outside the repo
+written.
