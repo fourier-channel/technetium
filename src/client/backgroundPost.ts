@@ -20,6 +20,21 @@ import type { IContent, MatrixClient } from 'matrix-js-sdk'
 
 export const BACKGROUND_FLAG = 'net.41chan.background'
 
+// A background's filename is chrome -- nothing reads it, and it does not
+// belong in a URL parameter. The sdk builds the upload URL with
+// `searchParams.set("filename", encodeURIComponent(name))`, and searchParams
+// already encodes, so any name is sent DOUBLE-encoded: a space becomes %2520
+// rather than %20. Names with spaces, commas or non-ASCII are the ones that
+// suffer, and "ChatGPT Image Aug 7, 2026, 09_43_34 AM.png" is all three.
+//
+// Rather than rely on every consumer handling that correctly, backgrounds
+// upload under a fixed, boring name. The original is kept in the message body
+// where it is only ever text.
+function safeUploadName(file: File): string {
+  const ext = /\.([A-Za-z0-9]{1,8})$/.exec(file.name)?.[1]?.toLowerCase()
+  return ext ? `background.${ext}` : 'background'
+}
+
 export type BackgroundKind = 'domain' | 'chat'
 
 export interface BackgroundPost {
@@ -67,7 +82,10 @@ export async function uploadAndPostBackground(
 ): Promise<BackgroundPost> {
   let mxc: string
   try {
-    const res = await client.uploadContent(file, { name: file.name, type: file.type })
+    const res = await client.uploadContent(file, {
+      name: safeUploadName(file),
+      type: file.type,
+    })
     mxc = res.content_uri
   } catch (err) {
     throw new BackgroundStageError('upload', err)
