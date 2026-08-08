@@ -7,7 +7,6 @@ import { useDomainMedia, type DomainMediaObject } from '../client/useDomainMedia
 import { useDomainObjects, type DomainObject, type MovePerm } from '../client/useDomainObjects'
 import { useDomainActions, ACTION_REGISTRY, type ActiveAction } from '../client/useDomainActions'
 import { useDomainModeration } from '../client/useDomainModeration'
-import { useAutoRefreshMedia } from '../client/useAutoRefreshMedia'
 import type { DomainSettingsApi } from './domainSettings'
 import { AuthedImage } from './AuthedImage'
 import { MediaTags } from './MediaTags'
@@ -170,7 +169,7 @@ export function DomainCanvas({
       {/* Shared domain background (room state) + its transform, beneath the
           grid. Hidden while editing and behind the show-backgrounds pref. */}
       {showSharedBg && background && (
-        <DomainBackgroundLayer client={client} mxc={background.mxc} transform={background.transform} />
+        <DomainBackgroundLayer mxc={background.mxc} transform={background.transform} />
       )}
       {/* Legacy local backdrop URL, only when no shared background is set. */}
       {showLegacyBackdrop && (
@@ -711,27 +710,23 @@ function DomainAvatar({
 // the fourier-auth gate) and render it beneath the grid with its stored
 // transform. Self-contained so DomainCanvas need not know about media auth.
 function DomainBackgroundLayer({
-  client,
   mxc,
   transform,
 }: {
-  client: MatrixClient
   mxc: string
   transform: Transform
 }) {
-  // Auto-refreshing source: keeps the last good image on transient failures and
-  // re-fetches on interval / focus / online, so the background self-heals rather
-  // than vanishing for the session on one bad fetch (see useAutoRefreshMedia).
-  const src = useAutoRefreshMedia(client, mxc)
-
-  if (!src) return null
+  // Rendered through AuthedImage -- the SAME component every timeline image
+  // uses. Backgrounds previously had their own media path, and that divergence
+  // was the bug: a working feature and a broken one resolving the same kind of
+  // mxc by different means. AuthedImage brings its own retry/backoff, so the
+  // self-healing the old hook provided is not lost.
   return (
-    <img
-      src={src}
-      alt=""
-      draggable={false}
+    <div
       style={{ ...transformToStyle(transform), zIndex: 0, pointerEvents: 'none', userSelect: 'none' }}
-    />
+    >
+      <AuthedImage mxc={mxc} width={850} fill transparentLoading alt="" />
+    </div>
   )
 }
 

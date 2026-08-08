@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import type { MatrixClient } from 'matrix-js-sdk'
-import { useAutoRefreshMedia } from '../client/useAutoRefreshMedia'
+import { AuthedImage } from './AuthedImage'
 import { uploadAndPostBackground } from '../client/backgroundPost'
 import type { ChatBg } from './chatBackground'
 
@@ -11,25 +11,31 @@ import type { ChatBg } from './chatBackground'
 // (upload an image -> mxc, or paste a URL) with a dim slider and Clear.
 // ---------------------------------------------------------------------------
 
-export function ChatBackdrop({ client, bg }: { client: MatrixClient; bg: ChatBg }) {
-  // mxc goes through the auto-refreshing homeserver path; a raw url is used as-is
-  // (best-effort -- we don't own its lifetime, so it can't self-heal).
-  const mxcSrc = useAutoRefreshMedia(client, bg.mxc ?? null)
-  const src = bg.mxc ? mxcSrc : bg.url ?? null
+export function ChatBackdrop({ bg }: { bg: ChatBg }) {
+  // An mxc renders through AuthedImage -- the same component every timeline
+  // image uses. A raw pasted URL is a plain CSS background, since we do not own
+  // its lifetime and there is nothing to authenticate.
+  const url = bg.mxc ? null : (bg.url ?? null)
   const dim = Math.max(0, Math.min(0.9, bg.dim))
 
-  if (!src) return null
+  if (!bg.mxc && !url) return null
   return (
     <div aria-hidden style={{ position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          backgroundImage: `url("${src}")`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }}
-      />
+      {bg.mxc ? (
+        <div style={{ position: 'absolute', inset: 0 }}>
+          <AuthedImage mxc={bg.mxc} width={850} fill transparentLoading alt="" />
+        </div>
+      ) : (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundImage: `url("${url}")`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+        />
+      )}
       {/* Readability scrim over the image (uses the canvas color so it blends). */}
       <div
         style={{

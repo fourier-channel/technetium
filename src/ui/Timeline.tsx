@@ -277,7 +277,7 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
         </div>
       </header>
       <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        {bg && client && <ChatBackdrop client={client} bg={bg} />}
+        {bg && client && <ChatBackdrop bg={bg} />}
         <div
           ref={scrollRef}
           style={{
