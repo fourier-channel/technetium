@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import type { MatrixClient } from 'matrix-js-sdk'
 import { AuthedImage } from './AuthedImage'
 import { uploadAndPostBackground } from '../client/backgroundPost'
+import { describeBackgroundError } from '../client/useDomainBackground'
 import type { ChatBg } from './chatBackground'
 
 // ---------------------------------------------------------------------------
@@ -100,8 +101,11 @@ export function ChatBackgroundMenu({
       // only the bytes become a room post.
       const { mxc: content_uri } = await uploadAndPostBackground(client, roomId, file, 'chat')
       onApply({ mxc: content_uri, dim })
-    } catch {
-      setError('Upload failed. Try again or use a URL.')
+    } catch (err) {
+      // The real reason, not a fixed sentence. A bare catch here meant the
+      // errcode was only ever visible in the browser's network tab -- which is
+      // where it had to be read from for five rounds of diagnosis.
+      setError(describeBackgroundError(err))
     } finally {
       setUploading(false)
     }
@@ -185,7 +189,23 @@ export function ChatBackgroundMenu({
         style={{ width: '100%' }}
       />
 
-      {error && <div style={{ fontSize: 11, color: 'var(--cpd-color-text-critical-primary, #d22)', marginTop: 6 }}>{error}</div>}
+      {error && (
+        <div
+          role="alert"
+          style={{
+            fontSize: 11,
+            color: 'var(--cpd-color-text-critical-primary, #d22)',
+            marginTop: 6,
+            // The message now carries a stage, status and errcode, so it must
+            // be able to wrap and be selected rather than being clipped.
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            userSelect: 'text',
+          }}
+        >
+          {error}
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', marginTop: 10 }}>
         {current && (
