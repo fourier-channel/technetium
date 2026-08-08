@@ -84,6 +84,16 @@ export async function fetchMediaObjectUrl(
   return URL.createObjectURL(await resp.blob())
 }
 
+// True when a URL points at the homeserver, and therefore needs the access
+// token that an <img src> cannot supply.
+function needsHomeserverAuth(client: MatrixClient, url: string): boolean {
+  try {
+    return new URL(url).origin === new URL(client.getHomeserverUrl()).origin
+  } catch {
+    return false
+  }
+}
+
 // Resolve an mxc to a directly-loadable <img src>.
 //
 // Two response shapes from the gateway, by request type:
@@ -131,6 +141,23 @@ export async function fetchMediaSrc(
   }
   const data = (await resp.json()) as { url?: string; expiresIn?: number }
   if (!data.url) throw new Error(`gateway returned no url for ${mxc}`)
+
+  // A URL that needs the homeserver's token CANNOT be used as an <img src> --
+  // an img tag has no way to send an Authorization header, and the homeserver
+  // answers M_MISSING_TOKEN. That happens whenever the gateway has no
+  // presigned R2 object to hand back and returns a homeserver URL instead.
+  // Fetch those as a blob WITH the token rather than handing them to an img.
+  if (needsHomeserverAuth(client, data.url)) {
+    const authed = await fetch(data.url, { headers: { Authorization: `Bearer ${token}` } })
+    if (!authed.ok) {
+      const detail = await authed.text().catch(() => '')
+      throw new Error(
+        `media fetch failed (${authed.status}) ${data.url} :: ${detail.slice(0, 200)}`,
+      )
+    }
+    const objUrl = URL.createObjectURL(await authed.blob())
+    return { src: objUrl, revoke: () => URL.revokeObjectURL(objUrl) }
+  }
   // Gateway presigns for 300s; cache with that lifetime (default if unsent).
   const ttlMs = (data.expiresIn ?? 300) * 1000
   originalUrlCache.set(mxc, { url: data.url, expiresAt: Date.now() + ttlMs })

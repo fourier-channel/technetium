@@ -65,10 +65,17 @@ export function useAutoRefreshMedia(
     let retryTimer: ReturnType<typeof setTimeout> | undefined
 
     const load = () => {
-      // Through the GATEWAY, like every other uploaded image. Backdrops are
-      // user-uploaded content, not chrome, and they are uploaded by the very
-      // same call as a chat image -- so they belong on the same read path.
-      fetchMediaSrc(client, mxc)
+      // Through the GATEWAY, like every other uploaded image, and via the
+      // THUMBNAIL route specifically -- the same route every timeline image
+      // uses successfully.
+      //
+      // That route streams bytes, so we fetch them as a blob WITH the token.
+      // The original route instead returns a URL for a plain <img src>, which
+      // works only when the gateway has a self-authorizing presigned R2 object
+      // to hand back; when it does not, an img tag has no way to authenticate
+      // and the homeserver answers M_MISSING_TOKEN. 850 is the largest size
+      // the gateway offers and is ample for a backdrop.
+      fetchMediaSrc(client, mxc, 850)
         .then((r) => {
           if (!alive) {
             r.revoke()
