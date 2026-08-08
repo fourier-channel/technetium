@@ -50,6 +50,21 @@ const LIST_REQUIRED_STATE: string[][] = [
   ['m.space.child', '*'], // space hierarchy (parent -> children)
   ['m.space.parent', '*'], // child -> parent, for the parent-gate in spaces.ts
   ['m.room.member', '$ME'], // OWN membership only -- not the roster
+
+  // ANYTHING read through room.currentState MUST be listed here. Sliding sync
+  // delivers only the state types a client asks for -- unlisted state is not
+  // "late", it never arrives at all, and currentState returns null forever.
+  //
+  // That is a silent failure with no error anywhere: the write succeeds with a
+  // 200, the event exists on the server, and the client that wrote it simply
+  // cannot see it. The domain background was broken this way from the day
+  // sliding sync landed.
+  //
+  // If you add a `getStateEvents(...)` call anywhere, add its type HERE.
+  ['net.41chan.domain.background', ''], // shared domain backdrop
+  ['m.room.topic', ''], // room header (W3.2)
+  ['m.room.pinned_events', ''], // pinned messages (W2.7)
+  ['im.ponies.room_emotes', '*'], // MSC2545 emoji packs (W5.4)
 ]
 const TIMELINE_LIMIT = 1
 
