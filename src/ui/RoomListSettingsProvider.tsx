@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { ClientEvent } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
 import { serverMutedRooms, setRoomMutedOnServer } from '../client/pushRules'
+import { reportIgnored } from '../client/report'
 import {
   ROOM_LIST_SETTINGS_KEY,
   RoomListSettingsContext,
@@ -27,7 +28,8 @@ function loadSettings(): RoomListSettings {
       panelWidth: typeof p.panelWidth === 'number' ? p.panelWidth : null,
       panelLocked: p.panelLocked === true,
     }
-  } catch {
+  } catch (err) {
+    reportIgnored('room list settings: read', err)
     return defaultRoomListSettings()
   }
 }
@@ -35,8 +37,8 @@ function loadSettings(): RoomListSettings {
 function saveSettings(s: RoomListSettings): void {
   try {
     localStorage.setItem(ROOM_LIST_SETTINGS_KEY, JSON.stringify(s))
-  } catch {
-    // storage unavailable -- best-effort in v1
+  } catch (err) {
+    reportIgnored('room list settings: save', err)
   }
 }
 

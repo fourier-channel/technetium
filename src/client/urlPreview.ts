@@ -33,6 +33,8 @@ export function isPreviewable(url: string): boolean {
     const u = new URL(url)
     return u.protocol === 'https:' || u.protocol === 'http:'
   } catch {
+    // Not a failure: an unparseable string is simply not a previewable URL,
+    // which is exactly what the caller is asking.
     return false
   }
 }

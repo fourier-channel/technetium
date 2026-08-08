@@ -11,6 +11,7 @@ import { arrangeSiblings, roomOrderScope } from './roomOrder'
 import { useReducedMotion } from './reducedMotion'
 import { AuthedImage } from './AuthedImage'
 import { RoomContextMenu } from './RoomContextMenu'
+import { reportAlways } from '../client/report'
 
 // Membership/join classification for a node's visual + click behavior.
 type Mode = 'joined' | 'joinable' | 'knock'
@@ -495,7 +496,8 @@ function TreeRow({
       try {
         await client.knockRoom(node.roomId)
         setKnocked(true)
-      } catch {
+      } catch (err) {
+        reportAlways('room: knock', err)
         setActionError(true)
       } finally {
         setBusy(false)
@@ -509,7 +511,8 @@ function TreeRow({
       await client.joinRoom(node.roomId)
       const room = client.getRoom(node.roomId)
       if (room && !node.isSpace) onSelectRoom?.(room)
-    } catch {
+    } catch (err) {
+      reportAlways('room: join', err)
       setActionError(true)
     } finally {
       setBusy(false)

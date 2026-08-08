@@ -21,6 +21,7 @@ function hrefFor(match: string): string | null {
     const u = new URL(url)
     if (u.protocol === 'http:' || u.protocol === 'https:') return url
   } catch {
+    // Not a failure: text that does not parse as a URL is just text.
     return null
   }
   return null

@@ -4,6 +4,8 @@ import type { TreeNode } from '../client/spaces'
 import { useClient } from '../client/ClientContext'
 import { useRoomListSettings } from './roomListSettings'
 import { markNodeRead } from '../client/markRead'
+import { describeInviteError } from '../client/userDirectory'
+import { reportAlways } from '../client/report'
 
 const PRESET_ICONS = ['💬', '📌', '🎮', '🎨', '🔥', '⭐', '🛠️', '📁', '🤖', '👾', '🧪', '📷']
 
@@ -28,6 +30,9 @@ export function RoomContextMenu({
   const settings = useRoomListSettings()
   const ref = useRef<HTMLDivElement>(null)
   const [confirmLeave, setConfirmLeave] = useState(false)
+  // A destructive action that fails must say so; the row staying put is not an
+  // explanation.
+  const [leaveError, setLeaveError] = useState<string | null>(null)
   const [iconDraft, setIconDraft] = useState('')
   // Non-null while a space-wide mark-as-read is running, so the row can say
   // what it is doing instead of looking like a dead click.
@@ -88,8 +93,13 @@ export function RoomContextMenu({
     if (!client) return
     try {
       await client.leave(node.roomId)
-    } catch {
-      // membership listener will keep the row if the leave failed
+    } catch (err) {
+      // The membership listener keeps the row, so the UI stays truthful -- but
+      // the user clicked a destructive action and deserves to know it did not
+      // happen, and why.
+      reportAlways('room: leave', err)
+      setLeaveError(describeInviteError(err))
+      return
     }
     onClose()
   }
@@ -133,6 +143,24 @@ export function RoomContextMenu({
         <MenuItem onClick={() => { settings.toggleFavorite(node.roomId); onClose() }}>
           {favorite ? '★ Unfavorite' : '☆ Favorite'}
         </MenuItem>
+      )}
+
+      {leaveError && (
+        <div
+          role="alert"
+          style={{
+            fontSize: 11,
+            margin: '2px 6px 4px',
+            padding: '4px 6px',
+            borderRadius: 5,
+            color: 'var(--cpd-color-text-critical-primary, #ff6b6b)',
+            background: 'var(--cpd-color-bg-subtle-secondary)',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+          }}
+        >
+          {leaveError}
+        </div>
       )}
 
       {joined && (

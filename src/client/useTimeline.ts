@@ -10,6 +10,7 @@ import {
 import { MEDIA_TAGS_EVENT } from './mediaTags'
 import { getIgnoredUsers } from './ignoredUsers'
 import { isBackgroundPost } from './backgroundPost'
+import { reportIgnored } from './report'
 import {
   buildRelationIndex,
   effectiveContent,
@@ -321,7 +322,7 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
         .then(() => {
           if (!cancelled) refresh()
         })
-        .catch(() => {})
+        .catch((err) => reportIgnored('timeline: initial scrollback', err))
     }
 
     // Fire on any timeline change in THIS room (new messages, etc.).

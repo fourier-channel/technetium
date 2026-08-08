@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-
+import { reportIgnored } from '../client/report'
 // W5.2 -- per-user opt-in for link previews.
 //
 // Opt-IN rather than opt-out: asking for a preview makes the HOMESERVER fetch
@@ -11,7 +11,8 @@ const KEY = 'net.41chan.link_previews'
 function load(): boolean {
   try {
     return localStorage.getItem(KEY) === 'on'
-  } catch {
+  } catch (err) {
+    reportIgnored('link preview pref: read', err)
     return false
   }
 }
@@ -35,8 +36,8 @@ export function useLinkPreviewToggle(): { enabled: boolean; toggle: () => void }
       const next = !prev
       try {
         localStorage.setItem(KEY, next ? 'on' : 'off')
-      } catch {
-        // best-effort
+      } catch (err) {
+        reportIgnored('link preview pref: save', err)
       }
       return next
     })

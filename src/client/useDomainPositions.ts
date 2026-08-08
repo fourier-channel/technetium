@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RoomEvent, type MatrixClient, type MatrixEvent, type Room } from 'matrix-js-sdk'
-
+import { reportIgnored } from './report'
 // ---------------------------------------------------------------------------
 // roompos -- the single source of truth for domain-mode positions.
 //
@@ -53,7 +53,8 @@ function readLocal(): Record<string, { x: number; y: number }> {
     if (!raw) return {}
     const p: unknown = JSON.parse(raw)
     return p && typeof p === 'object' ? (p as Record<string, { x: number; y: number }>) : {}
-  } catch {
+  } catch (err) {
+    reportIgnored('domain positions: read', err)
     return {}
   }
 }
@@ -63,8 +64,8 @@ function saveLocal(roomId: string, pos: { x: number; y: number }): void {
     const all = readLocal()
     all[roomId] = pos
     localStorage.setItem(LOCAL_KEY, JSON.stringify(all))
-  } catch {
-    // best-effort
+  } catch (err) {
+    reportIgnored('domain positions: save', err)
   }
 }
 

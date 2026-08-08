@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RoomMemberEvent, type MatrixClient, type Room, type RoomMember } from 'matrix-js-sdk'
+import { reportIgnored } from './report'
 
 // ---------------------------------------------------------------------------
 // W2.L4 -- typing indicators.
@@ -73,7 +74,11 @@ export function useTypingSender(client: MatrixClient | null, roomId: string | nu
     if (!isTyping.current) return
     isTyping.current = false
     lastSentAt.current = 0
-    if (client && roomId) void client.sendTyping(roomId, false, 0).catch(() => {})
+    if (client && roomId) {
+      void client
+        .sendTyping(roomId, false, 0)
+        .catch((err) => reportIgnored('typing: stop', err))
+    }
   }, [client, roomId])
 
   const notify = useCallback(
@@ -87,7 +92,9 @@ export function useTypingSender(client: MatrixClient | null, roomId: string | nu
       if (!isTyping.current || now - lastSentAt.current > REFRESH_MS) {
         isTyping.current = true
         lastSentAt.current = now
-        void client.sendTyping(roomId, true, TYPING_TIMEOUT_MS).catch(() => {})
+        void client
+          .sendTyping(roomId, true, TYPING_TIMEOUT_MS)
+          .catch((err) => reportIgnored('typing: start', err))
       }
       // Stopping typing is not an event the composer can observe, so it is
       // inferred from silence.

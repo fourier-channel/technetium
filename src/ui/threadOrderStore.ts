@@ -1,5 +1,5 @@
 import type { ThreadScope } from '../client/useThreadList'
-
+import { reportIgnored } from '../client/report'
 // ---------------------------------------------------------------------------
 // Custom thread-order persistence (v1: localStorage). Per D5 the v2 portable
 // form is a net.41chan.thread_order account-data event; the localStorage key is
@@ -25,7 +25,8 @@ export function loadCustomOrder(scopeKey: string): string[] | null {
       return parsed as string[]
     }
     return null
-  } catch {
+  } catch (err) {
+    reportIgnored('thread order: read', err)
     return null
   }
 }
@@ -33,7 +34,7 @@ export function loadCustomOrder(scopeKey: string): string[] | null {
 export function saveCustomOrder(scopeKey: string, ids: string[]): void {
   try {
     localStorage.setItem(`${PREFIX}:${scopeKey}`, JSON.stringify(ids))
-  } catch {
-    // storage unavailable/full -- persistence is best-effort in v1
+  } catch (err) {
+    reportIgnored('thread order: save', err)
   }
 }

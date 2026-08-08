@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-
+import { reportIgnored } from '../client/report'
 // ---------------------------------------------------------------------------
 // Local domain-mode settings (v1: localStorage): per-room backdrop image and
 // per-user avatar override (an emoji shown on the puck in domain mode). Local
@@ -29,7 +29,8 @@ function load(): DomainSettings {
       avatars: p.avatars && typeof p.avatars === 'object' ? p.avatars : {},
       showBackgrounds: p.showBackgrounds !== false,
     }
-  } catch {
+  } catch (err) {
+    reportIgnored('domain settings: read', err)
     return base
   }
 }
@@ -37,8 +38,8 @@ function load(): DomainSettings {
 function save(s: DomainSettings): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(s))
-  } catch {
-    // best-effort
+  } catch (err) {
+    reportIgnored('domain settings: save', err)
   }
 }
 

@@ -1,5 +1,5 @@
 import { PushRuleActionName, type MatrixClient } from 'matrix-js-sdk'
-
+import { reportIgnored } from './report'
 // ---------------------------------------------------------------------------
 // W3.5 -- server-backed room mute (O-tp2).
 //
@@ -23,8 +23,10 @@ export function isRoomMutedOnServer(client: MatrixClient | null, roomId: string)
   try {
     const rule = client.getRoomPushRule('global', roomId)
     return !!rule?.actions?.includes(PushRuleActionName.DontNotify)
-  } catch {
-    // A client without push rules loaded yet -- not muted as far as we know.
+  } catch (err) {
+    // Returning false makes a MUTED room look unmuted. Behaviour change,
+    // not a no-op.
+    reportIgnored('push rules: read room mute', err)
     return false
   }
 }

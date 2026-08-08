@@ -1,5 +1,5 @@
 import type { MatrixClient } from 'matrix-js-sdk'
-
+import { reportIgnored } from './report'
 // ---------------------------------------------------------------------------
 // W4.4 -- block / ignore.
 //
@@ -15,7 +15,10 @@ import type { MatrixClient } from 'matrix-js-sdk'
 export function getIgnoredUsers(client: MatrixClient): string[] {
   try {
     return client.getIgnoredUsers() ?? []
-  } catch {
+  } catch (err) {
+    // Returning [] means ignored users become VISIBLE again. That is a
+    // behaviour change, not a no-op, so it must not be silent.
+    reportIgnored('ignore list: read', err)
     return []
   }
 }

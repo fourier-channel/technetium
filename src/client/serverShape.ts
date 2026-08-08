@@ -1,4 +1,5 @@
 import type { NavTree, TreeNode } from './spaces'
+import { reportIgnored } from './report'
 
 // ---------------------------------------------------------------------------
 // "Last known server shape" (CD-11 stale-then-live). We persist the nav tree's
@@ -84,7 +85,10 @@ export function loadServerShape(): NavTree | null {
       : []
     if (spaces.length === 0 && orphanRooms.length === 0) return null
     return { spaces, orphanRooms }
-  } catch {
+  } catch (err) {
+    // A malformed cached shape is recoverable -- we fall back to a live fetch
+    // -- but it means the cache is corrupt, which is worth knowing about.
+    reportIgnored('server shape: read cache', err)
     return null
   }
 }

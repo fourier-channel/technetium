@@ -90,6 +90,8 @@ function needsHomeserverAuth(client: MatrixClient, url: string): boolean {
   try {
     return new URL(url).origin === new URL(client.getHomeserverUrl()).origin
   } catch {
+    // An unparseable URL is not a homeserver URL. Answering the question
+    // asked; nothing has gone wrong.
     return false
   }
 }

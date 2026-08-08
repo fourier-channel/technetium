@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { RoomEvent, type MatrixClient, type MatrixEvent, type Room } from 'matrix-js-sdk'
 import { findReceiptableEvent } from './receipts'
+import { reportIgnored } from './report'
 
 // ---------------------------------------------------------------------------
 // Mark the viewed room read. The base client never sent read receipts, so a
@@ -29,7 +30,11 @@ export function useReadMarker(client: MatrixClient | null, room: Room | null): v
       if (!target || !id || id === lastSent.current) return
       lastSent.current = id
       // unthreaded=true clears the room's overall unread regardless of thread.
-      void client.sendReadReceipt(target, undefined, true).catch(() => {})
+      void client
+        .sendReadReceipt(target, undefined, true)
+        // A silent failure here is why unread counts once stuck for a whole
+        // session with nothing to point at.
+        .catch((err) => reportIgnored('read receipt: send', err))
     }
 
     mark()

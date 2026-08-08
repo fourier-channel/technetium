@@ -1,5 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react'
-
+import { reportIgnored } from '../client/report'
 // ---------------------------------------------------------------------------
 // Tag-strip visibility: a GLOBAL default with PER-IMAGE overrides (operator's
 // call). Strips are on by default; the global switch turns them off everywhere
@@ -35,7 +35,8 @@ function load(): Prefs {
       enabled: typeof o.enabled === 'boolean' ? o.enabled : true,
       overrides: o.overrides && typeof o.overrides === 'object' ? o.overrides : {},
     }
-  } catch {
+  } catch (err) {
+    reportIgnored('media tag prefs: read', err)
     return DEFAULTS
   }
 }
@@ -46,8 +47,8 @@ const listeners = new Set<() => void>()
 function persist(): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(prefs))
-  } catch {
-    // best-effort
+  } catch (err) {
+    reportIgnored('media tag prefs: save', err)
   }
 }
 

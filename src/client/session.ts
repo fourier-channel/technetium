@@ -1,4 +1,5 @@
 // Session persistence for the OIDC-authenticated Matrix client.
+import { reportIgnored } from './report'
 //
 // Stores exactly what's needed to rebuild and refresh the client on reload:
 // the homeserver URL, the access/refresh tokens, the user/device identity, and
@@ -35,7 +36,8 @@ export function loadSession(): StoredSession | null {
   if (!raw) return null
   try {
     return JSON.parse(raw) as StoredSession
-  } catch {
+  } catch (err) {
+    reportIgnored('session: read', err)
     // Corrupt entry — treat as no session rather than crashing on load.
     localStorage.removeItem(SESSION_KEY)
     return null

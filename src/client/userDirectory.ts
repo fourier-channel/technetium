@@ -42,6 +42,9 @@ export async function searchDirectory(
       avatarMxc: r.avatar_url,
     }))
   } catch {
+    // Intentional and silent: a server with the directory disabled answers
+    // an error on EVERY keystroke. The picker degrades to local members,
+    // which is the documented behaviour, not a failure to report.
     return []
   }
 }

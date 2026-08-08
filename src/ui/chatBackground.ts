@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-
+import { reportIgnored } from '../client/report'
 // ---------------------------------------------------------------------------
 // Per-room chat-window background (local, per-user; v1 localStorage). Each user
 // can give a room's chat log a wallpaper -- an uploaded image (mxc, robust via
@@ -30,7 +30,8 @@ function load(): Store {
     if (!raw) return {}
     const p: unknown = JSON.parse(raw)
     return p && typeof p === 'object' ? (p as Store) : {}
-  } catch {
+  } catch (err) {
+    reportIgnored('chat background: read', err)
     return {}
   }
 }
@@ -38,8 +39,8 @@ function load(): Store {
 function persist(s: Store): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(s))
-  } catch {
-    // best-effort
+  } catch (err) {
+    reportIgnored('chat background: save', err)
   }
 }
 
