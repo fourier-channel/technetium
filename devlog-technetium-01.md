@@ -2682,3 +2682,74 @@ Worth keeping as a pattern rather than a one-off: emitting a well-named flag is
 usually the whole obligation an upstream owes a downstream. Deciding what the
 downstream does with it is not this repo's call, and filing it as a blocking
 question was me inventing a dependency that did not exist.
+
+---
+
+## 2026-08-08 -- the background bug: sliding sync never delivered the state
+
+Resolved. The domain background works. The cause was not media, not
+permissions, not encoding, and not any of the four things fixed on the way to
+finding it.
+
+### G-tp18 (gotcha) -- sliding sync delivers ONLY the state you name
+
+`required_state` in the sliding-sync list config is an allowlist. A state type
+absent from it is not delivered late or partially -- it never arrives, and
+`room.currentState.getStateEvents(type, '')` returns null forever.
+
+`net.41chan.domain.background` was not in that list. So the write returned
+200, the event existed on the server, and the client that wrote it could not
+see it. `background` stayed null, nothing rendered, and **no media request was
+ever made** -- which is exactly what the console showed once it was read in
+full: not one request to the gateway.
+
+Three more features were reading state the sync does not deliver, all added
+this campaign and all silently dead on a fresh sync: `m.room.topic` (room
+header), `m.room.pinned_events` (pinned messages), `im.ponies.room_emotes`
+(emoji packs). Media tags were unaffected only because they are read off the
+timeline rather than currentState.
+
+The rule is now written at the list itself: anything read through
+`currentState` must be named in `required_state`.
+
+### What made this take eight rounds
+
+The reported symptom -- `M_MISSING_TOKEN` -- was the routine sliding-sync
+token-expiry cycle. It appears in the console immediately before "Attempting
+to refresh token". It had nothing to do with backgrounds at any point.
+
+I treated a recurring symptom as the failure and built four separate
+diagnoses on it without once establishing which request produced it. Each
+diagnosis was internally coherent and each fixed something genuinely broken --
+a swallowed write error, an unintentional homeserver read path, an `<img src>`
+that cannot carry a credential, a bespoke media path nothing else used -- but
+none was the bug, and the real one was invisible in every one of those frames.
+
+Three pieces of ground truth ended it, each eliminating an entire stage in a
+single message: the event source (the post is correct), the state-write PUT
+returning 200 (the write is correct), and the full console (there is no media
+request at all). Every one of those was available from the first round. Asking
+for them instead of reasoning outward was the whole job, and I did it sixth.
+
+### D-tp16 -- no failure is silent
+
+The campaign's own gotcha register was ~9/17 "something silently ate or
+altered data", and this bug was the purest instance: a 200, a real event, and
+a client blind to it, with the only visible error belonging to something else.
+
+So every discarded error in the tree was audited -- 36 sites. Storage writes,
+behaviour-changing reads, user-initiated sends and a cache read now report
+through `client/report.ts` (deduped per scope, since a failing localStorage
+fails every time). Leaving a room now tells the user why it did not happen,
+where before it showed nothing at all. Eleven sites remain deliberately
+silent -- pointer capture mid-gesture, unparseable strings, hljs degradation,
+the directory probe -- and each now states why at the site.
+
+The generalisation worth keeping: fixing a bug and leaving the silence that
+hid it means the next failure down that path is invisible again. `useReadMarker`
+proved it -- a past gotcha records that exact call failing silently and
+freezing unread counts for a session; the fix landed, the swallow stayed.
+
+### Deployed
+tc.41chan.net, release 20260808-035127-de5fff9. Confirmed working by the
+operator.

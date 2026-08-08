@@ -14,8 +14,8 @@
 | field | value |
 | --- | --- |
 | campaign | parity-v1 (30 features, 3 audit categories) |
-| current wave | **CAMPAIGN FEATURE-COMPLETE** -- all 30 features landed. Awaiting operator verification + merge. |
-| pure checks | 425 passing (`npm run check`) -- 16 harnesses; 61 are sanitizer/security |
+| current wave | **CAMPAIGN COMPLETE, MERGED, DEPLOYED.** 30/30 features; `parity-v1` merged to `main`; live at release `20260808-035127-de5fff9`. |
+| pure checks | 447 passing (`npm run check`) -- 17 harnesses; 61 are sanitizer/security |
 | devlog | 2 entries appended (Wave 0+1, Wave 2 part 1) |
 | branch | `parity-v1` (off `main`) |
 | base HEAD | `d4d1494` (main, "Merge branch 'chatbox-domain-v1'") |
