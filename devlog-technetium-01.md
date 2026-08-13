@@ -2753,3 +2753,138 @@ freezing unread counts for a session; the fix landed, the swallow stayed.
 ### Deployed
 tc.41chan.net, release 20260808-035127-de5fff9. Confirmed working by the
 operator.
+
+---
+
+## 2026-08-13 -- UI pass: layout that stays put, counts that exist, and arrivals
+
+Branch `ui-pass-v1`. Five reported bugs, one that turned out not to be a bug
+here at all, and a new feature. Nothing deployed.
+
+### The two layout faults were the same law twice
+
+Hovering a message bumped the whole conversation. The row footer existed only
+to hold the hover-revealed "+", so it collapsed to `height: 0` and grew ~22px on
+hover -- and because the timeline re-pins to the bottom while following, every
+hover slid the log up and every mouse-off dropped it back. The affordance was
+being paid for in row height.
+
+So it moved out. `ReactionStrip` split into `ReactionAdd` and `ReactionPills`,
+because the two halves belong in different places: a media body takes a rail to
+the RIGHT of the picture, a text body takes a reserved inline slot after the
+text. The "+" is pinned at the TOP of the rail rather than after the pills, so
+it does not migrate as reactions accumulate -- an affordance that moves as
+content arrives is one the user has to re-find.
+
+The autoscroll fault had the same shape and a nastier second half. An inline
+image was a 120x90 placeholder and then an image up to 320px -- a couple hundred
+px of late growth. That growth fired a scroll event, and the handler read it as
+"the user scrolled up" and disengaged follow mode, after which the ResizeObserver
+had nothing left to re-pin because it checks the very flag the growth had just
+cleared. **A scroll event says the viewport moved relative to the content; it
+does not say the user moved it.** Images now reserve their box from the event's
+own `info.w`/`info.h`, so there is nothing to chase, and the handler compares
+`scrollHeight` between samples before believing anything about intent.
+
+### The selected room was invisible, and provably so
+
+`bg-action-primary-rest` and `text-primary` both resolve to `gray-1400`. The
+current room painted #ebeef2 on #ebeef2: contrast 1.00:1. It is a SOLID token,
+and Compound pairs solids with `text-on-solid-primary` -- the row had paired it
+with the ordinary text colour. Worth keeping as a habit: a semantic token name
+is not evidence that two tokens differ.
+
+### The unread coloration was never broken
+
+The operator asked for green unread and orange ping counters, and then said to
+fix the existing coloration first because it had never worked. It had been
+working perfectly, rendering a number that was always zero.
+
+Simplified Sliding Sync does not deliver notification counts. Synapse sends
+`notification_count: 0` for every room, always -- and it SENDS the field, so the
+sdk's `!= null` guard passes and `setUnreadNotificationCount` is called with a
+real zero. Nothing errors. Nothing warns. Every room has read 0 since sliding
+sync landed on 2026-07-19.
+
+It took five rounds, but the right five: the render path first (the getter reads
+what the setter writes), then a hook on `sendReadReceipt` proving no receipt was
+being sent, then the push rules (`.m.rule.message` enabled, notifying), and
+finally the same question asked down the classic path -- which answered
+`notification_count: 5` for a room the sliding-sync path had just set to 0. Each
+step eliminated a whole layer instead of adding a theory on top of one.
+
+That discipline is the direct inheritance of 2026-08-08, and it is the reason
+nothing was built on a wrong diagnosis this time. **The check that ended it was
+non-destructive**: one filtered classic `/sync` through `client.http`, no mode
+change, no re-login, the running session untouched. Worth reaching for that
+shape first -- the A/B I had queued up would have cost a full re-sync to learn
+the same thing.
+
+Counts now come from a stateless classic `/sync`. Stateless is a requirement,
+not a shortcut: an incremental sync would ack the to-device queue out from under
+the sliding-sync stream, which costs nothing today and would silently break the
+deferred encryption phase.
+
+### And then I starved my own poller
+
+Shipped it debouncing on `ClientEvent.Sync`, which under sliding sync fires on
+every long-poll cycle -- a few hundred ms apart in a busy room. Each one cleared
+and re-armed the 1.5s timer, so the deadline outran the clock and it never fired
+at all. Counts updated only when traffic went quiet, which in practice meant
+when the current room changed. **The burst that most needs a refresh was exactly
+the burst preventing it.**
+
+Caught by the operator, not by a gate. It typechecked, linted, built and passed
+every check. The scheduling rule is now a pure function with the burst simulated
+against it -- 200 events at 15ms intervals, asserting none of them can re-arm or
+postpone an armed poll.
+
+A second, quieter instance of the same class turned up on review: if the timer
+fired while a poll was in flight, the refresh was dropped and nothing re-armed.
+Both faults are "an event was received and then silently discarded", which is
+what D-tp16 is about, and neither was visible from the outside as anything but
+"it updates sometimes".
+
+### Membership events are people now
+
+`[m.room.member]` had no case in `classify()` and fell through to the
+unknown-type branch. The most common non-message event in a room rendered as its
+own type name.
+
+An arrival now bursts the person's own avatar pill into the log, one of six
+variants -- poof, warp, slam, sparkle, glitch, iris -- picked from the event id,
+so a given join always looks the same on replay while the log varies. It replays
+on each entry into view, because scrolling to a message is a deliberate act:
+read straight through and each plays once; go back and look on purpose and it
+plays again.
+
+Two decisions worth keeping. **Only arrivals animate** -- a ban rendered as a
+cheerful pop is a moderation action made illegible, and restricting motion to
+arrivals is what keeps it meaning something. And it keys on the membership
+TRANSITION, never on rendered text: an `m.room.member` carries the whole member
+state every time, so `join -> join` is a profile edit rather than an arrival,
+and `ban -> leave` is an unban rather than a kick even though a moderator sent
+it. None of those are separable from the text.
+
+The last check written was the one that mattered most: everything else proved
+the classifier correct, and none of it proved a membership event ever reaches
+the renderer. `toItems` drops four other event classes; had it dropped these
+too, the feature would have been dead and every other check would still have
+passed.
+
+### The tooling lied
+
+`grep -P` is unreliable here -- `grep` resolves to ugrep, and it reported no
+match for a literal plainly present in the file and zero non-ASCII characters on
+a line that contained one. Every ASCII-discipline result this session had to be
+re-run through Python before it could be trusted. They held, but the method had
+not been sound. **A clean result from a tool that greps for what it hopes not to
+find is not evidence unless the tool is known to work.**
+
+### Not done, and why
+
+The green/ping counters that started all this are still not built. The counts
+they need existed for the first time only a few hours ago, and the operator's
+instruction was to see the existing treatment work before deciding whether the
+redesign is warranted. Building badges on a number that had always been zero
+would have produced a feature that looked finished and never fired.
