@@ -26,6 +26,20 @@ export function readDirectMap(client: MatrixClient): DirectMap {
   return out
 }
 
+// Every room id the m.direct map claims, as a set.
+//
+// Membership is deliberately NOT verified here -- findExistingDm does that,
+// because REUSING a room the user has left would be wrong. This is only used to
+// decide how a room is PRESENTED (a DM is drawn as the person on the other end,
+// not as a room), where a stale entry costs nothing.
+export function directRoomIds(client: MatrixClient): Set<string> {
+  const out = new Set<string>()
+  for (const rooms of Object.values(readDirectMap(client))) {
+    for (const roomId of rooms) out.add(roomId)
+  }
+  return out
+}
+
 // An existing, still-joined DM with this user, or null.
 //
 // The m.direct map is not self-cleaning: it keeps rooms the user has left, so
