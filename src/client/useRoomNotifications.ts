@@ -128,20 +128,32 @@ function usePolledNotifications(client: MatrixClient | null): NotifMap {
 
   useEffect(() => {
     if (!client) return
+    // Captured after the guard: refresh/soon are function DECLARATIONS so they
+    // hoist, which puts them outside the narrowing the guard performed.
+    const mx = client
     let cancelled = false
     let inFlight = false
     let settle: ReturnType<typeof setTimeout> | undefined
     let lastPollAt = 0
 
-    const refresh = async () => {
-      if (cancelled || inFlight) return
-      // A hidden tab would spend a request on a room list nobody can see.
-      // The visibilitychange listener below asks again on the way back.
+    async function refresh() {
+      if (cancelled) return
+      // Already asking. RE-ARM rather than drop this one: a dropped refresh is
+      // a stale count until the next event or the 30s backstop, which is the
+      // "only updates sporadically" symptom. The gap floor in nextPollDelay
+      // stops the re-arm becoming a spin, since lastPollAt was just stamped.
+      if (inFlight) {
+        soon()
+        return
+      }
+      // A hidden tab would spend a request on a room list nobody can see. NOT
+      // re-armed: the visibilitychange listener below asks on the way back,
+      // and a timer chain against a hidden tab would run until it returned.
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
       inFlight = true
       lastPollAt = Date.now()
       try {
-        const next = await fetchNotificationCounts(client)
+        const next = await fetchNotificationCounts(mx)
         if (!cancelled) setMap((prev) => (sameCounts(prev, next) ? prev : next))
       } catch (err) {
         // The room list silently showing no unread is precisely the state
@@ -160,7 +172,9 @@ function usePolledNotifications(client: MatrixClient | null): NotifMap {
     // debounce: ClientEvent.Sync fires on every sliding-sync long-poll cycle,
     // so re-arming per event meant the timer never landed while a room was
     // busy. See the note at nextPollDelay.
-    const soon = () => {
+    // Declared as a function so it and refresh can call each other without an
+    // ordering dance -- refresh re-arms through here when a poll is in flight.
+    function soon() {
       const delay = nextPollDelay(Date.now(), lastPollAt, settle !== undefined)
       if (delay === null) return
       settle = setTimeout(() => {
