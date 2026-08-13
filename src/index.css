@@ -1013,3 +1013,175 @@ code {
 @media (prefers-reduced-motion: reduce) {
   .tc-row-gutter-time { transition: none; }
 }
+
+/* ---------------------------------------------------------------------------
+   Membership rows (m.room.member), which used to render as the literal string
+   `[m.room.member]` -- the most common non-message event in a room, so that
+   placeholder was most of what a quiet log contained.
+
+   An ARRIVAL bursts its avatar pill into the log with one of six variants,
+   picked from the event id. Everything else is a quiet static line, so motion
+   in the log means one thing: somebody showed up.
+
+   Every variant animates ONLY transform / opacity / filter / clip-path on an
+   inline-block wrapper, so a replay never reflows the row -- the same law the
+   hover affordance had to learn (G-tp19).
+   --------------------------------------------------------------------------- */
+.tc-member-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 3px 0 3px 16px;
+}
+.tc-member-phrase {
+  font-size: 13px;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  min-width: 0;
+}
+.tc-member-time {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 11px;
+  opacity: 0.6;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+}
+/* A removal is not decorated, but it is not disguised either. */
+.tc-member-row[data-transition='ban'] .tc-member-phrase,
+.tc-member-row[data-transition='kick'] .tc-member-phrase {
+  color: var(--cpd-color-text-critical-primary, #ff6b6b);
+}
+
+.tc-member-pop {
+  display: inline-block;
+  position: relative;
+  transform-origin: center;
+}
+
+/* 1. poof -- a ninja landing: dust puff, pill snaps in past full size. */
+@keyframes mevPoof {
+  0%   { opacity: 0; transform: scale(0.2); }
+  45%  { opacity: 1; transform: scale(1.18); }
+  70%  { transform: scale(0.96); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes mevPuff {
+  0%   { opacity: 0; transform: scale(0.3); }
+  15%  { opacity: 0.7; }
+  100% { opacity: 0; transform: scale(2.3); }
+}
+.tc-mev-poof { animation: mevPoof 460ms cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+.tc-mev-poof::before {
+  content: '';
+  position: absolute;
+  inset: -10px;
+  border-radius: 999px;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(212,196,160,0.6) 0%, rgba(212,196,160,0.18) 45%, transparent 70%);
+  animation: mevPuff 540ms ease-out both;
+}
+
+/* 2. warp -- teleport in: a bright vertical sliver widens into the pill. */
+@keyframes mevWarp {
+  0%   { opacity: 0; transform: scaleX(0.02) scaleY(0.55); filter: brightness(3.2); }
+  32%  { opacity: 1; transform: scaleX(0.05) scaleY(1); filter: brightness(3.2); }
+  62%  { transform: scaleX(1.07) scaleY(0.9); filter: brightness(1.35); }
+  100% { opacity: 1; transform: scaleX(1) scaleY(1); filter: none; }
+}
+@keyframes mevWarpFlash {
+  0%   { opacity: 0.95; transform: scaleY(1); }
+  100% { opacity: 0; transform: scaleY(0.2); }
+}
+.tc-mev-warp { animation: mevWarp 420ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.tc-mev-warp::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -6px;
+  bottom: -6px;
+  width: 2px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, #cfe8ff 45%, #ffffff 50%, #cfe8ff 55%, transparent);
+  animation: mevWarpFlash 300ms ease-out both;
+}
+
+/* 3. slam -- drops in from above and squashes on impact. */
+@keyframes mevSlam {
+  0%   { opacity: 0; transform: translateY(-26px) scaleX(0.86) scaleY(1.24); }
+  55%  { opacity: 1; transform: translateY(0) scaleX(1.16) scaleY(0.78); }
+  75%  { transform: translateY(-3px) scaleX(0.97) scaleY(1.05); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes mevShock {
+  0%   { opacity: 0; transform: scaleX(0.2); }
+  55%  { opacity: 0.7; }
+  100% { opacity: 0; transform: scaleX(1.9); }
+}
+.tc-mev-slam { animation: mevSlam 480ms cubic-bezier(0.3, 1.4, 0.5, 1) both; }
+.tc-mev-slam::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  right: -8px;
+  bottom: -5px;
+  height: 2px;
+  border-radius: 2px;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(255,214,150,0.9), transparent 70%);
+  animation: mevShock 520ms ease-out both;
+}
+
+/* 4. sparkle -- twinkles out, pill settles from a slight tilt. */
+@keyframes mevSparkleIn {
+  0%   { opacity: 0; transform: scale(0.7) rotate(-4deg); }
+  60%  { opacity: 1; transform: scale(1.06) rotate(1.5deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+@keyframes mevTwinkle {
+  0%   { opacity: 0; transform: scale(0.4); }
+  35%  { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.9); }
+}
+.tc-mev-sparkle { animation: mevSparkleIn 500ms cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+.tc-mev-sparkle::before {
+  content: '';
+  position: absolute;
+  inset: -12px;
+  pointer-events: none;
+  background:
+    radial-gradient(circle 2.5px at 12% 24%, #fff6d5 0 60%, transparent 70%),
+    radial-gradient(circle 2px at 86% 18%, #ffe9a8 0 60%, transparent 70%),
+    radial-gradient(circle 3px at 72% 88%, #fff6d5 0 60%, transparent 70%),
+    radial-gradient(circle 1.8px at 26% 86%, #ffe9a8 0 60%, transparent 70%),
+    radial-gradient(circle 2.2px at 50% 6%, #ffffff 0 60%, transparent 70%);
+  animation: mevTwinkle 620ms ease-out both;
+}
+
+/* 5. glitch -- snaps in through a couple of frames of bad signal. */
+@keyframes mevGlitch {
+  0%   { opacity: 0; transform: translateX(-7px) skewX(14deg); filter: hue-rotate(90deg) saturate(3); }
+  18%  { opacity: 1; transform: translateX(6px) skewX(-10deg); }
+  32%  { transform: translateX(-4px) skewX(6deg); filter: hue-rotate(-40deg) saturate(2); }
+  48%  { transform: translateX(3px) skewX(-3deg); filter: none; }
+  64%  { transform: translateX(-1.5px); }
+  100% { opacity: 1; transform: none; filter: none; }
+}
+.tc-mev-glitch { animation: mevGlitch 400ms steps(9, end) both; }
+
+/* 6. iris -- an eyecatch circle opens from the avatar outward. */
+@keyframes mevIris {
+  0%   { opacity: 0.35; clip-path: circle(0% at 11px 50%); transform: scale(1.08); }
+  70%  { opacity: 1; }
+  100% { opacity: 1; clip-path: circle(150% at 11px 50%); transform: scale(1); }
+}
+.tc-mev-iris { animation: mevIris 520ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* The component already declines to animate under reduced motion; this is the
+   backstop for anything that reaches the class another way. */
+@media (prefers-reduced-motion: reduce) {
+  .tc-member-pop,
+  .tc-member-pop::before,
+  .tc-member-pop::after {
+    animation: none !important;
+  }
+}

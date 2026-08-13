@@ -3,6 +3,7 @@ import { EventTimeline, ThreadEvent } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
 import { applyLayout, toItems } from '../client/useTimeline'
 import { DaySeparator, Row } from './Timeline'
+import { MemberEvent } from './MemberEvent'
 import { Composer } from './Composer'
 import { ComposerModeProvider } from './ComposerModeProvider'
 import { MessageVerbsProvider } from './MessageVerbs'
@@ -119,7 +120,9 @@ export function ThreadPanel({
           // so the default DOM-only jump is sufficient here -- no JumpContext.
           <MessageVerbsProvider room={room}>
             {items.map((item) =>
-              item.kind === 'day' ? (
+              item.kind === 'member' ? (
+                <MemberEvent key={item.id} event={item.event} />
+              ) : item.kind === 'day' ? (
                 <DaySeparator key={item.id} item={item} />
               ) : (
                 <Row key={item.id} item={item} />

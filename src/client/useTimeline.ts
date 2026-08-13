@@ -27,6 +27,9 @@ export type TimelineItemKind =
   | 'redacted'
   | 'other'
   | 'gallery'
+  // A membership change (m.room.member). Its own kind because it renders as a
+  // PERSON rather than as a message: no sender pill, no action bar, no footer.
+  | 'member'
   // W6.1 -- a date marker inserted BETWEEN items. Carries no event of its own.
   | 'day'
 
@@ -88,7 +91,13 @@ function sameDay(a: number, b: number): boolean {
 // apart is why every Wave 2 decoration survives grouping untouched.
 export function applyLayout(items: TimelineItem[]): TimelineItem[] {
   const out: TimelineItem[] = []
+  // The last item, for the day boundary.
   let prev: TimelineItem | null = null
+  // The last item a run can continue FROM, which is not the same thing: a
+  // membership row has no sender pill, so it can neither continue a run nor
+  // anchor one. Were it allowed to anchor, a message following a join from the
+  // same person would hide its pill and appear to belong to the join line.
+  let anchor: TimelineItem | null = null
 
   for (const item of items) {
     const ts = item.event.getTs()
@@ -105,19 +114,29 @@ export function applyLayout(items: TimelineItem[]): TimelineItem[] {
       // A day break always starts a new run, whoever sent it.
       out.push({ ...item, showHeader: true })
       prev = item
+      anchor = item.kind === 'member' ? null : item
+      continue
+    }
+
+    if (item.kind === 'member') {
+      out.push({ ...item, showHeader: true })
+      prev = item
+      anchor = null
       continue
     }
 
     const continues =
-      prev.event.getSender() === item.event.getSender() &&
-      ts - prev.event.getTs() < GROUP_WINDOW_MS &&
+      !!anchor &&
+      anchor.event.getSender() === item.event.getSender() &&
+      ts - anchor.event.getTs() < GROUP_WINDOW_MS &&
       // A reply opens a new thought: hiding the sender above a reply pill
       // reads as the pill belonging to the message before it.
       !item.replyTo &&
-      prev.kind !== 'day'
+      anchor.kind !== 'day'
 
     out.push({ ...item, showHeader: !continues })
     prev = item
+    anchor = item
   }
 
   return out
@@ -138,6 +157,9 @@ function classify(ev: MatrixEvent): TimelineItemKind {
   // Encrypted but not yet decrypted (crypto is a later phase) -> placeholder.
   if (ev.getType() === 'm.room.encrypted' || ev.isEncrypted()) return 'encrypted'
   if (ev.getType() === 'm.room.message') return 'message'
+  // Without this these fall through to the unknown-type branch and render as
+  // the literal string `[m.room.member]`.
+  if (ev.getType() === 'm.room.member') return 'member'
   return 'other'
 }
 

@@ -103,5 +103,48 @@ console.log('\n-- grouping collapses the HEADER and nothing else (regression) --
   check('the id is unchanged (jump/receipts key off it)', grouped.id === '$2')
 }
 
+console.log('\n-- membership rows break a run, and never anchor one --')
+{
+  const member = (id: string, sender: string, ts: number) =>
+    item(id, sender, ts, { kind: 'member' })
+
+  // The fault this guards: a membership row has no sender pill, so if it could
+  // anchor a run, the message after a join from the same person would hide its
+  // pill and read as belonging to the join line.
+  const out = applyLayout([
+    item('$1', '@a:x.net', BASE),
+    member('$m', '@a:x.net', BASE + 1000),
+    item('$2', '@a:x.net', BASE + 2000),
+  ]).filter((i) => i.kind !== 'day')
+  check('the membership row survives', out[1].kind === 'member')
+  check('a membership row always shows its own header', out[1].showHeader === true)
+  check(
+    'a same-sender message AFTER it shows its header again',
+    out[2].showHeader === true,
+    out[2].showHeader,
+  )
+
+  // Without the membership row in between, that same pair DOES group -- so the
+  // assertion above is about the member row and not about the window.
+  const control = applyLayout([
+    item('$1', '@a:x.net', BASE),
+    item('$2', '@a:x.net', BASE + 2000),
+  ]).filter((i) => i.kind !== 'day')
+  check('control: the same pair groups without one in between', control[1].showHeader === false)
+
+  // A membership row opening a day must not swallow the separator.
+  const dayOpen = applyLayout([member('$m', '@a:x.net', BASE)])
+  check('a membership row still gets its day separator', dayOpen[0].kind === 'day')
+  check('and renders after it', dayOpen[1].kind === 'member')
+
+  // Two in a row: neither may group into the other.
+  const pair = applyLayout([
+    member('$m1', '@a:x.net', BASE),
+    member('$m2', '@a:x.net', BASE + 500),
+  ]).filter((i) => i.kind !== 'day')
+  check('consecutive membership rows both show headers',
+    pair[0].showHeader === true && pair[1].showHeader === true)
+}
+
 console.log('\n' + (failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'))
 process.exit(failures === 0 ? 0 : 1)

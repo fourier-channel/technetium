@@ -612,6 +612,39 @@ with a `notify` action). The reproduction is a single filtered classic `/sync`
 through `client.http.authedRequest`, which is non-destructive and needs no mode
 change.
 
+### Membership rows -- 2026-08-13 (draft, unminted)
+
+Decisions: **D-tp21** membership events are their own `TimelineItemKind` and
+branch at the CALL SITE, not inside `Row` (G-tp17): they render as a PERSON, so
+they have no sender pill, action bar or footer, and an early return above Row's
+hooks would break rules-of-hooks - **D-tp22** **only ARRIVALS animate.** A ban
+or kick rendered as a cheerful pop is a moderation action made illegible, and a
+profile edit replaying every time it scrolls past is noise. Restricting motion to
+arrivals is also what keeps it MEANING something: movement in the log says
+somebody showed up - **D-tp23** the variant and phrase are picked from the event
+id, not at random per play. A fresh pick per replay would make one row look like
+a different event each time it scrolled past, which reads as a rendering glitch
+rather than as character; the two picks are salted apart so they do not move in
+lockstep - **D-tp24** the animation replays on each entry into view rather than
+once ever, because scrolling to a message is a deliberate act -- read the log
+straight through and each plays exactly once - **D-tp25** the avatar pill is
+EXTRACTED (`ui/AvatarPill.tsx`) and shared with the sender row rather than
+copied: the effect depends on the thing popping into view being recognisably the
+person's own pill, which a near-copy would erode.
+
+Gotchas: **G-tp25** an `m.room.member` carries the WHOLE member state every
+time, so a rename is indistinguishable from a join unless `prev_content` is
+consulted -- `join -> join` is a profile edit, never an arrival. Likewise a
+leave is only a kick when `sender !== state_key`, and `ban -> leave` is an
+unban even though a moderator sent it. None of these are separable from the
+rendered text, which is why this keys on the transition - **G-tp26** **`grep -P`
+is not reliable in this environment** (`grep` resolves to ugrep): it silently
+reported no match for a literal present in the file, and reported zero non-ASCII
+characters on a line that plainly contained one. Every ASCII-discipline check in
+this session had to be re-run through Python to be trusted. Any gate that greps
+for a pattern it expects NOT to find is worthless here unless verified another
+way -- a clean result from that tool is not evidence.
+
 ### O-tp dispositions
 
 O-tp1 CLOSED (operator confirmed) - O-tp2 through O-tp5 proceeded as recorded -
@@ -695,6 +728,20 @@ later sessions carry their own status and are NOT covered by that assumption.
 | UI6-c | Reading a room clears its count, and the change survives to the OTHER surfaces -- a collapsed space header's aggregate drops too. | no |
 | UI6-d | No console warning `[tc] failure -- notification counts: classic /sync poll`. If it appears, the poll is erroring and the count is stale, which is now visible rather than silent. | no |
 | UI6-e | Backgrounding the tab stops the polling (Network tab: no `/sync` on the v3 prefix while hidden) and it resumes on return. | no |
+
+### Added 2026-08-13 -- membership rows (unattended run, branch `ui-pass-v1`)
+
+| id | what needs eyes | 2nd identity? |
+| --- | --- | --- |
+| UI7-a | `[m.room.member]` is gone. A join renders as the person's avatar pill bursting in, with a phrase after it. | no |
+| UI7-b | Scroll a join out of view and back: it plays AGAIN, once. Scrolling straight past plays it exactly once. Sitting still does not replay it. | no |
+| UI7-c | Different joins use different variants (six exist: poof, warp, slam, sparkle, glitch, iris) and the SAME join always plays the same one. | no |
+| UI7-d | A leave / kick / ban / rename renders as a quiet STATIC line with no animation; kick and ban read in the critical colour. | yes |
+| UI7-e | The membership pill matches the sender pill exactly (same avatar, same shape) and clicking it opens the profile card. | no |
+| UI7-f | A membership row never changes the row's height as it animates -- messages above and below stay put while it plays. | no |
+| UI7-g | A message following a join from the SAME person still shows its own sender pill (it must not group into the join line). | yes |
+| UI7-h | `prefers-reduced-motion` in devtools: membership rows render static, no animation at all. | no |
+| UI7-i | **Judgement call: are six variants too many, too few, or wrong in feel?** The set is one line to edit in `memberEvents.ts` plus its keyframes. Phrases likewise. | no |
 
 Standing note: receipts, typing, reactions and presence all need a
 SECOND identity. Use Firefox Multi-Account Containers, never a private

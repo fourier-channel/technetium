@@ -7,6 +7,8 @@ import { eventPreview } from '../client/eventPreview'
 import { renderMessageBody } from '../client/messageBody'
 import { parseMxc } from '../client/media'
 import { AuthedImage } from './AuthedImage'
+import { AvatarPill } from './AvatarPill'
+import { MemberEvent } from './MemberEvent'
 import { useLightbox, type LightboxItem } from './Lightbox'
 import { linkify } from './linkify'
 import { useChatBackground } from './chatBackground'
@@ -375,9 +377,15 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
             )}
             <ReceiptsContext.Provider value={receipts}>
             <MessageVerbsProvider room={room}>
+              {/* Branched at the CALL SITE, not inside Row: an early return
+                  above Row's hooks breaks rules-of-hooks (G-tp17), and neither
+                  a separator nor a membership change is a message -- no
+                  pillbox, no action bar, no footer, no target for any verb. */}
               {items.map((item) =>
                 item.kind === 'day' ? (
                   <DaySeparator key={item.id} item={item} />
+                ) : item.kind === 'member' ? (
+                  <MemberEvent key={item.id} event={item.event} />
                 ) : (
                   <Row key={item.id} item={item} onOpenThread={onOpenThread} />
                 ),
@@ -410,22 +418,9 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
   )
 }
 
-// Deterministic avatar-disc color from a user id (fallback when no avatar image).
-function colorFor(userId: string): string {
-  let h = 0
-  for (let i = 0; i < userId.length; i++) h = (h * 31 + userId.charCodeAt(i)) % 360
-  return `hsl(${h}, 55%, 45%)`
-}
-
-function initialsFor(name: string): string {
-  const cleaned = name.replace(/^[@#!]/, '').trim()
-  return cleaned.slice(0, 2).toUpperCase() || '?'
-}
-
-// The sender identity shown at the top of a message row: a long rounded pill
-// carrying the sender's avatar AND display name together, with the timestamp
-// trailing outside it. Avatars load via the homeserver authenticated-media path
-// (the content gate 403s them), degrading to a colored initial.
+// The sender identity shown at the top of a message row: the shared AvatarPill
+// with the timestamp trailing outside it. The pill itself lives in
+// ./AvatarPill so the membership rows show the same one, not a copy of it.
 function SenderPill({
   event,
   time,
@@ -442,69 +437,7 @@ function SenderPill({
   const avatarMxc = member?.getMxcAvatarUrl() ?? null
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-      <span
-        role={onOpenProfile ? 'button' : undefined}
-        tabIndex={onOpenProfile ? 0 : undefined}
-        onClick={onOpenProfile ? (e) => onOpenProfile(senderId, e.clientX, e.clientY) : undefined}
-        onKeyDown={
-          onOpenProfile
-            ? (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  const r = e.currentTarget.getBoundingClientRect()
-                  onOpenProfile(senderId, r.left, r.bottom)
-                }
-              }
-            : undefined
-        }
-        title={onOpenProfile ? name : undefined}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          maxWidth: 260,
-          padding: '2px 12px 2px 2px',
-          borderRadius: 999,
-          background: 'var(--cpd-color-bg-subtle-secondary)',
-          border: '1px solid rgba(128,128,128,0.18)',
-          cursor: onOpenProfile ? 'pointer' : undefined,
-        }}
-      >
-        <span
-          style={{
-            width: 22,
-            height: 22,
-            flexShrink: 0,
-            borderRadius: '50%',
-            overflow: 'hidden',
-            display: 'grid',
-            placeItems: 'center',
-            fontSize: 10,
-            fontWeight: 700,
-            color: '#fff',
-            background: colorFor(senderId),
-          }}
-        >
-          {avatarMxc ? (
-            <AuthedImage mxc={avatarMxc} width={180} fill transparentLoading alt="" fallback={initialsFor(name)} viaHomeserver />
-          ) : (
-            initialsFor(name)
-          )}
-        </span>
-        <span
-          style={{
-            fontFamily: 'var(--tc-ui-font, inherit)',
-            fontWeight: 600,
-            fontSize: 13,
-            color: 'var(--cpd-color-text-primary)',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {name}
-        </span>
-      </span>
+      <AvatarPill userId={senderId} name={name} avatarMxc={avatarMxc} onOpen={onOpenProfile} />
       <span style={{ fontSize: 11, color: 'var(--cpd-color-text-secondary)', flexShrink: 0 }}>{time}</span>
     </div>
   )
