@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ThreadEvent, type Room, type MatrixEvent } from 'matrix-js-sdk'
+import { ThreadEvent, type IContent, type Room, type MatrixEvent } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
 import { useTimeline, type TimelineItem, type GalleryLayout } from '../client/useTimeline'
 import type { ReplyRef } from '../client/relations'
@@ -7,6 +7,8 @@ import { eventPreview } from '../client/eventPreview'
 import { renderMessageBody } from '../client/messageBody'
 import { parseMxc } from '../client/media'
 import { AuthedImage } from './AuthedImage'
+import { AvatarPill } from './AvatarPill'
+import { MemberEvent } from './MemberEvent'
 import { useLightbox, type LightboxItem } from './Lightbox'
 import { linkify } from './linkify'
 import { useChatBackground } from './chatBackground'
@@ -17,7 +19,7 @@ import { useMessageActions } from './messageActions'
 import { MessageActionBar } from './MessageActionBar'
 import { MessageVerbsProvider } from './MessageVerbs'
 import { JumpContext, scrollToEventInDom, useJump, type JumpApi } from './jumpToEvent'
-import { ReactionStrip } from './Reactions'
+import { ReactionAdd, ReactionPills, ReactionRail } from './Reactions'
 import { ReceiptCluster } from './ReceiptCluster'
 import { SPOILER_ATTR, toggleSpoiler } from '../client/spoilers'
 import { usePinnedEvents } from '../client/usePinnedEvents'
@@ -41,6 +43,44 @@ const MAX_JUMP_PAGES = 8
 
 // Stable empty array: a fresh [] per render would re-render every footer.
 const EMPTY_SEEN: string[] = []
+
+// Distance from the bottom, in px, within which the view counts as "at the
+// bottom" for follow mode.
+const FOLLOW_SLACK_PX = 120
+
+// Pin the scroller to its true bottom, container padding included.
+//
+// Assigning scrollTop rather than scrollIntoView on a sentinel div, for two
+// reasons: scrollIntoView aligns the SENTINEL's box, which leaves the
+// container's bottom padding unscrolled and reads as "not quite at the
+// bottom"; and it is allowed to scroll ancestor scrollers as well, which is
+// never what a chat log wants. Module-level so it is not a new closure per
+// render (which would churn the effects' dependency arrays).
+function pinBottom(el: HTMLElement | null): void {
+  if (el) el.scrollTop = el.scrollHeight
+}
+
+// The box an inline image will occupy, computed from the event's OWN info.w /
+// info.h before anything is fetched, fitted to the inline thumbnail's limits.
+//
+// This is the other half of the follow-the-bottom fix, and the better half: a
+// row whose height is known at first paint never shifts the timeline at all,
+// so there is nothing for follow mode to chase. The scroll-intent logic above
+// covers the images that arrive without dimensions.
+const INLINE_IMAGE_MAX_W = 320
+const INLINE_IMAGE_MAX_H = 320
+function reserveBox(content: IContent): { width: number; height: number } | undefined {
+  const info = content.info as { w?: unknown; h?: unknown } | undefined
+  const w = info && typeof info.w === 'number' ? info.w : 0
+  const h = info && typeof info.h === 'number' ? info.h : 0
+  // Sender-supplied and therefore not to be trusted blindly: a missing,
+  // zero or negative dimension means reserve nothing rather than reserve
+  // nonsense.
+  if (!(w > 0) || !(h > 0)) return undefined
+  // Never upscale -- a small image keeps its own size, as it does today.
+  const scale = Math.min(INLINE_IMAGE_MAX_W / w, INLINE_IMAGE_MAX_H / h, 1)
+  return { width: Math.round(w * scale), height: Math.round(h * scale) }
+}
 
 // Delegated spoiler handlers, shared by every row rather than allocated per
 // row: they resolve their target from the event, so they need no closure.
@@ -84,7 +124,6 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
   useEffect(() => {
     followRef.current = true
   }, [room])
-  const bottomRef = useRef<HTMLDivElement | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   // Non-null while a load-older is in flight: the scrollHeight captured
   // just before the prepend, used to restore the viewport afterward.
@@ -140,30 +179,54 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
       return
     }
     if (!followRef.current) return
-    bottomRef.current?.scrollIntoView({ block: 'end' })
+    pinBottom(el)
   }, [items.length])
 
   // Track user intent: scrolling away from the bottom disengages follow mode;
   // returning near it re-engages. Prepend restores land away from the bottom,
   // so they naturally leave follow off (correct: the user is reading history).
+  //
+  // The height check is what makes this trustworthy. A scroll event says the
+  // viewport moved relative to the content; it does NOT say the user moved it.
+  // When an inline image finishes loading, the row grows, the distance from the
+  // bottom jumps by the image's height, and a scroll event fires -- with the
+  // pointer untouched. Reading that as "the user scrolled up" is what stranded
+  // the timeline part-way up a conversation: follow disengaged, and the
+  // ResizeObserver below then had nothing left to re-pin, because it checks the
+  // very flag the growth had just cleared.
+  //
+  // So: if the content's height changed since the last sample, this event is
+  // content-driven and carries no intent. Re-pin (if following) and wait for a
+  // scroll that happens at a STABLE height before believing anything about what
+  // the user wants.
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
+    let lastHeight = el.scrollHeight
     const onScroll = () => {
-      followRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120
+      const height = el.scrollHeight
+      if (height !== lastHeight) {
+        lastHeight = height
+        if (followRef.current) pinBottom(el)
+        return
+      }
+      followRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < FOLLOW_SLACK_PX
     }
     el.addEventListener('scroll', onScroll, { passive: true })
     return () => el.removeEventListener('scroll', onScroll)
   }, [])
 
   // While following, re-pin on ANY content growth (async image paints shift
-  // layout well after the items effect has run).
+  // layout well after the items effect has run). Belt and braces with the
+  // height check above: this fires when the growth produces no scroll event at
+  // all, that one fires when it does.
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
     const ro = new ResizeObserver(() => {
-      if (followRef.current) bottomRef.current?.scrollIntoView({ block: 'end' })
+      if (followRef.current) pinBottom(el)
     })
+    ro.observe(el)
     for (const child of Array.from(el.children)) ro.observe(child)
     return () => ro.disconnect()
   }, [items.length])
@@ -314,9 +377,15 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
             )}
             <ReceiptsContext.Provider value={receipts}>
             <MessageVerbsProvider room={room}>
+              {/* Branched at the CALL SITE, not inside Row: an early return
+                  above Row's hooks breaks rules-of-hooks (G-tp17), and neither
+                  a separator nor a membership change is a message -- no
+                  pillbox, no action bar, no footer, no target for any verb. */}
               {items.map((item) =>
                 item.kind === 'day' ? (
                   <DaySeparator key={item.id} item={item} />
+                ) : item.kind === 'member' ? (
+                  <MemberEvent key={item.id} event={item.event} />
                 ) : (
                   <Row key={item.id} item={item} onOpenThread={onOpenThread} />
                 ),
@@ -343,29 +412,15 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
               onClose={() => setProfile(null)}
             />
           )}
-          <div ref={bottomRef} />
         </div>
       </div>
     </div>
   )
 }
 
-// Deterministic avatar-disc color from a user id (fallback when no avatar image).
-function colorFor(userId: string): string {
-  let h = 0
-  for (let i = 0; i < userId.length; i++) h = (h * 31 + userId.charCodeAt(i)) % 360
-  return `hsl(${h}, 55%, 45%)`
-}
-
-function initialsFor(name: string): string {
-  const cleaned = name.replace(/^[@#!]/, '').trim()
-  return cleaned.slice(0, 2).toUpperCase() || '?'
-}
-
-// The sender identity shown at the top of a message row: a long rounded pill
-// carrying the sender's avatar AND display name together, with the timestamp
-// trailing outside it. Avatars load via the homeserver authenticated-media path
-// (the content gate 403s them), degrading to a colored initial.
+// The sender identity shown at the top of a message row: the shared AvatarPill
+// with the timestamp trailing outside it. The pill itself lives in
+// ./AvatarPill so the membership rows show the same one, not a copy of it.
 function SenderPill({
   event,
   time,
@@ -382,69 +437,7 @@ function SenderPill({
   const avatarMxc = member?.getMxcAvatarUrl() ?? null
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-      <span
-        role={onOpenProfile ? 'button' : undefined}
-        tabIndex={onOpenProfile ? 0 : undefined}
-        onClick={onOpenProfile ? (e) => onOpenProfile(senderId, e.clientX, e.clientY) : undefined}
-        onKeyDown={
-          onOpenProfile
-            ? (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  const r = e.currentTarget.getBoundingClientRect()
-                  onOpenProfile(senderId, r.left, r.bottom)
-                }
-              }
-            : undefined
-        }
-        title={onOpenProfile ? name : undefined}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          maxWidth: 260,
-          padding: '2px 12px 2px 2px',
-          borderRadius: 999,
-          background: 'var(--cpd-color-bg-subtle-secondary)',
-          border: '1px solid rgba(128,128,128,0.18)',
-          cursor: onOpenProfile ? 'pointer' : undefined,
-        }}
-      >
-        <span
-          style={{
-            width: 22,
-            height: 22,
-            flexShrink: 0,
-            borderRadius: '50%',
-            overflow: 'hidden',
-            display: 'grid',
-            placeItems: 'center',
-            fontSize: 10,
-            fontWeight: 700,
-            color: '#fff',
-            background: colorFor(senderId),
-          }}
-        >
-          {avatarMxc ? (
-            <AuthedImage mxc={avatarMxc} width={180} fill transparentLoading alt="" fallback={initialsFor(name)} viaHomeserver />
-          ) : (
-            initialsFor(name)
-          )}
-        </span>
-        <span
-          style={{
-            fontFamily: 'var(--tc-ui-font, inherit)',
-            fontWeight: 600,
-            fontSize: 13,
-            color: 'var(--cpd-color-text-primary)',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {name}
-        </span>
-      </span>
+      <AvatarPill userId={senderId} name={name} avatarMxc={avatarMxc} onOpen={onOpenProfile} />
       <span style={{ fontSize: 11, color: 'var(--cpd-color-text-secondary)', flexShrink: 0 }}>{time}</span>
     </div>
   )
@@ -469,6 +462,19 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
     minute: '2-digit',
   })
 
+  const roomId = event.getRoomId() ?? ''
+  const canReact = kind === 'message' || kind === 'gallery'
+  // Where this row's reaction affordance goes. A MEDIA body takes the rail
+  // beside the picture; a text body takes the reserved slot trailing the text.
+  // Either way the slot is occupied at all times -- the row's height must be
+  // identical hovered and not, because the timeline re-pins to the bottom while
+  // following and any hover-driven growth slides the whole conversation.
+  const isMediaRow =
+    kind === 'gallery' ||
+    (kind === 'message' &&
+      item.content.msgtype === 'm.image' &&
+      !!parseMxc(typeof item.content.url === 'string' ? item.content.url : ''))
+
   let body: React.ReactNode
   if (kind === 'gallery' && cells) {
     body = <GalleryBody cells={cells} layout={layout ?? 'grid'} />
@@ -484,6 +490,7 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
           <AuthedImage
             mxc={mxc}
             width={320}
+            reserve={reserveBox(content)}
             alt={typeof content.body === 'string' ? content.body : undefined}
             onClick={() => open([{ mxc, ...imageMeta(event) }], 0)}
           />
@@ -561,11 +568,33 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
       >
         {item.replyTo && <ReplyPill replyTo={item.replyTo} />}
         <div style={{ fontSize: 14, wordBreak: 'break-word', minWidth: 0 }}>
-          {body}
+          {isMediaRow && roomId ? (
+            // The picture and its rail sit side by side. The picture is FIRST,
+            // so the rail appearing on hover cannot shift it.
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, minWidth: 0 }}>
+              <div style={{ minWidth: 0 }}>{body}</div>
+              <ReactionRail item={item} client={client} roomId={roomId} />
+            </div>
+          ) : (
+            <>
+              {body}
+              {item.editedTs !== undefined && (
+                <span
+                  className="tc-edited-marker"
+                  title={`Edited ${new Date(item.editedTs).toLocaleString()}`}
+                >
+                  (edited)
+                </span>
+              )}
+              {canReact && roomId && (
+                <ReactionAdd item={item} client={client} roomId={roomId} inline />
+              )}
+            </>
+          )}
           {previewUrl && (
             <LinkPreview client={client} url={previewUrl} enabled={linkPreviewsEnabled} />
           )}
-          {item.editedTs !== undefined && (
+          {isMediaRow && item.editedTs !== undefined && (
             <span
               className="tc-edited-marker"
               title={`Edited ${new Date(item.editedTs).toLocaleString()}`}
@@ -574,44 +603,44 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
             </span>
           )}
         </div>
-        <RowFooter item={item} onOpenThread={onOpenThread} />
+        <RowFooter item={item} onOpenThread={onOpenThread} pillsInRail={isMediaRow} />
       </div>
     </div>
   )
 }
 
 // W2.4's designed footer region: one wrapping flex row under the body, holding
-// the reactions strip, the thread chip, and (W2.6) the receipts cluster.
+// the reaction pills, the thread chip, and (W2.6) the receipts cluster.
 //
-// It renders NOTHING when it has no children -- no empty box with a min-height
-// -- so adding the first reaction to a message does not push the body. That is
-// the no-forced-reflow rule: the footer is appended, never inserted.
+// It renders NOTHING unless it has real content. It no longer carries the "+"
+// affordance at all: a footer that existed only to hold a hover-revealed button
+// had to grow from zero height on hover, which moved the row (and, because the
+// timeline re-pins to the bottom while following, every row above it). The
+// affordance now lives beside the body, where revealing it costs no height.
+//
+// A MEDIA row's pills live in its rail, so the footer skips them there.
 function RowFooter({
   item,
   onOpenThread,
+  pillsInRail = false,
 }: {
   item: TimelineItem
   onOpenThread?: (roomId: string, rootId: string) => void
+  pillsInRail?: boolean
 }) {
   const { client } = useClient()
   const receipts = useReceipts()
   const roomId = item.event.getRoomId() ?? ''
   const isThreadRoot = item.event.isThreadRoot
-  const canReact = item.kind === 'message' || item.kind === 'gallery'
   const hasReactions = (item.reactions?.length ?? 0) > 0
   const seenBy = receipts.get(item.id) ?? EMPTY_SEEN
+  const showPills = hasReactions && !pillsInRail
 
-  // The strip renders its own "+" affordance, so it is present whenever the
-  // message can be reacted to -- CSS keeps it hidden until the row is hovered
-  // or focused when there is nothing tallied yet.
-  if (!isThreadRoot && !canReact && !hasReactions && seenBy.length === 0) return null
+  if (!showPills && !isThreadRoot && seenBy.length === 0) return null
 
   return (
-    <div
-      className="tc-row-footer"
-      data-empty={!hasReactions && !isThreadRoot && seenBy.length === 0 ? 'true' : undefined}
-    >
-      {canReact && roomId && <ReactionStrip item={item} client={client} roomId={roomId} />}
+    <div className="tc-row-footer">
+      {showPills && roomId && <ReactionPills item={item} client={client} roomId={roomId} />}
       {isThreadRoot && <ThreadChip event={item.event} onOpen={onOpenThread} />}
       {seenBy.length > 0 && (
         <span style={{ marginLeft: 'auto', display: 'inline-flex' }}>

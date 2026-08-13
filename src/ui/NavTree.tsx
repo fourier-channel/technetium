@@ -12,6 +12,24 @@ import { useReducedMotion } from './reducedMotion'
 import { AuthedImage } from './AuthedImage'
 import { RoomContextMenu } from './RoomContextMenu'
 import { reportAlways } from '../client/report'
+import { directRoomIds } from '../client/dm'
+
+// Room-list row metrics. Vertical pitch = ROW_HEIGHT + 2 * ROW_MARGIN_Y.
+// Tightened 2026-08-13 (32px -> 28px) to fit more of the tree on screen.
+const ROW_HEIGHT = 26
+const ROW_MARGIN_Y = 1
+
+// Stable empty set for the no-client case, so the prop identity does not churn.
+const EMPTY_ROOM_IDS: ReadonlySet<string> = new Set()
+
+// A DM's tooltip names the person, since the icon no longer shows a label.
+function dmTitle(node: TreeNode, isDm: boolean, counts: NotifCounts | undefined): string {
+  const member = isDm ? node.room?.getAvatarFallbackMember() : undefined
+  const who = member?.name || node.name || node.roomId
+  if (!counts || counts.total < 1) return who
+  const ping = counts.highlight > 0 ? `, ${counts.highlight} ping` : ''
+  return `${who} (${counts.total} unread${ping})`
+}
 
 // Membership/join classification for a node's visual + click behavior.
 type Mode = 'joined' | 'joinable' | 'knock'
@@ -63,8 +81,13 @@ export function NavTree({
   const { client } = useClient()
   const { tree, loading, stale } = useNavTree(client)
   const notifs = useRoomNotifications(client)
-  const { animationsEnabled, setAnimationsEnabled, soundEnabled, setSoundEnabled, soundVolume, setSoundVolume } =
+  const { animationsEnabled, setAnimationsEnabled, soundEnabled, setSoundEnabled, soundVolume, setSoundVolume, isMutedNow } =
     useRoomListSettings()
+  // Recomputed each render rather than memoized on `client`: m.direct changes
+  // when a DM is created, and a memo keyed on the client would never see it.
+  // The map is a handful of entries, so this is cheaper than the subscription
+  // that would be needed to do it "properly".
+  const dmIds = client ? directRoomIds(client) : EMPTY_ROOM_IDS
   const reduced = useReducedMotion()
   const animate = animationsEnabled && !reduced
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
@@ -373,20 +396,45 @@ export function NavTree({
           >
             <div style={{ overflow: 'hidden', minHeight: 0 }}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, padding: '7px 8px 3px' }}>
-                {tree.orphanRooms.map((node) => (
-                  <button
-                    key={`${node.roomId}:${dmRevealKey}`}
-                    type="button"
-                    onClick={() => node.room && onSelectRoom?.(node.room)}
-                    onContextMenu={(e) => onContext(node, e)}
-                    title={node.name || node.roomId}
-                    style={{ padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', lineHeight: 0 }}
-                  >
-                    <EpicycleReveal seed={node.roomId} play={animate}>
-                      <RoomIcon node={node} size={30} />
-                    </EpicycleReveal>
-                  </button>
-                ))}
+                {tree.orphanRooms.map((node) => {
+                  // A DM is drawn as the PERSON on the other end. Reduced to
+                  // icons, a DM has nothing else to identify it: DM rooms
+                  // almost never carry an avatar of their own, so the room
+                  // avatar path left every one of them as a generic initial.
+                  const isDm = dmIds.has(node.roomId)
+                  const counts = isMutedNow(node.roomId) ? undefined : notifs.get(node.roomId)
+                  const unread = (counts?.total ?? 0) > 0
+                  const ping = (counts?.highlight ?? 0) > 0
+                  return (
+                    <button
+                      key={`${node.roomId}:${dmRevealKey}`}
+                      type="button"
+                      onClick={() => node.room && onSelectRoom?.(node.room)}
+                      onContextMenu={(e) => onContext(node, e)}
+                      title={dmTitle(node, isDm, counts)}
+                      style={{
+                        padding: 0,
+                        border: 'none',
+                        background: 'transparent',
+                        cursor: 'pointer',
+                        lineHeight: 0,
+                        borderRadius: '50%',
+                        // Glow, not a badge: at 30px there is no room for a
+                        // counter, and the ring reads at a glance across a
+                        // wrapped grid of faces.
+                        boxShadow: ping
+                          ? '0 0 0 2px var(--tc-unread), 0 0 12px 2px rgba(255,150,40,0.75)'
+                          : unread
+                            ? '0 0 0 2px var(--tc-unread-base), 0 0 9px rgba(255,150,40,0.45)'
+                            : undefined,
+                      }}
+                    >
+                      <EpicycleReveal seed={node.roomId} play={animate}>
+                        <RoomIcon node={node} size={30} isDm={isDm} />
+                      </EpicycleReveal>
+                    </button>
+                  )
+                })}
               </div>
             </div>
           </div>
@@ -579,16 +627,27 @@ function TreeRow({
           gap: 6,
           paddingLeft: indent,
           paddingRight: 6,
-          height: 28,
+          height: ROW_HEIGHT,
           cursor: 'pointer',
           borderRadius: 6,
-          margin: '2px 4px',
+          margin: `${ROW_MARGIN_Y}px 4px`,
           opacity: busy ? 0.6 : 1,
           fontWeight: mode === 'joinable' ? 700 : node.isSpace ? 600 : 400,
           color,
-          background: isSelected
-            ? 'var(--cpd-color-bg-action-primary-rest)'
-            : 'transparent',
+          // The selected row used to paint bg-action-primary-rest, which
+          // resolves to gray-1400 -- the SAME token text-primary resolves to.
+          // #ebeef2 on #ebeef2: the current room's name was invisible, at a
+          // contrast ratio of exactly 1.00:1. That token is a SOLID, and
+          // Compound pairs solids with text-on-solid-primary, not with
+          // text-primary.
+          //
+          // Fixed by going the other way instead: a subtle fill one step above
+          // the hover fill, which keeps text-primary at ~12:1, plus an accent
+          // bar that carries the actual "you are here" signal. The bar is an
+          // INSET shadow rather than a border so selecting a row does not
+          // change its box and shift the label.
+          background: isSelected ? 'var(--cpd-color-bg-subtle-primary)' : 'transparent',
+          boxShadow: isSelected ? 'inset 3px 0 0 0 var(--tc-link)' : undefined,
         }}
         onMouseEnter={(e) => {
           if (!isSelected)
@@ -934,10 +993,16 @@ function EpicycleReveal({
   )
 }
 
-function RoomIcon({ node, size = 20 }: { node: TreeNode; size?: number }) {
+function RoomIcon({ node, size = 20, isDm = false }: { node: TreeNode; size?: number; isDm?: boolean }) {
   const { getIcon } = useRoomListSettings()
   const override = getIcon(node.roomId)
-  const avatarMxc = node.room?.getMxcAvatarUrl() ?? null
+  // getAvatarFallbackMember() returns the other party ONLY for a genuine
+  // two-person DM (it counts non-functional members and gives up above two),
+  // and it reads the sliding-sync heroes, so it works without the roster
+  // loaded. undefined for a group room -- which then falls through to the
+  // room's own avatar, as before.
+  const dmMember = isDm ? (node.room?.getAvatarFallbackMember() ?? null) : null
+  const avatarMxc = dmMember?.getMxcAvatarUrl() ?? node.room?.getMxcAvatarUrl() ?? null
 
   const frame: React.CSSProperties = {
     width: size,
@@ -953,8 +1018,14 @@ function RoomIcon({ node, size = 20 }: { node: TreeNode; size?: number }) {
     color: 'var(--cpd-color-text-secondary)',
   }
 
+  // A DM with no avatar falls back to the PERSON's initial, not the room's --
+  // an unavatared DM room is usually named after its members anyway, but the
+  // member name is the one that is always right.
   const initial =
-    (node.name || node.roomId).replace(/^[#!@]/, '').charAt(0).toUpperCase() || '#'
+    (dmMember?.name || dmMember?.userId || node.name || node.roomId)
+      .replace(/^[#!@]/, '')
+      .charAt(0)
+      .toUpperCase() || '#'
 
   if (override)
     return (
