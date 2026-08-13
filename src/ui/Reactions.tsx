@@ -7,14 +7,28 @@ import { useReactTarget } from './reactTarget'
 import { useRoving } from './roving'
 import { isCustomEmojiKey } from '../client/emojiPacks'
 import { AuthedImage } from './AuthedImage'
+import { reportAlways } from '../client/report'
 
 // ---------------------------------------------------------------------------
-// W2.5 -- the reactions strip in the row footer.
+// W2.5 -- reactions.
 //
 // Reads its tallies from the S1 relation index, so the aggregation, the
 // own-reaction flag and the annotation id needed to un-react are all resolved
 // before this component sees them. Clicking toggles: send an m.annotation, or
 // redact the one you already sent.
+//
+// SPLIT into two pieces (2026-08-13) because they are placed differently:
+//
+//   ReactionAdd   -- the "+" affordance and its picker.
+//   ReactionPills -- the tallies.
+//
+// The add affordance is revealed on hover, so it must NEVER be inserted into
+// layout when it appears: it occupies its slot at all times and only changes
+// opacity. Growing a row on hover moved every message above it, because the
+// timeline re-pins to the bottom while following. That is why the two are
+// separable at all -- the "+" goes where it costs no height (beside a media
+// body in the rail, or in a reserved inline slot after a text body), while the
+// tallies go where they read naturally, which is not the same place.
 // ---------------------------------------------------------------------------
 
 // A local echo has no server-side event id yet, so nothing can annotate it.
@@ -22,30 +36,13 @@ function isSendable(eventId: string): boolean {
   return !!eventId && !eventId.startsWith('~')
 }
 
-export function ReactionStrip({
-  item,
-  client,
-  roomId,
-}: {
-  item: TimelineItem
-  client: MatrixClient | null
-  roomId: string
-}) {
-  // The action bar's React verb and the strip's own "+" must open ONE picker.
-  // The open target is therefore owned above both, keyed by event id, rather
-  // than each keeping its own boolean.
-  const { target, setTarget } = useReactTarget()
-  const [localOpen, setLocalOpen] = useState(false)
-  const pickerOpen = localOpen || target === item.id
-
-  const closePicker = () => {
-    setLocalOpen(false)
-    if (target === item.id) setTarget(null)
-  }
-  const tallies = item.reactions ?? []
-  // Pills plus the trailing "+" button.
-  const roving = useRoving(tallies.length + 1)
-
+// The toggle both halves share. Not a component: the "+" and the pills each
+// need it, and duplicating the redact-vs-send rule is how the two would drift.
+function useReactionToggle(
+  item: TimelineItem,
+  client: MatrixClient | null,
+  roomId: string,
+): { toggle: (key: string, existing?: ReactionTally) => Promise<void>; sendable: boolean } {
   const sendable = isSendable(item.id)
 
   const toggle = async (key: string, existing?: ReactionTally) => {
@@ -63,19 +60,95 @@ export function ReactionStrip({
         })
       }
     } catch (err) {
-      console.error('Reaction toggle failed:', err)
+      // User-initiated send: reported every time, not deduped (D-tp16).
+      reportAlways('reaction: toggle', err)
     }
   }
 
-  if (tallies.length === 0 && !pickerOpen && !sendable) return null
+  return { toggle, sendable }
+}
+
+// The "+" and the picker it opens. Rendered whenever the message can be
+// reacted to -- present in layout at all times, revealed by CSS on hover or
+// focus. `inline` places it in the reserved slot trailing a text body; without
+// it, it sits at the top of a media row's rail.
+export function ReactionAdd({
+  item,
+  client,
+  roomId,
+  inline = false,
+}: {
+  item: TimelineItem
+  client: MatrixClient | null
+  roomId: string
+  inline?: boolean
+}) {
+  // The action bar's React verb and this "+" must open ONE picker. The open
+  // target is therefore owned above both, keyed by event id, rather than each
+  // keeping its own boolean.
+  const { target, setTarget } = useReactTarget()
+  const [localOpen, setLocalOpen] = useState(false)
+  const pickerOpen = localOpen || target === item.id
+  const { toggle, sendable } = useReactionToggle(item, client, roomId)
+
+  const closePicker = () => {
+    setLocalOpen(false)
+    if (target === item.id) setTarget(null)
+  }
 
   return (
-    <div
-      className="tc-reactions"
-      role="group"
-      aria-label="Reactions"
-      onKeyDown={roving.onKeyDown}
+    // Anchors the picker. .tc-row is position:relative, but the picker should
+    // open from the button, not from the row's corner.
+    <span
+      className={inline ? 'tc-reaction-add-slot tc-reaction-add-inline' : 'tc-reaction-add-slot'}
     >
+      <button
+        type="button"
+        className="tc-reaction tc-reaction-add"
+        title="Add reaction"
+        aria-label="Add reaction"
+        aria-expanded={pickerOpen}
+        disabled={!sendable}
+        onClick={() => (pickerOpen ? closePicker() : setLocalOpen(true))}
+      >
+        {'+'}
+      </button>
+      {pickerOpen && (
+        <EmojiPicker
+          onPick={(emoji) => {
+            closePicker()
+            void toggle(
+              emoji,
+              (item.reactions ?? []).find((t) => t.key === emoji),
+            )
+          }}
+          onClose={closePicker}
+        />
+      )}
+    </span>
+  )
+}
+
+// The tallied pills. Renders nothing at all when there are none, so a message
+// with no reactions reserves no footer -- the pills are real content and are
+// the only part of this that is allowed to change a row's height.
+export function ReactionPills({
+  item,
+  client,
+  roomId,
+}: {
+  item: TimelineItem
+  client: MatrixClient | null
+  roomId: string
+}) {
+  const tallies = item.reactions ?? []
+  const roving = useRoving(tallies.length)
+  const { toggle, sendable } = useReactionToggle(item, client, roomId)
+
+  if (tallies.length === 0) return null
+
+  return (
+    <div className="tc-reactions" role="group" aria-label="Reactions" onKeyDown={roving.onKeyDown}>
       {tallies.map((t, i) => (
         <button
           key={t.key}
@@ -100,34 +173,28 @@ export function ReactionStrip({
           <span className="tc-reaction-count">{t.count}</span>
         </button>
       ))}
+    </div>
+  )
+}
 
-      {/* Anchored to .tc-row, which is position:relative. */}
-      <span style={{ position: 'relative', display: 'inline-flex' }}>
-        <button
-          type="button"
-          className="tc-reaction tc-reaction-add"
-          title="Add reaction"
-          aria-label="Add reaction"
-          aria-expanded={pickerOpen}
-          disabled={!sendable}
-          onClick={() => (pickerOpen ? closePicker() : setLocalOpen(true))}
-          {...roving.itemProps(tallies.length)}
-        >
-          {'+'}
-        </button>
-        {pickerOpen && (
-          <EmojiPicker
-            onPick={(emoji) => {
-              closePicker()
-              void toggle(
-                emoji,
-                tallies.find((t) => t.key === emoji),
-              )
-            }}
-            onClose={closePicker}
-          />
-        )}
-      </span>
+// A media body's reactions: a column to the RIGHT of the picture, top-aligned,
+// spilling downward. The "+" is pinned at the TOP of the column rather than
+// after the pills, so it stays directly beside the thumbnail's top edge no
+// matter how many reactions accumulate -- an affordance that moves as content
+// arrives is one the user has to re-find.
+export function ReactionRail({
+  item,
+  client,
+  roomId,
+}: {
+  item: TimelineItem
+  client: MatrixClient | null
+  roomId: string
+}) {
+  return (
+    <div className="tc-reaction-rail">
+      <ReactionAdd item={item} client={client} roomId={roomId} />
+      <ReactionPills item={item} client={client} roomId={roomId} />
     </div>
   )
 }

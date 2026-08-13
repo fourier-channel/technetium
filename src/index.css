@@ -398,12 +398,19 @@ code {
 }
 
 /* ---------------------------------------------------------------------------
-   Row footer (W2.4 design note): reactions strip + thread chip + (W2.6)
+   Row footer (W2.4 design note): reaction pills + thread chip + (W2.6)
    receipts cluster, in one wrapping flex row under the body.
 
    The footer is ABSENT when it has nothing to show, never present-but-empty,
-   so the first reaction on a message does not push the body down. Fixed 20px
-   control heights keep a row's height stable whether or not it has reactions.
+   and it never grows on hover. It used to: it carried the hover-revealed "+"
+   and so collapsed to height:0 until the pointer arrived, at which point the
+   row grew ~22px. While the timeline is following the bottom that re-pins the
+   view, so hovering ANY message slid the whole conversation up and mousing off
+   dropped it back. The "+" moved out (see .tc-reaction-rail /
+   .tc-reaction-add-slot) and the collapse went with it.
+
+   THE RULE: nothing revealed on hover may occupy layout. Reserve its slot, or
+   put it somewhere that has room already.
    --------------------------------------------------------------------------- */
 .tc-row-footer {
   display: flex;
@@ -413,19 +420,32 @@ code {
   margin-top: 2px;
 }
 
-/* A footer holding only the (hidden) add-reaction button takes no vertical
-   space until the row is hovered or focused -- otherwise every message would
-   reserve a footer's worth of height for a button nobody can see. */
-.tc-row-footer[data-empty='true'] {
-  margin-top: 0;
-  height: 0;
-  overflow: hidden;
+/* A media body's reactions: a column to the RIGHT of the picture, top-aligned,
+   spilling downward. The picture is the first flex child, so this column
+   appearing on hover cannot shift it, and the row's height is set by the
+   picture rather than by whether the pointer is over it. */
+.tc-reaction-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 0 0 auto;
+  gap: 4px;
+  padding-top: 1px;
 }
-.tc-row:hover > * .tc-row-footer[data-empty='true'],
-.tc-row:focus-within > * .tc-row-footer[data-empty='true'] {
-  height: auto;
-  margin-top: 2px;
-  overflow: visible;
+.tc-reaction-rail .tc-reactions {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* A text body's reaction affordance: a slot immediately after the message,
+   reserved at all times so revealing it changes nothing but opacity. */
+.tc-reaction-add-slot {
+  position: relative;
+  display: inline-flex;
+}
+.tc-reaction-add-inline {
+  margin-left: 6px;
+  vertical-align: text-bottom;
 }
 
 .tc-reactions {
@@ -475,16 +495,19 @@ code {
   color: var(--cpd-color-text-secondary, #a8b0bd);
 }
 
-/* The "+" only shows on hover/focus when the message has no reactions yet;
-   once there are pills it stays visible so the strip does not reflow. */
+/* The "+" is always in layout and only ever changes opacity -- it is the whole
+   reason the footer used to grow on hover. pointer-events follows opacity so an
+   invisible button is not also a clickable one. */
 .tc-reaction-add {
   opacity: 0;
+  pointer-events: none;
   transition: opacity 90ms ease-out;
 }
 .tc-row:hover .tc-reaction-add,
 .tc-row:focus-within .tc-reaction-add,
-.tc-reactions:hover .tc-reaction-add {
+.tc-reaction-rail:hover .tc-reaction-add {
   opacity: 1;
+  pointer-events: auto;
 }
 @media (prefers-reduced-motion: reduce) {
   .tc-reaction-add {

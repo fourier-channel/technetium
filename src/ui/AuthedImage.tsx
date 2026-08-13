@@ -21,6 +21,7 @@ export function AuthedImage({
   transparentLoading = false,
   fallback,
   viaHomeserver = false,
+  reserve,
 }: {
   mxc: string
   width?: ThumbSize
@@ -35,6 +36,15 @@ export function AuthedImage({
   // Fetch via the homeserver's authenticated-media endpoint instead of the
   // fourier-auth gateway. Used for avatars/chrome, which the content gate 403s.
   viaHomeserver?: boolean
+  // The box this image is KNOWN to occupy, derived from the event's own
+  // info.w/info.h before anything is fetched. When given, the placeholder and
+  // the loaded image are the same size, so the row's height is settled from
+  // first paint and never changes.
+  //
+  // Without it an inline image is 120x90 while loading and up to maxHeight
+  // afterwards -- a late jump of a couple hundred px per image, which is what
+  // fought the timeline's follow-the-bottom behaviour.
+  reserve?: { width: number; height: number }
 }) {
   const { client } = useClient()
   const [src, setSrc] = useState<string | null>(null)
@@ -128,8 +138,10 @@ export function AuthedImage({
             ? { display: 'block', width: '100%', height: '100%', background: 'var(--cpd-color-bg-subtle-secondary)' }
             : {
                 display: 'inline-block',
-                width: 120,
-                height: 90,
+                // The reserved box when the event told us its dimensions;
+                // otherwise the old guess, which WILL resize on load.
+                width: reserve?.width ?? 120,
+                height: reserve?.height ?? 90,
                 borderRadius: 8,
                 background: 'var(--cpd-color-bg-subtle-secondary)',
               }
@@ -153,13 +165,26 @@ export function AuthedImage({
               display: 'block',
               cursor: onClick ? 'pointer' : 'default',
             }
-          : {
-              maxWidth: '100%',
-              maxHeight,
-              borderRadius: 8,
-              display: 'block',
-              cursor: onClick ? 'pointer' : 'default',
-            }
+          : reserve
+            ? {
+                // Same box as the placeholder it replaces -- contain, so an
+                // info.w/h that disagrees with the real thumbnail letterboxes
+                // instead of resizing the row.
+                width: reserve.width,
+                height: reserve.height,
+                objectFit: 'contain',
+                maxWidth: '100%',
+                borderRadius: 8,
+                display: 'block',
+                cursor: onClick ? 'pointer' : 'default',
+              }
+            : {
+                maxWidth: '100%',
+                maxHeight,
+                borderRadius: 8,
+                display: 'block',
+                cursor: onClick ? 'pointer' : 'default',
+              }
       }
     />
   )
