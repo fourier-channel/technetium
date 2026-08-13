@@ -200,6 +200,40 @@ console.log('\n-- every animation name has CSS behind it --')
   check('no CSS variant is unreachable', orphans.length === 0, orphans)
 }
 
+console.log('\n-- end to end: a membership event survives toItems + applyLayout --')
+{
+  // The point of THIS one: everything above proves the classifier is right,
+  // and none of it proves a membership event ever reaches the renderer. If
+  // toItems dropped them the way it drops relation-only events, spatial events,
+  // tag writes and background posts, the whole feature would be dead and every
+  // other check here would still pass.
+  const { toItems, applyLayout: layout } = await import('../src/client/useTimeline.ts')
+  const ev = (id: string, type: string, content: any, prev: any = {}): any => ({
+    getId: () => id,
+    getSender: () => ALICE,
+    getStateKey: () => ALICE,
+    getTs: () => 1_700_000_000_000,
+    getType: () => type,
+    isRedacted: () => false,
+    isEncrypted: () => false,
+    getContent: () => content,
+    getPrevContent: () => prev,
+    getOriginalContent: () => content,
+  })
+
+  const items = toItems([
+    ev('$1', 'm.room.message', { msgtype: 'm.text', body: 'hi' }),
+    ev('$m', 'm.room.member', { membership: 'join', displayname: 'Ali' }),
+  ])
+  check('the membership event is not filtered out', items.length === 2, items.map((i) => i.id))
+  const member = items.find((i) => i.id === '$m')
+  check('it classifies as kind "member"', member?.kind === 'member', member?.kind)
+  check('it is NOT left as "other" (which renders [m.room.member])', member?.kind !== 'other')
+
+  const laidOut = layout(items).filter((i: any) => i.kind !== 'day')
+  check('it survives applyLayout', laidOut.some((i: any) => i.kind === 'member'))
+}
+
 if (failures > 0) {
   console.log(`\n${failures} FAILED`)
   process.exit(1)
