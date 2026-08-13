@@ -515,7 +515,11 @@ own messages only - **D-tp06** delete hidden when not permitted - **D-tp07**
 strips context, `m.mentions` above all - **D-tp09** mentions masked before
 markdown - **D-tp10** mute to the server, snooze deliberately not - **D-tp11**
 partial success reported, never swallowed - **D-tp12** sort by tier not power
-level - **D-tp13** presence renders nothing by design.
+level - **D-tp13** presence renders nothing by design - **D-tp14** backdrops
+belong on the R2 gateway, with no fallback - **D-tp15** make the media the thing
+the gate already authorizes (post it, then reference it) - **D-tp16** no failure
+is silent: 36 discarded-error sites audited, 11 deliberate swallows each stating
+why at the site.
 
 Gotchas: **G-tp01** react-refresh mixed exports - **G-tp02** a ref returned
 from a hook trips refs-during-render - **G-tp03** Node cannot load
@@ -529,7 +533,84 @@ it - **G-tp10** a security suite that passes without a DOM is worthless -
 **G-tp11** substring assertions on HTML lie in both directions - **G-tp12**
 derived data does not belong in state - **G-tp13** `m.direct` keeps rooms the
 user has left - **G-tp14** ignoring is not retroactive - **G-tp15** the
-harness could not load modules reading `import.meta.env`.
+harness could not load modules reading `import.meta.env` - **G-tp16** a caught
+write rejection that resolves anyway makes a failed save pixel-identical to a
+successful one - **G-tp17** a day separator as an early return inside Row breaks
+rules-of-hooks; it belongs at the call site - **G-tp18** sliding sync delivers
+ONLY the state named in `required_state`; unlisted state never arrives and
+`currentState` returns null forever.
+
+**Register hygiene note (2026-08-13):** D-tp14..16 and G-tp16..18 were minted in
+the devlog during the post-closeout sessions of 2026-08-07/08 but were never
+added here, so the register the minting pass would have read was six nodes
+short. Added above. The devlog entries are the authoritative text for each.
+
+### Post-campaign UI pass -- 2026-08-13 (draft, unminted)
+
+Decisions: **D-tp17** a hover-revealed affordance is placed where revealing it
+costs no height -- a rail to the RIGHT of a media body (with the "+" pinned at
+the TOP of the column, so it does not migrate as tallies accumulate), or a
+reserved inline slot trailing a text body. The old single `ReactionStrip` split
+into `ReactionAdd` + `ReactionPills` precisely because the two halves belong in
+different places - **D-tp18** pin a chat scroller with `scrollTop =
+scrollHeight`, never `scrollIntoView` on a sentinel: the sentinel's box excludes
+the container's bottom padding, and `scrollIntoView` is permitted to scroll
+ancestor scrollers too - **D-tp19** the selected room is a subtle fill plus an
+inset accent bar, not a solid pill: it keeps `text-primary` readable and leaves
+the unread orange/green uncontested - **D-tp20** a DM is presented as the PERSON
+(`getAvatarFallbackMember()`), and its unread state is a glow ring rather than a
+badge, because a 30px icon has no room for a counter.
+
+Gotchas: **G-tp19** anything revealed on hover that OCCUPIES LAYOUT moves the
+row -- and in a timeline that follows the bottom, moving one row moves the whole
+conversation. The empty row footer collapsed to `height:0` and grew on hover;
+every hover slid the log up and every mouse-off dropped it back. Reserve the
+slot, or put the control where there is already room - **G-tp20** a `scroll`
+event does not mean the user scrolled. A late-loading image grows a row, the
+distance-from-bottom jumps, and a scroll event fires with the pointer untouched;
+reading that as intent disengages follow mode permanently. Compare `scrollHeight`
+between samples -- a changed height means the event carries no intent -
+**G-tp21** Compound's `bg-action-primary-rest` and `text-primary` BOTH resolve to
+`gray-1400` (#ebeef2). Pairing them renders text at exactly 1.00:1 contrast.
+Solids pair with `text-on-solid-primary`; a semantic token name is not evidence
+that two tokens differ - **G-tp22** an inline image with no reserved box is a
+late layout jump of a couple of hundred px: `AuthedImage` showed a 120x90
+placeholder and then an image up to `maxHeight`. The event's own `info.w`/`info.h`
+are available before any fetch, so the box can be settled at first paint -
+**G-tp23** **Simplified Sliding Sync (MSC4186) does not deliver notification
+counts.** Synapse sends `notification_count: 0` and `highlight_count: 0` for
+every room, always. It SENDS the field, so `sliding-sync-sdk`'s `!= null` guard
+passes and `setUnreadNotificationCount` is called with a real zero -- no error,
+no warning, no absent value to notice. `getUnreadNotificationCount()` has
+therefore returned 0 for every room since sliding sync landed (2026-07-19), and
+the room-list unread glow, the `(N)` count, the ping treatment and the
+`aggregateNotif` space rollup have all been rendering a permanent zero. The
+second sibling of G-tp18: what sliding sync does not give you, it does not tell
+you it is not giving you.
+
+**G-tp24** -- **under sliding sync, `ClientEvent.Sync` is a HIGH-FREQUENCY
+signal, and a debounce on it starves.** It fires on every long-poll cycle, which
+completes in a few hundred ms while a room is busy. The G-tp23 poller first
+shipped with a 1.5s debounce that cleared and re-armed per event, so the
+deadline outran the clock and it never fired at all: counts updated only once
+traffic went quiet, which in practice meant only when the current room changed.
+The burst that most needs a refresh is exactly the burst that prevents it. Any
+timer driven by `ClientEvent.Sync` must arm on the FIRST event and ignore the
+rest until it lands (`nextPollDelay`), never re-arm per event. Caught in review
+by the operator, not by a gate -- the code typechecked, linted and built.
+
+**Evidence (2026-08-13, same account, same room, same minute).** Classic
+`/sync` with a minimal filter reports room `chat` at `unread_notifications:
+{notification_count: 5}`; the sliding-sync path set that same room's count to 0.
+Ruled out first, in this order: the render path (`getUnreadNotificationCount`
+reads what `setUnreadNotificationCount` writes, plus thread counts); a client
+read-receipt race (a hook on `sendReadReceipt` recorded no call, and the rooms
+in question had no receipt at all -- `ExtensionReceipts` is registered
+unconditionally, so absent means absent); push-rule suppression (the only
+enabled non-notifying rules are stock defaults, and `.m.rule.message` is enabled
+with a `notify` action). The reproduction is a single filtered classic `/sync`
+through `client.http.authedRequest`, which is non-destructive and needs no mode
+change.
 
 ### O-tp dispositions
 
@@ -540,12 +621,20 @@ SUPERSEDED in part by O-tp11 - O-tp10 still the operator's call (thread replies
 appear both inline and in the panel) - O-tp11 RESOLVED by the operator: jsdom
 added.
 
+| id | decision | status |
+| --- | --- | --- |
+| O-tp13 | **How unread counts are obtained, given G-tp23.** Sliding sync will not provide them. Options were: (a) a counts-only classic `/sync` poller feeding `useRoomNotifications`; (b) compute client-side via the sdk's push processor over loaded events -- rejected, since `timeline_limit: 1` means almost nothing is loaded and it would undercount the way thread stats do; (c) leave counts dead until Synapse implements it. | **RESOLVED 2026-08-13 by the operator: (a).** Built in `client/notificationCounts.ts` (pure parse/compare, 28 checks) + `useRoomNotifications.ts` (request + the two source paths). Three constraints are load-bearing and each is stated at its site: the request is **STATELESS -- never a `since` token**, or it would ack the to-device queue out from under the sliding-sync stream and silently break the deferred encryption phase; the counts are held in the hook rather than written back into Room state, which sliding sync re-zeroes on every touch; and the classic-sync path is kept intact and selected by mode, since the sdk's counts are correct and free when sliding sync is off. |
+| O-tp12 | **The verification matrix below is ASSUMED PASS** (operator, 2026-08-13). The pass was performed and mostly succeeded, but the per-row results were not saved, so no row can be cited as evidence. Treat every row as passed-by-assumption: a later contradiction is a finding AGAINST THE ASSUMPTION, not a regression, and does not imply the row ever passed. Unfortunate and unavoidable; recorded rather than quietly forgotten. | recorded, standing |
+
 ---
 
 ## PENDING OPERATOR VERIFICATION (running list)
 
 Headless box: typecheck / lint / build are self-verified. Anything
 visual or interactive is claimed only as PENDING.
+
+**Status of the parity-v1 rows below: ASSUMED PASS (O-tp12).** Rows added by
+later sessions carry their own status and are NOT covered by that assumption.
 
 | id | what needs eyes | 2nd identity? |
 | --- | --- | --- |
@@ -585,6 +674,27 @@ visual or interactive is claimed only as PENDING.
 | W4.4-a | Block hides that user's messages everywhere immediately (no gap, no placeholder row); Unblock restores them; the block is visible in Element's ignore list. | yes |
 | W4.5-a | **Presence renders NOTHING** until `presence.enabled: true` is set server-side (section 4). Absence here is the correct result, not a failure. | operator/server |
 | KBD-a | Tab from the timeline reaches the composer in a sane number of stops; arrows move within a row's action bar and reaction strip. | no |
+
+### Added 2026-08-13 -- UI pass (NOT covered by O-tp12; never yet seen)
+
+| id | what needs eyes | 2nd identity? |
+| --- | --- | --- |
+| UI1-a | **The bump is gone.** Mouse across messages in a room scrolled to the bottom: nothing moves, at all. Previously the whole log slid up on hover and dropped back on mouse-off. | no |
+| UI1-b | An IMAGE post shows the "+" directly right of the thumbnail's TOP edge on hover; reactions stack downward beneath it, and the "+" stays put as they accumulate. | yes |
+| UI1-c | A TEXT post shows the "+" in the slot just after the text on hover; the gap where it lives is reserved when hidden, so nothing shifts. Tallies still render below the text. | yes |
+| UI1-d | The React verb (smiley) in the hover bar and the "+" still open the SAME picker, and reacting still works from both. | yes |
+| UI2-a | **Posting an image while at the bottom keeps the view at the bottom** as it loads -- no drift, no half-scrolled state. Previously an expanding image stranded the log part-way up. | no |
+| UI2-b | Scrolling up to read history still holds position, and does NOT get yanked back down by a new message or a late image. | yes |
+| UI2-c | Images no longer visibly resize from a small grey box to full size -- they occupy their final box from the first frame. An image whose event carries no `info.w/h` still behaves as before. | no |
+| UI3-a | **The current room's name is readable.** It was invisible (identical fill and text colour). Confirm the selected row is also clearly distinct from a merely HOVERED row. | no |
+| UI4-a | The room list is vertically tighter (32px -> 28px pitch) and still comfortable to hit. Say if it is now too tight. | no |
+| UI5-a | A DM shows the OTHER user's avatar, not a generic initial; a DM with no avatar shows that person's initial. A group/orphan room in that row is unchanged. | yes |
+| UI5-b | A DM with an unread message glows orange; a ping glows brighter. Muting it silences the glow. | yes |
+| UI6-a | **Unread rooms light up at all** (G-tp23 fix). Room `chat` was at notification_count 5 server-side while the client showed 0; its name should now glow with a `(5)`. This is the first time this treatment has ever rendered a non-zero number. | no |
+| UI6-b | A new message in a room you are NOT viewing raises its count within ~2s (the settle debounce), not 30s (the backstop). | yes |
+| UI6-c | Reading a room clears its count, and the change survives to the OTHER surfaces -- a collapsed space header's aggregate drops too. | no |
+| UI6-d | No console warning `[tc] failure -- notification counts: classic /sync poll`. If it appears, the poll is erroring and the count is stale, which is now visible rather than silent. | no |
+| UI6-e | Backgrounding the tab stops the polling (Network tab: no `/sync` on the v3 prefix while hidden) and it resumes on return. | no |
 
 Standing note: receipts, typing, reactions and presence all need a
 SECOND identity. Use Firefox Multi-Account Containers, never a private
