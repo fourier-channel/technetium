@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RoomEvent, type MatrixClient, type MatrixEvent, type Room } from 'matrix-js-sdk'
+import { interactionsFor } from './interactionCatalog'
 
 // ---------------------------------------------------------------------------
 // Domain avatar ACTIONS -- ephemeral, emoji-like animations a user triggers on
@@ -33,11 +34,35 @@ export interface ActionDef {
   label: string
 }
 
-// --- Scaffolding registry (POC only; the real catalog is TBD) ---------------
-export const ACTION_REGISTRY: Record<string, ActionDef> = {
-  square: { kind: 'self', durationMs: 2000, glyph: '⬛', label: 'Square' },
-  throw: { kind: 'throw', durationMs: 950, glyph: '⭐', label: 'Throw ⭐' },
-}
+// --- Registry, DERIVED from the shared catalog ------------------------------
+//
+// This was two proof-of-concept entries under a comment saying the real catalog
+// was deliberately TBD, "per the operator -- do not invent the catalog". That
+// gate was lifted on 2026-08-14, so it now reads the shared definitions
+// (client/interactionCatalog.ts) filtered to the domain surface.
+//
+// Derived rather than duplicated: chat and the canvas draw the same actions in
+// different places, and two hand-maintained lists would drift on the first
+// addition. The canvas RENDERERS need no change to accept new entries --
+// SelfActionEffect and ThrownProjectile both animate whatever glyph the
+// definition carries -- so growing the catalog is a data change, not a
+// rendering one.
+//
+// The transports stay separate on purpose (D-in05): this one is deployed and
+// its lifecycle is entangled with canvas positions, and a refactor there cannot
+// be verified from a headless box.
+export const ACTION_REGISTRY: Record<string, ActionDef> = Object.fromEntries(
+  interactionsFor('domain').map((i) => [
+    i.id,
+    {
+      // The canvas knows two renderers: anchored to you, or arcing to someone.
+      kind: i.shape === 'targeted' ? 'throw' : 'self',
+      durationMs: i.durationMs,
+      glyph: i.glyph,
+      label: i.label,
+    } satisfies ActionDef,
+  ]),
+)
 
 export interface ActiveAction {
   key: string // instance id (the wire `id`)

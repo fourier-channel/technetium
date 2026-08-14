@@ -236,7 +236,7 @@ client offers.
 | A1.2 | Chat interaction transport + rate limit | **landed** | | Actor read from `getSender()`, never content (D-in02). Freshness rejects the FUTURE as well as the past, so a chosen timestamp cannot pin an animation on screen. Receiver-side rate limit, and a backwards clock jump does not unlock it. |
 | A1.3 | Overlay render layer + anchors | **landed** | | Anchors resolved once from the DOM at play time, in the scroller's coordinate space; a play whose anchor is off-screen is DROPPED, not aimed at the edge (O-in1). `AvatarPill` carries `data-user-anchor`, so every sender pill and membership row is an anchor for free. |
 | A1.4 | Right-click entry point | **landed** | | Menu owned by Timeline (two rows cannot each open one), reached through a context like `profileOpener`. Targeted actions are filtered out when the target is you. Rate-limited state says so rather than doing nothing. |
-| A2.1 | Domain catalog expansion | | | |
+| A2.1 | Domain catalog expansion | **landed** | | Registry now DERIVED from the shared catalog, filtered to the domain surface. The canvas renderers needed no change: `SelfActionEffect` and `ThrownProjectile` both animate whatever glyph the definition carries, so growing the catalog is a data change. Checks assert the deployed ids `square` and `throw` survive -- renaming either would make live clients emit events this one silently ignores. |
 | E1 | Custom packs in the picker | | | |
 | E2 | Inline sending (shortcode -> MSC2545 img) | | | |
 | E3 | Sanitizer widening (SECURITY, own commit) | | | |

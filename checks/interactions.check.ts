@@ -162,6 +162,38 @@ console.log('\n-- rate limit (D-in03: the RECEIVER enforces it too) --')
   check('a backwards clock jump does not unlock it', !rateLimitOk(NOW + 10_000, NOW))
 }
 
+console.log('\n-- the domain registry is DERIVED, and stays wire-compatible --')
+{
+  // useDomainActions pulls in React; fine in the harness, but import it lazily
+  // so the pure checks above run even if that ever stops being true.
+  const { ACTION_REGISTRY } = await import('../src/client/useDomainActions.ts')
+  const domain = interactionsFor('domain')
+
+  check('every domain catalog entry is in the registry',
+    domain.every((i) => !!ACTION_REGISTRY[i.id]),
+    domain.filter((i) => !ACTION_REGISTRY[i.id]).map((i) => i.id))
+  check('the registry adds nothing the catalog does not have',
+    Object.keys(ACTION_REGISTRY).length === domain.length)
+  check('chat-only actions are NOT in the canvas registry', !ACTION_REGISTRY.boop || domain.some((i) => i.id === 'boop'))
+
+  // The canvas knows exactly two renderers; a shape that maps to neither would
+  // render nothing at all.
+  check('every kind is one the canvas can render',
+    Object.values(ACTION_REGISTRY).every((d: any) => d.kind === 'self' || d.kind === 'throw'))
+  check('targeted maps to the arc renderer', ACTION_REGISTRY.throw?.kind === 'throw')
+  check('self maps to the anchored renderer', ACTION_REGISTRY.square?.kind === 'self')
+
+  // BACKWARDS COMPATIBILITY. 'square' and 'throw' are what the DEPLOYED client
+  // sends. Renaming or dropping either would make live clients emit events this
+  // one silently ignores -- and the failure would look like "actions stopped
+  // working for some people".
+  check("the deployed id 'square' still exists", !!ACTION_REGISTRY.square)
+  check("the deployed id 'throw' still exists", !!ACTION_REGISTRY.throw)
+
+  check('every registry entry has a glyph and a positive duration',
+    Object.values(ACTION_REGISTRY).every((d: any) => !!d.glyph && d.durationMs > 0))
+}
+
 if (failures > 0) {
   console.log(`\n${failures} FAILED`)
   process.exit(1)
