@@ -5,7 +5,7 @@ import type { ReactionTally } from '../client/relations'
 import { EmojiPicker } from './EmojiPicker'
 import { useReactTarget } from './reactTarget'
 import { useRoving } from './roving'
-import { isCustomEmojiKey } from '../client/emojiPacks'
+import { allPacks, isCustomEmojiKey } from '../client/emojiPacks'
 import { AuthedImage } from './AuthedImage'
 import { reportAlways } from '../client/report'
 
@@ -115,6 +115,11 @@ export function ReactionAdd({
       </button>
       {pickerOpen && (
         <EmojiPicker
+          // Reactions are the one surface that can use a custom emoji today:
+          // an annotation's KEY is the mxc, and the strip above already renders
+          // those as images. Inline sending needs a sanitizer widening and is
+          // deliberately not half-done here.
+          packs={allPacks(client, client?.getRoom(roomId) ?? null)}
           onPick={(emoji) => {
             closePicker()
             void toggle(

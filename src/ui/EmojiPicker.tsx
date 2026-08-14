@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { EmojiPack, PackImage } from '../client/emojiPacks'
+import { AuthedImage } from './AuthedImage'
 
 // ---------------------------------------------------------------------------
 // Lightweight, dependency-free emoji picker. Native unicode glyphs (no image
@@ -206,12 +208,23 @@ const CATEGORIES: { key: string; label: string; icon: string; list: Emoji[] }[] 
 
 const ALL: Emoji[] = CATEGORIES.flatMap((c) => c.list)
 
+// Tab key for the custom-pack section. Not a CATEGORIES entry because its
+// contents are per-room and per-user rather than a static list.
+const CUSTOM_CAT = '__custom'
+
 export function EmojiPicker({
   onPick,
   onClose,
+  packs,
 }: {
   onPick: (emoji: string) => void
   onClose: () => void
+  // MSC2545 custom packs. Passed only by surfaces that can USE an mxc key --
+  // a reaction can (its key is the mxc, and the strip already renders those as
+  // images), the composer cannot until inline sending lands, and offering an
+  // emoji there that pastes "mxc://..." as text would be worse than not
+  // offering it at all. Absent = unicode only, exactly as before.
+  packs?: EmojiPack[]
 }) {
   const [cat, setCat] = useState(CATEGORIES[0].key)
   const [query, setQuery] = useState('')
@@ -233,8 +246,26 @@ export function EmojiPicker({
   }, [onClose])
 
   const q = query.trim().toLowerCase()
+  const customImages = useMemo(() => {
+    if (!packs?.length) return []
+    // Emoticon usage only: a sticker is a different thing sent a different way.
+    const out: PackImage[] = []
+    for (const pack of packs) {
+      for (const img of pack.images) {
+        if (img.usage.includes('emoticon')) out.push(img)
+      }
+    }
+    return out
+  }, [packs])
+
+  const shownCustom = useMemo(() => {
+    if (!q) return cat === CUSTOM_CAT ? customImages : []
+    return customImages.filter((i) => i.code.toLowerCase().includes(q))
+  }, [q, cat, customImages])
+
   const shown = useMemo(() => {
     if (q) return ALL.filter((em) => em.n.includes(q))
+    if (cat === CUSTOM_CAT) return []
     return CATEGORIES.find((c) => c.key === cat)?.list ?? []
   }, [q, cat])
 
@@ -289,7 +320,32 @@ export function EmojiPicker({
         }}
         className="tc-scroll"
       >
-        {shown.length === 0 ? (
+        {shownCustom.map((img) => (
+          <button
+            key={img.mxc + img.code}
+            type="button"
+            title={`:${img.code}:`}
+            // The KEY of a custom-emoji reaction is the mxc itself (MSC2545),
+            // which is exactly what the reaction strip already knows how to
+            // render as an image.
+            onClick={() => onPick(img.mxc)}
+            style={{
+              aspectRatio: '1',
+              display: 'grid',
+              placeItems: 'center',
+              background: 'transparent',
+              border: 'none',
+              borderRadius: 6,
+              cursor: 'pointer',
+              padding: 3,
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--cpd-color-bg-subtle-secondary)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+          >
+            <AuthedImage mxc={img.mxc} width={180} fill transparentLoading alt={`:${img.code}:`} fallback="?" />
+          </button>
+        ))}
+        {shown.length === 0 && shownCustom.length === 0 ? (
           <div style={{ gridColumn: '1 / -1', fontSize: 12, color: 'var(--cpd-color-text-secondary)', padding: 8 }}>
             No emoji match "{query}".
           </div>
@@ -331,6 +387,26 @@ export function EmojiPicker({
             background: 'var(--cpd-color-bg-subtle-secondary)',
           }}
         >
+          {customImages.length > 0 && (
+            <button
+              key={CUSTOM_CAT}
+              type="button"
+              title="Custom emoji"
+              onClick={() => setCat(CUSTOM_CAT)}
+              style={{
+                fontSize: 16,
+                lineHeight: 1,
+                background: 'transparent',
+                border: 'none',
+                borderRadius: 6,
+                cursor: 'pointer',
+                padding: '4px 6px',
+                opacity: cat === CUSTOM_CAT ? 1 : 0.55,
+              }}
+            >
+              {'\u2605'}
+            </button>
+          )}
           {CATEGORIES.map((c) => (
             <button
               key={c.key}
