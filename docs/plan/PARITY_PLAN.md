@@ -656,6 +656,7 @@ added.
 
 | id | decision | status |
 | --- | --- | --- |
+| O-tp14 | **Green/orange unread counters: DEFERRED and no longer a standing request** (operator, 2026-08-14). Recorded for possible revisit. Nothing blocks them -- the counts they need now exist (G-tp23) -- they are simply not wanted yet. What ships is the existing treatment: orange glow, `(N)`, `@` ping, letter pulse. | recorded, not scheduled |
 | O-tp13 | **How unread counts are obtained, given G-tp23.** Sliding sync will not provide them. Options were: (a) a counts-only classic `/sync` poller feeding `useRoomNotifications`; (b) compute client-side via the sdk's push processor over loaded events -- rejected, since `timeline_limit: 1` means almost nothing is loaded and it would undercount the way thread stats do; (c) leave counts dead until Synapse implements it. | **RESOLVED 2026-08-13 by the operator: (a).** Built in `client/notificationCounts.ts` (pure parse/compare, 28 checks) + `useRoomNotifications.ts` (request + the two source paths). Three constraints are load-bearing and each is stated at its site: the request is **STATELESS -- never a `since` token**, or it would ack the to-device queue out from under the sliding-sync stream and silently break the deferred encryption phase; the counts are held in the hook rather than written back into Room state, which sliding sync re-zeroes on every touch; and the classic-sync path is kept intact and selected by mode, since the sdk's counts are correct and free when sliding sync is off. |
 | O-tp12 | **The verification matrix below is ASSUMED PASS** (operator, 2026-08-13). The pass was performed and mostly succeeded, but the per-row results were not saved, so no row can be cited as evidence. Treat every row as passed-by-assumption: a later contradiction is a finding AGAINST THE ASSUMPTION, not a regression, and does not imply the row ever passed. Unfortunate and unavoidable; recorded rather than quietly forgotten. | recorded, standing |
 
@@ -741,7 +742,7 @@ later sessions carry their own status and are NOT covered by that assumption.
 | UI7-f | A membership row never changes the row's height as it animates -- messages above and below stay put while it plays. | no |
 | UI7-g | A message following a join from the SAME person still shows its own sender pill (it must not group into the join line). | yes |
 | UI7-h | `prefers-reduced-motion` in devtools: membership rows render static, no animation at all. | no |
-| UI7-i | **Judgement call: are six variants too many, too few, or wrong in feel?** The set is one line to edit in `memberEvents.ts` plus its keyframes. Phrases likewise. | no |
+| UI7-i | ~~Judgement call: six variants?~~ **CLOSED 2026-08-14: six is right, pacing settled at 0.9-1.1s.** | -- |
 
 Standing note: receipts, typing, reactions and presence all need a
 SECOND identity. Use Firefox Multi-Account Containers, never a private

@@ -15,9 +15,9 @@
 | field | value |
 | --- | --- |
 | campaign | interactions-v1 (4 areas) |
-| branch | `interactions-v1` off `main` (`aeab785`) |
+| branch | `interactions-v1` off `main` (`aeab785`), pushed |
 | tsc / lint / build | CLEAN / 23 (HOLD) / PASSING |
-| checks | 571 at start |
+| checks | 571 at start -> **626** |
 | deploys | operator's call, as always |
 
 ---
@@ -256,3 +256,23 @@ client offers.
   simply not wanted yet.
 - **UI7-i CLOSED:** six arrival variants is the right number (operator,
   2026-08-14). Pacing settled at 0.9-1.1s.
+
+---
+
+## PENDING OPERATOR VERIFICATION -- interactions-v1
+
+Headless box: gates are self-verified, behaviour is not.
+
+| id | what needs eyes | 2nd identity? |
+| --- | --- | --- |
+| IX-a | Right-click someone's sender pill -> menu with things aimed at them plus things you do yourself. Right-click YOUR OWN pill -> only the self list. | no |
+| IX-b | Slap another identity: the hand travels from your pill to theirs, stretches on the way, impacts, and snaps back. Both clients see it. | yes |
+| IX-c | It plays over the log without moving ANYTHING -- no reflow, no scroll jump, even while following the bottom. | no |
+| IX-d | Scroll the target's pill off screen, then have them slap you: nothing plays, and nothing errors. That is the designed behaviour (O-in1), not a bug. | yes |
+| IX-e | Fire two in a row: the second is refused and the menu says so rather than appearing to do nothing. | no |
+| IX-f | Interactions do NOT appear as rows in the message log, and history has no `[net.41chan.interaction]` junk. | yes |
+| IX-g | Rejoining / reloading does not replay a burst of old interactions. | yes |
+| IX-h | `prefers-reduced-motion`: a small worded label instead of an animation. | no |
+| IX-i | Domain canvas: the puck menu now offers the fuller self list, and right-click -> targeted actions arc across as before. **`Square` and `Throw` must still work** -- they are what the deployed client sends. | yes |
+| IX-j | Reaction picker: a star tab appears when the room or your account has an MSC2545 pack; picking one reacts with the image. Searching matches shortcodes. | yes |
+| IX-k | **Judgement call: is the catalog right?** Ten entries, glyph-based. Naming, additions and removals are one array in `interactionCatalog.ts`. | no |
