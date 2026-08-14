@@ -2888,3 +2888,114 @@ they need existed for the first time only a few hours ago, and the operator's
 instruction was to see the existing treatment work before deciding whether the
 redesign is warranted. Building badges on a number that had always been zero
 would have produced a feature that looked finished and never fired.
+
+---
+
+## 2026-08-14 -- interactions-v1: things you can say that are not sentences
+
+Branch `interactions-v1`. Four features requested; two built, one part-built to
+a deliberate scope line, one blocked on a fact I could not obtain. Spec for all
+four in `docs/plan/INTERACTIONS_PLAN.md`.
+
+### The through-line
+
+A slap, a sticker, a reaction, a badly-chosen GIF -- all the same idea, which is
+that a chat client should be able to say things that are not sentences. They
+share a technical shape too: ephemeral or embedded media, addressed at a person,
+rendered without disturbing the log. Writing that down first is what made the
+catalog shared and the transports separate, rather than the other way round.
+
+### Interactions live above the log, not in it
+
+The obvious implementation is to render a slap inside the row of the person
+being slapped. That is wrong twice over: rows are recycled as the timeline
+scrolls and re-laid-out by same-sender grouping, so an animation parented to one
+dies mid-play; and anything drawn inside a row can move it, which is the fault
+this project has now fixed twice (G-tp19, G-tp20).
+
+So interactions draw on an overlay that never occupies layout and never takes
+pointer events, resolving both anchors from the DOM when the play starts.
+`AvatarPill` was already extracted and shared by sender rows and membership
+rows, so tagging it `data-user-anchor` made every one of them an anchor for
+free -- the extraction done for the arrival animations paid for itself a day
+later.
+
+**A play whose anchor is off-screen is dropped, not clamped to the edge.** An
+interaction nobody visible can receive is not worth faking, and the alternative
+is a hand flying at the border of the viewport for no reason.
+
+### What the wire deliberately does not carry
+
+Who did it. The actor is always `getSender()`; an actor field in content would
+let anyone author a slap "from" anyone else. That is the third time this shape
+has come up -- an `m.replace` honoured only from the original sender, only a
+poll's creator may end it -- and it was cheaper to close on the way in than to
+find later.
+
+The freshness gate rejects the FUTURE as well as the past, which is not
+symmetry for its own sake: a client choosing its own timestamp could otherwise
+pin an animation on everyone's screen indefinitely. The rate limit is enforced
+by the receiver as well as the sender, because a limit only the sender enforces
+is a limit only honest clients have. And a backwards clock jump does not reopen
+it.
+
+Forty-six checks, and almost all of them are the hostile cases rather than the
+happy path. The happy path is one line.
+
+### The catalog was the easy part, once it was shared
+
+The domain registry carried two proof-of-concept entries under a comment saying
+the real catalog was deliberately TBD, "per the operator -- do not invent the
+catalog". With that gate lifted, the expansion turned out to be a data change:
+`SelfActionEffect` and `ThrownProjectile` each animate whatever glyph the
+definition carries, so the canvas renderers needed no change at all. Two to
+eight entries, no rendering code touched.
+
+The transports stay separate and the definitions are shared. Duplicating the
+definitions would guarantee drift on the first addition; unifying the transports
+would mean refactoring deployed canvas code whose lifecycle is entangled with
+positions, on a box that cannot see it. The check that matters operationally is
+the boring one: `square` and `throw` still exist, because those are the ids the
+DEPLOYED client sends, and renaming either would look like "actions stopped
+working for some people".
+
+### A scope line, drawn on purpose
+
+Custom emoji have been readable since W5.4 and pickable by nobody. Packs now
+appear in the picker -- but only where an mxc key is usable, which today means
+reactions, whose key IS the mxc and which already render as images.
+
+The composer deliberately does not get packs. Inserting an mxc there would paste
+`mxc://...` into the message as literal text, which is worse than not offering
+it. Inline sending needs a shortcode-to-`<img data-mx-emoticon>` conversion and
+a DOMPurify allowlist widening, and the standing law calls a sanitizer widening
+security-critical: its own commit, minimal, with tests proving `javascript:`,
+`data:` and non-mxc `src` still die. Bolting that onto the end of a long
+unattended run is how a sanitizer gets a hole in it. Stopped instead.
+
+### The GIF picker is blocked, and guessing would have hidden that
+
+KLIPY is real and is one of three pickers Zulip supports alongside GIPHY and
+Tenor; usefully, all three treat the API key as non-secret and expect every
+browser to hold a copy, so a client-side picker is the intended shape and needs
+no proxy.
+
+What I could not get is the contract. `docs.klipy.com` refuses automated
+fetches, so the base URL, auth parameter, endpoint paths, pagination and
+response schema are unverified. **An adapter written from memory would look
+finished and 404** -- and it would 404 quietly, behind a picker that renders an
+empty grid. That is precisely the failure class of the last two campaigns, so
+the split is: the provider-agnostic half is specified and buildable now, the
+concrete adapter waits for the docs and a key.
+
+Two things worth the operator's attention before a provider is chosen, neither
+of them technical: KLIPY's stated model places ads between content and it ships
+an Ads API; and all three providers see a search query and an IP for every user
+who opens the picker, which is the same privacy surface that made URL previews
+opt-in here.
+
+### The thing I keep relearning
+
+Three of the four areas were sized correctly only because the spec got written
+before the code. The fourth was sized correctly because I checked a fact instead
+of assuming it. Both are cheap; neither feels like progress at the time.
