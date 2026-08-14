@@ -10,6 +10,7 @@ import {
 import { MEDIA_TAGS_EVENT } from './mediaTags'
 import { getIgnoredUsers } from './ignoredUsers'
 import { isBackgroundPost } from './backgroundPost'
+import { INTERACTION_EVENT } from './interactionEvents'
 import { reportIgnored } from './report'
 import {
   buildRelationIndex,
@@ -212,6 +213,11 @@ export function toItems(events: MatrixEvent[], opts: ToItemsOptions = {}): Timel
     // Spatial-mode presence/position events ride the timeline (so they work at
     // PL0) but are never chat -- keep them out of every message log.
     if (ev.getType().startsWith('net.41chan.spatial.')) continue
+    // Chat interactions (a slap, a wave) are ephemeral animations played by the
+    // overlay, not things anyone said. Without this they render as
+    // `[net.41chan.interaction]` rows, and a lively room's history becomes
+    // unreadable as conversation (D-in04).
+    if (ev.getType() === INTERACTION_EVENT) continue
     // Bridge tag writes are STATE events, but state events also travel down the
     // timeline -- without this they render as `[net.41chan.media.tags]` junk
     // rows between messages. The tag store reads them from the same stream.

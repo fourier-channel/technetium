@@ -1191,3 +1191,217 @@ code {
     animation: none !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Chat interactions (Area 1). Drawn on an overlay above the timeline, never
+   inside a Row -- rows are recycled by scrolling and re-laid-out by grouping, so
+   an animation parented to one dies mid-play.
+
+   The layer never occupies layout and never takes pointer events, so nothing
+   here can move, block or reflow a message (G-tp19). Every play is positioned
+   from --ix-from-* / --ix-to-*, resolved from the DOM when it starts.
+   --------------------------------------------------------------------------- */
+.tc-ix-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.tc-ix-self,
+.tc-ix-travel {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+.tc-ix-glyph {
+  position: absolute;
+  left: -14px;
+  top: -14px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
+}
+
+/* --- targeted: travel, impact, recoil ------------------------------------ */
+.tc-ix-travel {
+  animation: ixTravel var(--ix-dur, 1000ms) cubic-bezier(0.3, 0, 0.2, 1) both;
+}
+@keyframes ixTravel {
+  0%   { transform: translate(var(--ix-from-x), var(--ix-from-y)); }
+  /* Wind-up: pull back slightly before launching. */
+  14%  { transform: translate(calc(var(--ix-from-x) - 6px), var(--ix-from-y)); }
+  52%  { transform: translate(var(--ix-to-x), var(--ix-to-y)); }
+  /* Recoil: the elastic snaps the hand most of the way home. */
+  70%  { transform: translate(calc(var(--ix-to-x) + (var(--ix-from-x) - var(--ix-to-x)) * 0.55),
+                              calc(var(--ix-to-y) + (var(--ix-from-y) - var(--ix-to-y)) * 0.55)); }
+  84%  { transform: translate(var(--ix-to-x), var(--ix-to-y)); }
+  100% { opacity: 0; transform: translate(var(--ix-from-x), var(--ix-from-y)); }
+}
+/* The stretch rides on the glyph so it does not fight the travel transform. */
+.tc-ix-travel .tc-ix-glyph {
+  animation: ixStretch var(--ix-dur, 1000ms) ease-in-out both;
+}
+@keyframes ixStretch {
+  0%   { transform: scale(0.6) rotate(-20deg); opacity: 0; }
+  14%  { transform: scale(1) scaleX(0.8) rotate(-24deg); opacity: 1; }
+  /* Stretched thin along the flight path -- the elastic part. */
+  38%  { transform: scaleX(1.9) scaleY(0.7) rotate(6deg); }
+  52%  { transform: scaleX(0.78) scaleY(1.25) rotate(14deg); }
+  70%  { transform: scale(1) rotate(-4deg); }
+  100% { transform: scale(0.7) rotate(0deg); opacity: 0; }
+}
+.tc-ix-impact {
+  position: absolute;
+  left: calc(var(--ix-to-x) - var(--ix-from-x) - 16px);
+  top: calc(var(--ix-to-y) - var(--ix-from-y) - 16px);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 235, 190, 0.9) 0%, rgba(255, 190, 120, 0.35) 45%, transparent 70%);
+  opacity: 0;
+  animation: ixImpact var(--ix-dur, 1000ms) ease-out both;
+}
+@keyframes ixImpact {
+  0%, 46%  { opacity: 0; transform: scale(0.3); }
+  56%      { opacity: 1; transform: scale(1.25); }
+  100%     { opacity: 0; transform: scale(2); }
+}
+
+/* Per-action character, on top of the shared travel. */
+.tc-ix-travel[data-action='poke'] .tc-ix-glyph { animation-timing-function: cubic-bezier(0.5, 0, 0.2, 1); }
+.tc-ix-travel[data-action='hug'] .tc-ix-impact {
+  background: radial-gradient(circle, rgba(255, 170, 210, 0.85) 0%, rgba(255, 140, 190, 0.3) 50%, transparent 72%);
+}
+.tc-ix-travel[data-action='highfive'] .tc-ix-impact {
+  background: radial-gradient(circle, rgba(210, 235, 255, 0.95) 0%, rgba(150, 200, 255, 0.35) 45%, transparent 70%);
+}
+
+/* --- self: plays beside the actor ---------------------------------------- */
+.tc-ix-self {
+  transform: translate(var(--ix-from-x), var(--ix-from-y));
+}
+.tc-ix-self .tc-ix-glyph {
+  animation: ixSelf var(--ix-dur, 1200ms) ease-out both;
+}
+@keyframes ixSelf {
+  0%   { opacity: 0; transform: translate(18px, -6px) scale(0.4); }
+  18%  { opacity: 1; transform: translate(22px, -14px) scale(1.1); }
+  70%  { opacity: 1; transform: translate(22px, -16px) scale(1); }
+  100% { opacity: 0; transform: translate(22px, -26px) scale(0.9); }
+}
+.tc-ix-self[data-action='wave'] .tc-ix-glyph { animation-name: ixWave; }
+@keyframes ixWave {
+  0%   { opacity: 0; transform: translate(20px, -12px) rotate(0deg) scale(0.5); }
+  15%  { opacity: 1; transform: translate(22px, -14px) rotate(-18deg) scale(1); }
+  35%  { transform: translate(22px, -14px) rotate(20deg) scale(1); }
+  55%  { transform: translate(22px, -14px) rotate(-16deg) scale(1); }
+  75%  { transform: translate(22px, -14px) rotate(14deg) scale(1); }
+  100% { opacity: 0; transform: translate(22px, -18px) rotate(0deg) scale(0.9); }
+}
+.tc-ix-self[data-action='rip'] .tc-ix-glyph { animation-name: ixRip; }
+@keyframes ixRip {
+  0%   { opacity: 0; transform: translate(22px, -46px) scale(0.9); }
+  40%  { opacity: 1; transform: translate(22px, -12px) scale(1); }
+  52%  { transform: translate(22px, -16px) scale(1.04); }
+  62%  { transform: translate(22px, -12px) scale(1); }
+  100% { opacity: 0; transform: translate(22px, -12px) scale(1); }
+}
+
+/* Reduced motion: say it in words, parked where the actor is. Feedback is not
+   the thing being removed -- movement is. */
+.tc-ix-reduced {
+  position: absolute;
+  transform: translate(24px, -10px);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--cpd-color-text-primary, #e7ebf0);
+  background: var(--cpd-color-bg-canvas-default, #16181d);
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tc-ix-self,
+  .tc-ix-travel,
+  .tc-ix-self .tc-ix-glyph,
+  .tc-ix-travel .tc-ix-glyph,
+  .tc-ix-impact {
+    animation: none !important;
+  }
+}
+
+/* Interaction picker (right-click a person in the chat). */
+.tc-ix-menu {
+  z-index: 40;
+  min-width: 168px;
+  padding: 4px;
+  border-radius: 8px;
+  background: var(--cpd-color-bg-canvas-default, #16181d);
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  font-family: var(--tc-ui-font, inherit);
+  font-size: 13px;
+  color: var(--cpd-color-text-primary, #e7ebf0);
+}
+.tc-ix-menu-head {
+  padding: 4px 8px 2px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+.tc-ix-menu-sep {
+  height: 1px;
+  margin: 4px 2px;
+  background: rgba(128, 128, 128, 0.25);
+}
+.tc-ix-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.tc-ix-menu-item:hover:not(:disabled) {
+  background: var(--cpd-color-bg-subtle-secondary, rgba(128, 128, 128, 0.18));
+}
+.tc-ix-menu-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.tc-ix-menu-item:focus-visible {
+  outline: 2px solid var(--tc-link);
+  outline-offset: -2px;
+}
+.tc-ix-menu-glyph {
+  width: 18px;
+  text-align: center;
+  font-size: 15px;
+  line-height: 1;
+}
+.tc-ix-menu-note {
+  padding: 4px 8px 2px;
+  font-size: 11px;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+}

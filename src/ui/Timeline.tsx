@@ -37,6 +37,10 @@ import { ProfileActions } from './ProfileActions'
 import { usePresence } from '../client/usePresence'
 import { useRoomReceipts } from '../client/useReceipts'
 import { ReceiptsContext, useReceipts } from './receiptsContext'
+import { useChatInteractions } from '../client/useChatInteractions'
+import { InteractionLayer } from './InteractionLayer'
+import { InteractionMenu } from './InteractionMenu'
+import { InteractionTargetContext, useInteractionTarget } from './interactionTarget'
 
 // How many pages of history a click-to-jump will paginate before giving up.
 const MAX_JUMP_PAGES = 8
@@ -117,6 +121,10 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
   // each open their own.
   const [profile, setProfile] = useState<{ userId: string; x: number; y: number } | null>(null)
   const profilePresence = usePresence(client, profile ? [profile.userId] : [])
+  const interactions = useChatInteractions(client, room)
+  // One menu for the whole timeline, owned here so two rows cannot each open
+  // their own -- the same reason the profile card is owned here (W4.2).
+  const [ixMenu, setIxMenu] = useState<{ userId: string; x: number; y: number } | null>(null)
   const chatBg = useChatBackground()
   const tagPrefs = useMediaTagPrefs()
   const [bgMenuOpen, setBgMenuOpen] = useState(false)
@@ -361,6 +369,9 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
           <ProfileOpenerContext.Provider
             value={(userId, x, y) => setProfile({ userId, x, y })}
           >
+          <InteractionTargetContext.Provider
+            value={(userId, x, y) => setIxMenu({ userId, x, y })}
+          >
           <JumpContext.Provider value={jumpApi}>
             {searchOpen && client && (
               <SearchPanel client={client} room={room} onClose={() => setSearchOpen(false)} />
@@ -393,7 +404,28 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
             </MessageVerbsProvider>
             </ReceiptsContext.Provider>
           </JumpContext.Provider>
+          </InteractionTargetContext.Provider>
           </ProfileOpenerContext.Provider>
+          {/* Above the log, never inside it. */}
+          <InteractionLayer
+            plays={interactions.plays}
+            containerRef={scrollRef}
+            nameFor={(userId) => room.getMember(userId)?.name || userId}
+          />
+          {ixMenu && client && (
+            <InteractionMenu
+              x={ixMenu.x}
+              y={ixMenu.y}
+              targetUserId={ixMenu.userId}
+              targetName={room.getMember(ixMenu.userId)?.name || ixMenu.userId}
+              isSelf={ixMenu.userId === client.getUserId()}
+              disabled={!interactions.canTrigger()}
+              onPick={(def, userId) =>
+                interactions.trigger(def.id, def.shape === 'targeted' ? userId : undefined)
+              }
+              onClose={() => setIxMenu(null)}
+            />
+          )}
           {profile && client && (
             <ProfileCard
               x={profile.x}
@@ -425,10 +457,12 @@ function SenderPill({
   event,
   time,
   onOpenProfile,
+  onOpenInteractions,
 }: {
   event: MatrixEvent
   time: string
   onOpenProfile?: (userId: string, x: number, y: number) => void
+  onOpenInteractions?: (userId: string, x: number, y: number) => void
 }) {
   const { client } = useClient()
   const senderId = event.getSender() ?? '(unknown)'
@@ -437,7 +471,13 @@ function SenderPill({
   const avatarMxc = member?.getMxcAvatarUrl() ?? null
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-      <AvatarPill userId={senderId} name={name} avatarMxc={avatarMxc} onOpen={onOpenProfile} />
+      <AvatarPill
+        userId={senderId}
+        name={name}
+        avatarMxc={avatarMxc}
+        onOpen={onOpenProfile}
+        onContext={onOpenInteractions}
+      />
       <span style={{ fontSize: 11, color: 'var(--cpd-color-text-secondary)', flexShrink: 0 }}>{time}</span>
     </div>
   )
@@ -449,6 +489,7 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
   const { client } = useClient()
   const actions = useMessageActions(item)
   const openProfile = useProfileOpener()
+  const openInteractions = useInteractionTarget()
   // One preview per message: a wall of cards under a link-heavy message is its
   // own problem. Opt-in, because a preview makes the SERVER fetch a third-party
   // URL on the reader's behalf.
@@ -554,7 +595,12 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
           untouched, which is why grouping could land last without revisiting
           any of them. */}
       {item.showHeader !== false && (
-        <SenderPill event={event} time={time} onOpenProfile={openProfile} />
+        <SenderPill
+          event={event}
+          time={time}
+          onOpenProfile={openProfile}
+          onOpenInteractions={openInteractions}
+        />
       )}
       <div
         style={{

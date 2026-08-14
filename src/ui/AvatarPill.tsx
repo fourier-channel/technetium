@@ -31,11 +31,15 @@ export function AvatarPill({
   name,
   avatarMxc,
   onOpen,
+  onContext,
 }: {
   userId: string
   name: string
   avatarMxc: string | null
   onOpen?: (userId: string, x: number, y: number) => void
+  // Right-click. Separate from onOpen because left- and right-click mean
+  // different things here: look at them, versus do something to them.
+  onContext?: (userId: string, x: number, y: number) => void
 }) {
   return (
     <span
@@ -53,7 +57,18 @@ export function AvatarPill({
             }
           : undefined
       }
+      onContextMenu={
+        onContext
+          ? (e) => {
+              e.preventDefault()
+              onContext(userId, e.clientX, e.clientY)
+            }
+          : undefined
+      }
       title={onOpen ? name : undefined}
+      // Makes every sender pill and membership row an anchor the
+      // interaction overlay can aim at, for free.
+      data-user-anchor={userId}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
