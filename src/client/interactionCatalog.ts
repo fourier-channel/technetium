@@ -18,6 +18,24 @@ export type InteractionShape = 'self' | 'targeted'
 // Where an interaction is allowed to be triggered from.
 export type InteractionSurface = 'chat' | 'domain'
 
+// How the chat overlay stages it. Kept in the catalog rather than switched on
+// by id in the renderer, so adding an interaction is still a data change.
+//
+//   'self'     -- plays beside the actor, nobody else involved.
+//   'travel'   -- the glyph is thrown from the actor to the target and back.
+//   'approach' -- the ACTOR'S AVATAR comes to the target and acts on them there.
+export type InteractionChoreo = 'self' | 'travel' | 'approach'
+
+// Which anchors must be on screen for the play to be worth drawing.
+//
+// This is not cosmetic. A 'travel' play is a line between two people and is
+// meaningless with one end missing, but an 'approach' play stages itself
+// entirely around the TARGET -- the actor's avatar is drawn by the overlay, not
+// read from their pill -- so requiring the actor to be visible would drop plays
+// that would have rendered perfectly. O-in1 (drop rather than clamp) is
+// unchanged; this only says which anchors O-in1 is about.
+export type InteractionAnchors = 'actor' | 'target' | 'both'
+
 export interface InteractionDef {
   id: string
   label: string
@@ -26,8 +44,16 @@ export interface InteractionDef {
   glyph: string
   shape: InteractionShape
   surfaces: readonly InteractionSurface[]
+  choreo: InteractionChoreo
+  anchors: InteractionAnchors
   // How long the animation runs. The renderer expires the instance after this,
   // so it must match the CSS or a dead node lingers.
+  //
+  // These are deliberately UNHURRIED. The first pass was sized like a UI
+  // transition -- under a second, every beat clipped by the next -- and read as
+  // a flicker rather than as a thing that happened. Same correction the arrival
+  // animations took (0.9-1.1s). An interaction is a small performance; it needs
+  // room to wind up, land, and be seen landing.
   durationMs: number
   // Sentence shown to screen readers and in the reduced-motion fallback, with
   // {actor} and {target} substituted. Reduced motion does NOT mean "no
@@ -43,7 +69,12 @@ export const INTERACTIONS: readonly InteractionDef[] = [
     glyph: '🖐',
     shape: 'targeted',
     surfaces: ['chat', 'domain'],
-    durationMs: 1100,
+    choreo: 'travel',
+    anchors: 'both',
+    // Whip out, stick for a beat, get pulled home. The stick is most of it --
+    // that pause is the whole joke, and it is the first thing a short duration
+    // eats.
+    durationMs: 2400,
     phrase: '{actor} slapped {target} with an elastic sticky hand',
   },
   {
@@ -52,7 +83,9 @@ export const INTERACTIONS: readonly InteractionDef[] = [
     glyph: '👉',
     shape: 'targeted',
     surfaces: ['chat', 'domain'],
-    durationMs: 900,
+    choreo: 'approach',
+    anchors: 'target',
+    durationMs: 1500,
     phrase: '{actor} poked {target}',
   },
   {
@@ -61,7 +94,10 @@ export const INTERACTIONS: readonly InteractionDef[] = [
     glyph: '🫂',
     shape: 'targeted',
     surfaces: ['chat', 'domain'],
-    durationMs: 1200,
+    choreo: 'approach',
+    anchors: 'target',
+    // The longest of the three: arrive, converge, hold, bounce out.
+    durationMs: 2600,
     phrase: '{actor} hugged {target}',
   },
   {
@@ -70,7 +106,9 @@ export const INTERACTIONS: readonly InteractionDef[] = [
     glyph: '👆',
     shape: 'targeted',
     surfaces: ['chat', 'domain'],
-    durationMs: 800,
+    choreo: 'approach',
+    anchors: 'target',
+    durationMs: 1500,
     phrase: '{actor} booped {target}',
   },
   {
@@ -79,7 +117,9 @@ export const INTERACTIONS: readonly InteractionDef[] = [
     glyph: '🙏',
     shape: 'targeted',
     surfaces: ['chat', 'domain'],
-    durationMs: 1000,
+    choreo: 'travel',
+    anchors: 'both',
+    durationMs: 1800,
     phrase: '{actor} high-fived {target}',
   },
   {
@@ -88,7 +128,9 @@ export const INTERACTIONS: readonly InteractionDef[] = [
     glyph: '⭐',
     shape: 'targeted',
     surfaces: ['domain'],
-    durationMs: 950,
+    choreo: 'travel',
+    anchors: 'both',
+    durationMs: 1600,
     phrase: '{actor} threw a star at {target}',
   },
 
@@ -99,7 +141,9 @@ export const INTERACTIONS: readonly InteractionDef[] = [
     glyph: '👋',
     shape: 'self',
     surfaces: ['chat', 'domain'],
-    durationMs: 1200,
+    choreo: 'self',
+    anchors: 'actor',
+    durationMs: 2000,
     phrase: '{actor} waved',
   },
   {
@@ -108,7 +152,9 @@ export const INTERACTIONS: readonly InteractionDef[] = [
     glyph: '✨',
     shape: 'self',
     surfaces: ['chat', 'domain'],
-    durationMs: 1300,
+    choreo: 'self',
+    anchors: 'actor',
+    durationMs: 2100,
     phrase: '{actor} sparkled',
   },
   {
@@ -117,7 +163,9 @@ export const INTERACTIONS: readonly InteractionDef[] = [
     glyph: '🪦',
     shape: 'self',
     surfaces: ['chat', 'domain'],
-    durationMs: 1600,
+    choreo: 'self',
+    anchors: 'actor',
+    durationMs: 2600,
     phrase: '{actor} did not survive that',
   },
   {
@@ -126,7 +174,9 @@ export const INTERACTIONS: readonly InteractionDef[] = [
     glyph: '⬛',
     shape: 'self',
     surfaces: ['domain'],
-    durationMs: 2000,
+    choreo: 'self',
+    anchors: 'actor',
+    durationMs: 2800,
     phrase: '{actor} squared',
   },
 ]

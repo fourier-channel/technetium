@@ -447,6 +447,7 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
           plays={interactions.plays}
           containerRef={scrollRef}
           nameFor={(userId) => room.getMember(userId)?.name || userId}
+          avatarFor={(userId) => room.getMember(userId)?.getMxcAvatarUrl() ?? null}
         />
       </div>
     </div>

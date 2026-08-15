@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ActivePlay } from '../client/useChatInteractions'
 import { interactionPhrase } from '../client/interactionCatalog'
-import { anchorPoint, type Point, type RectLike } from './interactionGeometry'
+import { AvatarDisc } from './AvatarDisc'
+import {
+  anchorPoint,
+  anchorsSatisfied,
+  approachStart,
+  arcMidpoint,
+  arcSign,
+  type Point,
+  type RectLike,
+} from './interactionGeometry'
 import { useReducedMotion } from './reducedMotion'
 
 // ---------------------------------------------------------------------------
@@ -56,10 +65,14 @@ export function InteractionLayer({
   plays,
   containerRef,
   nameFor,
+  avatarFor,
 }: {
   plays: ActivePlay[]
   containerRef: React.RefObject<HTMLElement | null>
   nameFor: (userId: string) => string
+  // An 'approach' play draws the ACTOR themselves next to the target, so the
+  // overlay needs their avatar rather than only their name.
+  avatarFor: (userId: string) => string | null
 }) {
   const reduced = useReducedMotion()
   const layerRef = useRef<HTMLDivElement | null>(null)
@@ -73,6 +86,7 @@ export function InteractionLayer({
           containerRef={containerRef}
           layerRef={layerRef}
           nameFor={nameFor}
+          avatarFor={avatarFor}
           reduced={reduced}
         />
       ))}
@@ -85,19 +99,21 @@ function InteractionPlay({
   containerRef,
   layerRef,
   nameFor,
+  avatarFor,
   reduced,
 }: {
   play: ActivePlay
   containerRef: React.RefObject<HTMLElement | null>
   layerRef: React.RefObject<HTMLElement | null>
   nameFor: (userId: string) => string
+  avatarFor: (userId: string) => string | null
   reduced: boolean
 }) {
   // Anchors are resolved ONCE, in an effect after mount, and then held. Reading
   // them during render would be a layout read in the render phase; recomputing
   // them every frame would make the animation chase a scrolling list, which
   // looks like a bug rather than like physics.
-  const [geom, setGeom] = useState<{ from: Point; to: Point | null } | null>(null)
+  const [geom, setGeom] = useState<{ from: Point | null; to: Point | null } | null>(null)
   const [resolved, setResolved] = useState(false)
 
   useEffect(() => {
@@ -110,15 +126,18 @@ function InteractionPlay({
     const layerBox = layer.getBoundingClientRect()
     const from = resolveAnchor(container, layerBox, play.actor)
     const to = play.target ? resolveAnchor(container, layerBox, play.target) : null
-    // Both ends must exist for a targeted play; the actor alone for a self one.
-    if (!from || (play.target && !to)) {
+    // Which ends have to be present is the definition's call, not a blanket
+    // rule. An 'approach' stages itself entirely around the target and draws
+    // the actor itself, so demanding the actor's pill be on screen would drop
+    // plays that had everything they needed.
+    if (!anchorsSatisfied(play.def.anchors, from, to)) {
       setGeom(null)
       setResolved(true)
       return
     }
     setGeom({ from, to })
     setResolved(true)
-  }, [containerRef, layerRef, play.actor, play.target])
+  }, [containerRef, layerRef, play.def.anchors, play.actor, play.target])
 
   const phrase = interactionPhrase(
     play.def,
@@ -131,34 +150,89 @@ function InteractionPlay({
   // Reduced motion does not mean no feedback -- it means say it in words.
   // Dropped plays say nothing at all: there is nobody on screen it concerns.
   if (!geom) return null
+  // Where the words go: beside whoever the play is ABOUT, which for an approach
+  // is the target (the actor may not be on screen at all).
+  const label = geom.to ?? geom.from
   if (reduced) {
-    return (
-      <div
-        className="tc-ix-reduced"
-        style={{ left: geom.from.x, top: geom.from.y }}
-        role="status"
-      >
+    return label ? (
+      <div className="tc-ix-reduced" style={{ left: label.x, top: label.y }} role="status">
         {play.def.glyph} {phrase}
       </div>
-    )
+    ) : null
   }
 
   const { from, to } = geom
-  const style = {
-    '--ix-from-x': `${from.x}px`,
-    '--ix-from-y': `${from.y}px`,
-    '--ix-to-x': `${(to ?? from).x}px`,
-    '--ix-to-y': `${(to ?? from).y}px`,
-    '--ix-dur': `${play.def.durationMs}ms`,
-  } as React.CSSProperties
+  // The arc side, and the side an approach comes in from. Hashed from the play
+  // id so both clients bow the same slap the same way (arcSign).
+  const sign = arcSign(play.key)
 
-  if (play.def.shape === 'self') {
+  if (play.def.choreo === 'self') {
+    if (!from) return null
+    const style = {
+      '--ix-from-x': `${from.x}px`,
+      '--ix-from-y': `${from.y}px`,
+      '--ix-dur': `${play.def.durationMs}ms`,
+    } as React.CSSProperties
     return (
       <div className="tc-ix-self" data-action={play.def.id} style={style} role="status" aria-label={phrase}>
         <span className="tc-ix-glyph">{play.def.glyph}</span>
       </div>
     )
   }
+
+  if (play.def.choreo === 'approach') {
+    if (!to) return null
+    // Hug always comes in from the RIGHT, per the operator's staging -- it is a
+    // described gesture, not a random one. Poke and boop take the hashed side,
+    // so a run of them does not look mechanical.
+    const side = play.def.id === 'hug' ? 1 : sign
+    const start = approachStart(to, side)
+    const style = {
+      '--ix-from-x': `${start.x}px`,
+      '--ix-from-y': `${start.y}px`,
+      '--ix-to-x': `${to.x}px`,
+      '--ix-to-y': `${to.y}px`,
+      // Which way the glyph points, so a finger jabbing leftwards is not drawn
+      // pointing away from the person it is jabbing.
+      '--ix-face': side === 1 ? '-1' : '1',
+      '--ix-dur': `${play.def.durationMs}ms`,
+    } as React.CSSProperties
+    return (
+      <div
+        className="tc-ix-approach"
+        data-action={play.def.id}
+        style={style}
+        role="status"
+        aria-label={phrase}
+      >
+        {/* The actor, arriving. A bare disc rather than the whole pill: a name
+            plate sliding across the timeline reads as UI coming loose. */}
+        <span className="tc-ix-actor" aria-hidden="true">
+          <AvatarDisc
+            userId={play.actor}
+            name={nameFor(play.actor)}
+            avatarMxc={avatarFor(play.actor)}
+            size={30}
+          />
+        </span>
+        {/* The gesture itself, superimposed once the two have converged. */}
+        <span className="tc-ix-glyph">{play.def.glyph}</span>
+      </div>
+    )
+  }
+
+  // 'travel': thrown from the actor to the target and pulled back.
+  if (!from || !to) return null
+  const mid = arcMidpoint(from, to, sign)
+  const style = {
+    '--ix-from-x': `${from.x}px`,
+    '--ix-from-y': `${from.y}px`,
+    '--ix-mid-x': `${mid.x}px`,
+    '--ix-mid-y': `${mid.y}px`,
+    '--ix-to-x': `${to.x}px`,
+    '--ix-to-y': `${to.y}px`,
+    '--ix-dur': `${play.def.durationMs}ms`,
+  } as React.CSSProperties
 
   return (
     <div className="tc-ix-travel" data-action={play.def.id} style={style} role="status" aria-label={phrase}>

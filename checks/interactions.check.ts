@@ -17,7 +17,13 @@ import {
   parseInteraction,
   rateLimitOk,
 } from '../src/client/interactionEvents.ts'
-import { anchorPoint } from '../src/ui/interactionGeometry.ts'
+import {
+  anchorPoint,
+  anchorsSatisfied,
+  approachStart,
+  arcMidpoint,
+  arcSign,
+} from '../src/ui/interactionGeometry.ts'
 
 let failures = 0
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -239,6 +245,99 @@ console.log('\n-- overlay geometry: the layer is not the scroller --')
     anchorPoint(scroller, scrolledLayer, {
       top: 600, bottom: 620, left: 40, width: 60, height: 20,
     }) === null)
+}
+
+console.log('\n-- the arc is hashed, not random --')
+{
+  // Random would mean the sender and the receiver watch the same slap bow in
+  // opposite directions. The play id is on the wire, so hashing it makes every
+  // client stage the same event identically -- and keeps it out of render,
+  // where a random read would violate the React Compiler rules (G-tc01).
+  const key = '@a:x.net:1800000000000:slap'
+  check('the same play id always picks the same side',
+    arcSign(key) === arcSign(key) && arcSign(key) === arcSign('' + key))
+  check('the side is only ever -1 or 1', [1, -1].includes(arcSign(key)))
+
+  // Not a distribution test -- just proof it is not a constant dressed up as a
+  // hash, which would make every interaction bow the same way forever.
+  const sides = new Set(
+    Array.from({ length: 40 }, (_, i) => arcSign(`@a:x.net:${1800000000000 + i}:slap`)),
+  )
+  check('different plays get different sides', sides.size === 2, [...sides])
+
+  const from = { x: 100, y: 100 }
+  const to = { x: 300, y: 100 }
+  const left = arcMidpoint(from, to, -1)
+  const right = arcMidpoint(from, to, 1)
+  check('the arc passes over the midpoint on the x axis', left.x === 200 && right.x === 200)
+  check('the two sides bow opposite ways', left.y < 100 && right.y > 100)
+  check('the bow is symmetric', Math.abs(left.y - 100) === Math.abs(right.y - 100))
+
+  // Perpendicular, not "up": a vertical flight has to bow SIDEWAYS or the arc
+  // hides behind the travel. This is the case a hardcoded y-offset gets wrong.
+  const vertical = arcMidpoint({ x: 100, y: 100 }, { x: 100, y: 300 }, 1)
+  check('a vertical flight bows sideways', vertical.x !== 100 && vertical.y === 200)
+
+  // A long flight must not leave the screen on its way across.
+  const wide = arcMidpoint({ x: 0, y: 0 }, { x: 4000, y: 0 }, 1)
+  check('the bow is capped on a long flight', Math.abs(wide.y) <= 120)
+  // A short one must still visibly bow rather than reading as a straight line.
+  const short = arcMidpoint({ x: 0, y: 0 }, { x: 20, y: 0 }, 1)
+  check('a short flight still bows', Math.abs(short.y) >= 24)
+
+  // Degenerate: slapping somebody standing exactly where you are. No direction
+  // to be perpendicular to -- must not produce NaN and poison the CSS var.
+  const same = arcMidpoint({ x: 50, y: 50 }, { x: 50, y: 50 }, 1)
+  check('a zero-length flight is finite', Number.isFinite(same.x) && Number.isFinite(same.y))
+
+  const target = { x: 500, y: 200 }
+  check('an approach starts beside the target, level with it',
+    approachStart(target, 1).y === 200 && approachStart(target, 1).x > 500)
+  check('the other side starts on the other side', approachStart(target, -1).x < 500)
+}
+
+console.log('\n-- which anchors a choreography actually needs --')
+{
+  const p = { x: 1, y: 1 }
+  // The regression this prevents: every targeted play once required BOTH ends,
+  // so an approach was dropped whenever the actor had not spoken recently
+  // enough to be on screen -- which is most of the time you want to poke
+  // somebody. The actor's avatar is DRAWN for an approach, not located.
+  check('an approach needs only the target', anchorsSatisfied('target', null, p))
+  check('an approach without a target is still dropped', !anchorsSatisfied('target', p, null))
+  check('a travel needs both ends', anchorsSatisfied('both', p, p))
+  check('a travel with one end missing is dropped',
+    !anchorsSatisfied('both', null, p) && !anchorsSatisfied('both', p, null))
+  check('a self play needs only the actor', anchorsSatisfied('actor', p, null))
+  check('a self play without the actor is dropped', !anchorsSatisfied('actor', null, p))
+
+  // The catalog must agree with the renderer about what it is asking for: an
+  // approach that claimed 'both' would reintroduce the bug above, and a travel
+  // that claimed 'target' would draw a line from nowhere.
+  check('every approach asks for the target only',
+    INTERACTIONS.filter((i) => i.choreo === 'approach').every((i) => i.anchors === 'target'))
+  check('every travel asks for both ends',
+    INTERACTIONS.filter((i) => i.choreo === 'travel').every((i) => i.anchors === 'both'))
+  check('every self play asks for the actor only',
+    INTERACTIONS.filter((i) => i.choreo === 'self').every((i) => i.anchors === 'actor'))
+  check('only self-shaped entries use the self choreography',
+    INTERACTIONS.every((i) => (i.choreo === 'self') === (i.shape === 'self')))
+}
+
+console.log('\n-- unhurried: every interaction has room to be seen --')
+{
+  // The correction the arrival animations already took. Under about a second
+  // the beats clip each other and the whole thing reads as a flicker rather
+  // than as an event, which is what the operator saw first time round.
+  check('nothing plays in under 1.4s', INTERACTIONS.every((i) => i.durationMs >= 1400),
+    INTERACTIONS.filter((i) => i.durationMs < 1400).map((i) => i.id))
+  // The slap's stick is ~40% of its duration; too short and there is no stick.
+  const slap = interactionById('slap')
+  check('the slap is long enough to stick', (slap?.durationMs ?? 0) >= 2000)
+  // The receiver bounds an instance's lifetime by this, so it must cover the
+  // longest definition or the longest animation gets cut off mid-play.
+  check('MAX_INTERACTION_MS still covers the slowest',
+    MAX_INTERACTION_MS === Math.max(...INTERACTIONS.map((i) => i.durationMs)))
 }
 
 if (failures > 0) {

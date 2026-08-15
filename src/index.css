@@ -1210,7 +1210,8 @@ code {
 }
 
 .tc-ix-self,
-.tc-ix-travel {
+.tc-ix-travel,
+.tc-ix-approach {
   position: absolute;
   left: 0;
   top: 0;
@@ -1230,32 +1231,53 @@ code {
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
 }
 
-/* --- targeted: travel, impact, recoil ------------------------------------ */
+/* --- travel: whip out along an arc, STICK, get pulled home ----------------
+   The stick is the point. A hand that touches and leaves in the same motion
+   reads as a glyph sliding past somebody; a hand that arrives and STAYS there
+   for the better part of a second reads as stuck to them. Roughly 40% of the
+   duration is spent doing nothing at the far end, and that idle stretch is
+   what the first pass did not have.
+
+   The outbound leg bows through --ix-mid-*, computed perpendicular to the
+   flight and sided by a hash of the play id, so both clients bow the same slap
+   the same way. The return leg ignores the midpoint entirely: it is pulled
+   STRAIGHT back, because an elastic under tension does not retrace an arc. */
 .tc-ix-travel {
-  animation: ixTravel var(--ix-dur, 1000ms) cubic-bezier(0.3, 0, 0.2, 1) both;
+  animation: ixTravel var(--ix-dur, 2400ms) linear both;
 }
 @keyframes ixTravel {
   0%   { transform: translate(var(--ix-from-x), var(--ix-from-y)); }
-  /* Wind-up: pull back slightly before launching. */
-  14%  { transform: translate(calc(var(--ix-from-x) - 6px), var(--ix-from-y)); }
-  52%  { transform: translate(var(--ix-to-x), var(--ix-to-y)); }
-  /* Recoil: the elastic snaps the hand most of the way home. */
-  70%  { transform: translate(calc(var(--ix-to-x) + (var(--ix-from-x) - var(--ix-to-x)) * 0.55),
-                              calc(var(--ix-to-y) + (var(--ix-from-y) - var(--ix-to-y)) * 0.55)); }
-  84%  { transform: translate(var(--ix-to-x), var(--ix-to-y)); }
+  /* Wind-up: load the elastic before it lets go. */
+  8%   { transform: translate(calc(var(--ix-from-x) - 8px), calc(var(--ix-from-y) + 3px)); }
+  /* Out along the bow. */
+  22%  { animation-timing-function: cubic-bezier(0.35, 0, 0.15, 1);
+         transform: translate(var(--ix-mid-x, var(--ix-to-x)), var(--ix-mid-y, var(--ix-to-y))); }
+  /* Contact. */
+  34%  { transform: translate(var(--ix-to-x), var(--ix-to-y)); }
+  /* Stuck. Nothing moves here on purpose. */
+  72%  { transform: translate(var(--ix-to-x), var(--ix-to-y)); }
+  /* Snapped straight home, overshooting slightly past the hand's start. */
+  90%  { animation-timing-function: cubic-bezier(0.6, 0, 0.3, 1);
+         transform: translate(calc(var(--ix-from-x) - 5px), var(--ix-from-y)); }
   100% { opacity: 0; transform: translate(var(--ix-from-x), var(--ix-from-y)); }
 }
 /* The stretch rides on the glyph so it does not fight the travel transform. */
 .tc-ix-travel .tc-ix-glyph {
-  animation: ixStretch var(--ix-dur, 1000ms) ease-in-out both;
+  animation: ixStretch var(--ix-dur, 2400ms) ease-in-out both;
 }
 @keyframes ixStretch {
   0%   { transform: scale(0.6) rotate(-20deg); opacity: 0; }
-  14%  { transform: scale(1) scaleX(0.8) rotate(-24deg); opacity: 1; }
-  /* Stretched thin along the flight path -- the elastic part. */
-  38%  { transform: scaleX(1.9) scaleY(0.7) rotate(6deg); }
-  52%  { transform: scaleX(0.78) scaleY(1.25) rotate(14deg); }
-  70%  { transform: scale(1) rotate(-4deg); }
+  8%   { transform: scale(1) scaleX(0.78) rotate(-26deg); opacity: 1; }
+  /* Drawn thin along the flight path -- the elastic part. */
+  22%  { transform: scaleX(2) scaleY(0.62) rotate(8deg); }
+  /* Splat. */
+  34%  { transform: scaleX(0.72) scaleY(1.32) rotate(16deg); }
+  42%  { transform: scaleX(1.05) scaleY(0.95) rotate(12deg); }
+  /* Stuck: barely breathing, so it reads as adhered rather than frozen. */
+  56%  { transform: scaleX(0.98) scaleY(1.02) rotate(13deg); }
+  72%  { transform: scaleX(1) scaleY(1) rotate(12deg); }
+  /* Torn off and dragged back. */
+  82%  { transform: scaleX(1.85) scaleY(0.66) rotate(-6deg); }
   100% { transform: scale(0.7) rotate(0deg); opacity: 0; }
 }
 .tc-ix-impact {
@@ -1267,21 +1289,118 @@ code {
   border-radius: 50%;
   background: radial-gradient(circle, rgba(255, 235, 190, 0.9) 0%, rgba(255, 190, 120, 0.35) 45%, transparent 70%);
   opacity: 0;
-  animation: ixImpact var(--ix-dur, 1000ms) ease-out both;
+  animation: ixImpact var(--ix-dur, 2400ms) ease-out both;
 }
 @keyframes ixImpact {
-  0%, 46%  { opacity: 0; transform: scale(0.3); }
-  56%      { opacity: 1; transform: scale(1.25); }
+  0%, 30%  { opacity: 0; transform: scale(0.3); }
+  38%      { opacity: 1; transform: scale(1.25); }
+  62%      { opacity: 0; transform: scale(2); }
   100%     { opacity: 0; transform: scale(2); }
 }
 
-/* Per-action character, on top of the shared travel. */
-.tc-ix-travel[data-action='poke'] .tc-ix-glyph { animation-timing-function: cubic-bezier(0.5, 0, 0.2, 1); }
-.tc-ix-travel[data-action='hug'] .tc-ix-impact {
-  background: radial-gradient(circle, rgba(255, 170, 210, 0.85) 0%, rgba(255, 140, 190, 0.3) 50%, transparent 72%);
-}
 .tc-ix-travel[data-action='highfive'] .tc-ix-impact {
   background: radial-gradient(circle, rgba(210, 235, 255, 0.95) 0%, rgba(150, 200, 255, 0.35) 45%, transparent 70%);
+}
+
+/* --- approach: the actor comes to them ------------------------------------
+   Poke, boop and hug are not thrown things -- they are you turning up next to
+   somebody. The overlay draws the actor's own avatar disc arriving beside the
+   target and acting on them there, which is why these need only the TARGET's
+   anchor: the actor is drawn, not located. */
+.tc-ix-approach {
+  transform: translate(var(--ix-from-x), var(--ix-from-y));
+}
+.tc-ix-actor {
+  position: absolute;
+  left: -15px;
+  top: -15px;
+  display: block;
+}
+
+/* Poke and boop: turn up, jab, go. */
+.tc-ix-approach[data-action='poke'],
+.tc-ix-approach[data-action='boop'] {
+  animation: ixApproachHold var(--ix-dur, 1500ms) both;
+}
+@keyframes ixApproachHold {
+  /* Parked beside them for the whole play: the jab is the glyph's job, not the
+     avatar's, so the avatar has somewhere to jab FROM. */
+  0%, 100% { transform: translate(var(--ix-from-x), var(--ix-from-y)); }
+}
+.tc-ix-approach[data-action='poke'] .tc-ix-actor,
+.tc-ix-approach[data-action='boop'] .tc-ix-actor {
+  animation: ixActorBlink var(--ix-dur, 1500ms) ease-out both;
+}
+@keyframes ixActorBlink {
+  0%   { opacity: 0; transform: scale(0.55); }
+  14%  { opacity: 1; transform: scale(1.06); }
+  22%  { transform: scale(1); }
+  78%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.85); }
+}
+.tc-ix-approach[data-action='poke'] .tc-ix-glyph {
+  animation: ixJab var(--ix-dur, 1500ms) cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+/* The jab reaches from the avatar toward the target -- that vector is exactly
+   to-minus-from, so it needs no separate variable. --ix-face flips the glyph so
+   a pointing finger points at the person rather than away from them. */
+@keyframes ixJab {
+  0%   { opacity: 0; transform: translateX(0) scaleX(var(--ix-face, 1)) scale(0.6); }
+  16%  { opacity: 1; transform: translateX(0) scaleX(var(--ix-face, 1)) scale(1); }
+  36%  { transform: translateX(calc((var(--ix-to-x) - var(--ix-from-x)) * 0.92)) scaleX(var(--ix-face, 1)) scale(1); }
+  50%  { transform: translateX(calc((var(--ix-to-x) - var(--ix-from-x)) * 0.3)) scaleX(var(--ix-face, 1)) scale(1); }
+  68%  { transform: translateX(calc((var(--ix-to-x) - var(--ix-from-x)) * 0.92)) scaleX(var(--ix-face, 1)) scale(1); }
+  84%  { opacity: 1; transform: translateX(0) scaleX(var(--ix-face, 1)) scale(1); }
+  100% { opacity: 0; transform: translateX(0) scaleX(var(--ix-face, 1)) scale(0.8); }
+}
+/* A boop is one deliberate touch, arriving from slightly above. */
+.tc-ix-approach[data-action='boop'] .tc-ix-glyph {
+  animation: ixBoop var(--ix-dur, 1500ms) cubic-bezier(0.3, 0, 0.2, 1) both;
+}
+@keyframes ixBoop {
+  0%   { opacity: 0; transform: translate(0, -14px) scaleX(var(--ix-face, 1)) scale(0.6); }
+  18%  { opacity: 1; transform: translate(0, -10px) scaleX(var(--ix-face, 1)) scale(1); }
+  46%  { transform: translate(calc((var(--ix-to-x) - var(--ix-from-x)) * 0.9), 0) scaleX(var(--ix-face, 1)) scale(1.08); }
+  60%  { transform: translate(calc((var(--ix-to-x) - var(--ix-from-x)) * 0.75), -4px) scaleX(var(--ix-face, 1)) scale(1); }
+  86%  { opacity: 1; transform: translate(0, -8px) scaleX(var(--ix-face, 1)) scale(1); }
+  100% { opacity: 0; transform: translate(0, -14px) scaleX(var(--ix-face, 1)) scale(0.85); }
+}
+
+/* Hug: arrive from the right, converge, hold, lift away. */
+.tc-ix-approach[data-action='hug'] {
+  animation: ixConverge var(--ix-dur, 2600ms) cubic-bezier(0.25, 0.9, 0.3, 1) both;
+}
+@keyframes ixConverge {
+  0%   { transform: translate(var(--ix-from-x), var(--ix-from-y)); }
+  /* Closing the gap. Slower than it needs to be, which is the point. */
+  42%  { transform: translate(var(--ix-to-x), var(--ix-to-y)); }
+  100% { transform: translate(var(--ix-to-x), var(--ix-to-y)); }
+}
+.tc-ix-approach[data-action='hug'] .tc-ix-actor {
+  animation: ixActorArrive var(--ix-dur, 2600ms) ease-out both;
+}
+@keyframes ixActorArrive {
+  0%   { opacity: 0; transform: scale(0.75); }
+  12%  { opacity: 1; transform: scale(1); }
+  76%  { opacity: 1; transform: scale(1); }
+  /* Lifts away with the gesture rather than being left behind by it. */
+  100% { opacity: 0; transform: translateY(-30px) scale(0.9); }
+}
+.tc-ix-approach[data-action='hug'] .tc-ix-glyph {
+  animation: ixHug var(--ix-dur, 2600ms) ease-out both;
+}
+@keyframes ixHug {
+  /* Nothing until they have actually met -- the emoji is the RESULT of the
+     converge, so showing it early gives the punchline before the setup. */
+  0%, 40% { opacity: 0; transform: rotate(0deg) scale(0.5); }
+  52%     { opacity: 1; transform: rotate(0deg) scale(1.18); }
+  58%     { transform: rotate(-11deg) scale(1.05); }
+  66%     { transform: rotate(10deg) scale(1.05); }
+  74%     { transform: rotate(-7deg) scale(1.05); }
+  80%     { transform: rotate(0deg) scale(1.05); }
+  /* Bounce up and out. */
+  88%     { opacity: 1; transform: translateY(-16px) rotate(0deg) scale(1.1); }
+  100%    { opacity: 0; transform: translateY(-42px) rotate(0deg) scale(0.95); }
 }
 
 /* --- self: plays beside the actor ---------------------------------------- */
@@ -1332,8 +1451,11 @@ code {
 @media (prefers-reduced-motion: reduce) {
   .tc-ix-self,
   .tc-ix-travel,
+  .tc-ix-approach,
   .tc-ix-self .tc-ix-glyph,
   .tc-ix-travel .tc-ix-glyph,
+  .tc-ix-approach .tc-ix-glyph,
+  .tc-ix-actor,
   .tc-ix-impact {
     animation: none !important;
   }

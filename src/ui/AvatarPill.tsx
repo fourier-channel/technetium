@@ -1,4 +1,4 @@
-import { AuthedImage } from './AuthedImage'
+import { AvatarDisc } from './AvatarDisc'
 
 // ---------------------------------------------------------------------------
 // The long rounded pill carrying a person's avatar and display name together.
@@ -8,23 +8,11 @@ import { AuthedImage } from './AuthedImage'
 // arrival animation is that the thing popping into view is recognisably the
 // person's pill, so a near-copy that drifts would undo it.
 //
-// Avatars load via the homeserver authenticated-media path (the content gate
-// 403s them, D-bf01), degrading to a coloured initial.
+// The disc itself now lives in ./AvatarDisc for the same reason one step
+// further down: the interaction overlay draws a bare disc, and it has to be
+// THIS disc. Avatars load via the homeserver authenticated-media path (the
+// content gate 403s them, D-bf01), degrading to a coloured initial.
 // ---------------------------------------------------------------------------
-
-// Deterministic avatar-disc colour from a user id (fallback when no avatar).
-// NOT exported: a non-component export from a component file breaks fast
-// refresh for the whole module (G-tp01).
-function colorFor(userId: string): string {
-  let h = 0
-  for (let i = 0; i < userId.length; i++) h = (h * 31 + userId.charCodeAt(i)) % 360
-  return `hsl(${h}, 55%, 45%)`
-}
-
-function initialsFor(name: string): string {
-  const cleaned = name.replace(/^[@#!]/, '').trim()
-  return cleaned.slice(0, 2).toUpperCase() || '?'
-}
 
 export function AvatarPill({
   userId,
@@ -81,35 +69,7 @@ export function AvatarPill({
         cursor: onOpen ? 'pointer' : undefined,
       }}
     >
-      <span
-        style={{
-          width: 22,
-          height: 22,
-          flexShrink: 0,
-          borderRadius: '50%',
-          overflow: 'hidden',
-          display: 'grid',
-          placeItems: 'center',
-          fontSize: 10,
-          fontWeight: 700,
-          color: '#fff',
-          background: colorFor(userId),
-        }}
-      >
-        {avatarMxc ? (
-          <AuthedImage
-            mxc={avatarMxc}
-            width={180}
-            fill
-            transparentLoading
-            alt=""
-            fallback={initialsFor(name)}
-            viaHomeserver
-          />
-        ) : (
-          initialsFor(name)
-        )}
-      </span>
+      <AvatarDisc userId={userId} name={name} avatarMxc={avatarMxc} size={22} />
       <span
         style={{
           fontFamily: 'var(--tc-ui-font, inherit)',
