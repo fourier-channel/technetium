@@ -109,6 +109,54 @@ click through privacy notices, which is the opposite of the goal.
 `preview.url` is already opt-in and predates this system; it is folded in so
 there is ONE place a user sees everything, rather than a per-feature scattering.
 
+### KLIPY: the contract, sourced 2026-08-15
+
+Obtained from KLIPY's own public demo apps and migration guide after
+`docs.klipy.com` refused automated fetches. Read off working client code, not
+from memory -- but it is still SECOND-HAND and must be confirmed against the
+real docs before shipping.
+
+- **Base URL:** `https://api.klipy.com/api/v1/{API_KEY}` -- the key is a **PATH
+  SEGMENT**, not a query parameter or header.
+- **It is a drop-in Tenor replacement** (`tenor.googleapis.com` ->
+  `api.klipy.com`), which is why the shape is familiar.
+- **Endpoints:** `GET /gifs/trending`, `GET /gifs/search`, `GET /gifs/categories`,
+  `GET /gifs/recent/{customer_id}`, `POST /gifs/view/{slug}`,
+  `POST /gifs/share/{slug}`, `POST /gifs/report/{slug}`,
+  `DELETE /gifs/recent/{customer_id}`. Stickers, clips and memes mirror this.
+- **Parameters:** `page`, `per_page`, `customer_id`, `locale`, plus ad params.
+- **Item shape:** `{ id, title, slug, blur_preview, file: <size variants>, type,
+  width, height, content }`.
+
+**Two findings that change the notice, not just the code:**
+
+1. **`customer_id` is required on every call.** A persistent per-user identifier
+   goes to KLIPY with every search. That is materially more than "they see your
+   IP and your queries" -- it links a user's entire search history together. The
+   surface register was written before this was known and understated it; now
+   corrected. Nothing has shipped, so this is an edit rather than a
+   `noticeVersion` bump.
+2. **`view` and `share` are POST endpoints.** Which results you looked at and
+   which you sent are reported back individually. Whether calling them is
+   optional or contractually required is one of the open questions below.
+
+**Correction to what this ledger said on 2026-08-14:** I recorded that KLIPY
+"places ads between content". Their migration guide describes monetization as an
+opt-in feature a developer may integrate, not something imposed on the response.
+The earlier statement was stronger than the evidence supported.
+
+**Brand attribution is a requirement**, not a courtesy: the migration guide's
+step 3 requires KLIPY attribution in the search bar and content area. That is a
+UI obligation to design in, not a footnote.
+
+**Production access is gated:** keys start in sandbox and production must be
+requested through their partner panel.
+
+**Still needed before G2 can ship** (see the message to the operator): the
+`search` query parameter's exact name, response envelope and pagination fields,
+rate limits, whether `view`/`share` reporting is mandatory, the attribution
+asset requirements, and the verbatim caching clause.
+
 **KLIPY-specific note.** Their terms currently forbid caching their content,
 which forces the direct client-to-KLIPY connection and therefore forces the
 notice -- the restriction and the disclosure requirement are the same fact seen
@@ -150,7 +198,12 @@ pure read of it -- no migration needed.
 - **O-eg2** Should the notice block the FIRST use, or appear at settings time?
   Recommendation: first use. A notice shown when nothing is happening is not
   read; one shown at the moment of consequence is.
-- **O-eg3** Does the front page's gate and this client's register need to be
-  the same record? They are different origins with different storage.
+- **O-eg3 -- RESOLVED 2026-08-15 (operator): separate, and said so plainly.**
+  They are different surfaces -- a web surface reached by browser versus an app
+  surface intended to become a standalone wrapper -- with different storage and
+  different threat models. Implying one record would claim a guarantee that does
+  not technically exist.
+- ~~**O-eg3** Does the front page's gate and this client's register need to be
+  the same record?~~ They are different origins with different storage.
   Recommendation: no -- keep them separate and say so, rather than implying a
   cross-surface guarantee that does not technically exist.

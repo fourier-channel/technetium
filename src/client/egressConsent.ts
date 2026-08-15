@@ -47,6 +47,12 @@ export const EGRESS_SURFACES: readonly EgressSurface[] = [
       'your IP address',
       'your browser and its user agent',
       'every search term you type, as you type it',
+      // Not a guess: customer_id is a REQUIRED parameter on every KLIPY call.
+      // It is the difference between "they see queries" and "they see YOUR
+      // queries, linked together over time", and a notice that omitted it
+      // would be describing a weaker disclosure than the one taking place.
+      'a persistent identifier that links all of your searches together',
+      'which results you viewed and which you sent, reported back individually',
     ],
     ifDeclined: 'The GIF picker stays off. Everything else works normally.',
     noticeVersion: 1,
