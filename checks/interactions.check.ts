@@ -17,6 +17,7 @@ import {
   parseInteraction,
   rateLimitOk,
 } from '../src/client/interactionEvents.ts'
+import { anchorPoint } from '../src/ui/interactionGeometry.ts'
 
 let failures = 0
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -192,6 +193,52 @@ console.log('\n-- the domain registry is DERIVED, and stays wire-compatible --')
 
   check('every registry entry has a glyph and a positive duration',
     Object.values(ACTION_REGISTRY).every((d: any) => !!d.glyph && d.durationMs > 0))
+}
+
+console.log('\n-- overlay geometry: the layer is not the scroller --')
+{
+  // The regression these exist for: the overlay was mounted INSIDE the
+  // scroller, where `inset: 0` pins it to the top of the scrolled content
+  // rather than to the visible box. Positions were still measured from the
+  // scroller, so every play drew scrollTop pixels above the screen and was
+  // clipped. Nothing failed, nothing errored, and nothing appeared.
+  const scroller = { top: 100, bottom: 500, left: 0, width: 800, height: 400 }
+
+  // The layer sits over the scroller: the two origins agree.
+  const flush = anchorPoint(scroller, scroller, {
+    top: 200, bottom: 220, left: 40, width: 60, height: 20,
+  })
+  check('an anchor is measured from the layer origin', flush?.x === 70 && flush?.y === 110)
+
+  // The layer scrolled away with the content by 300px, which is what mounting
+  // it inside the scroller did. The point must follow the LAYER, not the
+  // scroller -- if this returns the same y as above, the origin is wrong again.
+  const scrolledLayer = { top: -200, bottom: 200, left: 0, width: 800, height: 400 }
+  const drifted = anchorPoint(scroller, scrolledLayer, {
+    top: 200, bottom: 220, left: 40, width: 60, height: 20,
+  })
+  check('a displaced layer shifts the point by exactly its own offset',
+    drifted?.y === 410 && drifted.y - (flush?.y ?? 0) === 300)
+
+  // Visibility is still judged against the SCROLLER, never the layer.
+  check('an anchor above the scroller band is dropped',
+    anchorPoint(scroller, scroller, {
+      top: 40, bottom: 60, left: 40, width: 60, height: 20,
+    }) === null)
+  check('an anchor below the scroller band is dropped',
+    anchorPoint(scroller, scroller, {
+      top: 600, bottom: 620, left: 40, width: 60, height: 20,
+    }) === null)
+  // Half-visible counts: a pill straddling the edge is still somewhere real.
+  check('an anchor straddling the top edge is kept',
+    anchorPoint(scroller, scroller, {
+      top: 90, bottom: 110, left: 40, width: 60, height: 20,
+    }) !== null)
+  // A layer displaced out of the band must NOT change what is visible.
+  check('the layer offset never decides visibility',
+    anchorPoint(scroller, scrolledLayer, {
+      top: 600, bottom: 620, left: 40, width: 60, height: 20,
+    }) === null)
 }
 
 if (failures > 0) {

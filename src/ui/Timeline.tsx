@@ -406,12 +406,6 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
           </JumpContext.Provider>
           </InteractionTargetContext.Provider>
           </ProfileOpenerContext.Provider>
-          {/* Above the log, never inside it. */}
-          <InteractionLayer
-            plays={interactions.plays}
-            containerRef={scrollRef}
-            nameFor={(userId) => room.getMember(userId)?.name || userId}
-          />
           {ixMenu && client && (
             <InteractionMenu
               x={ixMenu.x}
@@ -445,6 +439,15 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
             />
           )}
         </div>
+        {/* Above the log and OUTSIDE the scroller, deliberately: an absolutely
+            positioned child of a scrolling element is pinned to the top of its
+            content, not to the visible box, so mounting this one step deeper
+            drew every play scrollTop pixels off screen. */}
+        <InteractionLayer
+          plays={interactions.plays}
+          containerRef={scrollRef}
+          nameFor={(userId) => room.getMember(userId)?.name || userId}
+        />
       </div>
     </div>
   )

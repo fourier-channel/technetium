@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ActivePlay } from '../client/useChatInteractions'
 import { interactionPhrase } from '../client/interactionCatalog'
+import { anchorPoint, type Point, type RectLike } from './interactionGeometry'
 import { useReducedMotion } from './reducedMotion'
 
 // ---------------------------------------------------------------------------
@@ -15,6 +16,12 @@ import { useReducedMotion } from './reducedMotion'
 // It is `pointer-events: none` throughout and never occupies layout, so nothing
 // it does can move, block or reflow a message (G-tp19).
 //
+// The layer MUST be mounted OUTSIDE the scroller, as a sibling of it. Inside
+// one, `inset: 0` pins it to the top of the scrolled content instead of to the
+// visible box, and every play draws scrollTop pixels off screen. See
+// interactionGeometry.ts -- the geometry is separated out and checked precisely
+// so that mistake cannot come back silently.
+//
 // If an anchor cannot be resolved -- the person is scrolled out of view -- the
 // play is DROPPED rather than aimed at the edge of the screen (O-in1). An
 // interaction with nobody visible to receive it is not worth faking.
@@ -24,25 +31,23 @@ import { useReducedMotion } from './reducedMotion'
 // AvatarPill, so every sender pill and membership row is an anchor for free.
 export const USER_ANCHOR_ATTR = 'data-user-anchor'
 
-interface Point {
-  x: number
-  y: number
-}
-
-// The centre of the LAST on-screen anchor for a user, in the scroller's
-// coordinate space. Last, because in a chat the most recent thing somebody
-// said is where you think of them as being.
-function resolveAnchor(container: HTMLElement, userId: string): Point | null {
+// The centre of the LAST on-screen anchor for a user, in the LAYER's coordinate
+// space. Last, because in a chat the most recent thing somebody said is where
+// you think of them as being. Anchors are searched inside the scroller and
+// judged against its visible band, but measured from the layer -- the two boxes
+// are not the same one (interactionGeometry.ts).
+function resolveAnchor(
+  container: HTMLElement,
+  layer: RectLike,
+  userId: string,
+): Point | null {
   const escaped = userId.replace(/["\\]/g, '\\$&')
   const nodes = container.querySelectorAll<HTMLElement>(`[${USER_ANCHOR_ATTR}="${escaped}"]`)
   if (nodes.length === 0) return null
   const box = container.getBoundingClientRect()
   for (let i = nodes.length - 1; i >= 0; i--) {
-    const r = nodes[i].getBoundingClientRect()
-    // Must actually be within the scroller's visible band -- a pill scrolled
-    // out of view is still in the DOM.
-    if (r.bottom < box.top || r.top > box.bottom) continue
-    return { x: r.left - box.left + r.width / 2, y: r.top - box.top + r.height / 2 }
+    const p = anchorPoint(box, layer, nodes[i].getBoundingClientRect())
+    if (p) return p
   }
   return null
 }
@@ -57,14 +62,16 @@ export function InteractionLayer({
   nameFor: (userId: string) => string
 }) {
   const reduced = useReducedMotion()
+  const layerRef = useRef<HTMLDivElement | null>(null)
 
   return (
-    <div className="tc-ix-layer" aria-hidden={false}>
+    <div className="tc-ix-layer" ref={layerRef} aria-hidden={false}>
       {plays.map((play) => (
         <InteractionPlay
           key={play.key}
           play={play}
           containerRef={containerRef}
+          layerRef={layerRef}
           nameFor={nameFor}
           reduced={reduced}
         />
@@ -76,11 +83,13 @@ export function InteractionLayer({
 function InteractionPlay({
   play,
   containerRef,
+  layerRef,
   nameFor,
   reduced,
 }: {
   play: ActivePlay
   containerRef: React.RefObject<HTMLElement | null>
+  layerRef: React.RefObject<HTMLElement | null>
   nameFor: (userId: string) => string
   reduced: boolean
 }) {
@@ -93,12 +102,14 @@ function InteractionPlay({
 
   useEffect(() => {
     const container = containerRef.current
-    if (!container) {
+    const layer = layerRef.current
+    if (!container || !layer) {
       setResolved(true)
       return
     }
-    const from = resolveAnchor(container, play.actor)
-    const to = play.target ? resolveAnchor(container, play.target) : null
+    const layerBox = layer.getBoundingClientRect()
+    const from = resolveAnchor(container, layerBox, play.actor)
+    const to = play.target ? resolveAnchor(container, layerBox, play.target) : null
     // Both ends must exist for a targeted play; the actor alone for a self one.
     if (!from || (play.target && !to)) {
       setGeom(null)
@@ -107,7 +118,7 @@ function InteractionPlay({
     }
     setGeom({ from, to })
     setResolved(true)
-  }, [containerRef, play.actor, play.target])
+  }, [containerRef, layerRef, play.actor, play.target])
 
   const phrase = interactionPhrase(
     play.def,
