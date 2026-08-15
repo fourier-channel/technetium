@@ -25,6 +25,23 @@ export interface DirectoryUser {
   avatarMxc?: string
 }
 
+// Where a candidate came from, in descending order of confidence:
+//
+//   'local'     -- already in a room with you. They exist, and you can reach
+//                  them. No ambiguity at all.
+//   'directory' -- the server's directory found them. They exist.
+//   'raw'       -- you typed a well-formed id. NOBODY HAS CONFIRMED IT EXISTS.
+//                  The shape is valid; the person may not be.
+//
+// The picker used to flatten all three into one list, which made the third
+// indistinguishable from the first two -- so a typo that happened to be
+// well-formed looked exactly like a real person.
+export type CandidateSource = 'local' | 'directory' | 'raw'
+
+export interface Candidate extends DirectoryUser {
+  source: CandidateSource
+}
+
 // Search the server's user directory. Returns [] rather than throwing when the
 // server declines -- some homeservers disable it, and a picker that explodes
 // is worse than one that only offers local members.
@@ -57,23 +74,25 @@ export function mergeCandidates(
   directory: DirectoryUser[],
   rawInput: string,
   excludeUserIds: Set<string>,
-): DirectoryUser[] {
+): Candidate[] {
   const seen = new Set<string>(excludeUserIds)
-  const out: DirectoryUser[] = []
+  const out: Candidate[] = []
 
-  const push = (u: DirectoryUser) => {
+  const push = (u: DirectoryUser, source: CandidateSource) => {
     if (!u.userId || seen.has(u.userId)) return
     seen.add(u.userId)
-    out.push(u)
+    out.push({ ...u, source })
   }
 
-  for (const u of local) push(u)
-  for (const u of directory) push(u)
+  // Order is also precedence: the first source to claim an id keeps it, so
+  // someone already in your rooms is never relabelled as an unverified guess.
+  for (const u of local) push(u, 'local')
+  for (const u of directory) push(u, 'directory')
 
   // A hand-typed id goes LAST: it is the fallback, and surfacing it above real
   // matches would let a typo outrank the person being looked for.
   const raw = rawInput.trim()
-  if (isValidMxid(raw)) push({ userId: raw })
+  if (isValidMxid(raw)) push({ userId: raw }, 'raw')
 
   return out
 }

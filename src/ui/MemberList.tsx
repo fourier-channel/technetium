@@ -4,6 +4,7 @@ import { useClient } from '../client/ClientContext'
 import { startDm } from '../client/dm'
 import { describeInviteError } from '../client/userDirectory'
 import { UserPicker } from './UserPicker'
+import { findExistingDm } from '../client/dm'
 import { ProfileCard } from './ProfileCard'
 import { ProfileActions } from './ProfileActions'
 import { usePresence, type PresenceState } from '../client/usePresence'
@@ -139,6 +140,14 @@ export function MemberList({ room }: { room: Room | null }) {
           title={picker === 'dm' ? 'Start a direct message' : 'Invite to this room'}
           actionLabel={picker === 'dm' ? 'Opening' : 'Inviting'}
           excludeFromRoom={picker === 'invite' ? room : null}
+          // Only meaningful for the DM picker: W3.8 reuses an existing DM
+          // rather than creating a second one, and the user could not tell
+          // that was going to happen until after they clicked.
+          existingDmWith={
+            picker === 'dm' && client
+              ? (userId) => findExistingDm(client, userId) !== null
+              : undefined
+          }
           onPick={(userId) => {
             const run = async () => {
               try {
