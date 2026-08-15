@@ -1,5 +1,7 @@
+import { useClient } from '../client/ClientContext'
 import { AuthedImage } from './AuthedImage'
 import { colorFor, initialsFor } from './avatarLook'
+import { clipPathFor, resolveAvatarShape, useAvatarShape } from './avatarShape'
 
 // The round avatar disc on its own, without the pill around it.
 //
@@ -20,13 +22,23 @@ export function AvatarDisc({
   avatarMxc: string | null
   size?: number
 }) {
+  const { client } = useClient()
+  const { shape } = useAvatarShape()
+  // Resolved here rather than passed down from every call site, so a member
+  // row, a timeline line and the interaction overlay all agree without any of
+  // them having to know the rule.
+  const mask = resolveAvatarShape(userId, client?.getUserId() ?? null, shape)
   return (
     <span
       style={{
         width: size,
         height: size,
         flexShrink: 0,
-        borderRadius: '50%',
+        // The mask is a clip-path, not a border-radius: only the former can cut
+        // a triangle, a keyhole or a tear. It clips the coloured fallback disc
+        // and the loaded image alike, so an avatar that never loads is the same
+        // shape as one that does.
+        clipPath: clipPathFor(mask),
         overflow: 'hidden',
         display: 'grid',
         placeItems: 'center',

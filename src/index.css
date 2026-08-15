@@ -260,6 +260,17 @@ code {
    revealing it never reflows the message under the pointer.
    --------------------------------------------------------------------------- */
 .tc-row {
+  /* The gutter measurements live here and nowhere else, so the whole left
+     margin retunes from one place. On the ROW rather than on the line, because
+     the identity block is a sibling of the line and has to centre itself on the
+     same avatar the line positions. */
+  --tc-time-w: 44px;
+  --tc-av-w: 40px;
+  --tc-av-x: 52px;
+  --tc-body-x: 100px;
+  /* The avatar's centre, which is what the name is centred over. */
+  --tc-av-mid: calc(var(--tc-av-x) + var(--tc-av-w) / 2);
+
   position: relative;
 }
 
@@ -1004,13 +1015,6 @@ code {
    (G-tp19, G-tp20).
    --------------------------------------------------------------------------- */
 .tc-row-line {
-  /* The three gutter measurements live here and nowhere else, so the whole
-     left margin retunes from one place. */
-  --tc-time-w: 44px;
-  --tc-av-w: 26px;
-  --tc-av-x: 52px;
-  --tc-body-x: 86px;
-
   position: relative;
   min-width: 0;
   /* The avatar is out of flow, so the line's height would otherwise be the
@@ -1062,20 +1066,28 @@ code {
   border-radius: 50%;
 }
 
-/* The identity block: name, and the guild tag centred beneath it. */
+/* The identity block: name, and the guild tag centred beneath it -- the pair
+   centred over the AVATAR rather than aligned to the row's left edge.
+
+   It is a ZERO-WIDTH flex box parked on the avatar's centre line. A zero-width
+   centred container puts its child's midpoint exactly on that line and lets the
+   child overflow equally both ways, so the name stays centred at any length
+   instead of being pushed right by the gutter or clipped to fit it. Long names
+   spill, which is the intended behaviour here and not an oversight. */
 .tc-ident-row {
+  position: relative;
+  left: var(--tc-av-mid);
+  width: 0;
   display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
+  justify-content: center;
+  overflow: visible;
 }
 .tc-ident {
-  /* Inline-block so it is exactly as wide as the name -- which is what makes
-     "centred under the name" mean centred under the NAME rather than under the
-     row, for a name of any length. */
+  /* Exactly as wide as the name -- which is what makes "centred under the name"
+     mean centred under the NAME rather than under anything else, for a name of
+     any length. */
   display: inline-block;
-  min-width: 0;
-  max-width: 420px;
+  text-align: center;
 }
 .tc-ident-name {
   display: block;
@@ -1084,8 +1096,9 @@ code {
   font-size: 14px;
   line-height: 1.25;
   color: var(--cpd-color-text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* No ellipsis: a centred name that truncates would be centred on its stub
+     rather than on the person, and the point of this pass is to see what long
+     names actually do. */
   white-space: nowrap;
   cursor: pointer;
 }

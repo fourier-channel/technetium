@@ -27,6 +27,13 @@ import {
   travelPoses,
 } from '../src/ui/interactionGeometry.ts'
 import { decoratedName, displayDecoration } from '../src/ui/displayDecoration.ts'
+import {
+  AVATAR_SHAPES,
+  DEFAULT_AVATAR_SHAPE,
+  clipPathFor,
+  isAvatarShape,
+  resolveAvatarShape,
+} from '../src/ui/avatarShape.ts'
 
 let failures = 0
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -410,6 +417,35 @@ console.log('\n-- display decorations add NOTHING of their own --')
     live.prefix === '' && live.suffix === '' && live.guild === null)
   check('an undecorated name is untouched',
     decoratedName('saber', live) === 'saber')
+}
+
+console.log('\n-- avatar masks --')
+{
+  check('every shape the picker offers resolves to a clip-path',
+    AVATAR_SHAPES.every((s) => clipPathFor(s.id) === s.clipPath && s.clipPath.length > 0))
+  check('all five shapes are present', AVATAR_SHAPES.length === 5)
+  check('shape ids are unique', new Set(AVATAR_SHAPES.map((s) => s.id)).size === 5)
+
+  // Percentages, never pixels: the same disc is drawn at several sizes and a
+  // px path would only be correct at one of them.
+  check('no shape is measured in pixels',
+    AVATAR_SHAPES.every((s) => !/\d\s*px/.test(s.clipPath)),
+    AVATAR_SHAPES.filter((s) => /\d\s*px/.test(s.clipPath)).map((s) => s.id))
+
+  // A stored value from a future version, or a corrupted one, must fall back
+  // rather than emit an invalid clip-path that silently hides the avatar.
+  check('an unknown shape is rejected', !isAvatarShape('hexagon') && !isAvatarShape(null))
+  check('an unknown shape still yields a usable path',
+    clipPathFor('hexagon' as never) === clipPathFor(DEFAULT_AVATAR_SHAPE))
+
+  // Only your own choice is knowable today. Stated once, so the day a shared
+  // surface exists there is exactly one place to change (O-in6).
+  check('your own avatar takes your shape',
+    resolveAvatarShape('@me:x.net', '@me:x.net', 'keyhole') === 'keyhole')
+  check('everyone else keeps the default',
+    resolveAvatarShape('@you:x.net', '@me:x.net', 'keyhole') === DEFAULT_AVATAR_SHAPE)
+  check('logged out, nobody is special',
+    resolveAvatarShape('@me:x.net', null, 'keyhole') === DEFAULT_AVATAR_SHAPE)
 }
 
 if (failures > 0) {

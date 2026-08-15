@@ -618,7 +618,7 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
               : undefined
           }
         >
-          <AvatarDisc userId={senderId} name={senderName} avatarMxc={senderAvatar} size={26} />
+          <AvatarDisc userId={senderId} name={senderName} avatarMxc={senderAvatar} size={40} />
         </span>
         <div
           style={{
