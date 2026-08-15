@@ -14,6 +14,7 @@ const MEDIA_RETRY_BASE_MS = 800
 export function AuthedImage({
   mxc,
   width,
+  roomId,
   alt,
   maxHeight = 320,
   onClick,
@@ -24,6 +25,8 @@ export function AuthedImage({
 }: {
   mxc: string
   width?: ThumbSize
+  /** The room being rendered. Required for media in ENCRYPTED rooms. */
+  roomId?: string
   alt?: string
   maxHeight?: number
   onClick?: () => void
@@ -61,7 +64,7 @@ export function AuthedImage({
     let retryTimer: ReturnType<typeof setTimeout> | undefined
 
     // Reset the attempt counter only when the SOURCE changes, not on a retry.
-    const sourceKey = `${mxc}|${width ?? ''}`
+    const sourceKey = `${mxc}|${width ?? ''}|${roomId ?? ''}`
     if (sourceKeyRef.current !== sourceKey) {
       sourceKeyRef.current = sourceKey
       attemptsRef.current = 0
@@ -79,7 +82,7 @@ export function AuthedImage({
     // One fetcher. The server decides whether an mxc is chrome or content and
     // applies the matching rule, so the call site no longer has to know --
     // which is what the flag used to encode, in nine places.
-    fetchMediaSrc(client, mxc, width)
+    fetchMediaSrc(client, mxc, width, roomId)
       .then(({ src: resolved, revoke }) => {
         if (cancelled) {
           // Component moved on before the fetch resolved — clean up immediately.
@@ -114,7 +117,7 @@ export function AuthedImage({
         revokeRef.current = null
       }
     }
-  }, [client, mxc, width, retryTick])
+  }, [client, mxc, width, roomId, retryTick])
 
   if (error) {
     if (fallback !== undefined) return <>{fallback}</>

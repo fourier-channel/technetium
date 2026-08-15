@@ -509,9 +509,10 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
           <AuthedImage
             mxc={mxc}
             width={320}
+            roomId={room.roomId}
             reserve={reserveBox(content)}
             alt={typeof content.body === 'string' ? content.body : undefined}
-            onClick={() => open([{ mxc, ...imageMeta(event) }], 0)}
+            onClick={() => open([{ mxc, roomId: room.roomId, ...imageMeta(event) }], 0)}
           />
           <MediaTags mxc={mxc} roomId={event.getRoomId()} />
         </div>

@@ -53,6 +53,7 @@ export function mediaUrl(
   client: MatrixClient,
   mxc: string,
   width?: ThumbSize,
+  roomId?: string,
 ): string | null {
   const parsed = parseMxc(mxc)
   if (!parsed) return null
@@ -61,7 +62,20 @@ export function mediaUrl(
   const path =
     `${base}/_matrix/client/v1/media/${kind}/` +
     `${encodeURIComponent(parsed.serverName)}/${encodeURIComponent(parsed.mediaId)}`
-  return width ? `${path}?width=${width}&height=${width}&method=scale` : path
+  const q = new URLSearchParams()
+  if (width) {
+    q.set('width', String(width))
+    q.set('height', String(width))
+    q.set('method', 'scale')
+  }
+  // The room we are rendering. Only ever needed for ENCRYPTED rooms: the mxc
+  // lives inside the ciphertext, so the server cannot see which room it belongs
+  // to and has no way to authorize it otherwise. Sending it is not a claim of
+  // access -- the server still checks we are joined to this room, and only
+  // honours the hint when the room really is encrypted.
+  if (roomId) q.set('room_id', roomId)
+  const qs = q.toString()
+  return qs ? `${path}?${qs}` : path
 }
 
 // Fetch an mxc with the client's token and return an object URL for the bytes.
@@ -75,8 +89,9 @@ export async function fetchMediaSrc(
   client: MatrixClient,
   mxc: string,
   width?: ThumbSize,
+  roomId?: string,
 ): Promise<{ src: string; revoke: () => void }> {
-  const url = mediaUrl(client, mxc, width)
+  const url = mediaUrl(client, mxc, width, roomId)
   if (!url) throw new Error(`invalid mxc URI: ${mxc}`)
 
   const token = client.getAccessToken()

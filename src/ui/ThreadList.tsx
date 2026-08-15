@@ -327,7 +327,7 @@ const ThreadTile = memo(function ThreadTile({
           // 180x90 preview: a strip would swamp the card (and fight the drag
           // reorder), so tags ride as a count chip that expands on click.
           <div style={{ position: 'relative' }}>
-            <AuthedImage mxc={mxc} width={180} maxHeight={90} alt={preview} />
+            <AuthedImage mxc={mxc} width={180} roomId={roomId} maxHeight={90} alt={preview} />
             <MediaTags mxc={mxc} roomId={roomId} variant="chip" max={8} />
           </div>
         ) : (

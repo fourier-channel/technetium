@@ -16,6 +16,9 @@ import { MediaTags } from './MediaTags'
 // download filename / alt text, and an optional mimetype to derive an extension.
 export interface LightboxItem {
   mxc: string
+  /** The room this image was rendered from. Needed for ENCRYPTED rooms, where
+   *  the server cannot see which room an mxc belongs to. */
+  roomId?: string
   name?: string
   mimetype?: string
 }
@@ -125,7 +128,7 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
     setSrc(null)
     setError(false)
 
-    fetchMediaSrc(client, cur.mxc)
+    fetchMediaSrc(client, cur.mxc, undefined, cur.roomId)
       .then(({ src: resolved, revoke }) => {
         if (cancelled) {
           revoke()

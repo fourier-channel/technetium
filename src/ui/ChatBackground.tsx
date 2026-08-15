@@ -24,7 +24,7 @@ export function ChatBackdrop({ bg }: { bg: ChatBg }) {
     <div aria-hidden style={{ position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
       {bg.mxc ? (
         <div style={{ position: 'absolute', inset: 0 }}>
-          <AuthedImage mxc={bg.mxc} width={850} fill transparentLoading alt="" />
+          <AuthedImage mxc={bg.mxc} width={850} roomId={roomId} fill transparentLoading alt="" />
         </div>
       ) : (
         <div
