@@ -992,23 +992,107 @@ code {
 .tc-row[data-grouped='true'] {
   padding-top: 0 !important;
 }
+/* ---------------------------------------------------------------------------
+   Row layout: an identity block on the first message of a cluster, and an
+   avatar on every line of it.
+
+   The avatar column is a FIXED width whether or not its image has loaded, and
+   the two things that share it -- the avatar and a grouped row's timestamp --
+   are stacked in the same box and cross-faded by opacity alone. Nothing here
+   changes size on hover, because the timeline re-pins to the bottom while
+   following and any hover-driven growth slides the whole conversation
+   (G-tp19, G-tp20).
+   --------------------------------------------------------------------------- */
+.tc-row-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+.tc-row-av {
+  position: relative;
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  display: block;
+  cursor: pointer;
+}
+.tc-row-av:focus-visible {
+  outline: 2px solid var(--tc-link);
+  outline-offset: 2px;
+  border-radius: 50%;
+}
+
+/* The identity block: name, and the guild tag centred beneath it. */
+.tc-ident-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.tc-ident {
+  /* Inline-block so it is exactly as wide as the name -- which is what makes
+     "centred under the name" mean centred under the NAME rather than under the
+     row, for a name of any length. */
+  display: inline-block;
+  min-width: 0;
+  max-width: 420px;
+}
+.tc-ident-name {
+  display: block;
+  font-family: var(--tc-ui-font, inherit);
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.25;
+  color: var(--cpd-color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tc-ident-name:focus-visible {
+  outline: 2px solid var(--tc-link);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+.tc-ident-guild {
+  display: block;
+  text-align: center;
+  font-size: 10px;
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tc-ident-time {
+  font-size: 11px;
+  color: var(--cpd-color-text-secondary);
+  flex-shrink: 0;
+}
+
+/* A grouped row's timestamp shares the avatar's box: same position, same size,
+   revealed by swapping opacity so neither one ever moves the other. */
 .tc-row-gutter-time {
   position: absolute;
-  left: 0;
-  top: 2px;
-  width: 44px;
-  text-align: right;
+  inset: 0;
+  display: grid;
+  place-items: center;
   font-size: 10px;
-  line-height: 1.4;
+  line-height: 1;
   color: var(--cpd-color-text-secondary, #a8b0bd);
+  background: var(--cpd-color-bg-canvas-default, #16181d);
+  border-radius: 50%;
   opacity: 0;
   pointer-events: none;
   user-select: none;
   transition: opacity 90ms ease-out;
 }
-.tc-row:hover > .tc-row-gutter-time,
-.tc-row:focus-within > .tc-row-gutter-time {
-  opacity: 0.75;
+.tc-row:hover .tc-row-gutter-time,
+.tc-row:focus-within .tc-row-gutter-time {
+  opacity: 0.9;
 }
 @media (prefers-reduced-motion: reduce) {
   .tc-row-gutter-time { transition: none; }

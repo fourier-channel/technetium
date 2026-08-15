@@ -7,7 +7,8 @@ import { eventPreview } from '../client/eventPreview'
 import { renderMessageBody } from '../client/messageBody'
 import { parseMxc } from '../client/media'
 import { AuthedImage } from './AuthedImage'
-import { AvatarPill } from './AvatarPill'
+import { AvatarDisc } from './AvatarDisc'
+import { SenderIdentity } from './SenderIdentity'
 import { MemberEvent } from './MemberEvent'
 import { useLightbox, type LightboxItem } from './Lightbox'
 import { linkify } from './linkify'
@@ -454,39 +455,6 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
   )
 }
 
-// The sender identity shown at the top of a message row: the shared AvatarPill
-// with the timestamp trailing outside it. The pill itself lives in
-// ./AvatarPill so the membership rows show the same one, not a copy of it.
-function SenderPill({
-  event,
-  time,
-  onOpenProfile,
-  onOpenInteractions,
-}: {
-  event: MatrixEvent
-  time: string
-  onOpenProfile?: (userId: string, x: number, y: number) => void
-  onOpenInteractions?: (userId: string, x: number, y: number) => void
-}) {
-  const { client } = useClient()
-  const senderId = event.getSender() ?? '(unknown)'
-  const member = client?.getRoom(event.getRoomId() ?? '')?.getMember(senderId) ?? null
-  const name = member?.name || senderId
-  const avatarMxc = member?.getMxcAvatarUrl() ?? null
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-      <AvatarPill
-        userId={senderId}
-        name={name}
-        avatarMxc={avatarMxc}
-        onOpen={onOpenProfile}
-        onContext={onOpenInteractions}
-      />
-      <span style={{ fontSize: 11, color: 'var(--cpd-color-text-secondary)', flexShrink: 0 }}>{time}</span>
-    </div>
-  )
-}
-
 export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?: (roomId: string, rootId: string) => void }) {
   const { event, kind, cells, layout } = item
   const { open } = useLightbox()
@@ -508,6 +476,12 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
   })
 
   const roomId = event.getRoomId() ?? ''
+  // Read once and shared by the identity block and the avatar column, which
+  // are now two elements describing the same person rather than one pill.
+  const senderId = event.getSender() ?? '(unknown)'
+  const senderMember = client?.getRoom(roomId)?.getMember(senderId) ?? null
+  const senderName = senderMember?.name || senderId
+  const senderAvatar = senderMember?.getMxcAvatarUrl() ?? null
   const canReact = kind === 'message' || kind === 'gallery'
   // Where this row's reaction affordance goes. A MEDIA body takes the rail
   // beside the picture; a text body takes the reserved slot trailing the text.
@@ -587,35 +561,76 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
       data-grouped={item.showHeader === false ? 'true' : undefined}
       style={{ padding: '4px 0' }}
     >
-      {/* A grouped message loses its pillbox, so its time is shown in the
-          gutter on hover -- otherwise the timestamp becomes unreachable for
-          every message after the first in a run. */}
-      {item.showHeader === false && <span className="tc-row-gutter-time">{time}</span>}
       {/* Overlays the row's top-right; revealed by CSS on hover/focus-within so
           no React state churns per pointer crossing. */}
       <MessageActionBar actions={actions} />
-      {/* Grouping hides the HEADER only. Every decoration below -- reply
-          pill, body, edited marker, reactions, receipts, thread chip -- is
-          untouched, which is why grouping could land last without revisiting
-          any of them. */}
+      {/* Grouping hides the IDENTITY BLOCK only -- the name and its guild tag.
+          The avatar repeats on every line of the run, and every decoration
+          below (reply pill, body, edited marker, reactions, receipts, thread
+          chip) is untouched either way. */}
       {item.showHeader !== false && (
-        <SenderPill
-          event={event}
+        <SenderIdentity
+          userId={senderId}
+          name={senderName}
           time={time}
           onOpenProfile={openProfile}
           onOpenInteractions={openInteractions}
         />
       )}
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 2,
-          minWidth: 0,
-          paddingLeft: 16,
-          marginTop: 1,
-        }}
-      >
+      <div className="tc-row-line">
+        {/* The avatar column. Fixed width whether or not the image has loaded,
+            so nothing shifts when it does.
+
+            The interaction anchor lives HERE and only on the lead row -- the
+            operator's rule is that effects centre on the name-with-avatar-under
+            -it, so a bare repeat avatar four messages down must not steal the
+            anchor. resolveAnchor takes the LAST match, and without this every
+            slap would land on the bottom of the run instead of on the person.
+            AvatarDisc is the pill's own disc, not a copy (D-bf01 routing). */}
+        <span
+          className="tc-row-av"
+          data-user-anchor={item.showHeader !== false ? senderId : undefined}
+          role={openProfile ? 'button' : undefined}
+          tabIndex={openProfile ? 0 : undefined}
+          title={senderName}
+          onClick={openProfile ? (e) => openProfile(senderId, e.clientX, e.clientY) : undefined}
+          onKeyDown={
+            openProfile
+              ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    const r = e.currentTarget.getBoundingClientRect()
+                    openProfile(senderId, r.left, r.bottom)
+                  }
+                }
+              : undefined
+          }
+          onContextMenu={
+            openInteractions
+              ? (e) => {
+                  e.preventDefault()
+                  openInteractions(senderId, e.clientX, e.clientY)
+                }
+              : undefined
+          }
+        >
+          <AvatarDisc userId={senderId} name={senderName} avatarMxc={senderAvatar} size={26} />
+          {/* A grouped message has no name line, so its time has nowhere to
+              live. It shares the avatar's slot and cross-fades with it on
+              hover: same box, opacity only, so the row is exactly the same
+              size hovered and not. */}
+          {item.showHeader === false && <span className="tc-row-gutter-time">{time}</span>}
+        </span>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
+            minWidth: 0,
+            flex: 1,
+            marginTop: 1,
+          }}
+        >
         {item.replyTo && <ReplyPill replyTo={item.replyTo} />}
         <div style={{ fontSize: 14, wordBreak: 'break-word', minWidth: 0 }}>
           {isMediaRow && roomId ? (
@@ -653,7 +668,8 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
             </span>
           )}
         </div>
-        <RowFooter item={item} onOpenThread={onOpenThread} pillsInRail={isMediaRow} />
+          <RowFooter item={item} onOpenThread={onOpenThread} pillsInRail={isMediaRow} />
+        </div>
       </div>
     </div>
   )

@@ -26,6 +26,7 @@ import {
   armSegment,
   travelPoses,
 } from '../src/ui/interactionGeometry.ts'
+import { decoratedName, displayDecoration } from '../src/ui/displayDecoration.ts'
 
 let failures = 0
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -383,6 +384,32 @@ console.log('\n-- unhurried: every interaction has room to be seen --')
   // longest definition or the longest animation gets cut off mid-play.
   check('MAX_INTERACTION_MS still covers the slowest',
     MAX_INTERACTION_MS === Math.max(...INTERACTIONS.map((i) => i.durationMs)))
+}
+
+console.log('\n-- display decorations add NOTHING of their own --')
+{
+  // The rule the operator was explicit about: no separator is ever inserted.
+  // The whitespace belongs to the decoration, because that is the only way a
+  // comma, an apostrophe or a bracket can sit flush against the name.
+  const dec = { prefix: 'Mr. ', suffix: ', if you please.', guild: 'Gentlemen' }
+  check('prefix and suffix are concatenated raw',
+    decoratedName('Maple', dec) === 'Mr. Maple, if you please.')
+  check('a suffix can sit flush against the name',
+    decoratedName('saber', { prefix: '', suffix: "'s", guild: null }) === "saber's")
+  check('an empty decoration leaves the name exactly as it was',
+    decoratedName('saber', { prefix: '', suffix: '', guild: null }) === 'saber')
+  // The failure this guards: someone "helpfully" joining with a space, which
+  // would break every possessive and bracket and offer no way to opt out.
+  check('no space is invented between the parts',
+    decoratedName('x', { prefix: 'a', suffix: 'b', guild: null }) === 'axb')
+
+  // Nothing is decorated yet, and that is the intended state -- the slots are
+  // reserved so filling them later is one function, not a row rewrite.
+  const live = displayDecoration('@someone:x.net')
+  check('the wiring point is empty by default',
+    live.prefix === '' && live.suffix === '' && live.guild === null)
+  check('an undecorated name is untouched',
+    decoratedName('saber', live) === 'saber')
 }
 
 if (failures > 0) {
