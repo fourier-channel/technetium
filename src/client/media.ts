@@ -78,6 +78,64 @@ export function mediaUrl(
   return qs ? `${path}?${qs}` : path
 }
 
+// ---------------------------------------------------------------------------
+// Blob cache.
+//
+// The HTTP response is immutable and cached for a year, so re-viewing an image
+// costs no network. It still cost a fresh createObjectURL and a fresh decode on
+// every mount, and AuthedImage blanks its src before fetching -- so an image
+// you had already seen visibly reloaded every time you opened it.
+//
+// The version of this file before the one-path rewrite cached resolved URLs for
+// exactly this reason. Removing it was a regression: "no URL whose lifetime
+// needs managing" was true of PRESIGNED urls and said nothing about blobs.
+//
+// Refcounted, because the alternative is choosing between two bugs. Revoking on
+// every unmount is what caused this; never revoking leaks every image the
+// session ever displayed. So: hand the same object URL to every caller that
+// wants it, and only revoke once nothing holds it AND it has aged out.
+// ---------------------------------------------------------------------------
+
+const BLOB_CACHE_MAX = 64
+
+interface CachedBlob {
+  url: string
+  refs: number
+}
+
+const blobs = new Map<string, CachedBlob>()
+const inFlight = new Map<string, Promise<string>>()
+
+function cacheKey(mxc: string, width?: ThumbSize, roomId?: string): string {
+  return `${mxc}|${width ?? ''}|${roomId ?? ''}`
+}
+
+function release(key: string): void {
+  const e = blobs.get(key)
+  if (e && e.refs > 0) e.refs -= 1
+  evict()
+}
+
+// Only entries nothing is holding are evictable; a wall of thumbnails larger
+// than the cache must not revoke a URL that is still on screen.
+function evict(): void {
+  if (blobs.size <= BLOB_CACHE_MAX) return
+  for (const [k, e] of blobs) {
+    if (blobs.size <= BLOB_CACHE_MAX) break
+    if (e.refs === 0) {
+      URL.revokeObjectURL(e.url)
+      blobs.delete(k)
+    }
+  }
+}
+
+/** For tests and diagnostics: how many blobs are held, and by how many callers. */
+export function blobCacheStats(): { size: number; held: number } {
+  let held = 0
+  for (const e of blobs.values()) if (e.refs > 0) held += 1
+  return { size: blobs.size, held }
+}
+
 // Fetch an mxc with the client's token and return an object URL for the bytes.
 // The caller MUST revoke() on cleanup or it leaks the blob.
 //
@@ -91,21 +149,54 @@ export async function fetchMediaSrc(
   width?: ThumbSize,
   roomId?: string,
 ): Promise<{ src: string; revoke: () => void }> {
+  const key = cacheKey(mxc, width, roomId)
+
+  // Already decoded and still held: hand back the SAME object URL, so the
+  // browser reuses the image it already has rather than decoding it again.
+  const cached = blobs.get(key)
+  if (cached) {
+    cached.refs += 1
+    blobs.delete(key)
+    blobs.set(key, cached) // touch for LRU
+    return { src: cached.url, revoke: () => release(key) }
+  }
+
   const url = mediaUrl(client, mxc, width, roomId)
   if (!url) throw new Error(`invalid mxc URI: ${mxc}`)
 
   const token = client.getAccessToken()
   if (!token) throw new Error('no access token available for media fetch')
 
-  const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-  if (!resp.ok) {
-    // Keep the body. Discarding it is why a media failure could only ever be
-    // diagnosed from the browser's network tab.
-    const detail = await resp.text().catch(() => '')
-    throw new Error(
-      `media fetch failed (${resp.status}) ${url} :: ${detail.slice(0, 200)}`,
-    )
+  // Coalesce concurrent requests for the same image. A timeline mounting the
+  // same avatar twenty times at once should fetch once, not twenty times.
+  let pending = inFlight.get(key)
+  if (!pending) {
+    pending = (async () => {
+      const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      if (!resp.ok) {
+        // Keep the body. Discarding it is why a media failure could only ever
+        // be diagnosed from the browser's network tab.
+        const detail = await resp.text().catch(() => '')
+        throw new Error(
+          `media fetch failed (${resp.status}) ${url} :: ${detail.slice(0, 200)}`,
+        )
+      }
+      return URL.createObjectURL(await resp.blob())
+    })()
+    inFlight.set(key, pending)
+    pending.finally(() => inFlight.delete(key))
   }
-  const objUrl = URL.createObjectURL(await resp.blob())
-  return { src: objUrl, revoke: () => URL.revokeObjectURL(objUrl) }
+
+  const objUrl = await pending
+
+  const existing = blobs.get(key)
+  if (existing) {
+    // Another caller won the race and cached it; drop ours rather than leak.
+    if (existing.url !== objUrl) URL.revokeObjectURL(objUrl)
+    existing.refs += 1
+    return { src: existing.url, revoke: () => release(key) }
+  }
+  blobs.set(key, { url: objUrl, refs: 1 })
+  evict()
+  return { src: objUrl, revoke: () => release(key) }
 }
