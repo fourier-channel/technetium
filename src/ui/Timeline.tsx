@@ -349,7 +349,7 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
         </div>
       </header>
       <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        {bg && client && <ChatBackdrop bg={bg} />}
+        {bg && client && <ChatBackdrop bg={bg} roomId={room.roomId} />}
         <div
           ref={scrollRef}
           style={{
@@ -509,10 +509,10 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
           <AuthedImage
             mxc={mxc}
             width={320}
-            roomId={room.roomId}
+            roomId={roomId}
             reserve={reserveBox(content)}
             alt={typeof content.body === 'string' ? content.body : undefined}
-            onClick={() => open([{ mxc, roomId: room.roomId, ...imageMeta(event) }], 0)}
+            onClick={() => open([{ mxc, roomId, ...imageMeta(event) }], 0)}
           />
           <MediaTags mxc={mxc} roomId={event.getRoomId()} />
         </div>
