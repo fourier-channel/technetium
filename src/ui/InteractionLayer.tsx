@@ -6,8 +6,9 @@ import {
   anchorPoint,
   anchorsSatisfied,
   approachStart,
-  arcMidpoint,
   arcSign,
+  armSegment,
+  travelPoses,
   type Point,
   type RectLike,
 } from './interactionGeometry'
@@ -223,24 +224,51 @@ function InteractionPlay({
 
   // 'travel': thrown from the actor to the target and pulled back.
   if (!from || !to) return null
-  const mid = arcMidpoint(from, to, sign)
+  const poses = travelPoses(from, to, sign)
+  // The arm is sampled at the same poses the hand is keyframed at, so the two
+  // never disagree about where the hand is.
+  const arm = {
+    windup: armSegment(from, poses.windup),
+    mid: armSegment(from, poses.mid),
+    impact: armSegment(from, poses.impact),
+    recoil: armSegment(from, poses.recoil),
+  }
   const style = {
     '--ix-from-x': `${from.x}px`,
     '--ix-from-y': `${from.y}px`,
-    '--ix-mid-x': `${mid.x}px`,
-    '--ix-mid-y': `${mid.y}px`,
+    '--ix-mid-x': `${poses.mid.x}px`,
+    '--ix-mid-y': `${poses.mid.y}px`,
     '--ix-to-x': `${to.x}px`,
     '--ix-to-y': `${to.y}px`,
+    '--ix-arm-a1': `${arm.windup.angle}deg`,
+    '--ix-arm-l1': `${arm.windup.length}`,
+    '--ix-arm-a2': `${arm.mid.angle}deg`,
+    '--ix-arm-l2': `${arm.mid.length}`,
+    '--ix-arm-a3': `${arm.impact.angle}deg`,
+    '--ix-arm-l3': `${arm.impact.length}`,
+    '--ix-arm-a4': `${arm.recoil.angle}deg`,
+    '--ix-arm-l4': `${arm.recoil.length}`,
     '--ix-dur': `${play.def.durationMs}ms`,
   } as React.CSSProperties
 
   return (
-    <div className="tc-ix-travel" data-action={play.def.id} style={style} role="status" aria-label={phrase}>
-      {/* The hand/glyph that travels. Its stretch is a separate element so the
-          travel transform and the squash transform do not fight. */}
-      <span className="tc-ix-glyph">{play.def.glyph}</span>
-      {/* Impact, parked at the target end. */}
-      <span className="tc-ix-impact" aria-hidden="true" />
-    </div>
+    <>
+      {/* The arm, pinned at the actor and rotating to follow the hand. Its own
+          element, and a SIBLING of the travelling hand rather than a child --
+          inside it, it would inherit the hand's translation and never stretch.
+          Rendered first so the hand sits over the arm it is attached to. */}
+      {play.def.tether && (
+        <div className="tc-ix-arm-anchor" style={style} aria-hidden="true">
+          <span className="tc-ix-arm" />
+        </div>
+      )}
+      <div className="tc-ix-travel" data-action={play.def.id} style={style} role="status" aria-label={phrase}>
+        {/* The hand/glyph that travels. Its stretch is a separate element so the
+            travel transform and the squash transform do not fight. */}
+        <span className="tc-ix-glyph">{play.def.glyph}</span>
+        {/* Impact, parked at the target end. */}
+        <span className="tc-ix-impact" aria-hidden="true" />
+      </div>
+    </>
   )
 }

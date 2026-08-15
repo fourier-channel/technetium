@@ -46,6 +46,11 @@ export interface InteractionDef {
   surfaces: readonly InteractionSurface[]
   choreo: InteractionChoreo
   anchors: InteractionAnchors
+  // 'travel' only: the glyph stays ATTACHED to the actor by a stretched arm
+  // that tracks it out, holds while it sticks, and reels it back. A sticky hand
+  // has one; a high five is two hands meeting and a thrown star has left your
+  // grip, so neither does.
+  tether?: boolean
   // How long the animation runs. The renderer expires the instance after this,
   // so it must match the CSS or a dead node lingers.
   //
@@ -71,6 +76,7 @@ export const INTERACTIONS: readonly InteractionDef[] = [
     surfaces: ['chat', 'domain'],
     choreo: 'travel',
     anchors: 'both',
+    tether: true,
     // Whip out, stick for a beat, get pulled home. The stick is most of it --
     // that pause is the whole joke, and it is the first thing a short duration
     // eats.

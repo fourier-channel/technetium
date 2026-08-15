@@ -110,3 +110,51 @@ const APPROACH_OFFSET_PX = 72
 export function approachStart(target: Point, sign: -1 | 1): Point {
   return { x: target.x + APPROACH_OFFSET_PX * sign, y: target.y }
 }
+
+// --- the arm ---------------------------------------------------------------
+//
+// A sticky hand with no arm is just a hand flying across the room. The arm is
+// drawn as ONE bar pinned at the actor, rotated to point at wherever the hand
+// currently is and scaled to reach it -- so it does not follow the hand's arc,
+// it SWINGS as the hand swings around, which is what a rubber arm actually does.
+//
+// The bar is 1px wide at rest, so `length` is directly its scaleX factor.
+
+export interface ArmSegment {
+  // Degrees, because that is what CSS rotate() wants.
+  angle: number
+  length: number
+}
+
+export function armSegment(from: Point, to: Point): ArmSegment {
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  return {
+    angle: (Math.atan2(dy, dx) * 180) / Math.PI,
+    length: Math.hypot(dx, dy),
+  }
+}
+
+// The waypoints the arm is sampled at. These MUST correspond to the percentages
+// in the ixTravel keyframes -- the arm is interpolated between the same poses
+// the hand is, and a sample taken anywhere else would have the arm pointing
+// somewhere the hand is not.
+export interface TravelPoses {
+  windup: Point
+  mid: Point
+  impact: Point
+  recoil: Point
+}
+
+const WINDUP_DX = -8
+const WINDUP_DY = 3
+const RECOIL_DX = -5
+
+export function travelPoses(from: Point, to: Point, sign: -1 | 1): TravelPoses {
+  return {
+    windup: { x: from.x + WINDUP_DX, y: from.y + WINDUP_DY },
+    mid: arcMidpoint(from, to, sign),
+    impact: to,
+    recoil: { x: from.x + RECOIL_DX, y: from.y },
+  }
+}

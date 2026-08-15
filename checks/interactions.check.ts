@@ -23,6 +23,8 @@ import {
   approachStart,
   arcMidpoint,
   arcSign,
+  armSegment,
+  travelPoses,
 } from '../src/ui/interactionGeometry.ts'
 
 let failures = 0
@@ -294,6 +296,49 @@ console.log('\n-- the arc is hashed, not random --')
   check('an approach starts beside the target, level with it',
     approachStart(target, 1).y === 200 && approachStart(target, 1).x > 500)
   check('the other side starts on the other side', approachStart(target, -1).x < 500)
+}
+
+console.log('\n-- the arm reaches wherever the hand is --')
+{
+  const from = { x: 100, y: 100 }
+  const to = { x: 300, y: 100 }
+
+  // The arm is ONE bar pinned at the actor: it must reach exactly as far as the
+  // hand and point exactly at it. If length and angle are ever computed against
+  // a different point than the hand's keyframe, the hand detaches from its arm.
+  const straight = armSegment(from, to)
+  check('the arm reaches the hand', straight.length === 200)
+  check('the arm points at the hand', straight.angle === 0)
+
+  const up = armSegment(from, { x: 100, y: 0 })
+  check('a hand straight up gives a vertical arm', up.angle === -90 && up.length === 100)
+
+  // Sampled at exactly the poses the hand is keyframed at -- this is the
+  // pairing that keeps them attached, so it is asserted rather than trusted.
+  const poses = travelPoses(from, to, 1)
+  check('the impact pose IS the target', poses.impact.x === 300 && poses.impact.y === 100)
+  check('the mid pose IS the arc midpoint',
+    poses.mid.x === arcMidpoint(from, to, 1).x && poses.mid.y === arcMidpoint(from, to, 1).y)
+  check('the wind-up pulls back from the actor', poses.windup.x < from.x)
+  check('the recoil returns near the actor', Math.abs(poses.recoil.x - from.x) <= 8)
+
+  // The arm swings with the arc rather than following it: at the midpoint it
+  // must point off the straight line to the target.
+  const bowed = armSegment(from, poses.mid)
+  check('the arm swings off the direct line at the bow', bowed.angle !== 0)
+
+  // A zero-length arm must not produce NaN and poison the CSS var.
+  const degenerate = armSegment(from, from)
+  check('a zero-length arm is finite',
+    Number.isFinite(degenerate.angle) && degenerate.length === 0)
+
+  // Only the sticky hand is tethered. A high five is two hands meeting and a
+  // thrown star has left your grip; drawing an arm on either would be wrong.
+  check('the slap is tethered', interactionById('slap')?.tether === true)
+  check('nothing else is tethered',
+    INTERACTIONS.filter((i) => i.id !== 'slap').every((i) => !i.tether))
+  check('only a travel can be tethered',
+    INTERACTIONS.filter((i) => i.tether).every((i) => i.choreo === 'travel'))
 }
 
 console.log('\n-- which anchors a choreography actually needs --')
