@@ -246,12 +246,55 @@ client offers.
 | E1 | Custom packs in the picker | **landed (reactions only -- see note)** | | Packs appear as a star tab and are searchable by shortcode. Wired ONLY into the reaction picker, which is the one surface that can use an mxc key today: an annotation's key IS the mxc and the strip already renders it as an image, so this is a complete slice rather than a half one. The composer is deliberately NOT given packs -- offering an emoji there that pastes `mxc://...` as literal text would be worse than not offering it. That needs E2+E3. **Known cost:** each custom emoji in the grid is its own authed fetch, so a large pack means many small requests.
 | A1.5 | Overlay coordinate fix | **landed** | | The layer was mounted INSIDE the scroller, where `inset: 0` pins a child to the top of the SCROLLED CONTENT, while anchors were measured against the scroller's VISIBLE box. The two origins differ by exactly scrollTop, so every play drew off screen and was clipped -- the menu worked, the event went out, and nothing appeared. Layer now positions from its own box and is mounted as a sibling of the scroller. Geometry extracted to `ui/interactionGeometry.ts` (pure) so the two boxes are separate arguments. **Operator-confirmed working.** |
 | A1.6 | Choreography pass: slower, three staged forms | **landed** | | Durations roughly doubled (a check refuses anything under 1.4s). One shared targeted animation became three, chosen by a `choreo` field on the definition rather than an id switch. **slap** = travel: whip along an arc, stick for ~40% of the play, tear off straight back. Arc side is HASHED FROM THE PLAY ID, not random, so sender and receiver stage the same slap identically. **poke/boop/hug** = approach: the actor's own avatar disc arrives beside the target and acts there. Avatar disc extracted to `ui/AvatarDisc.tsx` + `ui/avatarLook.ts` so the overlay draws THE pill's disc, not a copy. **Bug fixed on the way:** an approach needs only the TARGET's anchor, where every targeted play previously required both -- so a poke was dropped whenever the actor had not spoken recently enough to be on screen. O-in1 unchanged; the definition now says which anchors it is about. |
+| A1.7 | Sticky-hand arm + hug eclipse | **landed** | | Arm is ONE bar pinned at the actor, rotated to point at the hand and scaled to reach it -- it SWINGS with the arc rather than bending along it. Sibling of the travelling hand, never a child (inside it, it would inherit the hand's translation and never stretch). Sampled at the same poses the hand is keyframed at, asserted rather than trusted. `tether` is a catalog flag: only the slap has one. Hug now completes the eclipse (36%) before the emoji appears (40%+), and the actor fades out quickly in place instead of drifting up. |
+| L1 | Row layout: identity block + per-line avatar | **landed** | | Name + guild tag once per cluster, avatar on EVERY line. `ui/displayDecoration.ts` holds the prefix/suffix/guild wiring point, empty, with a real map lookup rather than a constant. **Prefix/suffix concatenate RAW -- nothing ever inserts a separator** (checked); the whitespace is the decoration's, so a comma or apostrophe can sit flush. Guild line is omitted, not drawn empty. Anchor stays on the LEAD row's avatar only -- `resolveAnchor` takes the last match, so tagging repeat avatars would move every slap to the bottom of a run. Grouped-row timestamp shares the avatar's box, opacity-only cross-fade, no size change on hover. **PROVISIONAL** (operator may revert after seeing it) -- hence its own component, `ui/SenderIdentity.tsx`. |
 | E2 | Inline sending (shortcode -> MSC2545 img) | | | |
 | E3 | Sanitizer widening (SECURITY, own commit) | | | |
 | E4 | Animated emoji + preference | | | |
 | E5 | Upload flow (gated on O-in3) | | | |
 | G1 | Provider-agnostic GIF core + picker UI | | | |
 | G2 | Concrete adapter (gated on docs + key) | | | |
+
+---
+
+## Next: squirt and guard (specified, not built)
+
+**D-in08 -- "ephemeral" is amended, deliberately.** Constraint 2 said an
+interaction must not replay when you scroll past it later. A squirt's droplets
+outlive their animation, which is close enough to that line that building it
+silently would quietly retire the constraint. The amended rule: **nothing is
+ever reconstructed from history.** A live effect may outlive its animation, but
+once gone it never returns. That keeps the actual protection -- no burst of
+month-old slaps on join -- while allowing a drench to sit there.
+
+**D-in09 -- every client computes its own splash** (operator, 2026-08-15). The
+wire carries only actor and target, as it already does. Who was caught in the
+crossfire is derived from the RECEIVING client's own viewport, because a
+sender's casualty list describes their screen, not yours, and is forgeable --
+the same reasoning that reads the actor from `getSender()` and never from
+content (D-in02). You get wet only if you were genuinely in the line of fire on
+your own screen. Unspoofable, and needs no new wire field.
+
+**D-in10 -- droplets live on the ROW, not the overlay** (operator, 2026-08-15).
+Keyed by the target's `data-event-id`. They scroll with the row for free and
+stay pixel-stable, where the overlay resolves anchors once and holds by design
+-- a persistent effect there would need position re-resolution on every scroll,
+which is the exact thing the layer exists to avoid. Costs one `position:
+relative`; no reflow. **Note:** the timeline is NOT windowed (`toItems` renders
+every loaded event), so rows survive scrolling out of view -- "until the line
+scrolls off" needs an explicit `IntersectionObserver` against the scroller, not
+unmount.
+
+**Drying:** secondary targets a few seconds, the primary ~10s, then the
+droplets disintegrate upward and lose opacity rather than blinking out.
+
+**Guard** is a self interaction that sets a guarded window on its actor, which
+every client tracks from the same event it already receives. Hostile actions
+aimed at a guarded user REFLECT back onto the actor; non-hostile ones (hug)
+play only to the edge of the target's namespace instead of converging. Needs a
+`hostile` flag on the catalog, a guard-window duration, and a stated position on
+the race (a client that missed the guard event will stage the hostile action
+unreflected -- correct, and not worth a handshake to fix).
 
 ---
 
