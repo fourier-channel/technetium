@@ -778,6 +778,7 @@ function GalleryCell({ ev, onOpen }: { ev: MatrixEvent | null; onOpen?: () => vo
           <AuthedImage
             mxc={mxc}
             width={360}
+            roomId={ev?.getRoomId()}
             alt={typeof c?.body === 'string' ? c.body : undefined}
             fill
             transparentLoading
