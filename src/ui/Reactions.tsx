@@ -167,10 +167,16 @@ export function ReactionPills({
           {...roving.itemProps(i)}
         >
           {/* A custom-emoji reaction's KEY is an mxc uri (MSC2545), so it
-              renders as an image rather than as literal "mxc://..." text. */}
+              renders as an image rather than as literal "mxc://..." text.
+
+              viaHomeserver, like avatars (D-bf01): an emoji is CHROME, and the
+              content gateway authorizes by post. A pack emoji has no post
+              behind it by design (D-in06 keeps them out of the booru), so the
+              gate has nothing to authorize and refuses -- which looked like
+              emoji working when first posted and 404ing on reload. */}
           <span className="tc-reaction-key">
             {isCustomEmojiKey(t.key) ? (
-              <AuthedImage mxc={t.key} width={180} fill transparentLoading alt="" fallback="?" />
+              <AuthedImage mxc={t.key} width={180} fill transparentLoading alt="" fallback="?" viaHomeserver />
             ) : (
               t.key
             )}

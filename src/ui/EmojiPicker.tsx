@@ -342,7 +342,10 @@ export function EmojiPicker({
             onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--cpd-color-bg-subtle-secondary)')}
             onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
           >
-            <AuthedImage mxc={img.mxc} width={180} fill transparentLoading alt={`:${img.code}:`} fallback="?" />
+            {/* viaHomeserver, like avatars (D-bf01) -- see Reactions.tsx: a
+                pack emoji has no post behind it, so the content gateway has
+                nothing to authorize and refuses it. */}
+            <AuthedImage mxc={img.mxc} width={180} fill transparentLoading alt={`:${img.code}:`} fallback="?" viaHomeserver />
           </button>
         ))}
         {shown.length === 0 && shownCustom.length === 0 ? (
