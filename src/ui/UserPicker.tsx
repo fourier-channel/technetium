@@ -248,7 +248,6 @@ export function UserPicker({
                       transparentLoading
                       alt=""
                       fallback={initials(u.displayName || u.userId)}
-                      viaHomeserver
                     />
                   ) : (
                     initials(u.displayName || u.userId)

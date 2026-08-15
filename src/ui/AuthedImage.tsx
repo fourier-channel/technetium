@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useClient } from '../client/ClientContext'
-import { fetchMediaSrc, fetchHomeserverThumb, type ThumbSize } from '../client/media'
+import { fetchMediaSrc, type ThumbSize } from '../client/media'
 
 // Retry transient media failures (heavy sync starves fetches) before showing the
 // unavailable state: ~0.8s, 1.6s, 3.2s, 6.4s -> gives up after ~12s.
@@ -20,7 +20,6 @@ export function AuthedImage({
   fill = false,
   transparentLoading = false,
   fallback,
-  viaHomeserver = false,
   reserve,
 }: {
   mxc: string
@@ -35,7 +34,6 @@ export function AuthedImage({
   fallback?: ReactNode
   // Fetch via the homeserver's authenticated-media endpoint instead of the
   // fourier-auth gateway. Used for avatars/chrome, which the content gate 403s.
-  viaHomeserver?: boolean
   // The box this image is KNOWN to occupy, derived from the event's own
   // info.w/info.h before anything is fetched. When given, the placeholder and
   // the loaded image are the same size, so the row's height is settled from
@@ -63,7 +61,7 @@ export function AuthedImage({
     let retryTimer: ReturnType<typeof setTimeout> | undefined
 
     // Reset the attempt counter only when the SOURCE changes, not on a retry.
-    const sourceKey = `${mxc}|${width ?? ''}|${viaHomeserver}`
+    const sourceKey = `${mxc}|${width ?? ''}`
     if (sourceKeyRef.current !== sourceKey) {
       sourceKeyRef.current = sourceKey
       attemptsRef.current = 0
@@ -78,10 +76,10 @@ export function AuthedImage({
       }
     })
 
-    const fetcher = viaHomeserver
-      ? fetchHomeserverThumb(client, mxc, width ?? 96)
-      : fetchMediaSrc(client, mxc, width)
-    fetcher
+    // One fetcher. The server decides whether an mxc is chrome or content and
+    // applies the matching rule, so the call site no longer has to know --
+    // which is what the flag used to encode, in nine places.
+    fetchMediaSrc(client, mxc, width)
       .then(({ src: resolved, revoke }) => {
         if (cancelled) {
           // Component moved on before the fetch resolved — clean up immediately.
@@ -116,7 +114,7 @@ export function AuthedImage({
         revokeRef.current = null
       }
     }
-  }, [client, mxc, width, viaHomeserver, retryTick])
+  }, [client, mxc, width, retryTick])
 
   if (error) {
     if (fallback !== undefined) return <>{fallback}</>

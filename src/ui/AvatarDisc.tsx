@@ -58,7 +58,6 @@ export function AvatarDisc({
           transparentLoading
           alt=""
           fallback={initialsFor(name)}
-          viaHomeserver
         />
       ) : (
         initialsFor(name)

@@ -128,7 +128,6 @@ export function ProfileCard({
               transparentLoading
               alt=""
               fallback={initials(name)}
-              viaHomeserver
             />
           ) : (
             initials(name)

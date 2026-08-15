@@ -1,31 +1,29 @@
 import type { MatrixClient } from 'matrix-js-sdk'
 
 // ---------------------------------------------------------------------------
-// Media gateway client. This is the ONE place that knows how an mxc:// URI
-// becomes bytes: the fourier-auth gateway origin, the URL shape, and the
-// bearer-token fetch. Everything else (timeline, composer previews) goes
-// through here, so changing the gateway — origin, thumbnail params, a future
-// signed-URL scheme — is a single-file change, never a hunt.
+// Media. ONE path, for every mxc, every size, every caller.
+//
+// It used to be three. An original went to the fourier-auth gateway, which
+// returned a JSON envelope wrapping a presigned R2 URL that was then handed to
+// an <img src> -- four hundred characters of X-Amz-Signature in the DOM. A
+// thumbnail went to the same gateway but got bytes back. And anything the
+// gateway called chrome went straight to the homeserver instead, because the
+// gate 403'd avatars: fetchHomeserverThumb existed purely to route around a
+// server that was answering the wrong question.
+//
+// The server now classifies media itself -- site asset (avatar, emoji, room
+// icon) versus content -- and applies the matching rule, so the client no
+// longer has to know which is which. Everything is:
+//
+//   GET {homeserver}/_matrix/client/v1/media/{download,thumbnail}/{server}/{id}
+//   Authorization: Bearer <token>
+//
+// which is the standard Matrix authenticated-media endpoint. Cloudflare serves
+// it from R2; 41chan never touches the bytes. No envelope, no presigned URL, no
+// second path for chrome, nothing to cache-and-reuse before it expires.
 // ---------------------------------------------------------------------------
 
-// Gateway origin, configurable per build so dev / prod / future hosts don't
-// require a code edit. Falls back to the production gateway when unset, so the
-// client works with zero config. Trailing slashes trimmed for clean joins.
-const MEDIA_BASE = (
-  (import.meta.env.VITE_MEDIA_BASE as string | undefined) ?? 'https://mxc.41chan.net'
-).replace(/\/+$/, '')
-
-// In-memory cache of resolved presigned R2 URLs for ORIGINALS, keyed by mxc.
-// The presigned URL changes signature on every mint, so without this each
-// re-view (gallery left/right, timeline scrollback) is a fresh URL = a fresh
-// browser cache key = a full re-download. Reusing the same URL within its life
-// lets the browser's disk cache (immutable header on the R2 response) hit.
-// Reuse only while >60s of the presign's life remains, so <img> never gets a
-// URL about to expire mid-load.
-const REUSE_MARGIN_MS = 60 * 1000
-const originalUrlCache = new Map<string, { url: string; expiresAt: number }>()
-
-// Thumbnail widths the gateway honors (snapped server-side to its
+// Thumbnail widths the server honors (snapped server-side to its
 // ALLOWED_THUMB_SIZES). Exposed so callers pick a real size, not an arbitrary
 // one that would just get snapped anyway.
 export const THUMB_SIZES = [180, 320, 360, 720, 850] as const
@@ -44,157 +42,53 @@ export function parseMxc(mxc: string): ParsedMxc | null {
   return { serverName: m[1], mediaId: m[2] }
 }
 
-// Build the gateway URL for an mxc. With `width`, requests a thumbnail;
-// without, the full download. Returns null for a malformed mxc.
-export function mediaUrl(mxc: string, width?: ThumbSize): string | null {
-  const parsed = parseMxc(mxc)
-  if (!parsed) return null
-  const path = `${MEDIA_BASE}/media/${encodeURIComponent(
-    parsed.serverName,
-  )}/${encodeURIComponent(parsed.mediaId)}`
-  return width ? `${path}?w=${width}` : path
-}
-
-// Fetch an mxc through the gateway with the client's MAS token as Bearer and
-// return an object URL for the bytes. The caller MUST URL.revokeObjectURL the
-// result when done, or it leaks the blob. Throws on a missing token or non-2xx
-// response, so the UI can show an error/retry rather than a broken <img>.
-export async function fetchMediaObjectUrl(
+// Build the media URL for an mxc. With `width`, a thumbnail; without, the full
+// download. Returns null for a malformed mxc.
+//
+// The homeserver's own origin, not a separate gateway host: this is the URL
+// Element already uses, so both clients hit the same path and get the same
+// answer from the same check. A second origin would be a second path, which is
+// the thing being removed.
+export function mediaUrl(
   client: MatrixClient,
   mxc: string,
   width?: ThumbSize,
-): Promise<string> {
-  const url = mediaUrl(mxc, width)
+): string | null {
+  const parsed = parseMxc(mxc)
+  if (!parsed) return null
+  const base = client.getHomeserverUrl().replace(/\/+$/, '')
+  const kind = width ? 'thumbnail' : 'download'
+  const path =
+    `${base}/_matrix/client/v1/media/${kind}/` +
+    `${encodeURIComponent(parsed.serverName)}/${encodeURIComponent(parsed.mediaId)}`
+  return width ? `${path}?width=${width}&height=${width}&method=scale` : path
+}
+
+// Fetch an mxc with the client's token and return an object URL for the bytes.
+// The caller MUST revoke() on cleanup or it leaks the blob.
+//
+// A blob for everything, originals included. An <img src> cannot send an
+// Authorization header, so the only alternatives are a credential in the URL
+// (which is what the presigned envelope was, and why it is gone) or fetching
+// the bytes ourselves. This is the second.
+export async function fetchMediaSrc(
+  client: MatrixClient,
+  mxc: string,
+  width?: ThumbSize,
+): Promise<{ src: string; revoke: () => void }> {
+  const url = mediaUrl(client, mxc, width)
   if (!url) throw new Error(`invalid mxc URI: ${mxc}`)
 
   const token = client.getAccessToken()
   if (!token) throw new Error('no access token available for media fetch')
 
-  const resp = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
+  const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
   if (!resp.ok) {
     // Keep the body. Discarding it is why a media failure could only ever be
     // diagnosed from the browser's network tab.
     const detail = await resp.text().catch(() => '')
     throw new Error(
       `media fetch failed (${resp.status}) ${url} :: ${detail.slice(0, 200)}`,
-    )
-  }
-  return URL.createObjectURL(await resp.blob())
-}
-
-// True when a URL points at the homeserver, and therefore needs the access
-// token that an <img src> cannot supply.
-function needsHomeserverAuth(client: MatrixClient, url: string): boolean {
-  try {
-    return new URL(url).origin === new URL(client.getHomeserverUrl()).origin
-  } catch {
-    // An unparseable URL is not a homeserver URL. Answering the question
-    // asked; nothing has gone wrong.
-    return false
-  }
-}
-
-// Resolve an mxc to a directly-loadable <img src>.
-//
-// Two response shapes from the gateway, by request type:
-//   - ORIGINAL (no width): the gateway authorizes, then returns JSON
-//     { url } with a short-lived presigned R2 URL. We return that URL as-is;
-//     the caller loads it with a plain <img src>, which fetches bytes straight
-//     from R2 (cross-origin <img> is unrestricted; the presigned URL self-
-//     authorizes). No blob, and no CORS-on-redirect problem.
-//   - THUMBNAIL (width set): the gateway streams image bytes directly, so we
-//     fall back to the blob path.
-//
-// Returns { src, revoke }: `revoke` is a no-op for the original path (nothing
-// to free) and revokes the object URL for the thumbnail path. The caller
-// always calls revoke() on cleanup and needn't know which path ran.
-export async function fetchMediaSrc(
-  client: MatrixClient,
-  mxc: string,
-  width?: ThumbSize,
-): Promise<{ src: string; revoke: () => void }> {
-  if (width) {
-    const objUrl = await fetchMediaObjectUrl(client, mxc, width)
-    return { src: objUrl, revoke: () => URL.revokeObjectURL(objUrl) }
-  }
-
-  // Reuse a still-valid cached presigned URL so the browser cache can hit.
-  const cached = originalUrlCache.get(mxc)
-  if (cached && cached.expiresAt - Date.now() > REUSE_MARGIN_MS) {
-    return { src: cached.url, revoke: () => {} }
-  }
-
-  const url = mediaUrl(mxc)
-  if (!url) throw new Error(`invalid mxc URI: ${mxc}`)
-
-  const token = client.getAccessToken()
-  if (!token) throw new Error('no access token available for media fetch')
-
-  const resp = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  if (!resp.ok) {
-    const detail = await resp.text().catch(() => '')
-    throw new Error(
-      `media fetch failed (${resp.status}) ${url} :: ${detail.slice(0, 200)}`,
-    )
-  }
-  const data = (await resp.json()) as { url?: string; expiresIn?: number }
-  if (!data.url) throw new Error(`gateway returned no url for ${mxc}`)
-
-  // A URL that needs the homeserver's token CANNOT be used as an <img src> --
-  // an img tag has no way to send an Authorization header, and the homeserver
-  // answers M_MISSING_TOKEN. That happens whenever the gateway has no
-  // presigned R2 object to hand back and returns a homeserver URL instead.
-  // Fetch those as a blob WITH the token rather than handing them to an img.
-  if (needsHomeserverAuth(client, data.url)) {
-    const authed = await fetch(data.url, { headers: { Authorization: `Bearer ${token}` } })
-    if (!authed.ok) {
-      const detail = await authed.text().catch(() => '')
-      throw new Error(
-        `media fetch failed (${authed.status}) ${data.url} :: ${detail.slice(0, 200)}`,
-      )
-    }
-    const objUrl = URL.createObjectURL(await authed.blob())
-    return { src: objUrl, revoke: () => URL.revokeObjectURL(objUrl) }
-  }
-  // Gateway presigns for 300s; cache with that lifetime (default if unsent).
-  const ttlMs = (data.expiresIn ?? 300) * 1000
-  originalUrlCache.set(mxc, { url: data.url, expiresAt: Date.now() + ttlMs })
-  return { src: data.url, revoke: () => {} }
-}
-
-// Fetch a thumbnail via the HOMESERVER's Matrix authenticated-media endpoint
-// (spec v1.11, /_matrix/client/v1/media/thumbnail) with the client's access
-// token, returning a blob src. This deliberately BYPASSES the fourier-auth
-// content gate: that gate authorizes booru content (message media) and returns
-// 403 "not authorized for this media" for avatars, which aren't booru content.
-// Avatars/chrome are standard Matrix media, so they come straight from the
-// homeserver. The caller MUST revoke() the object URL on cleanup.
-export async function fetchHomeserverThumb(
-  client: MatrixClient,
-  mxc: string,
-  size = 96,
-): Promise<{ src: string; revoke: () => void }> {
-  const parsed = parseMxc(mxc)
-  if (!parsed) throw new Error(`invalid mxc URI: ${mxc}`)
-
-  const token = client.getAccessToken()
-  if (!token) throw new Error('no access token available for media fetch')
-
-  const base = client.getHomeserverUrl().replace(/\/+$/, '')
-  const url =
-    `${base}/_matrix/client/v1/media/thumbnail/` +
-    `${encodeURIComponent(parsed.serverName)}/${encodeURIComponent(parsed.mediaId)}` +
-    `?width=${size}&height=${size}&method=scale`
-
-  const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-  if (!resp.ok) {
-    const detail = await resp.text().catch(() => '')
-    throw new Error(
-      `homeserver media fetch failed (${resp.status}) ${url} :: ${detail.slice(0, 200)}`,
     )
   }
   const objUrl = URL.createObjectURL(await resp.blob())
