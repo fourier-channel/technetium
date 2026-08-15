@@ -1004,18 +1004,57 @@ code {
    (G-tp19, G-tp20).
    --------------------------------------------------------------------------- */
 .tc-row-line {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  min-width: 0;
-}
-.tc-row-av {
+  /* The three gutter measurements live here and nowhere else, so the whole
+     left margin retunes from one place. */
+  --tc-time-w: 44px;
+  --tc-av-w: 26px;
+  --tc-av-x: 52px;
+  --tc-body-x: 86px;
+
   position: relative;
-  flex: 0 0 26px;
-  width: 26px;
-  height: 26px;
+  min-width: 0;
+  /* The avatar is out of flow, so the line's height would otherwise be the
+     text's alone and a one-line message would let the avatar hang into the row
+     below it. */
+  min-height: var(--tc-av-w);
+  padding-left: var(--tc-body-x);
+}
+/* Absolutely positioned, and that is the entire point: the timestamp beside it
+   is a different width at 09:05 than at 12:45, and in flow that difference
+   would walk the avatar left and right from line to line. Out of flow, the
+   avatar is at the same x on every row no matter what the clock says. */
+.tc-row-av {
+  position: absolute;
+  left: var(--tc-av-x);
+  top: 0;
+  width: var(--tc-av-w);
+  height: var(--tc-av-w);
   display: block;
   cursor: pointer;
+}
+/* Right-aligned in its own fixed column, so times of different widths grow
+   away from the avatar rather than into it, and their right edges line up. */
+.tc-row-time {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--tc-time-w);
+  height: var(--tc-av-w);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  font-size: 10px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  opacity: 0.55;
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+}
+.tc-row:hover .tc-row-time,
+.tc-row:focus-within .tc-row-time {
+  opacity: 0.9;
 }
 .tc-row-av:focus-visible {
   outline: 2px solid var(--tc-link);
@@ -1066,36 +1105,6 @@ code {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.tc-ident-time {
-  font-size: 11px;
-  color: var(--cpd-color-text-secondary);
-  flex-shrink: 0;
-}
-
-/* A grouped row's timestamp shares the avatar's box: same position, same size,
-   revealed by swapping opacity so neither one ever moves the other. */
-.tc-row-gutter-time {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  font-size: 10px;
-  line-height: 1;
-  color: var(--cpd-color-text-secondary, #a8b0bd);
-  background: var(--cpd-color-bg-canvas-default, #16181d);
-  border-radius: 50%;
-  opacity: 0;
-  pointer-events: none;
-  user-select: none;
-  transition: opacity 90ms ease-out;
-}
-.tc-row:hover .tc-row-gutter-time,
-.tc-row:focus-within .tc-row-gutter-time {
-  opacity: 0.9;
-}
-@media (prefers-reduced-motion: reduce) {
-  .tc-row-gutter-time { transition: none; }
 }
 
 /* ---------------------------------------------------------------------------

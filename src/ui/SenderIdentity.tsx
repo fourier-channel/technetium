@@ -2,9 +2,13 @@ import { displayDecoration, decoratedName } from './displayDecoration'
 
 // ---------------------------------------------------------------------------
 // The identity block above the first message of a cluster: the decorated name,
-// and the guild tag centred beneath it. The avatar is NOT here -- it belongs to
-// the message line below, where it repeats for every message in the run, and it
-// lands directly under this block because this block sits directly above it.
+// and the guild tag centred beneath it. Nothing else.
+//
+// The avatar is NOT here -- it belongs to the message line below, where it
+// repeats for every message in the run. Neither is the TIMESTAMP: a time is a
+// property of a message, and a cluster is many messages, so hanging one off the
+// name only ever labelled the first of them. It now sits beside each line's own
+// avatar instead.
 //
 // Its own file rather than a branch inside Timeline, because this layout is
 // provisional: the operator wants to see it before deciding to keep it, and a
@@ -19,13 +23,11 @@ import { displayDecoration, decoratedName } from './displayDecoration'
 export function SenderIdentity({
   userId,
   name,
-  time,
   onOpenProfile,
   onOpenInteractions,
 }: {
   userId: string
   name: string
-  time: string
   onOpenProfile?: (userId: string, x: number, y: number) => void
   onOpenInteractions?: (userId: string, x: number, y: number) => void
 }) {
@@ -65,7 +67,6 @@ export function SenderIdentity({
         </span>
         {dec.guild !== null && <span className="tc-ident-guild">{dec.guild}</span>}
       </span>
-      <span className="tc-ident-time">{time}</span>
     </div>
   )
 }

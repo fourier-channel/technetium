@@ -572,12 +572,16 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
         <SenderIdentity
           userId={senderId}
           name={senderName}
-          time={time}
           onOpenProfile={openProfile}
           onOpenInteractions={openInteractions}
         />
       )}
       <div className="tc-row-line">
+        {/* The timestamp belongs to the LINE, not to the name -- every message
+            has one, including the first of a cluster. It sits in its own fixed
+            column to the left of the avatar, out of flow, so a wider clock
+            reading never nudges the avatar sideways. */}
+        <span className="tc-row-time">{time}</span>
         {/* The avatar column. Fixed width whether or not the image has loaded,
             so nothing shifts when it does.
 
@@ -615,11 +619,6 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
           }
         >
           <AvatarDisc userId={senderId} name={senderName} avatarMxc={senderAvatar} size={26} />
-          {/* A grouped message has no name line, so its time has nowhere to
-              live. It shares the avatar's slot and cross-fades with it on
-              hover: same box, opacity only, so the row is exactly the same
-              size hovered and not. */}
-          {item.showHeader === false && <span className="tc-row-gutter-time">{time}</span>}
         </span>
         <div
           style={{
