@@ -168,9 +168,15 @@ question (**O-in3**) and the one genuine external dependency in this area.
 
 **Open questions.**
 
-- **O-in3** Does the media gate serve an mxc referenced only from pack state,
-  with no post behind it? If not, emoji will 403 exactly as backgrounds did.
-  Must be answered before E5 ships. E1-E4 work against packs that already exist.
+- **O-in3 -- RESOLVED 2026-08-15, and the question was posed wrong.** It asked
+  whether the media gate would serve an mxc referenced only from pack state.
+  Reported symptom: emoji render when first posted, then 404 on reload. Both
+  render sites went through the content gateway, which authorizes by POST, and
+  a pack emoji deliberately has no post behind it (D-in06). The answer is not to
+  ask the gate at all -- `viaHomeserver`, the same routing avatars take
+  (D-bf01). Client-side, nothing needed from the operator, and E5's rendering
+  half is unblocked. **Carried to E4:** `fetchHomeserverThumb` requests a
+  THUMBNAIL, which will flatten an animated emoji to its first frame.
 - **O-in4** Size cap for an uploaded emoji. Recommendation: 256KB and 128px,
   rejected with a sentence, not a bare 413.
 
@@ -238,6 +244,8 @@ client offers.
 | A1.4 | Right-click entry point | **landed** | | Menu owned by Timeline (two rows cannot each open one), reached through a context like `profileOpener`. Targeted actions are filtered out when the target is you. Rate-limited state says so rather than doing nothing. |
 | A2.1 | Domain catalog expansion | **landed** | | Registry now DERIVED from the shared catalog, filtered to the domain surface. The canvas renderers needed no change: `SelfActionEffect` and `ThrownProjectile` both animate whatever glyph the definition carries, so growing the catalog is a data change. Checks assert the deployed ids `square` and `throw` survive -- renaming either would make live clients emit events this one silently ignores. |
 | E1 | Custom packs in the picker | **landed (reactions only -- see note)** | | Packs appear as a star tab and are searchable by shortcode. Wired ONLY into the reaction picker, which is the one surface that can use an mxc key today: an annotation's key IS the mxc and the strip already renders it as an image, so this is a complete slice rather than a half one. The composer is deliberately NOT given packs -- offering an emoji there that pastes `mxc://...` as literal text would be worse than not offering it. That needs E2+E3. **Known cost:** each custom emoji in the grid is its own authed fetch, so a large pack means many small requests.
+| A1.5 | Overlay coordinate fix | **landed** | | The layer was mounted INSIDE the scroller, where `inset: 0` pins a child to the top of the SCROLLED CONTENT, while anchors were measured against the scroller's VISIBLE box. The two origins differ by exactly scrollTop, so every play drew off screen and was clipped -- the menu worked, the event went out, and nothing appeared. Layer now positions from its own box and is mounted as a sibling of the scroller. Geometry extracted to `ui/interactionGeometry.ts` (pure) so the two boxes are separate arguments. **Operator-confirmed working.** |
+| A1.6 | Choreography pass: slower, three staged forms | **landed** | | Durations roughly doubled (a check refuses anything under 1.4s). One shared targeted animation became three, chosen by a `choreo` field on the definition rather than an id switch. **slap** = travel: whip along an arc, stick for ~40% of the play, tear off straight back. Arc side is HASHED FROM THE PLAY ID, not random, so sender and receiver stage the same slap identically. **poke/boop/hug** = approach: the actor's own avatar disc arrives beside the target and acts there. Avatar disc extracted to `ui/AvatarDisc.tsx` + `ui/avatarLook.ts` so the overlay draws THE pill's disc, not a copy. **Bug fixed on the way:** an approach needs only the TARGET's anchor, where every targeted play previously required both -- so a poke was dropped whenever the actor had not spoken recently enough to be on screen. O-in1 unchanged; the definition now says which anchors it is about. |
 | E2 | Inline sending (shortcode -> MSC2545 img) | | | |
 | E3 | Sanitizer widening (SECURITY, own commit) | | | |
 | E4 | Animated emoji + preference | | | |
@@ -276,3 +284,14 @@ Headless box: gates are self-verified, behaviour is not.
 | IX-i | Domain canvas: the puck menu now offers the fuller self list, and right-click -> targeted actions arc across as before. **`Square` and `Throw` must still work** -- they are what the deployed client sends. | yes |
 | IX-j | Reaction picker: a star tab appears when the room or your account has an MSC2545 pack; picking one reacts with the image. Searching matches shortcodes. | yes |
 | IX-k | **Judgement call: is the catalog right?** Ten entries, glyph-based. Naming, additions and removals are one array in `interactionCatalog.ts`. | no |
+
+### Added 2026-08-15 -- choreography pass + emoji routing
+
+| id | what needs eyes | 2nd identity? |
+| --- | --- | --- |
+| IX-l | Pacing: every interaction now reads as an event rather than a flicker. Judgement call -- durations are one number each in `interactionCatalog.ts`. | no |
+| IX-m | **Slap:** winds up, whips out along a curve that visibly bows to one side, STICKS to the target for about a second, then snaps straight back. Repeat slaps bow both ways over time, and both clients see the SAME slap bow the same way. | yes |
+| IX-n | **Poke / boop:** your avatar disc (not the whole pill) blinks in beside the target and jabs with the finger, which points AT them rather than away. Poke jabs twice; boop is one touch from above. | yes |
+| IX-o | **Hug:** your avatar fades in to the RIGHT of their pill, slides left onto them, the hug emoji appears only once they have met, rocks left and right, then bounces up and fades. | yes |
+| IX-p | **Poke someone while your own pill is scrolled out of view.** It must now play -- an approach needs only the target. A slap in the same situation is still correctly dropped. | yes |
+| IX-q | Custom emoji survive a reload: react with a pack emoji, hard-refresh, the image is still there rather than a "?" (O-in3). | yes |
