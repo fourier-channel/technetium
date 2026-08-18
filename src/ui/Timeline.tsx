@@ -510,6 +510,7 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
             mxc={mxc}
             width={320}
             roomId={roomId}
+            lazy
             reserve={reserveBox(content)}
             alt={typeof content.body === 'string' ? content.body : undefined}
             onClick={() => open([{ mxc, roomId, ...imageMeta(event) }], 0)}
@@ -783,6 +784,7 @@ function GalleryCell({ ev, onOpen }: { ev: MatrixEvent | null; onOpen?: () => vo
             roomId={ev?.getRoomId()}
             alt={typeof c?.body === 'string' ? c.body : undefined}
             fill
+            lazy
             transparentLoading
             onClick={onOpen}
           />

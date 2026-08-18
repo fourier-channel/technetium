@@ -1683,3 +1683,53 @@ code {
   font-size: 11px;
   color: var(--cpd-color-text-secondary, #a8b0bd);
 }
+
+/* ---------------------------------------------------------------------------
+   Media placeholder: the space a picture will occupy, held before it arrives.
+
+   It is not a grey box for decoration -- it is the reservation. The loaded
+   image is given the SAME box, so the row is settled from first paint and the
+   picture letterboxes into it rather than resizing the conversation around it
+   (G-tp19, G-tp20).
+   --------------------------------------------------------------------------- */
+.tc-media-ph {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--cpd-color-bg-subtle-secondary, rgba(128, 128, 128, 0.14));
+  /* A slow diagonal sheen, so a slot that is waiting reads differently from one
+     that has finished and happens to be blank. */
+  background-image: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.07) 45%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.07) 55%,
+    transparent 70%
+  );
+  background-size: 220% 100%;
+  animation: tcMediaWait 1.9s ease-in-out infinite;
+}
+/* A quiet mark in the middle, so an empty rectangle still says "picture". */
+.tc-media-ph::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22px;
+  height: 18px;
+  margin: -9px 0 0 -11px;
+  border-radius: 3px;
+  border: 1.5px solid var(--cpd-color-text-secondary, #a8b0bd);
+  opacity: 0.25;
+}
+@keyframes tcMediaWait {
+  0%   { background-position: 140% 0; }
+  100% { background-position: -40% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tc-media-ph {
+    animation: none;
+    background-image: none;
+  }
+}

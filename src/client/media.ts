@@ -1,4 +1,5 @@
 import type { MatrixClient } from 'matrix-js-sdk'
+import { createLimiter } from './concurrency'
 
 // ---------------------------------------------------------------------------
 // Media. ONE path, for every mxc, every size, every caller.
@@ -103,6 +104,17 @@ export function mediaUrl(
 // wants it, and only revoke once nothing holds it AND it has aged out.
 // ---------------------------------------------------------------------------
 
+// Six: the classic per-host parallel limit, and past it the server is the
+// bottleneck anyway. The cap matters more than the number -- unbounded is what
+// made the visible thumbnails wait behind the off-screen ones.
+const MAX_CONCURRENT_MEDIA = 6
+const mediaLimiter = createLimiter(MAX_CONCURRENT_MEDIA)
+
+/** For diagnostics: how many media fetches are in flight, and how many queued. */
+export function mediaQueueStats(): { active: number; waiting: number } {
+  return mediaLimiter.stats()
+}
+
 const BLOB_CACHE_MAX = 64
 
 interface CachedBlob {
@@ -178,7 +190,7 @@ export async function fetchMediaSrc(
   // same avatar twenty times at once should fetch once, not twenty times.
   let pending = inFlight.get(key)
   if (!pending) {
-    pending = (async () => {
+    pending = mediaLimiter.run(async () => {
       const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
       if (!resp.ok) {
         // Keep the body. Discarding it is why a media failure could only ever
@@ -189,7 +201,7 @@ export async function fetchMediaSrc(
         )
       }
       return URL.createObjectURL(await resp.blob())
-    })()
+    })
     inFlight.set(key, pending)
     // `.finally()` returns a NEW promise, which rejects whenever `pending`
     // does -- and nothing awaits that one. The caller's `await pending` handles
