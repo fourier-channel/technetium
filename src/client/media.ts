@@ -68,12 +68,19 @@ export function mediaUrl(
     q.set('height', String(width))
     q.set('method', 'scale')
   }
-  // The room we are rendering. Only ever needed for ENCRYPTED rooms: the mxc
-  // lives inside the ciphertext, so the server cannot see which room it belongs
-  // to and has no way to authorize it otherwise. Sending it is not a claim of
-  // access -- the server still checks we are joined to this room, and only
-  // honours the hint when the room really is encrypted.
-  if (roomId) q.set('room_id', roomId)
+  // The room hint, sent ONLY when the room is actually encrypted -- which is
+  // what this comment always claimed and the code did not do.
+  //
+  // In an ENCRYPTED room the mxc lives inside the ciphertext, so the server
+  // cannot see which room the media belongs to and has no other way to
+  // authorize it. In an UNENCRYPTED room the server can already see the event,
+  // so the hint tells it nothing it does not know -- and sending it anyway asks
+  // a stricter question ("is this media yours in THAT room") about media that
+  // is legitimately rendered elsewhere: a forward, a thread panel, a gallery
+  // cell. That is the shape of 403 this path has already produced twice, and
+  // the branch avatars never take -- which is why avatars were never affected.
+  const encrypted = roomId ? (client.getRoom(roomId)?.hasEncryptionStateEvent() ?? false) : false
+  if (roomId && encrypted) q.set('room_id', roomId)
   const qs = q.toString()
   return qs ? `${path}?${qs}` : path
 }
@@ -105,10 +112,6 @@ interface CachedBlob {
 
 const blobs = new Map<string, CachedBlob>()
 const inFlight = new Map<string, Promise<string>>()
-
-function cacheKey(mxc: string, width?: ThumbSize, roomId?: string): string {
-  return `${mxc}|${width ?? ''}|${roomId ?? ''}`
-}
 
 function release(key: string): void {
   const e = blobs.get(key)
@@ -149,7 +152,14 @@ export async function fetchMediaSrc(
   width?: ThumbSize,
   roomId?: string,
 ): Promise<{ src: string; revoke: () => void }> {
-  const key = cacheKey(mxc, width, roomId)
+  const url = mediaUrl(client, mxc, width, roomId)
+  if (!url) throw new Error(`invalid mxc URI: ${mxc}`)
+
+  // Keyed by the URL ACTUALLY REQUESTED, not by the arguments that produced it.
+  // The same picture shown in the room, in a thread panel and in a gallery cell
+  // is one identical request once the room hint is gone -- keying on roomId
+  // made it three cache entries and three downloads of the same bytes.
+  const key = url
 
   // Already decoded and still held: hand back the SAME object URL, so the
   // browser reuses the image it already has rather than decoding it again.
@@ -160,9 +170,6 @@ export async function fetchMediaSrc(
     blobs.set(key, cached) // touch for LRU
     return { src: cached.url, revoke: () => release(key) }
   }
-
-  const url = mediaUrl(client, mxc, width, roomId)
-  if (!url) throw new Error(`invalid mxc URI: ${mxc}`)
 
   const token = client.getAccessToken()
   if (!token) throw new Error('no access token available for media fetch')
