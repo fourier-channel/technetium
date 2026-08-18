@@ -12,6 +12,8 @@ import { getIgnoredUsers } from './ignoredUsers'
 import { isBackgroundPost } from './backgroundPost'
 import { INTERACTION_EVENT } from './interactionEvents'
 import { reportIgnored } from './report'
+import { isSystemEvent } from './systemEvents'
+import { useShowSystemEvents } from './systemEventPref'
 import {
   buildRelationIndex,
   effectiveContent,
@@ -151,6 +153,10 @@ export interface ToItemsOptions {
   // ignored user's events, but NOT retroactively: anything already in a loaded
   // timeline stays, so the renderer has to filter too.
   ignoredUsers?: readonly string[]
+  // Show the events that exist so the room works rather than to be read
+  // (isSystemEvent). Off by default: they render as a literal `[type]` row that
+  // costs height and splits a cluster, and nobody has ever wanted to see one.
+  showSystemEvents?: boolean
 }
 
 function classify(ev: MatrixEvent): TimelineItemKind {
@@ -203,6 +209,9 @@ export function toItems(events: MatrixEvent[], opts: ToItemsOptions = {}): Timel
     const ev = events[i]
     const evId = ev.getId() ?? ''
     if (!evId || consumed.has(evId)) continue
+    // Dropped before anything else looks at it, so a hidden system event cannot
+    // break a sender cluster in two or strand a day separator above nothing.
+    if (!opts.showSystemEvents && isSystemEvent(ev.getType())) continue
     // Edits and reactions modify another event; they are never rows of their
     // own. Without this they render as duplicate messages and `[m.reaction]`
     // junk -- which is exactly what the client does today.
@@ -299,6 +308,10 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [atStart, setAtStart] = useState(false)
   const roomRef = useRef<Room | null>(null)
+  // Read here rather than inside refresh: it is the reason to rebuild, so it
+  // belongs in the dependency list and not in a closure that never sees it
+  // change.
+  const showSystemEvents = useShowSystemEvents()
 
   // Rebuild the item list from the room's current live timeline.
   const refresh = useCallback(() => {
@@ -310,12 +323,13 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
     setItems(
       applyLayout(
         toItems(room.getLiveTimeline().getEvents(), {
+          showSystemEvents,
           myUserId,
           ignoredUsers: client ? getIgnoredUsers(client) : undefined,
         }),
       ),
     )
-  }, [client, room])
+  }, [client, room, showSystemEvents])
 
   useEffect(() => {
     roomRef.current = room
