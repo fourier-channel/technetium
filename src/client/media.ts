@@ -184,7 +184,13 @@ export async function fetchMediaSrc(
       return URL.createObjectURL(await resp.blob())
     })()
     inFlight.set(key, pending)
-    pending.finally(() => inFlight.delete(key))
+    // `.finally()` returns a NEW promise, which rejects whenever `pending`
+    // does -- and nothing awaits that one. The caller's `await pending` handles
+    // the real rejection; this derived branch had no handler at all, which is
+    // the "Uncaught (in promise)" a failing image produced. Neutralise the
+    // derived chain ONLY: `pending` itself still rejects for whoever awaited
+    // it, so the error still reaches AuthedImage's retry and report path.
+    void pending.finally(() => inFlight.delete(key)).catch(() => {})
   }
 
   const objUrl = await pending
