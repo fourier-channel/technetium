@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useClient } from '../client/ClientContext'
 import { fetchMediaSrc, type ThumbSize } from '../client/media'
+import { reportIgnored } from '../client/report'
 
 // Retry transient media failures (heavy sync starves fetches) before showing the
 // unavailable state: ~0.8s, 1.6s, 3.2s, 6.4s -> gives up after ~12s.
@@ -65,6 +66,12 @@ export function AuthedImage({
 
     // Reset the attempt counter only when the SOURCE changes, not on a retry.
     const sourceKey = `${mxc}|${width ?? ''}|${roomId ?? ''}`
+    // Names WHICH request shape failed. "An image did not load" does not say
+    // whether the gateway's sized path broke or the whole media route did, and
+    // those are very different faults. The width is in the scope because the
+    // gateway snaps to a fixed size list, so one misconfigured size fails alone
+    // -- invisible when every failure logs the same line.
+    const failureScope = width ? `media: thumbnail w=${width}` : 'media: original'
     if (sourceKeyRef.current !== sourceKey) {
       sourceKeyRef.current = sourceKey
       attemptsRef.current = 0
@@ -92,7 +99,7 @@ export function AuthedImage({
         revokeRef.current = revoke
         setSrc(resolved)
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (cancelled) return
         // A heavy initial sync starves media fetches, so a failure here is
         // usually transient. Retry with backoff before giving up, so images
@@ -105,6 +112,12 @@ export function AuthedImage({
             if (!cancelled) setRetryTick((t) => t + 1)
           }, delay)
         } else {
+          // Only once the retries are spent. Reporting each attempt would turn
+          // an expected sync-starvation blip into four console lines per image,
+          // which is how a log stops being read. fetchMediaSrc keeps the
+          // response status and body in this error precisely so this line can
+          // carry them (D-tp16).
+          reportIgnored(failureScope, err)
           setError(true)
         }
       })
