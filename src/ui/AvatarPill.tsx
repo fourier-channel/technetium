@@ -54,9 +54,6 @@ export function AvatarPill({
           : undefined
       }
       title={onOpen ? name : undefined}
-      // Makes every sender pill and membership row an anchor the
-      // interaction overlay can aim at, for free.
-      data-user-anchor={userId}
       style={{
         display: 'inline-flex',
         alignItems: 'center',

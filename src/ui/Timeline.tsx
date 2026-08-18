@@ -578,23 +578,19 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
         />
       )}
       <div className="tc-row-line">
-        {/* The timestamp belongs to the LINE, not to the name -- every message
-            has one, including the first of a cluster. It sits in its own fixed
-            column to the left of the avatar, out of flow, so a wider clock
-            reading never nudges the avatar sideways. */}
-        <span className="tc-row-time">{time}</span>
-        {/* The avatar column. Fixed width whether or not the image has loaded,
-            so nothing shifts when it does.
+        {/* The avatar column, left-justified and out of flow, so its width is
+            fixed whether or not the image has loaded and nothing shifts when
+            it does.
 
-            The interaction anchor lives HERE and only on the lead row -- the
-            operator's rule is that effects centre on the name-with-avatar-under
-            -it, so a bare repeat avatar four messages down must not steal the
-            anchor. resolveAnchor takes the LAST match, and without this every
-            slap would land on the bottom of the run instead of on the person.
-            AvatarDisc is the pill's own disc, not a copy (D-bf01 routing). */}
+            EVERY message row is an interaction anchor, not just the lead one.
+            resolveAnchor takes the LAST match on screen, so anchoring only the
+            cluster head meant a slap aimed at somebody whose latest line was
+            directly above you flew to the TOP of their run instead -- which is
+            further the more they had said. Their most recent line is where you
+            think of them as being, and now that is what it is. */}
         <span
           className="tc-row-av"
-          data-user-anchor={item.showHeader !== false ? senderId : undefined}
+          data-user-anchor={senderId}
           role={openProfile ? 'button' : undefined}
           tabIndex={openProfile ? 0 : undefined}
           title={senderName}
@@ -622,15 +618,21 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
           <AvatarDisc userId={senderId} name={senderName} avatarMxc={senderAvatar} size={40} />
         </span>
         <div
+          className="tc-row-col"
           style={{
             display: 'flex',
             flexDirection: 'column',
-            gap: 2,
             minWidth: 0,
             flex: 1,
-            marginTop: 1,
           }}
         >
+        {/* Stacked ON TOP of the output it labels, inside the body column
+            rather than in a gutter of its own. Its height and the first line's
+            are set independently of the avatar: together they come to the same
+            height, but they are NOT derived from it, because the avatar's size
+            is not a constant and tying them would make a change to one silently
+            retune the other. */}
+        <span className="tc-row-time">{time}</span>
         {item.replyTo && <ReplyPill replyTo={item.replyTo} />}
         <div style={{ fontSize: 14, wordBreak: 'break-word', minWidth: 0 }}>
           {isMediaRow && roomId ? (

@@ -264,12 +264,14 @@ code {
      margin retunes from one place. On the ROW rather than on the line, because
      the identity block is a sibling of the line and has to centre itself on the
      same avatar the line positions. */
-  --tc-time-w: 44px;
   --tc-av-w: 40px;
-  --tc-av-x: 52px;
-  --tc-body-x: 100px;
-  /* The avatar's centre, which is what the name is centred over. */
-  --tc-av-mid: calc(var(--tc-av-x) + var(--tc-av-w) / 2);
+  --tc-body-x: 52px;
+  /* The two stacked lines beside the avatar. Chosen so their sum matches the
+     avatar today, but deliberately NOT derived from --tc-av-w: the avatar's
+     size is not a constant, and a calc() off it would make resizing the avatar
+     silently restyle the timestamp and the message text along with it. */
+  --tc-row-time-h: 14px;
+  --tc-row-text-h: 26px;
 
   position: relative;
 }
@@ -1023,38 +1025,36 @@ code {
   min-height: var(--tc-av-w);
   padding-left: var(--tc-body-x);
 }
-/* Absolutely positioned, and that is the entire point: the timestamp beside it
-   is a different width at 09:05 than at 12:45, and in flow that difference
-   would walk the avatar left and right from line to line. Out of flow, the
-   avatar is at the same x on every row no matter what the clock says. */
+/* Left-justified and out of flow. Out of flow because the row's height must be
+   the text's, not the avatar's -- and because nothing to its right may ever
+   move it sideways. */
 .tc-row-av {
   position: absolute;
-  left: var(--tc-av-x);
+  left: 0;
   top: 0;
   width: var(--tc-av-w);
   height: var(--tc-av-w);
   display: block;
   cursor: pointer;
 }
-/* Right-aligned in its own fixed column, so times of different widths grow
-   away from the avatar rather than into it, and their right edges line up. */
+/* Stacked directly above the output it labels, in the body column. Fixed
+   height, so a row is the same height whether or not the clock reading is
+   wider this minute than last. */
 .tc-row-time {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: var(--tc-time-w);
-  height: var(--tc-av-w);
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
+  display: block;
+  height: var(--tc-row-time-h);
+  line-height: var(--tc-row-time-h);
   font-size: 10px;
-  line-height: 1;
   font-variant-numeric: tabular-nums;
   color: var(--cpd-color-text-secondary, #a8b0bd);
   opacity: 0.55;
   pointer-events: none;
   user-select: none;
   white-space: nowrap;
+}
+/* The first line of output sits on the second of the two stacked rows. */
+.tc-row-col {
+  min-height: var(--tc-row-text-h);
 }
 .tc-row:hover .tc-row-time,
 .tc-row:focus-within .tc-row-time {
@@ -1074,13 +1074,13 @@ code {
    child overflow equally both ways, so the name stays centred at any length
    instead of being pushed right by the gutter or clipped to fit it. Long names
    spill, which is the intended behaviour here and not an oversight. */
+/* Left-aligned, because the avatar is now at x=0: centring a name over a
+   left-justified avatar would push half of every name off the left edge of the
+   timeline. The guild tag stays centred UNDER THE NAME, which still works and
+   is the part of that decision worth keeping. */
 .tc-ident-row {
-  position: relative;
-  left: var(--tc-av-mid);
-  width: 0;
   display: flex;
-  justify-content: center;
-  overflow: visible;
+  min-width: 0;
 }
 .tc-ident {
   /* Exactly as wide as the name -- which is what makes "centred under the name"
