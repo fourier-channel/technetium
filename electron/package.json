@@ -1,0 +1,14 @@
+{
+  "name": "technetium-shell",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Desktop shell for Technetium. Hosts the deployed client and owns the QuickQueue seam.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "check": "node --check main.js && node --check preload.js && node --check settings.js && node --check quickqueue.js"
+  },
+  "devDependencies": {
+    "electron": "^43.4.0"
+  }
+}
