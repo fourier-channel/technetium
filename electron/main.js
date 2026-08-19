@@ -37,7 +37,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
   app.on('second-instance', (_event, argv) => {
-    const files = quickqueue.parseArgv(argv)
+    const files = quickqueue.parseArgv(argv, app.getAppPath())
     if (files.length) {
       log(`[qq] second-instance delivered ${files.length} path(s):`)
       files.forEach((f) => log(`      ${f}`))
@@ -54,7 +54,7 @@ if (!app.requestSingleInstanceLock()) {
 function start() {
   const s = settings.read()
 
-  const first = quickqueue.parseArgv(process.argv)
+  const first = quickqueue.parseArgv(process.argv, app.getAppPath())
   if (first.length) {
     log(`[qq] first-instance launched with ${first.length} path(s):`)
     first.forEach((f) => log(`      ${f}`))
@@ -84,6 +84,7 @@ function createWindow(s) {
     y: s.window.y,
     minWidth: 940,
     minHeight: 600,
+    title: 'Technetium',
     backgroundColor: '#101317', // Compound canvas -- no white flash before paint
     autoHideMenuBar: true,
     webPreferences: {
@@ -99,6 +100,12 @@ function createWindow(s) {
   })
 
   if (s.window.maximized) mainWindow.maximize()
+
+  // The deployed page still carries its pre-rename <title> ("matrix-client"),
+  // and a remote document should not be naming the desktop window regardless of
+  // what it says. Hold the title we set; the taskbar and the window list are
+  // ours, not the page's.
+  mainWindow.on('page-title-updated', (event) => event.preventDefault())
 
   mainWindow.loadURL(APP_ORIGIN)
 
