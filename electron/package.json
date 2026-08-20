@@ -6,7 +6,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "check": "node --check main.js && node --check preload.js && node --check settings.js && node --check quickqueue.js"
+    "check": "node --check main.js && node --check preload.js && node --check settings.js && node --check quickqueue.js && node --check navpolicy.js && node tests/run.js"
   },
   "devDependencies": {
     "electron": "^43.4.0"

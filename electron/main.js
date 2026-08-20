@@ -20,6 +20,7 @@ const path = require('node:path')
 const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron')
 const settings = require('./settings')
 const quickqueue = require('./quickqueue')
+const { isFirstParty } = require('./navpolicy')
 
 const APP_ORIGIN = process.env.TECHNETIUM_ORIGIN || 'https://tc.41chan.net'
 
@@ -117,11 +118,16 @@ function createWindow(s) {
     return { action: 'deny' }
   })
 
-  // Same rule for in-page navigation, with the identity provider allowed
-  // through: MAS sign-in is a full-page redirect off-origin and back, so
-  // blocking it outright would block login itself.
+  // Server-side redirects are deliberately NOT policed. An OAuth flow is a
+  // chain of them, and interrupting one mid-chain is precisely the failure
+  // navpolicy.js records; the destination is still governed by will-navigate.
+
+
+  // Same rule for in-page navigation. MAS sign-in is a full-page navigation to
+  // the identity provider and back, so this boundary decides whether login
+  // works at all -- see navpolicy.js for what that cost the first time.
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (!isNavigable(url)) {
+    if (!isFirstParty(url, APP_ORIGIN)) {
       event.preventDefault()
       shell.openExternal(url)
     }
@@ -135,19 +141,6 @@ function createWindow(s) {
   }
   mainWindow.on('close', remember)
   mainWindow.on('closed', () => { mainWindow = null })
-}
-
-// Our origin plus the homeserver that hosts the identity provider. Compared on
-// the parsed origin, never by string prefix -- `https://tc.41chan.net.evil.tld`
-// starts with our origin as text and is a different site.
-function isNavigable(url) {
-  try {
-    const u = new URL(url)
-    const allowed = new Set([new URL(APP_ORIGIN).origin, 'https://41chan.net', 'https://matrix.41chan.net'])
-    return allowed.has(u.origin)
-  } catch {
-    return false
-  }
 }
 
 function openConsent() {

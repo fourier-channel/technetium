@@ -16,6 +16,8 @@ Override the origin for testing with `TECHNETIUM_ORIGIN`.
 | `preload.js` | The only bridge. Two booleans in, two booleans out. |
 | `settings.js` | Per-installation prefs (atomic write via temp+rename) |
 | `quickqueue.js` | argv parsing and the integration stubs |
+| `navpolicy.js` | What the window may navigate to. Login depends on it. |
+| `tests/run.js` | Table-driven checks for both pure modules (`npm run check`) |
 | `consent/` | First-run disclosure + the two pill toggles |
 
 Settings are per-INSTALLATION, not Matrix account data: they describe whether
