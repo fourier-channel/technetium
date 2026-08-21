@@ -2090,3 +2090,122 @@ code {
 .tc-ix-approach[data-deflected='true'] .tc-ix-glyph {
   opacity: 0.35;
 }
+
+/* ---------------------------------------------------------------------------
+   Faces: typed into a message, flashed over the sender's avatar.
+
+   The variant names are the SAME six the arrivals use (memberEvents'
+   ARRIVAL_ANIMATIONS), so the vocabulary is shared even though the keyframes
+   are their own -- a pill bursting into a log and a face landing on a 40px disc
+   want different motion at different scales.
+
+   Enter and exit are chosen independently, so a face rarely leaves the way it
+   arrived. Both are transform/opacity/filter only: the overlay holds no layout
+   and cannot move the row it sits on (G-tp19).
+   --------------------------------------------------------------------------- */
+.tc-face-anchor {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.tc-face {
+  position: absolute;
+  inset: -2px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(12, 14, 18, 0.72);
+  backdrop-filter: blur(1px);
+  z-index: 3;
+}
+.tc-face-text {
+  font-family: var(--tc-ui-font, ui-monospace, monospace);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #f2f6ff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
+}
+
+/* --- entering ------------------------------------------------------------ */
+.tc-face[data-phase='in'][data-anim='poof']    { animation: faceInPoof 620ms cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+.tc-face[data-phase='in'][data-anim='warp']    { animation: faceInWarp 620ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.tc-face[data-phase='in'][data-anim='slam']    { animation: faceInSlam 620ms cubic-bezier(0.3, 1.5, 0.5, 1) both; }
+.tc-face[data-phase='in'][data-anim='sparkle'] { animation: faceInSparkle 620ms cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+.tc-face[data-phase='in'][data-anim='glitch']  { animation: faceInGlitch 620ms steps(9, end) both; }
+.tc-face[data-phase='in'][data-anim='iris']    { animation: faceInIris 620ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@keyframes faceInPoof {
+  0%   { opacity: 0; transform: scale(0.2); filter: blur(3px); }
+  60%  { opacity: 1; transform: scale(1.18); filter: blur(0); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes faceInWarp {
+  0%   { opacity: 0; transform: scale(2.2) rotate(-24deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+@keyframes faceInSlam {
+  0%   { opacity: 0; transform: translateY(-22px) scale(1.4); }
+  70%  { opacity: 1; transform: translateY(2px) scale(0.94); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes faceInSparkle {
+  0%   { opacity: 0; transform: scale(0.6) rotate(12deg); filter: brightness(2.4); }
+  55%  { opacity: 1; transform: scale(1.12) rotate(-4deg); filter: brightness(1.5); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); filter: brightness(1); }
+}
+@keyframes faceInGlitch {
+  0%   { opacity: 0; transform: translateX(-6px); }
+  20%  { opacity: 1; transform: translateX(5px); }
+  40%  { transform: translateX(-3px) scaleY(1.15); }
+  60%  { transform: translateX(3px) scaleY(0.9); }
+  80%  { transform: translateX(-1px); }
+  100% { opacity: 1; transform: translateX(0) scaleY(1); }
+}
+@keyframes faceInIris {
+  0%   { opacity: 0; clip-path: circle(0% at 50% 50%); }
+  100% { opacity: 1; clip-path: circle(75% at 50% 50%); }
+}
+
+/* --- leaving -------------------------------------------------------------- */
+.tc-face[data-phase='out'][data-anim='poof']    { animation: faceOutPoof 620ms cubic-bezier(0.4, 0, 0.9, 0.4) both; }
+.tc-face[data-phase='out'][data-anim='warp']    { animation: faceOutWarp 620ms cubic-bezier(0.5, 0, 1, 0.5) both; }
+.tc-face[data-phase='out'][data-anim='slam']    { animation: faceOutSlam 620ms cubic-bezier(0.5, -0.4, 0.8, 0.5) both; }
+.tc-face[data-phase='out'][data-anim='sparkle'] { animation: faceOutSparkle 620ms ease-in both; }
+.tc-face[data-phase='out'][data-anim='glitch']  { animation: faceOutGlitch 620ms steps(9, end) both; }
+.tc-face[data-phase='out'][data-anim='iris']    { animation: faceOutIris 620ms cubic-bezier(0.5, 0, 1, 0.5) both; }
+
+@keyframes faceOutPoof {
+  0%   { opacity: 1; transform: scale(1); filter: blur(0); }
+  100% { opacity: 0; transform: scale(1.8); filter: blur(4px); }
+}
+@keyframes faceOutWarp {
+  0%   { opacity: 1; transform: scale(1) rotate(0deg); }
+  100% { opacity: 0; transform: scale(0.1) rotate(28deg); }
+}
+@keyframes faceOutSlam {
+  0%   { opacity: 1; transform: translateY(0) scale(1); }
+  25%  { transform: translateY(-6px) scale(1.08); }
+  100% { opacity: 0; transform: translateY(26px) scale(0.85); }
+}
+@keyframes faceOutSparkle {
+  0%   { opacity: 1; transform: scale(1); filter: brightness(1); }
+  40%  { opacity: 1; transform: scale(1.15); filter: brightness(2.2); }
+  100% { opacity: 0; transform: scale(0.5); filter: brightness(3); }
+}
+@keyframes faceOutGlitch {
+  0%   { opacity: 1; transform: translateX(0); }
+  25%  { transform: translateX(6px) scaleY(1.2); }
+  50%  { opacity: 0.7; transform: translateX(-7px) scaleY(0.8); }
+  75%  { transform: translateX(4px); }
+  100% { opacity: 0; transform: translateX(0); }
+}
+@keyframes faceOutIris {
+  0%   { opacity: 1; clip-path: circle(75% at 50% 50%); }
+  100% { opacity: 0; clip-path: circle(0% at 50% 50%); }
+}
+
+/* Reduced motion never mounts a face at all -- FaceFlash checks it before
+   playing, so there is nothing here to disable. */

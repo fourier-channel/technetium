@@ -10,6 +10,8 @@ import { parseMxc } from '../client/media'
 import { AuthedImage } from './AuthedImage'
 import { AvatarDisc } from './AvatarDisc'
 import { Drench } from './Drench'
+import { FaceFlash } from './FaceFlash'
+import { detectFace } from '../client/faces'
 import { SenderIdentity } from './SenderIdentity'
 import { MemberEvent } from './MemberEvent'
 import { useLightbox, type LightboxItem } from './Lightbox'
@@ -496,6 +498,13 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
       item.content.msgtype === 'm.image' &&
       !!parseMxc(typeof item.content.url === 'string' ? item.content.url : ''))
 
+  // A face typed into the message flashes over the sender's avatar. Text
+  // messages only -- there is nothing to read a face out of a picture.
+  const face =
+    kind === 'message' && !isMediaRow
+      ? detectFace(typeof item.content.body === 'string' ? item.content.body : '')
+      : null
+
   // Bubbles are for words. A picture in a speech bubble is not a speech bubble,
   // and a gallery's geometry is its own.
   const bubble =
@@ -629,6 +638,7 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
           }
         >
           <AvatarDisc userId={senderId} name={senderName} avatarMxc={senderAvatar} size={40} />
+          {face && <FaceFlash face={face} seed={item.id} />}
         </span>
         <div
           className="tc-row-col"
