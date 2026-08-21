@@ -17,7 +17,7 @@
 | campaign | interactions-v1 (4 areas, plus the layout and media work that grew out of it) |
 | branch | `interactions-v1` off `main` (`aeab785`), pushed |
 | tsc / lint / build | CLEAN / 23 (HOLD) / PASSING |
-| checks | 571 at start -> **890** |
+| checks | 571 at start -> **945** |
 | deploys | operator's call, as always |
 | still unbuilt | -- (squirt and guard landed 2026-08-21) |
 
@@ -261,6 +261,7 @@ client offers.
 | S1 | Squirt | **landed** | | Flat fast jet; the point is the water it leaves. Droplets live ON THE ROW keyed by `data-event-id` (D-in10) -- the overlay resolves anchors once and holds them, so a persistent mark there would need re-resolution on every scroll. **D-in08 is now real in code:** nothing is reconstructed from history; scrolling a wet row out of view clears it permanently, observed explicitly because the timeline is not windowed. Primary ~10s, secondary ~3.5s, both drying by breaking up and drifting off. |
 | S2 | Splash, computed per client | **landed** | | D-in09. Perpendicular distance to the SEGMENT, not the line -- somebody past the target or behind the shooter is not in the line of fire. The wire carries only actor and target; casualties are a different answer on every screen and a sender's list would be forgeable. Radius 46px. |
 | G1 | Guard | **landed** | | 30s shield. **Hostile reflects** (ends swapped, so the travel choreography is reused); **everything else deflects** and stops 34px short. `hostile` is a catalog flag -- a hug is targeted and welcome. Nothing on the wire says "reflected": a sender who could set it could decline to. Future-dated guards refused, self-attack through your own guard deflects rather than reflecting. |
+| F1 | Faces over the avatar | **landed** | | Seven tokens (`:3 ._. o_O O_o -_- :o -.-`) flash on the sender's avatar and leave. **Whole-token match only** -- ":3" lives inside "12:30" and "host:3000", and a substring match would fire at somebody every time they mentioned a time. Case-sensitive by necessity (`o_O` vs `O_o`); `O_O` is not a face rather than being normalised into one. Enter/exit drawn from `ARRIVAL_ANIMATIONS` with distinct salts, **seeded from the event** so replays and other clients agree. Three phases on timers, not one CSS shorthand (a second animation's `both` fill overrides the first from time zero); unmount on a timer, not `animationend` (G-04f01d). `art: null` on every face is the image hook -- the renderer already branches. |
 | E2 | Inline sending (shortcode -> MSC2545 img) | | | |
 | E3 | Sanitizer widening (SECURITY, own commit) | | | |
 | E4 | Animated emoji + preference | | | |
@@ -340,6 +341,16 @@ Headless box: gates are self-verified, behaviour is not.
 | IX-i | Domain canvas: the puck menu now offers the fuller self list, and right-click -> targeted actions arc across as before. **`Square` and `Throw` must still work** -- they are what the deployed client sends. | yes |
 | IX-j | Reaction picker: a star tab appears when the room or your account has an MSC2545 pack; picking one reacts with the image. Searching matches shortcodes. | yes |
 | IX-k | **Judgement call: is the catalog right?** Ten entries, glyph-based. Naming, additions and removals are one array in `interactionCatalog.ts`. | no |
+
+### Added 2026-08-21 -- faces
+
+| id | what needs eyes | 2nd identity? |
+| --- | --- | --- |
+| FC-a | Type `:3` on its own: it lands on your avatar, holds, and leaves -- and the `:3` is still in the message. | yes |
+| FC-b | All seven fire, and `o_O` and `O_o` are visibly different. | no |
+| FC-c | "meeting at 12:30" and "it took 3.5 seconds" set off NOTHING. | no |
+| FC-d | Scroll a face message out of view and back: it plays again. Different messages arrive and leave differently. | no |
+| FC-e | **Judgement call: is 620/900/620ms the right pacing, and are the six variants right at avatar scale?** They were tuned for a pill bursting into the log, not a 40px disc. | no |
 
 ### Added 2026-08-21 (later) -- squirt, guard, and three panel fixes
 
