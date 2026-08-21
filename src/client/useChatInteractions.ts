@@ -8,6 +8,7 @@ import {
   type ParsedInteraction,
 } from './interactionEvents'
 import { MAX_INTERACTION_MS, interactionById } from './interactionCatalog'
+import { GUARD_MS, applyGuard } from './guard'
 import { reportAlways } from './report'
 
 // ---------------------------------------------------------------------------
@@ -27,6 +28,10 @@ import { reportAlways } from './report'
 export interface ActivePlay extends ParsedInteraction {
   // When it started, so the layer can compute progress if it needs to.
   startedAt: number
+  /** Came back at whoever sent it: the ends are already swapped. */
+  reflected?: boolean
+  /** Played, but stopped short of a guarded person rather than reaching them. */
+  deflected?: boolean
 }
 
 export interface ChatInteractionsApi {
@@ -49,6 +54,11 @@ export function useChatInteractions(
   const lastBySender = useRef<Map<string, number>>(new Map())
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const myLastSend = useRef<number>(0)
+  // Who currently has a guard up, and until when. Built from the same guard
+  // events every client already receives -- nobody is told that a play was
+  // reflected, because a sender who could say so could also decline to
+  // (D-in09).
+  const guardedUntil = useRef<Map<string, number>>(new Map())
 
   const expire = useCallback((key: string) => {
     setPlays((prev) => prev.filter((p) => p.key !== key))
@@ -62,10 +72,32 @@ export function useChatInteractions(
       if (!rateLimitOk(lastBySender.current.get(parsed.actor), now)) return
       lastBySender.current.set(parsed.actor, now)
 
+      // A guard raises a shield for its sender. Recorded before the play is
+      // staged, so a guard and the thing it stops can arrive in either order
+      // within the same tick and still resolve the same way.
+      if (parsed.action === 'guard') {
+        guardedUntil.current.set(parsed.actor, now + GUARD_MS)
+      }
+
+      const outcome = applyGuard(
+        { actor: parsed.actor, target: parsed.target, hostile: !!parsed.def.hostile },
+        (u) => guardedUntil.current.get(u),
+        now,
+      )
+      const staged: ParsedInteraction = { ...parsed, actor: outcome.actor, target: outcome.target }
+
       setPlays((prev) => {
         // Dedup our own optimistic play against its echo from the server.
         if (prev.some((p) => p.key === parsed.key)) return prev
-        return [...prev, { ...parsed, startedAt: now }]
+        return [
+          ...prev,
+          {
+            ...staged,
+            startedAt: now,
+            reflected: outcome.reflected,
+            deflected: outcome.deflected,
+          },
+        ]
       })
 
       const existing = timers.current.get(parsed.key)

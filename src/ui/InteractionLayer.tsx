@@ -2,10 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import type { ActivePlay } from '../client/useChatInteractions'
 import { interactionPhrase } from '../client/interactionCatalog'
 import { AvatarDisc } from './AvatarDisc'
+import { soak } from './drench'
 import {
   anchorPoint,
   anchorsSatisfied,
   approachStart,
+  inSplash,
+  stopShort,
+  GUARD_STANDOFF_PX,
   arcSign,
   armSegment,
   travelPoses,
@@ -60,6 +64,45 @@ function resolveAnchor(
     if (p) return p
   }
   return null
+}
+
+// Which row an anchor belongs to. Rows carry data-event-id already, for
+// click-to-jump, so the water can be keyed on the same id the timeline uses --
+// no second index to keep in sync.
+function rowIdOf(el: Element): string | null {
+  return el.closest('[data-event-id]')?.getAttribute('data-event-id') ?? null
+}
+
+// Everyone caught in the line of fire, computed FROM THIS CLIENT'S OWN VIEWPORT
+// (D-in09). The wire says only who squirted whom; who was standing in the way
+// is a different answer on every screen, and the only honest one is the one
+// drawn from the screen it is shown on.
+function applySplash(
+  container: HTMLElement,
+  layer: RectLike,
+  play: ActivePlay,
+  from: Point,
+  to: Point,
+): void {
+  const box = container.getBoundingClientRect()
+  const targetId = play.target
+
+  const nodes = container.querySelectorAll<HTMLElement>(`[${USER_ANCHOR_ATTR}]`)
+  for (const el of nodes) {
+    const user = el.getAttribute(USER_ANCHOR_ATTR)
+    if (!user) continue
+    const rowId = rowIdOf(el)
+    if (!rowId) continue
+    // The person hit is soaked; the shooter is not, however close they stand to
+    // their own jet.
+    if (user === targetId) {
+      soak(rowId, 'primary')
+      continue
+    }
+    if (user === play.actor) continue
+    const p = anchorPoint(box, layer, el.getBoundingClientRect())
+    if (p && inSplash(p, from, to)) soak(rowId, 'secondary')
+  }
 }
 
 export function InteractionLayer({
@@ -138,7 +181,13 @@ function InteractionPlay({
     }
     setGeom({ from, to })
     setResolved(true)
-  }, [containerRef, layerRef, play.def.anchors, play.actor, play.target])
+
+    // Water is left where the blast passed, and only for a blast that actually
+    // arrived: a deflected squirt hits a guard, not a person.
+    if (play.def.id === 'squirt' && from && to && !play.deflected) {
+      applySplash(container, layerBox, play, from, to)
+    }
+  }, [containerRef, layerRef, play])
 
   const phrase = interactionPhrase(
     play.def,
@@ -188,11 +237,15 @@ function InteractionPlay({
     // so a run of them does not look mechanical.
     const side = play.def.id === 'hug' ? 1 : sign
     const start = approachStart(to, side)
+    // Held at arm's length rather than refused: a deflected play still plays,
+    // it just does not arrive. Stopping AT the target and skipping the impact
+    // would read as a hit that failed to render.
+    const dest = play.deflected ? stopShort(start, to, GUARD_STANDOFF_PX) : to
     const style = {
       '--ix-from-x': `${start.x}px`,
       '--ix-from-y': `${start.y}px`,
-      '--ix-to-x': `${to.x}px`,
-      '--ix-to-y': `${to.y}px`,
+      '--ix-to-x': `${dest.x}px`,
+      '--ix-to-y': `${dest.y}px`,
       // Which way the glyph points, so a finger jabbing leftwards is not drawn
       // pointing away from the person it is jabbing.
       '--ix-face': side === 1 ? '-1' : '1',
@@ -202,6 +255,7 @@ function InteractionPlay({
       <div
         className="tc-ix-approach"
         data-action={play.def.id}
+        data-deflected={play.deflected ? 'true' : undefined}
         style={style}
         role="status"
         aria-label={phrase}
@@ -224,7 +278,8 @@ function InteractionPlay({
 
   // 'travel': thrown from the actor to the target and pulled back.
   if (!from || !to) return null
-  const poses = travelPoses(from, to, sign)
+  const dest = play.deflected ? stopShort(from, to, GUARD_STANDOFF_PX) : to
+  const poses = travelPoses(from, dest, sign)
   // The arm is sampled at the same poses the hand is keyframed at, so the two
   // never disagree about where the hand is.
   const arm = {
@@ -238,8 +293,8 @@ function InteractionPlay({
     '--ix-from-y': `${from.y}px`,
     '--ix-mid-x': `${poses.mid.x}px`,
     '--ix-mid-y': `${poses.mid.y}px`,
-    '--ix-to-x': `${to.x}px`,
-    '--ix-to-y': `${to.y}px`,
+    '--ix-to-x': `${dest.x}px`,
+    '--ix-to-y': `${dest.y}px`,
     '--ix-arm-a1': `${arm.windup.angle}deg`,
     '--ix-arm-l1': `${arm.windup.length}`,
     '--ix-arm-a2': `${arm.mid.angle}deg`,
@@ -262,7 +317,22 @@ function InteractionPlay({
           <span className="tc-ix-arm" />
         </div>
       )}
-      <div className="tc-ix-travel" data-action={play.def.id} style={style} role="status" aria-label={phrase}>
+      {/* The shield, at the end the play now starts from -- which after a
+          reflection is the guarded person, because the ends were swapped. It is
+          the only sign that this was not simply somebody attacking backwards. */}
+      {(play.reflected || play.deflected) && (
+        <div className="tc-ix-shield" style={style} aria-hidden="true">
+          <span>{'\u{1F6E1}'}</span>
+        </div>
+      )}
+      <div
+        className="tc-ix-travel"
+        data-action={play.def.id}
+        data-deflected={play.deflected ? 'true' : undefined}
+        style={style}
+        role="status"
+        aria-label={phrase}
+      >
         {/* The hand/glyph that travels. Its stretch is a separate element so the
             travel transform and the squash transform do not fight. */}
         <span className="tc-ix-glyph">{play.def.glyph}</span>

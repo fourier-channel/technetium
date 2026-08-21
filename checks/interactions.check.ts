@@ -25,6 +25,11 @@ import {
   arcSign,
   armSegment,
   travelPoses,
+  pointSegmentDistance,
+  inSplash,
+  stopShort,
+  SPLASH_RADIUS_PX,
+  GUARD_STANDOFF_PX,
 } from '../src/ui/interactionGeometry.ts'
 import { decoratedName, displayDecoration } from '../src/ui/displayDecoration.ts'
 import {
@@ -446,6 +451,55 @@ console.log('\n-- avatar masks --')
     resolveAvatarShape('@you:x.net', '@me:x.net', 'keyhole') === DEFAULT_AVATAR_SHAPE)
   check('logged out, nobody is special',
     resolveAvatarShape('@me:x.net', null, 'keyhole') === DEFAULT_AVATAR_SHAPE)
+}
+
+console.log('\n-- the splash: who was standing in the way --')
+{
+  const a = { x: 0, y: 0 }
+  const b = { x: 200, y: 0 }
+
+  check('a point on the line is at zero', pointSegmentDistance({ x: 100, y: 0 }, a, b) === 0)
+  check('perpendicular distance is measured', pointSegmentDistance({ x: 100, y: 30 }, a, b) === 30)
+
+  // The SEGMENT, not the infinite line through it. Somebody standing well past
+  // the target, or well behind the shooter, is not in the line of fire however
+  // neatly they line up with it -- dropping the clamp soaks the whole room.
+  check('past the target is measured from the target',
+    pointSegmentDistance({ x: 400, y: 0 }, a, b) === 200)
+  check('behind the shooter is measured from the shooter',
+    pointSegmentDistance({ x: -50, y: 0 }, a, b) === 50)
+  check('somebody far past the line is NOT caught',
+    !inSplash({ x: 1000, y: 0 }, a, b))
+  check('somebody beside the middle IS caught',
+    inSplash({ x: 100, y: SPLASH_RADIUS_PX - 1 }, a, b))
+  check('just outside the radius is not caught',
+    !inSplash({ x: 100, y: SPLASH_RADIUS_PX + 1 }, a, b))
+
+  // Degenerate: shooter and target resolved to the same point. Must not divide
+  // by zero and hand a NaN to the caller.
+  const same = pointSegmentDistance({ x: 3, y: 4 }, a, a)
+  check('a zero-length blast is finite', same === 5)
+}
+
+console.log('\n-- the guard stand-off --')
+{
+  const from = { x: 0, y: 0 }
+  const to = { x: 100, y: 0 }
+  const short = stopShort(from, to, GUARD_STANDOFF_PX)
+  check('it stops short of the target', short.x === 100 - GUARD_STANDOFF_PX && short.y === 0)
+  check('it stays on the line', short.y === 0)
+
+  // Never overshoot backwards past the sender: a deflection is being held off,
+  // not a retreat.
+  check('a target closer than the stand-off collapses to the sender',
+    stopShort(from, { x: 10, y: 0 }, GUARD_STANDOFF_PX).x === 0)
+  check('a zero-length play does not produce NaN',
+    Number.isFinite(stopShort(from, from, GUARD_STANDOFF_PX).x))
+
+  // Diagonals too -- the stand-off is a distance, not an x offset.
+  const diag = stopShort({ x: 0, y: 0 }, { x: 30, y: 40 }, 10)
+  check('the stand-off is a real distance on a diagonal',
+    Math.abs(Math.hypot(30 - diag.x, 40 - diag.y) - 10) < 0.001)
 }
 
 if (failures > 0) {

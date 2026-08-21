@@ -9,6 +9,7 @@ import { bubbleTone } from '../client/bubbleTone'
 import { parseMxc } from '../client/media'
 import { AuthedImage } from './AuthedImage'
 import { AvatarDisc } from './AvatarDisc'
+import { Drench } from './Drench'
 import { SenderIdentity } from './SenderIdentity'
 import { MemberEvent } from './MemberEvent'
 import { useLightbox, type LightboxItem } from './Lightbox'
@@ -571,6 +572,9 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
       data-grouped={item.showHeader === false ? 'true' : undefined}
       style={{ padding: '4px 0' }}
     >
+      {/* Water left by a squirt. Renders null when dry, which is nearly always
+          -- it sits on every row, so the empty path is the cheap one. */}
+      <Drench rowId={item.id} />
       {/* Overlays the row's top-right; revealed by CSS on hover/focus-within so
           no React state churns per pointer crossing. */}
       <MessageActionBar actions={actions} />

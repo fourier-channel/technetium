@@ -1993,3 +1993,100 @@ code {
     transition: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Squirt: the jet, and the water it leaves behind.
+   --------------------------------------------------------------------------- */
+/* The blast travels flatter and faster than a slap -- water is thrown, not
+   swung -- so it barely bows and does not come back. */
+.tc-ix-travel[data-action='squirt'] .tc-ix-glyph {
+  animation-name: ixJet;
+}
+@keyframes ixJet {
+  0%   { opacity: 0; transform: scale(0.4) scaleX(0.6); }
+  12%  { opacity: 1; transform: scaleX(1.8) scaleY(0.7); }
+  34%  { transform: scaleX(2.4) scaleY(0.6); }
+  46%  { transform: scaleX(1) scaleY(1.25); }
+  70%  { opacity: 0.9; transform: scale(1.1); }
+  100% { opacity: 0; transform: scale(1.5); }
+}
+.tc-ix-travel[data-action='squirt'] .tc-ix-impact {
+  background: radial-gradient(
+    circle,
+    rgba(150, 205, 255, 0.95) 0%,
+    rgba(90, 160, 230, 0.4) 45%,
+    transparent 72%
+  );
+}
+
+/* Droplets on a soaked row. Absolutely positioned, pointer-events none: they
+   hold no layout, so a wet row is exactly the height of a dry one (G-tp19). */
+.tc-drench {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.tc-drop {
+  position: absolute;
+  width: 7px;
+  height: 9px;
+  border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%;
+  background: linear-gradient(180deg, rgba(190, 228, 255, 0.85), rgba(96, 165, 230, 0.55));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), inset 0 -1px 1px rgba(255, 255, 255, 0.5);
+  transform: scale(var(--tc-drop-scale, 1));
+  opacity: 0.85;
+}
+.tc-drench[data-level='secondary'] .tc-drop {
+  opacity: 0.5;
+  filter: saturate(0.8);
+}
+/* Drying: they break up and drift off rather than blinking out. */
+.tc-drench[data-drying='true'] .tc-drop {
+  animation: tcDropDry 1200ms ease-in both;
+  animation-delay: var(--tc-drop-delay, 0ms);
+}
+@keyframes tcDropDry {
+  0%   { opacity: 0.85; transform: scale(var(--tc-drop-scale, 1)) translateY(0); }
+  55%  { opacity: 0.5; transform: scale(calc(var(--tc-drop-scale, 1) * 0.7)) translateY(-9px); }
+  100% { opacity: 0; transform: scale(calc(var(--tc-drop-scale, 1) * 0.35)) translateY(-22px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tc-drench[data-drying='true'] .tc-drop { animation: none; opacity: 0; }
+}
+
+/* ---------------------------------------------------------------------------
+   Guard: the shield, and what a deflected play looks like.
+   --------------------------------------------------------------------------- */
+.tc-ix-shield {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  transform: translate(var(--ix-from-x), var(--ix-from-y));
+}
+.tc-ix-shield > span {
+  position: absolute;
+  left: -16px;
+  top: -16px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  filter: drop-shadow(0 0 8px rgba(140, 200, 255, 0.7));
+  animation: ixShield var(--ix-dur, 2000ms) ease-out both;
+}
+@keyframes ixShield {
+  0%   { opacity: 0; transform: scale(0.5); }
+  18%  { opacity: 1; transform: scale(1.15); }
+  30%  { transform: scale(1); }
+  72%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.3); }
+}
+
+/* A deflected play stops short and loses its impact -- nothing landed. */
+.tc-ix-travel[data-deflected='true'] .tc-ix-impact,
+.tc-ix-approach[data-deflected='true'] .tc-ix-glyph {
+  opacity: 0.35;
+}

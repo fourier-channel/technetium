@@ -158,3 +158,54 @@ export function travelPoses(from: Point, to: Point, sign: -1 | 1): TravelPoses {
     recoil: { x: from.x + RECOIL_DX, y: from.y },
   }
 }
+
+// --- the splash -------------------------------------------------------------
+//
+// Who else got wet. Every client works this out from ITS OWN viewport (D-in09):
+// the wire carries only who squirted whom, and each screen decides who was
+// standing in the way of it. A sender's list of casualties would describe the
+// sender's screen, not yours -- and would be forgeable, which is the same
+// reasoning that reads the actor from getSender() and never from content.
+//
+// The perpendicular distance from a point to the SEGMENT, not to the infinite
+// line through it: somebody standing well past the target, or well behind the
+// shooter, is not in the line of fire however neatly they line up with it.
+export function pointSegmentDistance(p: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const lenSq = dx * dx + dy * dy
+  // Degenerate: shooter and target in the same place. Fall back to distance
+  // from the point itself rather than dividing by zero.
+  if (lenSq === 0) return Math.hypot(p.x - a.x, p.y - a.y)
+  // Clamped to [0,1] -- that clamp IS the difference between a segment and a
+  // line, and dropping it soaks bystanders on the far side of the room.
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq))
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy))
+}
+
+// How close counts as caught in it.
+export const SPLASH_RADIUS_PX = 46
+
+export function inSplash(p: Point, a: Point, b: Point): boolean {
+  return pointSegmentDistance(p, a, b) <= SPLASH_RADIUS_PX
+}
+
+// --- guard ------------------------------------------------------------------
+
+/** How far short of a guarded person a deflected play stops. */
+export const GUARD_STANDOFF_PX = 34
+
+// The point `px` before `to`, along the line from `from`. A deflected play
+// still plays -- it just does not arrive, which is what being held at arm's
+// length looks like. Stopping AT the target and simply not drawing the impact
+// would read as a hit that failed to render.
+export function stopShort(from: Point, to: Point, px: number): Point {
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  const len = Math.hypot(dx, dy)
+  // Closer than the stand-off already, or nowhere to back off to: do not
+  // overshoot backwards past the sender, which would look like a retreat.
+  if (len === 0 || len <= px) return from
+  const t = (len - px) / len
+  return { x: from.x + dx * t, y: from.y + dy * t }
+}

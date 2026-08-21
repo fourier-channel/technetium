@@ -51,6 +51,10 @@ export interface InteractionDef {
   // has one; a high five is two hands meeting and a thrown star has left your
   // grip, so neither does.
   tether?: boolean
+  // Aimed AT somebody with intent to land. Guard reflects these back at whoever
+  // sent them; everything else is let through and merely kept at arm's length.
+  // Being aimed at a person is not enough -- a hug is targeted and welcome.
+  hostile?: boolean
   // How long the animation runs. The renderer expires the instance after this,
   // so it must match the CSS or a dead node lingers.
   //
@@ -77,6 +81,7 @@ export const INTERACTIONS: readonly InteractionDef[] = [
     choreo: 'travel',
     anchors: 'both',
     tether: true,
+    hostile: true,
     // Whip out, stick for a beat, get pulled home. The stick is most of it --
     // that pause is the whole joke, and it is the first thing a short duration
     // eats.
@@ -116,6 +121,20 @@ export const INTERACTIONS: readonly InteractionDef[] = [
     anchors: 'target',
     durationMs: 1500,
     phrase: '{actor} booped {target}',
+  },
+  {
+    id: 'squirt',
+    label: 'Squirt',
+    glyph: '💦',
+    shape: 'targeted',
+    surfaces: ['chat', 'domain'],
+    choreo: 'travel',
+    anchors: 'both',
+    hostile: true,
+    // Long, because the blast has to arrive, land, and be seen landing before
+    // the droplets it leaves behind become the point.
+    durationMs: 2200,
+    phrase: '{actor} soaked {target}',
   },
   {
     id: 'highfive',
@@ -173,6 +192,17 @@ export const INTERACTIONS: readonly InteractionDef[] = [
     anchors: 'actor',
     durationMs: 2600,
     phrase: '{actor} did not survive that',
+  },
+  {
+    id: 'guard',
+    label: 'Guard',
+    glyph: '🛡',
+    shape: 'self',
+    surfaces: ['chat', 'domain'],
+    choreo: 'self',
+    anchors: 'actor',
+    durationMs: 1800,
+    phrase: '{actor} put a guard up',
   },
   {
     id: 'square',
