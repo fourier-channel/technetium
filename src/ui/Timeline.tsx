@@ -5,6 +5,7 @@ import { useTimeline, type TimelineItem, type GalleryLayout } from '../client/us
 import type { ReplyRef } from '../client/relations'
 import { eventPreview } from '../client/eventPreview'
 import { renderMessageBody } from '../client/messageBody'
+import { bubbleTone } from '../client/bubbleTone'
 import { parseMxc } from '../client/media'
 import { AuthedImage } from './AuthedImage'
 import { AvatarDisc } from './AvatarDisc'
@@ -494,6 +495,13 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
       item.content.msgtype === 'm.image' &&
       !!parseMxc(typeof item.content.url === 'string' ? item.content.url : ''))
 
+  // Bubbles are for words. A picture in a speech bubble is not a speech bubble,
+  // and a gallery's geometry is its own.
+  const bubble =
+    kind === 'message' && !isMediaRow
+      ? bubbleTone(typeof item.content.body === 'string' ? item.content.body : '')
+      : null
+
   let body: React.ReactNode
   if (kind === 'gallery' && cells) {
     body = <GalleryBody cells={cells} layout={layout ?? 'grid'} />
@@ -635,7 +643,11 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
             retune the other. */}
         <span className="tc-row-time">{time}</span>
         {item.replyTo && <ReplyPill replyTo={item.replyTo} />}
-        <div style={{ fontSize: 14, wordBreak: 'break-word', minWidth: 0 }}>
+        <div
+          className={bubble ? 'tc-bubble' : undefined}
+          data-bubble={bubble ?? undefined}
+          style={{ fontSize: 14, wordBreak: 'break-word', minWidth: 0 }}
+        >
           {isMediaRow && roomId ? (
             // The picture and its rail sit side by side. The picture is FIRST,
             // so the rail appearing on hover cannot shift it.
