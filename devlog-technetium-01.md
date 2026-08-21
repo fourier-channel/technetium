@@ -2999,3 +2999,152 @@ opt-in here.
 Three of the four areas were sized correctly only because the spec got written
 before the code. The fourth was sized correctly because I checked a fact instead
 of assuming it. Both are cheap; neither feels like progress at the time.
+
+## 2026-08-21 -- the chat window, taken apart and put back (branch interactions-v1)
+
+A long session that started as "why is a slap landing in the wrong place" and
+turned into most of the chat window. Grouped by what it was really about rather
+than by commit order, because the commits interleave.
+
+### Everything silent turned out to be silent on purpose
+
+Three separate bugs this session were invisible, and all three were invisible
+because something had been written to make them so.
+
+The interaction overlay resolved anchors against the scroller's VISIBLE box,
+which is what its own comment says it intends, but it was mounted INSIDE that
+scroller -- and `position: absolute; inset: 0` on a child of an `overflow: auto`
+element pins it to the top of the SCROLLED CONTENT, not to the visible box. The
+two origins differ by exactly scrollTop, so every play drew that far above the
+screen and the layer's own overflow clipped it. It could only ever have looked
+right in a room scrolled hard to the top. The menu opened, the event went out,
+the optimistic play was admitted, and nothing appeared.
+
+Then images. `fetchMediaSrc` keeps the failure body deliberately -- its comment
+reads "Discarding it is why a media failure could only ever be diagnosed from
+the browser's network tab" -- and `AuthedImage` caught it as `.catch(() => {`
+and threw the whole thing away. The no-silent-failure sweep counted 36 sites and
+missed the one behind every picture on screen.
+
+And the console message the operator finally did get was not from the reporting
+path at all: `pending.finally(() => inFlight.delete(key))` returns a NEW promise
+that rejects whenever `pending` does, and nothing ever awaited that one. The
+handled rejection and an unhandled one, side by side, every time.
+
+The lesson is not "add logging". It is that a deliberate swallow needs a
+deliberate report at the same moment, or the reasoning that justified the
+swallow outlives the person who can remember it.
+
+### An authorization that changes its mind is not a client bug
+
+Thumbnails 403'd with M_FORBIDDEN and then, on retry, loaded. Same URL, same
+token, same hint. An authorization decision that flips from deny to allow with
+nothing changing on the client is a server-side race, and retrying a 403 --
+normally pointless -- was the only reason images appeared at all.
+
+What was ours: the room hint. Its comment said "Only ever needed for ENCRYPTED
+rooms" and the code sent it for every room that had an id. Every room here is
+unencrypted, so it was on every request and needed by none. Not free either: in
+an unencrypted room the server can already see the event, so the hint adds
+nothing but asks a stricter question -- "is this media yours in THAT room" --
+about media legitimately rendered elsewhere, which is a forward, a thread panel,
+a gallery cell. Avatars were the one thing that always worked, and avatars are
+the one thing that never sent it. That was the tell, and it was sitting in the
+operator's own description of the symptom the whole time.
+
+### Speed had a ceiling nobody had named
+
+An `<img>` cannot send an Authorization header, so every picture is a JS fetch,
+which costs the browser's scheduling: no priority, no native lazy loading, and
+nothing painted until the whole file lands. A paginating timeline fired every
+request at once and the six on screen queued behind the forty-four that were
+not. A cap of six fixes that, and LIFO rather than FIFO because requests arrive
+in scroll order, so the newest is the likeliest to be under the reader's eyes.
+
+The placeholder is the reservation, not decoration: one `box` value feeds both
+the placeholder and the loaded image, so they cannot disagree and the row is
+settled from first paint.
+
+### The anchor bug was the layout's fault, twice
+
+A slap aimed at somebody whose latest line was directly above flew to the top of
+the screen. Only the LEAD row of a cluster carried an anchor, and resolveAnchor
+takes the last match -- so the error was proportional to how much the target had
+just said. Five messages in a row put them five messages above where you aimed.
+The operator guessed date separators; the observation was exact and the guess
+was wrong, which is the most useful kind of bug report.
+
+The "empty space between names" was the second half: membership rows carried
+anchors too, so a join notice could win the search and take the slap.
+
+Worth recording that the anchor rule I had written two iterations earlier --
+anchor only the cluster head, so a repeat avatar cannot steal it -- was a direct
+instruction from the operator at the time, followed correctly, and wrong. The
+instruction was about which thing the effect should centre on; it was not about
+which rows should be candidates.
+
+### Layout, four times, and that is the process working
+
+Avatars moved right, then left. Names went left-aligned, then centred over the
+avatar, then left again. The timestamp went beside the name, then into a gutter,
+then stacked over the message. Each move was a response to seeing the previous
+one, which is what a headless box cannot do and the operator can.
+
+Two things fell out of it worth keeping. Absolutely positioning the avatar is
+not a detail: 09:05 and 12:45 are not the same width, and in flow that walks the
+avatar sideways line to line. And when the operator asked for the stacked lines
+to equal the avatar's height, they specifically asked NOT to derive them from
+it -- so they are their own tokens that happen to sum correctly. That is the
+right instinct: a calc() would make resizing the avatar silently restyle the
+text beside it.
+
+### Where a decision was mine rather than theirs
+
+Speech bubbles were specified as four shapes -- standard, thinking, yelling,
+questioning -- with nothing said about how a line finds one. Rather than build
+shapes nothing could select, the tone is inferred from conventions people
+already use, and the whole rule is one pure function so that replacing it with a
+per-message choice touches nothing else.
+
+The ambiguous cases are decided on purpose: volume beats interrogation, so
+"WHAT?!" shouts rather than asks, which is how it reads out loud. Brackets beat
+both. And caps detection is ASCII-ONLY, because `toUpperCase()` is the identity
+for scripts without case, so the obvious test would call every CJK and Cyrillic
+message a shout -- asserted in a check so nobody helpfully fixes it later.
+
+### One mechanism, because "exactly the same" has only one implementation
+
+The domain and the thread strip both had to arrive and leave the same way. Two
+transition implementations drift by their second edit, so there is one --
+`useReveal` -- and both call it.
+
+It unmounts on a TIMER rather than on `transitionend`, which is G-04f01d paid
+for a second time: `transitionend` never fires for a no-op property change, so a
+panel closed before it finished opening, or one whose transition is suppressed
+under reduced motion, would never unmount and would sit invisibly over the app.
+
+The carousel is the same idea stated as geometry: the track moves so the focused
+card is under the middle, and the reading position never moves. The ends are
+deliberately not clamped -- a carousel that refuses to centre its first and last
+cards leaves them off-centre while every other card is centred, which reads as
+broken edges rather than as a boundary.
+
+### Two things I got wrong, recorded
+
+I declared the connection-leak theory dead on an `ss` count taken AFTER the
+mass teardown that was the evidence for it -- measuring the aftermath and
+calling it exoneration. And I reported check counts in three commit messages
+that were undercounts; the verified figure was 754 where I had written 737.
+Neither changed what shipped, and both are the same failure: trusting a
+measurement without checking when it was taken.
+
+### Gates
+
+tsc clean, lint at the 23 baseline throughout, build passing. Checks 626 -> 847.
+Six new check files: media, systemEvents, concurrency, carousel, bubbleTone, and
+the geometry added to interactions. Nothing visual is claimed -- this box is
+headless, and the pending list in `docs/plan/INTERACTIONS_PLAN.md` is what needs
+the operator's eyes.
+
+**Still unbuilt: squirt and guard**, specified in the ledger with D-in08, D-in09
+and D-in10 recorded and unchanged.

@@ -14,11 +14,12 @@
 
 | field | value |
 | --- | --- |
-| campaign | interactions-v1 (4 areas) |
+| campaign | interactions-v1 (4 areas, plus the layout and media work that grew out of it) |
 | branch | `interactions-v1` off `main` (`aeab785`), pushed |
 | tsc / lint / build | CLEAN / 23 (HOLD) / PASSING |
-| checks | 571 at start -> **626** |
+| checks | 571 at start -> **847** |
 | deploys | operator's call, as always |
+| still unbuilt | **squirt** and **guard** (specified below, D-in08/09/10 recorded) |
 
 ---
 
@@ -248,6 +249,15 @@ client offers.
 | A1.6 | Choreography pass: slower, three staged forms | **landed** | | Durations roughly doubled (a check refuses anything under 1.4s). One shared targeted animation became three, chosen by a `choreo` field on the definition rather than an id switch. **slap** = travel: whip along an arc, stick for ~40% of the play, tear off straight back. Arc side is HASHED FROM THE PLAY ID, not random, so sender and receiver stage the same slap identically. **poke/boop/hug** = approach: the actor's own avatar disc arrives beside the target and acts there. Avatar disc extracted to `ui/AvatarDisc.tsx` + `ui/avatarLook.ts` so the overlay draws THE pill's disc, not a copy. **Bug fixed on the way:** an approach needs only the TARGET's anchor, where every targeted play previously required both -- so a poke was dropped whenever the actor had not spoken recently enough to be on screen. O-in1 unchanged; the definition now says which anchors it is about. |
 | A1.7 | Sticky-hand arm + hug eclipse | **landed** | | Arm is ONE bar pinned at the actor, rotated to point at the hand and scaled to reach it -- it SWINGS with the arc rather than bending along it. Sibling of the travelling hand, never a child (inside it, it would inherit the hand's translation and never stretch). Sampled at the same poses the hand is keyframed at, asserted rather than trusted. `tether` is a catalog flag: only the slap has one. Hug now completes the eclipse (36%) before the emoji appears (40%+), and the actor fades out quickly in place instead of drifting up. |
 | L1 | Row layout: identity block + per-line avatar | **landed** | | Name + guild tag once per cluster, avatar on EVERY line. `ui/displayDecoration.ts` holds the prefix/suffix/guild wiring point, empty, with a real map lookup rather than a constant. **Prefix/suffix concatenate RAW -- nothing ever inserts a separator** (checked); the whitespace is the decoration's, so a comma or apostrophe can sit flush. Guild line is omitted, not drawn empty. Anchor stays on the LEAD row's avatar only -- `resolveAnchor` takes the last match, so tagging repeat avatars would move every slap to the bottom of a run. Grouped-row timestamp shares the avatar's box, opacity-only cross-fade, no size change on hover. **PROVISIONAL** (operator may revert after seeing it) -- hence its own component, `ui/SenderIdentity.tsx`. |
+| L2 | Timestamp off the name, onto the line | **landed** | | Every message carries its own time, always visible. The avatar is absolutely positioned so a wider clock reading cannot walk it sideways; the time is right-aligned in a fixed column with tabular numerals. |
+| L3 | Bigger avatars, mask shapes | **landed** | | 26 -> 40px. Five clip-path masks (circle, square, triangle, torn hole, keyhole), all in PERCENTAGES because the same disc renders at several sizes. **O-in6:** the mask is LOCAL ONLY and the picker says so -- sharing it needs MSC4133, which the SDK already implements and Synapse gates behind `experimental_features: msc4133_enabled`. Operator-side. |
+| L4 | Avatars left-justified, timestamp stacked | **landed** | | Avatar at x=0; timestamp above the output it labels. The two stacked line heights are their OWN tokens, deliberately not derived from the avatar (operator's instruction). Identity block left-aligned -- centring a name over an x=0 avatar puts half of it off the edge. |
+| L5 | Speech bubbles | **landed** | | Four tones, tail pointing at the avatar. Thinking has circles instead of a tail; yelling is one clip-path carrying both the jagged edge AND the spike, because a pseudo-element tail would be clipped by it. **Tone is INFERRED** (`client/bubbleTone.ts`) since the operator named shapes and not triggers -- volume beats interrogation, brackets beat both, caps detection is ASCII-only so caseless scripts are not called shouting. One pure function to replace if tone should be chosen per message instead. |
+| L6 | System events hidden | **landed** | | `net.41chan.*` by prefix, `m.room.*` config enumerated. Anything unrecognised STAYS VISIBLE -- the risk runs one way. Preference wired (`client/systemEventPref.ts`) for the settings panel; default off. |
+| L7 | Domain + thread strip as animated panels | **landed** | | One `useReveal` for both, per the operator's "exactly the same". Unmount on a TIMER not `transitionend` (G-04f01d). Domain emerges from the right over a still-mounted chat; thread strip comes down across the top. |
+| L8 | Thread carousel | **landed** | | Track slides so the focused card sits under the middle; the reading position never moves. Wheel/arrows/Home/End/click-neighbour move focus, click-focused opens. Pure geometry in `ui/carousel.ts`, 20 checks. Ends deliberately unclamped. Drag-reorder, FLIP, pop and persisted custom order all survive. |
+| M1 | Media: silence, then speed | **landed** | | Four commits. (a) `AuthedImage` discarded the error `fetchMediaSrc` went out of its way to preserve -- now reports, scoped by request shape. (b) the in-flight dedup orphaned a rejected promise via `.finally()`, which was the `Uncaught (in promise)`. (c) the room hint was sent for EVERY room though its own comment said encrypted-only; now gated on `Room.hasEncryptionStateEvent()`, and the blob cache is keyed on the URL so one picture in three places is one download. (d) prefetch at ~800px, a LIFO concurrency cap of 6, and a placeholder that IS the reservation. |
+| M2 | Interaction anchors on every line | **landed** | | Only the cluster HEAD was an anchor, so a slap's error was proportional to how much the target had just said. Membership rows were anchors too, which is the "empty space between names". Every message row now; membership rows no longer. |
 | E2 | Inline sending (shortcode -> MSC2545 img) | | | |
 | E3 | Sanitizer widening (SECURITY, own commit) | | | |
 | E4 | Animated emoji + preference | | | |
@@ -327,6 +337,19 @@ Headless box: gates are self-verified, behaviour is not.
 | IX-i | Domain canvas: the puck menu now offers the fuller self list, and right-click -> targeted actions arc across as before. **`Square` and `Throw` must still work** -- they are what the deployed client sends. | yes |
 | IX-j | Reaction picker: a star tab appears when the room or your account has an MSC2545 pack; picking one reacts with the image. Searching matches shortcodes. | yes |
 | IX-k | **Judgement call: is the catalog right?** Ten entries, glyph-based. Naming, additions and removals are one array in `interactionCatalog.ts`. | no |
+
+### Added 2026-08-21 -- layout, media, panels
+
+| id | what needs eyes | 2nd identity? |
+| --- | --- | --- |
+| LX-a | Thumbnails: do they now appear as you scroll rather than trickling in, and does nothing shuffle while they land? | no |
+| LX-b | Speech bubbles: four tones fire on the right lines, tails point at the avatar, and a long line still wraps sanely. Judgement call on the inferred triggers. | no |
+| LX-c | Slap/poke/hug land on the target's MOST RECENT line, including deep in a long cluster, and never on a join notice. | yes |
+| LX-d | Expand Domain slides in from the right and reverses on collapse -- no flash, no remounted timeline behind it. | no |
+| LX-e | Thread strip comes down across the top the same way, and the carousel brings cards to you (wheel, arrows, clicking a neighbour). First and last cards reach the middle. | no |
+| LX-f | Drag-to-reorder still works in the strip, and the custom order still persists. | no |
+| LX-g | System events are gone from the log and nothing real went with them. | no |
+| LX-h | Avatar mask shapes render at 40px and in the interaction overlay. | no |
 
 ### Added 2026-08-15 -- choreography pass + emoji routing
 
