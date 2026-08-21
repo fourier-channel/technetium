@@ -166,6 +166,7 @@ function App() {
                     onSelect={(roomId, rootId) => setOpenThread({ roomId, rootId })}
                     activeRootId={openThread?.rootId}
                     roomId={selectedRoom?.roomId}
+                    onClose={() => setThreadListOpen(false)}
                   />
                 </div>
               )}

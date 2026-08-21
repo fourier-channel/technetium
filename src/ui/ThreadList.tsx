@@ -42,6 +42,7 @@ export function ThreadList({
   roomId,
   width = 190,
   layout = 'column',
+  onClose,
 }: {
   onSelect: (roomId: string, rootId: string) => void
   activeRootId?: string
@@ -50,6 +51,8 @@ export function ThreadList({
   // 'carousel' is the horizontal strip: one card under the reader's eyes and
   // the track sliding to put it there. 'column' is the original side list.
   layout?: 'column' | 'carousel'
+  // Present when the surface hosting this list has no other way to dismiss it.
+  onClose?: () => void
 }) {
   const carousel = layout === 'carousel'
   const { client } = useClient()
@@ -261,13 +264,48 @@ export function ThreadList({
       }
     >
       <div
+        className={carousel ? 'tc-carousel-head' : undefined}
         style={{
           padding: '10px 12px 6px',
           borderBottom: '1px solid rgba(128,128,128,0.25)',
           flexShrink: 0,
         }}
       >
-        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>Threads</div>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontWeight: 600,
+            fontSize: 13,
+            marginBottom: carousel ? 2 : 6,
+          }}
+        >
+          <span>Threads</span>
+          {/* The strip covers the top of the timeline, and the timeline's own
+              Threads toggle is up there under it -- so opening the strip hid
+              the only way to close it. It carries its own. */}
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              title="Hide threads"
+              aria-label="Hide threads"
+              style={{
+                fontSize: 14,
+                lineHeight: 1,
+                padding: '2px 7px',
+                borderRadius: 6,
+                border: '1px solid rgba(128,128,128,0.35)',
+                background: 'transparent',
+                color: 'var(--cpd-color-text-primary)',
+                cursor: 'pointer',
+              }}
+            >
+              {'\u00D7'}
+            </button>
+          )}
+        </div>
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', paddingBottom: 6 }}>
           {roomId && (
             <button type="button" style={chip(scope === 'room')} onClick={() => handleScope('room')}>

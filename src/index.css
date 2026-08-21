@@ -1745,13 +1745,20 @@ code {
    Shrink-to-fit via align-self, so a three-word line gets a three-word bubble
    rather than a rectangle across the whole timeline.
    --------------------------------------------------------------------------- */
+/* How wide the conversation column runs. ONE number, because the domain panel
+   fills the space to the right of it -- if the bubble's width and the panel's
+   left edge were separate values they would overlap the day either changed. */
+:root {
+  --tc-chat-w: 560px;
+}
+
 .tc-bubble {
   --tc-bub-bg: var(--cpd-color-bg-subtle-secondary, rgba(128, 128, 128, 0.14));
   --tc-bub-line: rgba(128, 128, 128, 0.28);
 
   position: relative;
   align-self: flex-start;
-  max-width: min(100%, 68ch);
+  max-width: min(100%, var(--tc-chat-w));
   padding: 7px 12px;
   border-radius: 12px;
   background: var(--tc-bub-bg);
@@ -1871,9 +1878,16 @@ code {
   will-change: transform, opacity;
 }
 
-/* The domain emerges from the right edge of the chat and covers it. */
+/* The domain fills the open space to the RIGHT of the conversation, floor to
+   ceiling. It is not an overlay on the chat: the bubbles stop at --tc-chat-w
+   and everything past that was empty, so the domain expands into it and the
+   conversation keeps reading beside it. Capped at 60% so a narrow window gives
+   the words the room rather than the canvas. */
 .tc-panel-right {
-  inset: 0;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  left: min(calc(var(--tc-chat-w) + 88px), 60%);
   display: flex;
   flex-direction: column;
   transform: translateX(100%);
@@ -1890,7 +1904,9 @@ code {
   left: 0;
   right: 0;
   top: 0;
-  height: 178px;
+  /* Tall enough for the header AND a whole card. The cards were running out
+     of the bottom because this was budgeted for one of the two. */
+  height: 208px;
   border-bottom: 1px solid rgba(128, 128, 128, 0.25);
   transform: translateY(-100%);
   opacity: 0.6;
@@ -1937,10 +1953,21 @@ code {
   will-change: transform;
 }
 
+/* Compact in the strip: the header is competing with the cards for 208px, and
+   the cards are the reason the strip exists. */
+.tc-carousel-head {
+  padding: 5px 10px 4px !important;
+  font-size: 11px;
+}
+.tc-carousel-head select,
+.tc-carousel-head button {
+  font-size: 11px;
+}
+
 .tc-carousel-card {
   flex: 0 0 232px;
   width: 232px;
-  height: 118px;
+  height: 120px;
   overflow: hidden;
   border-radius: 10px;
   border: 1px solid rgba(128, 128, 128, 0.22);
