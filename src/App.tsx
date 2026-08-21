@@ -9,6 +9,7 @@ import { TypingBar } from './ui/TypingBar'
 import { MemberList } from './ui/MemberList'
 import { ThreadPanel } from './ui/ThreadPanel'
 import { ThreadList } from './ui/ThreadList'
+import { useReveal } from './ui/useReveal'
 import { LightboxProvider } from './ui/Lightbox'
 import { RoomListSettingsProvider } from './ui/RoomListSettingsProvider'
 import { useReadMarker } from './client/useReadMarker'
@@ -25,9 +26,12 @@ function App() {
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   const [openThread, setOpenThread] = useState<{ roomId: string; rootId: string } | null>(null)
   const [threadListOpen, setThreadListOpen] = useState(false)
-  const [threadListWidth, setThreadListWidth] = useState(190)
   const [threadPanelWidth, setThreadPanelWidth] = useState(380)
   const [domainExpanded, setDomainExpanded] = useState(false)
+  // Both panels arrive and leave the same way, from one mechanism -- the only
+  // way two things stay exactly the same is for there to be one of them.
+  const domainReveal = useReveal(domainExpanded, 420)
+  const threadReveal = useReveal(threadListOpen, 380)
   // Mark the viewed room read so its unread glow/ping clears (base client sent
   // no read receipts). Called before any early return to keep hook order stable.
   useReadMarker(client, selectedRoom)
@@ -99,11 +103,21 @@ function App() {
         }
       />
 
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      {/* position: relative because the domain and the thread strip are panels
+          ON this, not replacements for it. The chat stays mounted underneath --
+          a panel that slides away to reveal a freshly remounted timeline is not
+          a panel, it is a page change wearing an animation. */}
+      <main
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          minWidth: 0,
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+      >
         {selectedRoom ? (
-          domainExpanded ? (
-            <DomainView room={selectedRoom} onExit={() => setDomainExpanded(false)} />
-          ) : (
             // One composer-mode scope per composer: the room timeline and its
             // composer share a reply/edit target, and the thread panel keeps
             // its own so replying in a thread cannot hijack the room composer.
@@ -137,24 +151,41 @@ function App() {
               </div>
               <TypingBar client={client} room={selectedRoom} />
               <Composer room={selectedRoom} />
+
+              {/* Across the top, over the oldest messages on screen -- which is
+                  the part the reader is least likely to be reading, since the
+                  timeline follows the bottom. */}
+              {threadReveal.mounted && (
+                <div
+                  className="tc-panel tc-panel-top"
+                  data-shown={threadReveal.shown ? 'true' : 'false'}
+                  style={{ transitionDuration: `${threadReveal.durationMs}ms` }}
+                >
+                  <ThreadList
+                    layout="carousel"
+                    onSelect={(roomId, rootId) => setOpenThread({ roomId, rootId })}
+                    activeRootId={openThread?.rootId}
+                    roomId={selectedRoom?.roomId}
+                  />
+                </div>
+              )}
+
+              {/* Rendered last so it covers the strip: opening the domain is a
+                  bigger statement than browsing threads. */}
+              {domainReveal.mounted && (
+                <div
+                  className="tc-panel tc-panel-right"
+                  data-shown={domainReveal.shown ? 'true' : 'false'}
+                  style={{ transitionDuration: `${domainReveal.durationMs}ms` }}
+                >
+                  <DomainView room={selectedRoom} onExit={() => setDomainExpanded(false)} />
+                </div>
+              )}
             </ComposerModeProvider>
-          )
         ) : (
           <div style={{ padding: 24, opacity: 0.6 }}>Select a room from the left.</div>
         )}
       </main>
-
-      {threadListOpen && (
-          <ResizeHandle onDrag={(dx) => setThreadListWidth((w) => Math.max(140, Math.min(420, w - dx)))} />
-        )}
-        {threadListOpen && (
-        <ThreadList
-          onSelect={(roomId, rootId) => setOpenThread({ roomId, rootId })}
-          activeRootId={openThread?.rootId}
-          roomId={selectedRoom?.roomId}
-            width={threadListWidth}
-        />
-      )}
 
       {openThread && (
           <ResizeHandle onDrag={(dx) => setThreadPanelWidth((w) => Math.max(280, Math.min(640, w - dx)))} />

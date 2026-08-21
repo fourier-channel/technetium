@@ -1849,3 +1849,120 @@ code {
 .tc-bubble[data-bubble='yelling']::after {
   content: none;
 }
+
+/* ---------------------------------------------------------------------------
+   Panels: the domain and the thread strip.
+
+   Both arrive by transform and leave the same way, from one mechanism
+   (useReveal), because the requirement was that they behave EXACTLY alike and
+   the only way two things stay alike is for there to be one of them.
+
+   transform and opacity only -- no width, height or inset animation, so a panel
+   sliding in cannot reflow the conversation underneath it (G-tp19, G-tp20).
+   The duration is set inline from the hook, so JS and CSS cannot disagree about
+   how long to wait before unmounting.
+   --------------------------------------------------------------------------- */
+.tc-panel {
+  position: absolute;
+  z-index: 12;
+  background: var(--cpd-color-bg-canvas-default, #16181d);
+  transition-property: transform, opacity;
+  transition-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: transform, opacity;
+}
+
+/* The domain emerges from the right edge of the chat and covers it. */
+.tc-panel-right {
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  opacity: 0.6;
+  box-shadow: -14px 0 34px rgba(0, 0, 0, 0.38);
+}
+.tc-panel-right[data-shown='true'] {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+/* The thread strip comes down across the top. */
+.tc-panel-top {
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 178px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+  transform: translateY(-100%);
+  opacity: 0.6;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.34);
+}
+.tc-panel-top[data-shown='true'] {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tc-panel {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Thread carousel: the results come to the reader.
+
+   The track slides so the focused card sits under the middle of the strip. The
+   reading position never moves, which is the point -- a scrollbar asks the
+   reader to go to the results.
+   --------------------------------------------------------------------------- */
+.tc-carousel {
+  height: 100%;
+  overflow: hidden;
+  outline: none;
+}
+.tc-carousel:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--tc-link);
+}
+.tc-carousel-track {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /* No run-up padding here on purpose. trackOffset() already centres the
+     focused card against the measured strip width, and a padding would be
+     added on TOP of that translate -- every card centred, and every one of them
+     off by the padding. The pure function is the only authority for where the
+     track sits. The first and last cards simply translate past the edge, which
+     the strip's overflow hides. */
+  will-change: transform;
+}
+
+.tc-carousel-card {
+  flex: 0 0 232px;
+  width: 232px;
+  height: 118px;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid rgba(128, 128, 128, 0.22);
+  background: var(--cpd-color-bg-canvas-default, #16181d);
+  transition: transform 320ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 320ms ease-out;
+  will-change: transform, opacity;
+}
+/* Distance from the reader, capped at 3 by visualDistance -- a card six away
+   and one sixty away are both simply "not near" and must not generate sixty
+   visual states. */
+.tc-carousel-card[data-distance='0'] {
+  transform: scale(1);
+  opacity: 1;
+  border-color: rgba(150, 150, 150, 0.5);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.tc-carousel-card[data-distance='1'] { transform: scale(0.92); opacity: 0.72; }
+.tc-carousel-card[data-distance='2'] { transform: scale(0.86); opacity: 0.5; }
+.tc-carousel-card[data-distance='3'] { transform: scale(0.82); opacity: 0.34; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tc-carousel-card {
+    transition: none;
+  }
+}
