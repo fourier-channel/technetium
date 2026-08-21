@@ -17,9 +17,9 @@
 | campaign | interactions-v1 (4 areas, plus the layout and media work that grew out of it) |
 | branch | `interactions-v1` off `main` (`aeab785`), pushed |
 | tsc / lint / build | CLEAN / 23 (HOLD) / PASSING |
-| checks | 571 at start -> **847** |
+| checks | 571 at start -> **890** |
 | deploys | operator's call, as always |
-| still unbuilt | **squirt** and **guard** (specified below, D-in08/09/10 recorded) |
+| still unbuilt | -- (squirt and guard landed 2026-08-21) |
 
 ---
 
@@ -258,6 +258,9 @@ client offers.
 | L8 | Thread carousel | **landed** | | Track slides so the focused card sits under the middle; the reading position never moves. Wheel/arrows/Home/End/click-neighbour move focus, click-focused opens. Pure geometry in `ui/carousel.ts`, 20 checks. Ends deliberately unclamped. Drag-reorder, FLIP, pop and persisted custom order all survive. |
 | M1 | Media: silence, then speed | **landed** | | Four commits. (a) `AuthedImage` discarded the error `fetchMediaSrc` went out of its way to preserve -- now reports, scoped by request shape. (b) the in-flight dedup orphaned a rejected promise via `.finally()`, which was the `Uncaught (in promise)`. (c) the room hint was sent for EVERY room though its own comment said encrypted-only; now gated on `Room.hasEncryptionStateEvent()`, and the blob cache is keyed on the URL so one picture in three places is one download. (d) prefetch at ~800px, a LIFO concurrency cap of 6, and a placeholder that IS the reservation. |
 | M2 | Interaction anchors on every line | **landed** | | Only the cluster HEAD was an anchor, so a slap's error was proportional to how much the target had just said. Membership rows were anchors too, which is the "empty space between names". Every message row now; membership rows no longer. |
+| S1 | Squirt | **landed** | | Flat fast jet; the point is the water it leaves. Droplets live ON THE ROW keyed by `data-event-id` (D-in10) -- the overlay resolves anchors once and holds them, so a persistent mark there would need re-resolution on every scroll. **D-in08 is now real in code:** nothing is reconstructed from history; scrolling a wet row out of view clears it permanently, observed explicitly because the timeline is not windowed. Primary ~10s, secondary ~3.5s, both drying by breaking up and drifting off. |
+| S2 | Splash, computed per client | **landed** | | D-in09. Perpendicular distance to the SEGMENT, not the line -- somebody past the target or behind the shooter is not in the line of fire. The wire carries only actor and target; casualties are a different answer on every screen and a sender's list would be forgeable. Radius 46px. |
+| G1 | Guard | **landed** | | 30s shield. **Hostile reflects** (ends swapped, so the travel choreography is reused); **everything else deflects** and stops 34px short. `hostile` is a catalog flag -- a hug is targeted and welcome. Nothing on the wire says "reflected": a sender who could set it could decline to. Future-dated guards refused, self-attack through your own guard deflects rather than reflecting. |
 | E2 | Inline sending (shortcode -> MSC2545 img) | | | |
 | E3 | Sanitizer widening (SECURITY, own commit) | | | |
 | E4 | Animated emoji + preference | | | |
@@ -337,6 +340,19 @@ Headless box: gates are self-verified, behaviour is not.
 | IX-i | Domain canvas: the puck menu now offers the fuller self list, and right-click -> targeted actions arc across as before. **`Square` and `Throw` must still work** -- they are what the deployed client sends. | yes |
 | IX-j | Reaction picker: a star tab appears when the room or your account has an MSC2545 pack; picking one reacts with the image. Searching matches shortcodes. | yes |
 | IX-k | **Judgement call: is the catalog right?** Ten entries, glyph-based. Naming, additions and removals are one array in `interactionCatalog.ts`. | no |
+
+### Added 2026-08-21 (later) -- squirt, guard, and three panel fixes
+
+| id | what needs eyes | 2nd identity? |
+| --- | --- | --- |
+| SG-a | Squirt lands, and the target stays visibly wet for about ten seconds before the droplets break up and drift off. | yes |
+| SG-b | Somebody whose line sits between the two gets lightly splashed and dries in a few seconds. Somebody well past the target does NOT. | yes (3 ideally) |
+| SG-c | Scroll a wet row out of view and back: it is dry, and stays dry. History never rains. | no |
+| SG-d | Guard, then have someone slap or squirt you: it comes back at them, with a shield at your end. | yes |
+| SG-e | Guard, then have someone hug you: it plays but stops short, and is not thrown back. | yes |
+| SG-f | Domain now fills the space to the right of the conversation, floor to ceiling, with the chat still readable beside it. | no |
+| SG-g | The thread strip can be closed from its own X. | no |
+| SG-h | Thread cards sit fully inside the strip. | no |
 
 ### Added 2026-08-21 -- layout, media, panels
 

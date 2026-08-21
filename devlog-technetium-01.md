@@ -3148,3 +3148,91 @@ the operator's eyes.
 
 **Still unbuilt: squirt and guard**, specified in the ledger with D-in08, D-in09
 and D-in10 recorded and unchanged.
+
+## 2026-08-21 (later) -- squirt, guard, and three panels that did not fit
+
+### The panels were wrong in the way a headless box cannot see
+
+The domain was built as an overlay across the whole chat, and what the operator
+actually wanted was for it to EXPAND INTO the empty space beside the
+conversation -- floor to ceiling, chat still readable to its left. The bubbles
+stop well short of the edge; everything past that was already dead space.
+
+So the bubble's max width and the panel's left edge became one number. Two
+values would overlap the first day either changed, and this is exactly the case
+where they must agree.
+
+The thread strip could not be closed, and the reason is worth writing down: the
+strip lands over the top of the timeline, which is where the timeline's own
+Threads toggle lives. Opening it hid the only control that could dismiss it. A
+panel whose dismiss control is underneath itself is a trap, and it is the kind
+that only appears the first time somebody opens it -- there is no way to reason
+your way to it from the code, and no test that would have caught it.
+
+And the cards ran out of the bottom because 178px had been budgeted for either
+the header or a whole card, not both.
+
+### Squirt: the first thing here that outlives its own animation
+
+Everything before this was strictly ephemeral, and the campaign's second
+constraint said so. Persistent droplets sit close enough to that line that
+building them quietly would have retired the constraint by accident, so it was
+amended out loud instead: **nothing is ever reconstructed from history.** A live
+effect may outlive its animation; once gone it never comes back. That keeps the
+protection that mattered -- no burst of month-old slaps on join -- and allows
+water to sit on a row for ten seconds.
+
+The droplets live on the ROW rather than on the interaction overlay, and that is
+not an implementation preference. The overlay resolves its anchors once and
+holds them, deliberately, because chasing a scrolling list looks like a bug. A
+persistent mark there would have to re-resolve on every scroll, which is the
+exact cost the layer exists to avoid. On the row they scroll for free.
+
+Clearing them needed an IntersectionObserver rather than an unmount, because the
+timeline is not windowed -- every loaded event stays in the DOM, so a row that
+scrolls away never unmounts and the water would sit there for hours.
+
+### Who got wet is a different answer on every screen
+
+The splash follows the rule the operator set: every client computes its own. The
+wire carries who squirted whom and nothing else. A sender's list of casualties
+would describe the sender's viewport, not yours, and would be forgeable besides
+-- the third time this shape has come up, after the actor read from getSender()
+and the m.replace honoured only from its original sender.
+
+The geometry is perpendicular distance to the SEGMENT, not to the infinite line
+through it. Somebody standing well past the target, or well behind the shooter,
+is not in the line of fire however neatly they line up with it. That clamp is
+one `Math.max(0, Math.min(1, t))` and dropping it soaks the entire room, so it
+has its own check.
+
+### Guard, and the flag that could not go on the wire
+
+Nothing in the event says "this was reflected". It cannot: a sender who could
+set that flag could also decline to set it, and a shield you can talk your way
+past is not a shield. Every client works it out from the guard event it already
+received.
+
+That leaves a race, and it is the honest one -- a client that never saw the
+guard plays the hostile action straight. It is not wrong, it simply knows less,
+and a handshake to fix it would cost more than the mismatch does.
+
+Two answers rather than one, because there are two questions. Hostile things
+REFLECT: the ends are swapped, which reuses the entire travel choreography
+instead of inventing a backwards one. Everything else DEFLECTS -- it plays and
+stops short. A hug should not be punished for arriving while somebody is
+defensive, and refusing it outright would read as the client dropping the event.
+
+Hostility had to be a catalog flag rather than "is it targeted", because a hug
+is targeted and welcome. And a guard timestamped in the future is refused for
+the same reason the freshness gate rejects future events: otherwise a client
+with a chosen clock holds a shield up permanently. That is the second time that
+exact reasoning has been needed, which suggests it is a property of the whole
+transport rather than of either feature.
+
+### Gates
+
+tsc clean, lint at the 23 baseline, build passing. Checks 847 -> 890, with the
+splash geometry, the stand-off, and guard's reflection rules each covered --
+including the degenerate cases that would otherwise hand a NaN to a CSS
+transform, which fails silently by dropping the whole rule.
