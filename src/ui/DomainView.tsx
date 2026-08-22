@@ -2,36 +2,45 @@ import { useEffect, useRef, useState } from 'react'
 import type { Room } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
 import { DomainCanvas } from './DomainCanvas'
-import { Timeline } from './Timeline'
-import { Composer } from './Composer'
-import { ComposerModeProvider } from './ComposerModeProvider'
-import { TypingBar } from './TypingBar'
 import { useDomainSettings } from './domainSettings'
 import { DomainOptions } from './DomainOptions'
 import { describeBackgroundError, useDomainBackground } from '../client/useDomainBackground'
-import { TTD_DEFAULT } from '../client/useDomainMedia'
 
 // ---------------------------------------------------------------------------
 // Domain mode for a room: a header (room name -> right-click to change
-// backdrop, plus an exit button), the domain canvas (the big area), and BELOW
-// it the normal chat log + composer -- so the familiar chat window still exists
-// as a sizeable panel above the text input.
+// backdrop, plus an exit button) and the domain canvas filling everything below
+// it.
+//
+// IT NO LONGER CARRIES A CHAT. It used to: domain mode REPLACED the timeline,
+// so it had to bring a log and a composer along or there was no conversation at
+// all. Now it opens as a panel beside the real chat, and bringing its own meant
+// two timelines and two composers on screen at once, one of them a copy.
+//
+// The time-to-die control stays here -- it belongs to the canvas, which is what
+// it applies to -- but its VALUE is owned by the caller and handed to the one
+// real composer, so a post typed while the domain is open still lands with a
+// lifetime. That is the one thing the embedded composer was doing that nothing
+// else could.
 // ---------------------------------------------------------------------------
 
-// Resize-bar geometry. The bar changes how much of the canvas is VISIBLE (the
-// viewport) and how tall the chat panel is -- it never changes the canvas's own
-// size, so pucks/objects don't shift under a drag.
-const MIN_CHAT = 120
 const MIN_CANVAS = 160
-const HANDLE_H = 6
 
-export function DomainView({ room, onExit }: { room: Room; onExit: () => void }) {
+export function DomainView({
+  room,
+  onExit,
+  ttd,
+  onTtdChange,
+}: {
+  room: Room
+  onExit: () => void
+  ttd: number
+  onTtdChange: (ttd: number) => void
+}) {
   const { client } = useClient()
   const settings = useDomainSettings()
   const [backdropMenu, setBackdropMenu] = useState<{ x: number; y: number } | null>(null)
   const [optionsOpen, setOptionsOpen] = useState(false)
   const [bgEditing, setBgEditing] = useState(false)
-  const [ttd, setTtd] = useState(TTD_DEFAULT)
   const [bgError, setBgError] = useState<string | null>(null)
   const { background, clearBackground } = useDomainBackground(client, room)
   const hasBackground = background !== null || settings.getBackdrop(room.roomId) !== undefined
@@ -41,37 +50,25 @@ export function DomainView({ room, onExit }: { room: Room; onExit: () => void })
   // resizes. areaH depends only on the window, never on the drag.
   const areaRef = useRef<HTMLDivElement>(null)
   const [areaH, setAreaH] = useState<number | null>(null)
-  const [chatHeight, setChatHeight] = useState(260)
 
   useEffect(() => {
     const el = areaRef.current
     if (!el) return
     const ro = new ResizeObserver(() => {
-      const h = el.clientHeight
-      setAreaH(h)
-      // Keep the chat within bounds if the window shrank (setState in an RO
-      // callback is allowed; it isn't a synchronous setState in an effect body).
-      const maxChat = Math.max(MIN_CHAT, h - MIN_CANVAS - HANDLE_H)
-      setChatHeight((c) => Math.max(MIN_CHAT, Math.min(maxChat, c)))
+      setAreaH(el.clientHeight)
     })
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
 
-  // Fixed canvas content height = the largest the viewport can ever be (chat at
-  // its minimum). Dragging the bar only clips this window; it does NOT rescale
-  // the canvas. Falls back to filling the viewport until first measured.
+  // The canvas now gets the whole panel. Falls back to filling the viewport
+  // until first measured.
   const canvasContentHeight: number | string =
-    areaH != null ? Math.max(MIN_CANVAS, areaH - MIN_CHAT - HANDLE_H) : '100%'
-  const clampChat = (v: number) =>
-    Math.max(MIN_CHAT, Math.min(areaH != null ? areaH - MIN_CANVAS - HANDLE_H : 9999, v))
+    areaH != null ? Math.max(MIN_CANVAS, areaH) : '100%'
 
   if (!client) return null
 
   return (
-    // Domain mode has its own timeline + composer pair, so it gets its own
-    // composer-mode scope like the room view and the thread panel.
-    <ComposerModeProvider>
     <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       <div
         style={{
@@ -199,28 +196,12 @@ export function DomainView({ room, onExit }: { room: Room; onExit: () => void })
               bgEditing={bgEditing}
               onExitBgEdit={() => setBgEditing(false)}
               ttd={ttd}
-              onTtdChange={setTtd}
+              onTtdChange={onTtdChange}
             />
           </div>
         </div>
 
-        <HResizeHandle onDrag={(dy) => setChatHeight((h) => clampChat(h - dy))} />
-
-        {/* The normal chat log as a sizeable panel above the composer. */}
-        <div
-          style={{
-            height: chatHeight,
-            flexShrink: 0,
-            minHeight: 0,
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
-          <Timeline room={room} />
-        </div>
       </div>
-      <TypingBar client={client} room={room} />
-      <Composer room={room} domainTtd={ttd} />
 
       {backdropMenu && (
         <BackdropMenu
@@ -238,49 +219,6 @@ export function DomainView({ room, onExit }: { room: Room; onExit: () => void })
           onClose={() => setBackdropMenu(null)}
         />
       )}
-    </div>
-    </ComposerModeProvider>
-  )
-}
-
-// Horizontal (row-resize) drag bar between the canvas viewport and the chat
-// panel. Pointer-capture drag; reports the vertical delta each move. Dragging
-// down grows the canvas view and shrinks the chat, and vice-versa.
-function HResizeHandle({ onDrag }: { onDrag: (dy: number) => void }) {
-  const startY = useRef(0)
-  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    startY.current = e.clientY
-    e.currentTarget.setPointerCapture(e.pointerId)
-  }
-  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
-    const dy = e.clientY - startY.current
-    startY.current = e.clientY
-    if (dy !== 0) onDrag(dy)
-  }
-  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
-  }
-  return (
-    <div
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      title="Drag to resize the canvas viewport"
-      style={{
-        height: HANDLE_H,
-        flexShrink: 0,
-        cursor: 'row-resize',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderTop: '1px solid rgba(128,128,128,0.25)',
-        background: 'var(--cpd-color-bg-subtle-secondary)',
-        touchAction: 'none',
-      }}
-    >
-      <div style={{ width: 40, height: 2, borderRadius: 2, background: 'rgba(128,128,128,0.55)' }} />
     </div>
   )
 }

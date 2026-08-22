@@ -33,7 +33,7 @@ const EMPTY_NEW_IDS: ReadonlySet<string> = new Set()
 // The card is a fixed size so the geometry is arithmetic rather than
 // measurement: every card the same width means the focused one can be centred
 // without reading the DOM for each.
-const CAROUSEL_CARD_W = 232
+const CAROUSEL_CARD_W = 288
 const CAROUSEL_GAP = 12
 
 export function ThreadList({
@@ -275,13 +275,45 @@ export function ThreadList({
           style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
+            gap: 6,
+            flexWrap: carousel ? 'nowrap' : 'wrap',
             fontWeight: 600,
             fontSize: 13,
-            marginBottom: carousel ? 2 : 6,
+            marginBottom: carousel ? 0 : 6,
           }}
         >
-          <span>Threads</span>
+          <span style={{ flexShrink: 0 }}>Threads</span>
+          {/* The scope chips ride on the title's line rather than below it.
+              In the strip that is a whole row of height back, and the strip is
+              short enough that a row is the difference between a card fitting
+              and being clipped. */}
+          {roomId && (
+            <button type="button" style={chip(scope === 'room')} onClick={() => handleScope('room')}>
+              Here
+            </button>
+          )}
+          <button type="button" style={chip(scope === 'all')} onClick={() => handleScope('all')}>
+            Everywhere
+          </button>
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as SortMode)}
+            style={{
+              fontSize: 11,
+              background: 'transparent',
+              color: 'var(--cpd-color-text-primary)',
+              border: '1px solid rgba(128,128,128,0.35)',
+              borderRadius: 10,
+              padding: '2px 4px',
+            }}
+          >
+            <option value="latest-activity">Latest</option>
+            <option value="created">Created</option>
+            <option value="reply-count">Replies</option>
+            {/* Custom appears once the user has drag-arranged an order (O1). */}
+            {customOrder !== null && <option value="custom">Custom</option>}
+          </select>
+          <span style={{ flex: 1 }} />
           {/* The strip covers the top of the timeline, and the timeline's own
               Threads toggle is up there under it -- so opening the strip hid
               the only way to close it. It carries its own. */}
@@ -305,34 +337,6 @@ export function ThreadList({
               {'\u00D7'}
             </button>
           )}
-        </div>
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', paddingBottom: 6 }}>
-          {roomId && (
-            <button type="button" style={chip(scope === 'room')} onClick={() => handleScope('room')}>
-              This room
-            </button>
-          )}
-          <button type="button" style={chip(scope === 'all')} onClick={() => handleScope('all')}>
-            All rooms
-          </button>
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortMode)}
-            style={{
-              fontSize: 11,
-              background: 'transparent',
-              color: 'var(--cpd-color-text-primary)',
-              border: '1px solid rgba(128,128,128,0.35)',
-              borderRadius: 10,
-              padding: '2px 4px',
-            }}
-          >
-            <option value="latest-activity">Latest</option>
-            <option value="created">Created</option>
-            <option value="reply-count">Replies</option>
-            {/* Custom appears once the user has drag-arranged an order (O1). */}
-            {customOrder !== null && <option value="custom">Custom</option>}
-          </select>
         </div>
       </div>
       <div
@@ -479,6 +483,49 @@ const ThreadTile = memo(function ThreadTile({
             }
       }
     >
+      {carousel ? (
+        // The card design from fourier-sampling's thread list: a square cover,
+        // a small accent line naming where it came from, the subject in bold,
+        // and a faint line of counts. Adapted rather than copied -- there is no
+        // board or post number here, so the accent line is the ROOM, and the
+        // counts are the pills this client already uses (posts, media, posters)
+        // rather than the archive's present/missing, which has no meaning for a
+        // Matrix thread that is never "complete".
+        <div
+          ref={popRef}
+          onClick={() => onSelect(roomId, rootId, index)}
+          className="tc-tcard"
+        >
+          <div className="tc-tcard-cover">
+            {isImage ? (
+              <>
+                <AuthedImage mxc={mxc} width={180} roomId={roomId} fill transparentLoading alt={preview} />
+                <MediaTags mxc={mxc} roomId={roomId} variant="chip" max={8} />
+              </>
+            ) : (
+              // No picture: the opening glyph of the thread stands in, so the
+              // cover column is never an empty hole.
+              <span className="tc-tcard-cover-glyph" aria-hidden="true">
+                {'\u{1F5E8}'}
+              </span>
+            )}
+          </div>
+          <div className="tc-tcard-body">
+            <div className="tc-tcard-room">
+              {isNew && <span className="tc-tcard-new">new</span>}
+              {roomName}
+            </div>
+            <div className="tc-tcard-sub" title={preview}>{preview}</div>
+            <div className="tc-tcard-cnt">
+              <StatCluster item={item} />
+            </div>
+            <div className="tc-tcard-foot">
+              <span className="tc-tcard-author">{author}</span>
+              <span>{fmt(lastTs)}</span>
+            </div>
+          </div>
+        </div>
+      ) : (
       <div
         ref={popRef}
         onClick={() => onSelect(roomId, rootId, index)}
@@ -545,6 +592,7 @@ const ThreadTile = memo(function ThreadTile({
           </span>
         </div>
       </div>
+      )}
     </div>
   )
 }, threadTileEqual)

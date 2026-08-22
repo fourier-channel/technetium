@@ -11,6 +11,7 @@ import {
   visualDistance,
   MAX_VISUAL_DISTANCE,
 } from '../src/ui/carousel.ts'
+import { readFileSync } from 'node:fs'
 
 let failures = 0
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -83,6 +84,35 @@ console.log('\n-- distance, for styling --')
   // generate sixty different visual states.
   check('distance is capped', visualDistance(90, 4) === MAX_VISUAL_DISTANCE)
   check('the cap is symmetric', visualDistance(0, 90) === MAX_VISUAL_DISTANCE)
+}
+
+console.log('\n-- the card and the strip must agree --')
+{
+  // CAROUSEL_CARD_W in ThreadList and the .tc-carousel-card width in the CSS are
+  // the same measurement in two files. When they drift, every card is centred
+  // by the difference and the carousel quietly aims slightly wrong -- which
+  // looks like a rendering bug, not a mismatched constant.
+  const ts = readFileSync('src/ui/ThreadList.tsx', 'utf8')
+  const css = readFileSync('src/index.css', 'utf8')
+  const tsW = /const CAROUSEL_CARD_W = (\d+)/.exec(ts)?.[1]
+  const tsGap = /const CAROUSEL_GAP = (\d+)/.exec(ts)?.[1]
+  const cardBlock = /\.tc-carousel-card \{[^}]*\}/.exec(css)?.[0] ?? ''
+  const cssW = /width: (\d+)px/.exec(cardBlock)?.[1]
+  const trackBlock = /\.tc-carousel-track \{[^}]*\}/.exec(css)?.[0] ?? ''
+  const cssGap = /gap: (\d+)px/.exec(trackBlock)?.[1]
+
+  check('the card width is declared in both places', !!tsW && !!cssW, [tsW, cssW])
+  check('and they agree', tsW === cssW, [tsW, cssW])
+  check('the gap is declared in both places', !!tsGap && !!cssGap, [tsGap, cssGap])
+  check('and they agree too', tsGap === cssGap, [tsGap, cssGap])
+
+  // The strip has to hold a whole card plus its one-row header. This has been
+  // budgeted for one of the two twice now.
+  const stripBlock = /\.tc-panel-top \{[^}]*\}/.exec(css)?.[0] ?? ''
+  const stripH = Number(/height: (\d+)px/.exec(stripBlock)?.[1] ?? 0)
+  const cardH = Number(/height: (\d+)px/.exec(cardBlock)?.[1] ?? 0)
+  check('the strip is taller than the card it holds', stripH > cardH, [stripH, cardH])
+  check('...with room for a header as well', stripH - cardH >= 60, stripH - cardH)
 }
 
 if (failures > 0) {

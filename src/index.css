@@ -1904,9 +1904,10 @@ code {
   left: 0;
   right: 0;
   top: 0;
-  /* Tall enough for the header AND a whole card. The cards were running out
-     of the bottom because this was budgeted for one of the two. */
-  height: 208px;
+  /* The header is one row now, and the card is the reason the strip exists, so
+     the card gets the rest. Budgeted for BOTH, which the first two attempts at
+     this number were not. */
+  height: 236px;
   border-bottom: 1px solid rgba(128, 128, 128, 0.25);
   transform: translateY(-100%);
   opacity: 0.6;
@@ -1965,9 +1966,9 @@ code {
 }
 
 .tc-carousel-card {
-  flex: 0 0 232px;
-  width: 232px;
-  height: 120px;
+  flex: 0 0 288px;
+  width: 288px;
+  height: 152px;
   overflow: hidden;
   border-radius: 10px;
   border: 1px solid rgba(128, 128, 128, 0.22);
@@ -2209,3 +2210,101 @@ code {
 
 /* Reduced motion never mounts a face at all -- FaceFlash checks it before
    playing, so there is nothing here to disable. */
+
+/* ---------------------------------------------------------------------------
+   Thread card, after fourier-sampling's .tcard.
+
+   A square cover, a small accent line saying where it came from, the subject in
+   bold, and a faint line of counts. Adapted rather than copied: there is no
+   board or post number here, so the accent line is the ROOM -- and the counts
+   are this client's own pills, because the archive's present/missing figures
+   describe a capture that can be complete, which a live Matrix thread never is.
+   --------------------------------------------------------------------------- */
+.tc-tcard {
+  display: flex;
+  gap: 10px;
+  height: 100%;
+  padding: 9px;
+  cursor: pointer;
+  color: var(--cpd-color-text-primary);
+  min-width: 0;
+}
+.tc-tcard-cover {
+  position: relative;
+  flex: 0 0 76px;
+  width: 76px;
+  height: 76px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(8, 11, 15, 0.6);
+  display: grid;
+  place-items: center;
+}
+.tc-tcard-cover-glyph {
+  font-size: 26px;
+  opacity: 0.35;
+}
+.tc-tcard-body {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* The accent line: monospace and coloured, so the eye finds the room first --
+   the same job "/board/ 12345" does in the archive. */
+.tc-tcard-room {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--tc-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 11px;
+  color: var(--tc-link, #6ea8fe);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tc-tcard-new {
+  flex-shrink: 0;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 8px;
+  color: var(--cpd-color-text-on-solid-primary, #fff);
+  background: var(--cpd-color-bg-action-primary-rest, #3d7bfd);
+}
+/* The subject. Two lines rather than one: a Matrix thread has no title, so this
+   is the opening message standing in for one, and one line of it is usually not
+   enough to tell two threads apart. */
+.tc-tcard-sub {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.32;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.tc-tcard-cnt {
+  margin-top: auto;
+  font-size: 11px;
+  color: var(--cpd-color-text-secondary, #6b7480);
+  min-width: 0;
+}
+.tc-tcard-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--cpd-color-text-secondary, #6b7480);
+  opacity: 0.75;
+  min-width: 0;
+}
+.tc-tcard-author {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

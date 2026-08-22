@@ -10,6 +10,7 @@ import { MemberList } from './ui/MemberList'
 import { ThreadPanel } from './ui/ThreadPanel'
 import { ThreadList } from './ui/ThreadList'
 import { useReveal } from './ui/useReveal'
+import { TTD_DEFAULT } from './client/useDomainMedia'
 import { LightboxProvider } from './ui/Lightbox'
 import { RoomListSettingsProvider } from './ui/RoomListSettingsProvider'
 import { useReadMarker } from './client/useReadMarker'
@@ -28,6 +29,11 @@ function App() {
   const [threadListOpen, setThreadListOpen] = useState(false)
   const [threadPanelWidth, setThreadPanelWidth] = useState(380)
   const [domainExpanded, setDomainExpanded] = useState(false)
+  // The canvas's time-to-die lives here rather than inside DomainView, so the
+  // ONE composer can stamp it onto a post while the domain is open. The domain
+  // used to carry its own composer purely to reach this value, which is how it
+  // ended up bringing a second chat along with it.
+  const [domainTtd, setDomainTtd] = useState(TTD_DEFAULT)
   // Both panels arrive and leave the same way, from one mechanism -- the only
   // way two things stay exactly the same is for there to be one of them.
   const domainReveal = useReveal(domainExpanded, 420)
@@ -150,7 +156,9 @@ function App() {
                 <Timeline room={selectedRoom} onOpenThread={(roomId, rootId) => setOpenThread({ roomId, rootId })} threadListOpen={threadListOpen} onToggleThreadList={() => setThreadListOpen((o) => !o)} />
               </div>
               <TypingBar client={client} room={selectedRoom} />
-              <Composer room={selectedRoom} />
+              {/* Undefined unless the domain is open, so an ordinary message
+                  in an ordinary room never acquires a lifetime. */}
+              <Composer room={selectedRoom} domainTtd={domainExpanded ? domainTtd : undefined} />
 
               {/* Across the top, over the oldest messages on screen -- which is
                   the part the reader is least likely to be reading, since the
@@ -179,7 +187,12 @@ function App() {
                   data-shown={domainReveal.shown ? 'true' : 'false'}
                   style={{ transitionDuration: `${domainReveal.durationMs}ms` }}
                 >
-                  <DomainView room={selectedRoom} onExit={() => setDomainExpanded(false)} />
+                  <DomainView
+                    room={selectedRoom}
+                    onExit={() => setDomainExpanded(false)}
+                    ttd={domainTtd}
+                    onTtdChange={setDomainTtd}
+                  />
                 </div>
               )}
             </ComposerModeProvider>
