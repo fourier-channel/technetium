@@ -38,6 +38,9 @@ function App() {
   // way two things stay exactly the same is for there to be one of them.
   const domainReveal = useReveal(domainExpanded, 420)
   const threadReveal = useReveal(threadListOpen, 380)
+  // The reading pane arrives the same way the domain does. Same hook, same
+  // duration family, so "like the domain" is a fact rather than a resemblance.
+  const threadPanelReveal = useReveal(!!openThread, 420)
   // Mark the viewed room read so its unread glow/ping clears (base client sent
   // no read receipts). Called before any early return to keep hook order stable.
   useReadMarker(client, selectedRoom)
@@ -179,6 +182,33 @@ function App() {
                 </div>
               )}
 
+              {/* The thread reading pane, arriving from the right like the
+                  domain. It keeps its drag handle, as its own left edge rather
+                  than as a separate column -- a panel that floats over the chat
+                  has no column to put a handle beside. */}
+              {threadPanelReveal.mounted && openThread && (
+                <div
+                  className="tc-panel tc-panel-thread"
+                  data-shown={threadPanelReveal.shown ? 'true' : 'false'}
+                  style={{
+                    width: threadPanelWidth,
+                    transitionDuration: `${threadPanelReveal.durationMs}ms`,
+                  }}
+                >
+                  <ResizeHandle
+                    onDrag={(dx) =>
+                      setThreadPanelWidth((w) => Math.max(280, Math.min(640, w - dx)))
+                    }
+                  />
+                  <ThreadPanel
+                    roomId={openThread.roomId}
+                    rootId={openThread.rootId}
+                    onClose={() => setOpenThread(null)}
+                    width={threadPanelWidth}
+                  />
+                </div>
+              )}
+
               {/* Rendered last so it covers the strip: opening the domain is a
                   bigger statement than browsing threads. */}
               {domainReveal.mounted && (
@@ -200,18 +230,6 @@ function App() {
           <div style={{ padding: 24, opacity: 0.6 }}>Select a room from the left.</div>
         )}
       </main>
-
-      {openThread && (
-          <ResizeHandle onDrag={(dx) => setThreadPanelWidth((w) => Math.max(280, Math.min(640, w - dx)))} />
-        )}
-        {openThread && (
-        <ThreadPanel
-          roomId={openThread.roomId}
-          rootId={openThread.rootId}
-          onClose={() => setOpenThread(null)}
-            width={threadPanelWidth}
-        />
-      )}
 
       <MemberList room={selectedRoom} />
     </div>

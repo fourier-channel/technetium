@@ -164,14 +164,24 @@ export function ThreadList({
     queueMicrotask(() => setFocus(Math.max(0, count - 1)))
   }, [count, focus])
 
-  // Opening a thread from anywhere else brings its card to the reader, which is
-  // the whole premise: the results come to you.
+  // Opening a thread brings its card to the reader once -- and ONLY once.
+  //
+  // This used to depend on `focus`, which made it a leash: scroll away from the
+  // thread you are reading and the effect saw focus drift, decided the active
+  // card was not centred, and hauled it straight back. Opening a thread
+  // therefore froze the carousel on it. Recording which thread we have already
+  // centred for makes the pull a one-off, so browsing stays free while the
+  // thread you are reading stays open.
+  const centredFor = useRef<string | undefined>(undefined)
   useEffect(() => {
     if (!carousel || !activeRootId) return
+    if (centredFor.current === activeRootId) return
     const i = entries.findIndex((e) => e.rootId === activeRootId)
-    if (i < 0 || i === focus) return
+    if (i < 0) return
+    // Written in an effect, never in render -- the rule is about render (G-tc01).
+    centredFor.current = activeRootId
     queueMicrotask(() => setFocus(i))
-  }, [carousel, activeRootId, entries, focus])
+  }, [carousel, activeRootId, entries])
 
   const offset = trackOffset(focus, {
     cardWidth: CAROUSEL_CARD_W,
@@ -474,6 +484,10 @@ const ThreadTile = memo(function ThreadTile({
       {...getCardHandlers(flipIdOf(roomId, rootId))}
       className={carousel ? 'tc-carousel-card' : undefined}
       data-distance={carousel ? distance : undefined}
+      // Being READ and being under the reader's eyes are different things now
+      // that the carousel is free to scroll away from the open thread. The card
+      // has to say which one is open on its own, at any distance.
+      data-active={carousel && active ? 'true' : undefined}
       style={
         carousel
           ? { background: active ? 'var(--cpd-color-bg-subtle-secondary)' : undefined }
@@ -496,6 +510,7 @@ const ThreadTile = memo(function ThreadTile({
           onClick={() => onSelect(roomId, rootId, index)}
           className="tc-tcard"
         >
+          {active && <span className="tc-tcard-reading">reading</span>}
           <div className="tc-tcard-cover">
             {isImage ? (
               <>

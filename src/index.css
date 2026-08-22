@@ -2220,7 +2220,11 @@ code {
    are this client's own pills, because the archive's present/missing figures
    describe a capture that can be complete, which a live Matrix thread never is.
    --------------------------------------------------------------------------- */
+/* position: relative so the "reading" badge anchors to THE CARD. Without it the
+   badge finds the strip as its containing block and pins itself to the corner
+   of the whole thread bar, labelling nothing. */
 .tc-tcard {
+  position: relative;
   display: flex;
   gap: 10px;
   height: 100%;
@@ -2307,4 +2311,50 @@ code {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The thread reading pane: same arrival as the domain, from the same hook, but
+   it keeps a draggable width so it is anchored to the right edge and sized
+   inline rather than offset from the left. */
+.tc-panel-thread {
+  top: 0;
+  bottom: 0;
+  right: 0;
+  display: flex;
+  transform: translateX(100%);
+  opacity: 0.6;
+  box-shadow: -14px 0 34px rgba(0, 0, 0, 0.38);
+}
+.tc-panel-thread[data-shown='true'] {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+/* Which thread is open, said on the card itself.
+   Being READ and being under the reader's eyes are now different things -- the
+   carousel is free to scroll away from the open thread -- so the card carries
+   the fact at any distance, and does not rely on being the focused one. */
+.tc-carousel-card[data-active='true'] {
+  border-color: var(--tc-link, #6ea8fe);
+  box-shadow: 0 0 0 1px var(--tc-link, #6ea8fe), 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+/* Legible even at the far end of the track, where cards are dimmed to 0.34. */
+.tc-carousel-card[data-active='true'][data-distance='2'],
+.tc-carousel-card[data-active='true'][data-distance='3'] {
+  opacity: 0.78;
+}
+.tc-tcard-reading {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 8px;
+  color: var(--cpd-color-text-on-solid-primary, #fff);
+  background: var(--tc-link, #6ea8fe);
+  pointer-events: none;
 }
