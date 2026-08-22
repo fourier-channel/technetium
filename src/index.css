@@ -1966,8 +1966,8 @@ code {
 }
 
 .tc-carousel-card {
-  flex: 0 0 288px;
-  width: 288px;
+  flex: 0 0 336px;
+  width: 336px;
   height: 152px;
   overflow: hidden;
   border-radius: 10px;
@@ -2233,11 +2233,14 @@ code {
   color: var(--cpd-color-text-primary);
   min-width: 0;
 }
+/* The cover fills the card's full height rather than sitting as a small square
+   in the top corner of a tall column. At 76px in a 134px space it left a hole
+   under itself, which is what made the card look unfinished. */
 .tc-tcard-cover {
   position: relative;
-  flex: 0 0 76px;
-  width: 76px;
-  height: 76px;
+  flex: 0 0 134px;
+  width: 134px;
+  height: 100%;
   border-radius: 6px;
   overflow: hidden;
   background: rgba(8, 11, 15, 0.6);
@@ -2245,7 +2248,7 @@ code {
   place-items: center;
 }
 .tc-tcard-cover-glyph {
-  font-size: 26px;
+  font-size: 34px;
   opacity: 0.35;
 }
 .tc-tcard-body {
@@ -2288,9 +2291,17 @@ code {
   font-weight: 600;
   line-height: 1.32;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  /* Three, not two: the card is tall enough, and the extra line is what closes
+     the gap that was opening between the subject and the counts. */
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+/* A filename is not a headline. The cover beside it is already the subject. */
+.tc-tcard-sub[data-kind='file'] {
+  font-weight: 400;
+  font-size: 11.5px;
+  color: var(--cpd-color-text-secondary, #9aa4b2);
 }
 .tc-tcard-cnt {
   margin-top: auto;

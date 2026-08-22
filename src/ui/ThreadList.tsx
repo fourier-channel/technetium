@@ -33,7 +33,7 @@ const EMPTY_NEW_IDS: ReadonlySet<string> = new Set()
 // The card is a fixed size so the geometry is arithmetic rather than
 // measurement: every card the same width means the focused one can be centred
 // without reading the DOM for each.
-const CAROUSEL_CARD_W = 288
+const CAROUSEL_CARD_W = 336
 const CAROUSEL_GAP = 12
 
 export function ThreadList({
@@ -455,6 +455,11 @@ const ThreadTile = memo(function ThreadTile({
   distance,
 }: ThreadTileProps) {
   const { thread, roomName, roomId, rootId, lastTs, createdTs, author } = item
+  // The list carries the sender's MXID, which is what the event has. A card is
+  // read at a glance, and "@saber:41chan.net" is the same person's name with
+  // routing information stapled to it.
+  const { client: tileClient } = useClient()
+  const authorName = tileClient?.getRoom(roomId)?.getMember(author)?.name || author
   // Pop on last-activity increase, rate-limited, on the inner content element
   // so it never collides with the FLIP translate on the outer card.
   const popRef = useRef<HTMLDivElement>(null)
@@ -530,12 +535,23 @@ const ThreadTile = memo(function ThreadTile({
               {isNew && <span className="tc-tcard-new">new</span>}
               {roomName}
             </div>
-            <div className="tc-tcard-sub" title={preview}>{preview}</div>
+            {/* An image thread's "subject" is the file's name, because that is
+                all a Matrix root carries. Setting a filename in bold makes it a
+                headline it was never written to be -- and the cover directly
+                beside it already says what the thread is -- so it drops to a
+                quiet caption instead of competing with the picture. */}
+            <div
+              className="tc-tcard-sub"
+              data-kind={isImage ? 'file' : 'text'}
+              title={preview}
+            >
+              {preview}
+            </div>
             <div className="tc-tcard-cnt">
               <StatCluster item={item} />
             </div>
             <div className="tc-tcard-foot">
-              <span className="tc-tcard-author">{author}</span>
+              <span className="tc-tcard-author">{authorName}</span>
               <span>{fmt(lastTs)}</span>
             </div>
           </div>
@@ -628,7 +644,17 @@ function StatCluster({ item }: { item: ThreadListItem }) {
       style={{ position: 'relative', display: 'inline-flex', gap: 8, minWidth: 0 }}
     >
       <span style={{ fontSize: 10, color: 'var(--cpd-color-text-secondary)', whiteSpace: 'nowrap' }}>
-        {'\u{1F4AC}'} {item.postCount} {'\u00B7'} {'\u{1F4CE}'} {item.mediaCount} {'\u00B7'} {'\u{1F464}'} {item.posterCount}
+        {/* Zeroes are dropped rather than shown. "0 media" is not information
+            anybody wanted; it is three characters of noise crowding the two
+            counts that do say something. */}
+        {[
+          [`\u{1F4AC}`, item.postCount] as const,
+          [`\u{1F4CE}`, item.mediaCount] as const,
+          [`\u{1F464}`, item.posterCount] as const,
+        ]
+          .filter(([, n]) => n > 0)
+          .map(([icon, n]) => `${icon} ${n}`)
+          .join('  \u00B7  ')}
       </span>
       {show && item.perUser.length > 0 && (
         <span
