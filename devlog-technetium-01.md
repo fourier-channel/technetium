@@ -3236,3 +3236,111 @@ tsc clean, lint at the 23 baseline, build passing. Checks 847 -> 890, with the
 splash geometry, the stand-off, and guard's reflection rules each covered --
 including the degenerate cases that would otherwise hand a NaN to a CSS
 transform, which fails silently by dropping the whole rule.
+
+## 2026-08-22 -- faces, and three surfaces that were carrying each other's furniture
+
+### Seven faces, and the rule that made them safe
+
+Typing `:3` puts it over your avatar for a moment. The whole feature is one pure
+function plus some keyframes; what took the thinking was the matching rule.
+
+`:3` appears inside `12:30` and inside `http://host:3000`. A substring match
+would fire an animation at somebody every time they mentioned a time or a port,
+and -- this is the part that decided it -- they would have no way to work out
+what they had done. So it matches whole tokens only, whitespace or the ends of
+the message on either side. The cost is that `:3!` does not fire, which is the
+cheaper mistake by a wide margin.
+
+Case-sensitivity is not a preference here either: `o_O` and `O_o` are two
+different faces, so folding case collapses them. Which means `O_O` has to be
+NOT a face rather than being helpfully normalised into one of the two, and that
+has its own check -- "normalise the input" is exactly the tidy-up somebody
+performs later in good faith.
+
+The operator asked for random entrances and exits. They are seeded from the
+event id instead, and that is a deviation worth defending: the arrival
+animations already record why, which is that a fresh pick per replay makes one
+row look like a different event each time it scrolls past. It also means two
+people in a room watch the same face arrive the same way. Random across
+messages, fixed for a given message.
+
+### Three surfaces, each carrying furniture that belonged to another
+
+The domain brought a whole second chat with it -- its own Timeline, TypingBar
+and Composer. That was correct when domain mode REPLACED the timeline: there
+would have been no conversation otherwise. It stopped being correct the moment
+the domain became a panel beside the real chat, and nobody noticed because the
+code had not changed; its meaning had.
+
+The interesting part was what fell out when removing it. The embedded composer
+was doing one thing nothing else could: stamping a time-to-die on a post. Delete
+it naively and that feature quietly disappears. So the TTD's value moved up to
+the caller and is handed to the one real composer while the domain is open. The
+control stays on the canvas, which is what it applies to; only the value
+travels.
+
+The thread strip had the mirror-image problem: its scope chips sat on their own
+row, which was free in a tall side column and expensive in a 236px strip. And
+when the chips moved up, the sort select was left alone on the row below -- the
+first pass hid that row in carousel mode, which is how a control gets lost
+because its container was in the way.
+
+### The leash
+
+Opening a thread froze the carousel on it, and the cause was not the click
+handler. The effect that brings an opened thread's card to the reader listed
+`focus` as a dependency, so every time the reader scrolled away it re-fired,
+observed that the active card was no longer centred, and pulled it back. A
+one-off nudge expressed as a continuous condition becomes a leash.
+
+Recording which thread has already been centred for makes it happen once. And
+that immediately created a second problem worth noticing: while the carousel was
+leashed, "the thread being read" and "the card under your eyes" were the same
+card, so one visual treatment served both. Freeing the scroll split them apart,
+and the open thread needed to say so on its own -- at any distance, including
+the far end of the track where cards dim to a third of opacity.
+
+### A design borrowed, and the part deliberately left behind
+
+The thread cards now follow fourier-sampling's `.tcard`: square cover, small
+accent line for provenance, subject in bold, faint counts. Adapted rather than
+copied, and the adaptations are where the thinking is.
+
+There is no board or post number, so the accent line became the ROOM. There is
+no thread title in Matrix, so the opening message stands in -- over two lines,
+because one line rarely distinguishes two threads that begin similarly.
+
+And the archive's present/missing counts were left out for a better reason than
+"the operator said so". They describe a capture that can be COMPLETE. A live
+Matrix thread never is, so there is no state for that pill to report; it would
+be a gauge wired to nothing.
+
+### The constant that lives in two files
+
+The card width is arithmetic in ThreadList and a rule in the stylesheet. The
+strip height has to hold a card plus its header. I got the second one wrong
+twice in a row, so there are now six checks that read both files and compare
+them.
+
+That is not a normal thing to test, and it is worth being explicit about why it
+earns its place: a drift there does not throw and does not fail a build. Every
+card is simply centred by the difference, and the carousel aims slightly wrong
+for ever after -- which presents as a rendering bug rather than as a mismatched
+number, and would be diagnosed in the wrong file.
+
+### Housekeeping
+
+The Guard row had taken the ledger id `G1`, which the GIF-picker row has held
+since the campaign opened. Renamed to `GD1`; the older claim wins.
+
+### Gates
+
+tsc clean, lint at the 23 baseline throughout, build passing. Checks 890 -> 951.
+Two new check files (faces, guard) plus splash geometry, the guard stand-off and
+the cross-file constants.
+
+One report is unresolved rather than fixed: the operator says the card design
+did not take. It is live -- the markup branch renders, the rules are in
+src/index.css, and `tc-tcard-cover` is present in the built stylesheet -- so the
+next step is a hard reload, and if it still does not appear the fault is
+somewhere I have not looked yet rather than somewhere I have.

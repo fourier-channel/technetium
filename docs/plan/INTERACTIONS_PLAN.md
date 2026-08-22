@@ -17,7 +17,7 @@
 | campaign | interactions-v1 (4 areas, plus the layout and media work that grew out of it) |
 | branch | `interactions-v1` off `main` (`aeab785`), pushed |
 | tsc / lint / build | CLEAN / 23 (HOLD) / PASSING |
-| checks | 571 at start -> **945** |
+| checks | 571 at start -> **951** |
 | deploys | operator's call, as always |
 | still unbuilt | -- (squirt and guard landed 2026-08-21) |
 
@@ -260,8 +260,14 @@ client offers.
 | M2 | Interaction anchors on every line | **landed** | | Only the cluster HEAD was an anchor, so a slap's error was proportional to how much the target had just said. Membership rows were anchors too, which is the "empty space between names". Every message row now; membership rows no longer. |
 | S1 | Squirt | **landed** | | Flat fast jet; the point is the water it leaves. Droplets live ON THE ROW keyed by `data-event-id` (D-in10) -- the overlay resolves anchors once and holds them, so a persistent mark there would need re-resolution on every scroll. **D-in08 is now real in code:** nothing is reconstructed from history; scrolling a wet row out of view clears it permanently, observed explicitly because the timeline is not windowed. Primary ~10s, secondary ~3.5s, both drying by breaking up and drifting off. |
 | S2 | Splash, computed per client | **landed** | | D-in09. Perpendicular distance to the SEGMENT, not the line -- somebody past the target or behind the shooter is not in the line of fire. The wire carries only actor and target; casualties are a different answer on every screen and a sender's list would be forgeable. Radius 46px. |
-| G1 | Guard | **landed** | | 30s shield. **Hostile reflects** (ends swapped, so the travel choreography is reused); **everything else deflects** and stops 34px short. `hostile` is a catalog flag -- a hug is targeted and welcome. Nothing on the wire says "reflected": a sender who could set it could decline to. Future-dated guards refused, self-attack through your own guard deflects rather than reflecting. |
+| GD1 | Guard | **landed** | | 30s shield. **Hostile reflects** (ends swapped, so the travel choreography is reused); **everything else deflects** and stops 34px short. `hostile` is a catalog flag -- a hug is targeted and welcome. Nothing on the wire says "reflected": a sender who could set it could decline to. Future-dated guards refused, self-attack through your own guard deflects rather than reflecting. |
 | F1 | Faces over the avatar | **landed** | | Seven tokens (`:3 ._. o_O O_o -_- :o -.-`) flash on the sender's avatar and leave. **Whole-token match only** -- ":3" lives inside "12:30" and "host:3000", and a substring match would fire at somebody every time they mentioned a time. Case-sensitive by necessity (`o_O` vs `O_o`); `O_O` is not a face rather than being normalised into one. Enter/exit drawn from `ARRIVAL_ANIMATIONS` with distinct salts, **seeded from the event** so replays and other clients agree. Three phases on timers, not one CSS shorthand (a second animation's `both` fill overrides the first from time zero); unmount on a timer, not `animationend` (G-04f01d). `art: null` on every face is the image hook -- the renderer already branches. |
+| D1 | Domain drops its copy of the chat | **landed** | | It carried its own Timeline, TypingBar and Composer -- correct when domain mode REPLACED the timeline, a duplicate as a panel beside it. Removed with the resize bar that divided them; the canvas gets the whole panel. **The TTD value moved up to App** and is handed to the one real composer while the domain is open (undefined otherwise), because stamping a lifetime on a post was the only thing the embedded composer could do that nothing else could. |
+| T1 | Thread header on one row | **landed** | | Title, scope chips, sort and close on the same line. "This room"/"All rooms" -> **"Here"/"Everywhere"**. Strip 236px. The sort select moved ONTO that row rather than being hidden with the row it was in -- tucking a control away because its container is in the way loses the control. |
+| T2 | Thread card, after fourier-sampling's `.tcard` | **landed** | | Square 76px cover (thread's first image, or a glyph -- never an empty hole), accent monospace **room** line where the archive had `/board/ no`, subject in bold over two lines (a Matrix thread has no title, so the opening message stands in and one line rarely distinguishes two threads), then this client's own 💬/📎/👤 pills. **Present/missing deliberately not taken:** those describe a capture that can be COMPLETE, which a live thread never is. Card 288x152. |
+| T3 | The carousel stopped being leashed | **landed** | | The bring-to-reader effect depended on `focus`, so scrolling away made it haul the active card back -- opening a thread froze the carousel on it. Now recorded per activeRootId, so the pull is once per thread. **Consequence:** being read and being under the reader's eyes are now different things, so the open thread carries an accent border and a "reading" badge at any distance, held legible where cards otherwise dim to a third. |
+| T4 | Reading pane arrives like the domain | **landed** | | Same `useReveal`, so "like the domain" is a fact rather than a resemblance. Moved from a flex column between chat and member list to an overlay on the chat's right. Keeps its drag handle as its own left edge -- a panel floating over the chat has no column to put a handle beside. |
+| X1 | Cross-file constants are checked | **landed** | | `CAROUSEL_CARD_W`/`CAROUSEL_GAP` live in ThreadList (the centring arithmetic) and in the CSS (the actual card), and the strip must hold a card plus its header. Six checks read both files and compare. A drift there does not throw: every card is centred by the difference and the carousel aims quietly wrong, which reads as a rendering bug. Added after getting the strip height wrong twice. |
 | E2 | Inline sending (shortcode -> MSC2545 img) | | | |
 | E3 | Sanitizer widening (SECURITY, own commit) | | | |
 | E4 | Animated emoji + preference | | | |
@@ -341,6 +347,17 @@ Headless box: gates are self-verified, behaviour is not.
 | IX-i | Domain canvas: the puck menu now offers the fuller self list, and right-click -> targeted actions arc across as before. **`Square` and `Throw` must still work** -- they are what the deployed client sends. | yes |
 | IX-j | Reaction picker: a star tab appears when the room or your account has an MSC2545 pack; picking one reacts with the image. Searching matches shortcodes. | yes |
 | IX-k | **Judgement call: is the catalog right?** Ten entries, glyph-based. Naming, additions and removals are one array in `interactionCatalog.ts`. | no |
+
+### Added 2026-08-22 -- domain, threads, cards
+
+| id | what needs eyes | 2nd identity? |
+| --- | --- | --- |
+| TD-a | Opening the domain shows ONE chat, not two, and the canvas fills the panel. | no |
+| TD-b | With the domain open, a message sent from the normal composer still carries a time-to-die; with it closed, it does not. | no |
+| TD-c | Thread strip header is one row -- Threads, Here, Everywhere, sort, close -- and a whole card fits below it. | no |
+| TD-d | The card looks like fourier-sampling's: 76px cover (or a glyph), accent room line, two-line subject, count pills, author/time footer. **Reported as not taking; verified live in the built stylesheet, so this needs a hard reload before it is a bug.** | no |
+| TD-e | Open a thread, then scroll the carousel freely -- it does NOT snap back. The open thread stays marked with a border and a "reading" badge wherever it sits. | no |
+| TD-f | The reading pane slides in from the right like the domain, and its drag handle still resizes it. | no |
 
 ### Added 2026-08-21 -- faces
 
