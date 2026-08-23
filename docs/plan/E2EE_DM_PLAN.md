@@ -18,7 +18,7 @@
 | campaign | e2ee-dms |
 | branch | `e2ee-dms`, cut off `main` at `41bd9b4` |
 | base | `main` at the interactions-v1 merge, deployed 2026-08-23 |
-| tsc / lint / check / build | CLEAN / 23 (HOLD) / 1022 / PASSING |
+| tsc / lint / check / build | CLEAN / 23 (HOLD) / 1048 / PASSING |
 | deploys | operator's call, `./deploy.sh` only |
 
 ---
@@ -335,7 +335,7 @@ E6 is deferred -- with an honest placeholder, per E5.
 | --- | --- | --- | --- | --- |
 | D1 | Attachment decryption: decide the dependency | todo | | Recommendation: NO new dependency. Hand-roll `client/encryptedFile.ts` on WebCrypto and record the decision in DEPENDENCIES.md as a decision NOT to take one. Belongs with E6, so it moves with E6. |
 | E1 | `initRustCrypto` + IndexedDB crypto store, with the load surfaced | landed | `83df9c7` | Behind `VITE_E2EE=1`; DEFAULT OFF, so nothing changed for anyone. `client/cryptoProgress.ts` (pure, 30 checks) + `client/crypto.ts` (11 checks) + `onboarding/KeysArrival.tsx` + `CryptoArrivalHost`. Checks 981 -> 1022. **PENDING: E1-a..E1-f.** |
-| E2 | Adopt or create the cross-signing identity | todo | | First-time bootstrap needs no UI. The work is DETECTING an existing identity and not clobbering it (D-e1). |
+| E2 | Adopt or create the cross-signing identity | landed | `73edf01` | `client/cryptoIdentity.ts` (pure decision) + `observeCryptoIdentity`/`applySilentIdentityAction` in `client/crypto.ts`. Silent actions run at boot; anything needing the user is published as state and WAITED on, never acted upon. 26 checks, incl. all four safety properties proved over the full 96-state input space and a source-level guard that the SDK's reset option cannot be named outside the (not yet written) reset module. **PENDING: E2-a.** |
 | E3 | Secret storage + recovery key, incl. RESTORE | todo | | Restore-from-recovery-key is the MVP-critical half, not creation. Show a new key ONCE and make the user confirm they have it. A recovery key shown twice is a recovery key in a screenshot. |
 | E4 | New DMs are created encrypted, WITH the D-e4 guard | todo | | `startDm()` gains an `m.room.encryption` initial state event ONLY when the other party has device keys. New DMs only. |
 | E5 | Decrypt and render encrypted timeline events | todo | | Replaces the "decryption coming later" placeholder. A failed decryption must say WHY (unknown session, no key, unverified device) rather than showing the padlock forever -- D-tp16 applied to the thing users will actually hit. Includes the honest placeholder for encrypted ATTACHMENTS while E6 is deferred (H3). |
@@ -376,12 +376,18 @@ This box is headless; nothing below has been seen in a browser.
   stays, turns red, and says encryption could not be set up -- rather than
   spinning forever or vanishing silently.
 - **E1-f** The title renders with its spacing intact: `A r gh   the  Ke  y    s`.
+- **E2-a** On a real account that already has an identity, the boot reaches
+  `recover-from-secret-storage` or `verify-with-other-device` -- and NOT
+  `bootstrap-new`. The decision is proved over its whole input space, but that
+  the observed facts are read correctly from a live server is not something a
+  headless box can show.
 
 ---
 
-## Operator-side items this campaign depends on
+## Operator-side items -- the human-fingers batch
 
-Not client work; recorded here so they are not lost.
+Not client work, and deliberately grouped: the operator handles these in one
+pass rather than one at a time.
 
 - **Cloudflare is not edge-caching the wasm.** It answers `cf-cache-status:
   DYNAMIC` because `.wasm` is not in the default cacheable-extension list, so

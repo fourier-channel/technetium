@@ -10,8 +10,14 @@ import type { MatrixClient } from 'matrix-js-sdk'
 import { saveSession, loadSession, clearSession } from './session'
 import { buildClient, startAndWaitForSync } from './buildClient'
 import { createTokenRefreshFunction } from './tokenRefresher'
-import { e2eeEnabled, initCrypto } from './crypto'
+import { e2eeEnabled, initCrypto, observeCryptoIdentity, applySilentIdentityAction } from './crypto'
 import { CRYPTO_LOAD_IDLE, type CryptoLoadState } from './cryptoProgress'
+import {
+  decideIdentityAction,
+  isSilentAction,
+  type CryptoIdentityFacts,
+  type IdentityAction,
+} from './cryptoIdentity'
 
 // MAS redirect target + statically-registered public client id (see mas/config.yaml
 // on the remote server). REDIRECT_URI must match the browser's origin and the
@@ -38,6 +44,13 @@ interface ClientContextValue {
   // How the crypto engine's arrival is going, so the shell can show it (D-e6).
   // Stays 'idle' for everyone while the flag is off.
   cryptoLoad: CryptoLoadState
+  // What this account's encryption identity needs, if anything. Null until
+  // crypto is up, or when we could not read it -- which is NOT the same as
+  // "nothing needed", and callers must not collapse the two.
+  identityAction: IdentityAction | null
+  // The facts behind that decision, for surfaces that need more than the verb
+  // (whether history is readable, whether a backup exists).
+  identityFacts: CryptoIdentityFacts | null
   login: (homeserver?: string) => Promise<void>
   logout: () => void
 }
@@ -51,6 +64,14 @@ export function useClient(): ClientContextValue {
   return ctx
 }
 
+// Hoisted out of the component on purpose. Writing to `window` inside
+// ClientProvider is a react-hooks/immutability error under the React Compiler
+// (G-tc01): a variable defined outside the component may not be modified from
+// within it. The write is identical; only its scope moved.
+function exposeForDevConsole(c: MatrixClient) {
+  if (import.meta.env.DEV) (window as unknown as { mxClient?: unknown }).mxClient = c
+}
+
 // Module-level guard: React StrictMode double-invokes effects in dev, and both
 // the OIDC code exchange (single-use code) and resume (avoid two clients) must
 // run at most once. Survives a StrictMode remount where component state would not.
@@ -62,6 +83,8 @@ export function ClientProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
   const [cryptoLoad, setCryptoLoad] = useState<CryptoLoadState>(CRYPTO_LOAD_IDLE)
+  const [identityAction, setIdentityAction] = useState<IdentityAction | null>(null)
+  const [identityFacts, setIdentityFacts] = useState<CryptoIdentityFacts | null>(null)
 
   // Bootstrap on mount: finish an in-progress login, resume a stored session,
   // or fall through to awaiting_login.
@@ -94,18 +117,51 @@ export function ClientProvider({ children }: { children: ReactNode }) {
   }) => {
     setStatus('syncing')
     const c = await buildClient(params)
-    if (import.meta.env.DEV) (window as unknown as { mxClient?: unknown }).mxClient = c
+    exposeForDevConsole(c)
 
     // Crypto comes up BETWEEN createClient and startClient -- the SDK requires
     // that order, and it is also the only window with no sync traffic for the
     // progress wrapper to sit in front of. A failure here is reported and
     // stepped past: an unencrypted client is still a working client, and E10
     // says we then tell the truth about it rather than showing a dead shield.
-    if (e2eeEnabled()) await initCrypto(c, setCryptoLoad)
+    if (e2eeEnabled()) {
+      const up = await initCrypto(c, setCryptoLoad)
+      // Identity work only once the engine is actually up. Reading the account
+      // through a half-initialised client is how a fresh device concludes that
+      // no identity exists (E2).
+      if (up) await settleIdentity(c)
+    }
 
     setClient(c)
     await startAndWaitForSync(c)
     setStatus('ready')
+  }
+
+  // Read the account's encryption identity, decide, and take ONLY the actions
+  // that are safe to take without asking (E2).
+  //
+  // Nothing destructive can happen here: the decision comes from the pure
+  // decideIdentityAction, and applySilentIdentityAction refuses anything that
+  // is not silent. A decision that needs the user is published as state and
+  // waited on -- never acted upon.
+  const settleIdentity = async (c: MatrixClient) => {
+    const facts = await observeCryptoIdentity(c)
+    setIdentityFacts(facts)
+    // Null means we could not read the account, which must not be treated as
+    // "nothing to do" -- leaving the action null keeps every downstream surface
+    // in its honest unknown state (E10).
+    if (!facts) return
+    const action = decideIdentityAction(facts)
+    setIdentityAction(action)
+    if (!isSilentAction(action)) return
+    await applySilentIdentityAction(c, action)
+    // Re-read rather than assume the action worked: bootstrapping can fail
+    // server-side, and a client that believes it succeeded shows a shield it
+    // has not earned.
+    const after = await observeCryptoIdentity(c)
+    if (!after) return
+    setIdentityFacts(after)
+    setIdentityAction(decideIdentityAction(after))
   }
 
   // Path 1: exchange the MAS authorization code, persist the session, sync.
@@ -235,6 +291,8 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     client,
     status,
     cryptoLoad,
+    identityAction,
+    identityFacts,
     error,
     userId,
     login,

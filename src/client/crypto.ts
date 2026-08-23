@@ -4,6 +4,7 @@ import {
   CRYPTO_LOAD_IDLE,
   type CryptoLoadState,
 } from './cryptoProgress'
+import { isSilentAction, type CryptoIdentityFacts, type IdentityAction } from './cryptoIdentity'
 
 // ---------------------------------------------------------------------------
 // Bringing up the Rust crypto engine, and showing the user that it is
@@ -157,6 +158,84 @@ export async function initCrypto(client: MatrixClient, report: Report): Promise<
       error: 'Encryption could not be set up. Private chats will not be encrypted.',
     })
     console.error('[crypto] initRustCrypto failed', err)
+    return false
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Observing the account's cross-signing identity.
+//
+// Gathering only -- every decision made from these facts lives in the pure
+// ./cryptoIdentity, so the branch that could destroy a user's keys is one the
+// harness can prove over its whole input space rather than one buried in a
+// component.
+// ---------------------------------------------------------------------------
+
+// Read the account's crypto identity, or null when crypto is not up.
+//
+// A failure to observe returns null rather than a guess. Every field here feeds
+// a decision about whether something is safe to overwrite, and a defaulted
+// `false` on `accountHasIdentity` is precisely the value that would make a
+// reset look safe.
+export async function observeCryptoIdentity(
+  client: MatrixClient,
+): Promise<CryptoIdentityFacts | null> {
+  const crypto = client.getCrypto()
+  const userId = client.getUserId()
+  const deviceId = client.getDeviceId()
+  if (!crypto || !userId || !deviceId) return null
+
+  try {
+    // `downloadUncached: true` -- this must be the SERVER's answer, not
+    // whatever happens to be in the local cache on a fresh device. The local
+    // cache on a fresh device is empty, and an empty cache read as "no identity
+    // exists" is exactly the mistake this whole module is built to prevent.
+    const accountHasIdentity = await crypto.userHasCrossSigningKeys(userId, true)
+    const status = await crypto.getCrossSigningStatus()
+    const cached = status.privateKeysCachedLocally
+    const backup = await crypto.getKeyBackupInfo()
+    const deviceStatus = await crypto.getDeviceVerificationStatus(userId, deviceId)
+    const devices = await crypto.getUserDeviceInfo([userId])
+
+    return {
+      accountHasIdentity,
+      // All three, not any: a partial set cannot sign or decrypt, and treating
+      // it as "keys are here" strands the user on a device that silently
+      // cannot do the thing it just claimed.
+      privateKeysOnThisDevice: cached.masterKey && cached.selfSigningKey && cached.userSigningKey,
+      privateKeysInSecretStorage: status.privateKeysInSecretStorage,
+      keyBackupVersion: backup?.version ?? null,
+      thisDeviceVerified: deviceStatus?.crossSigningVerified ?? false,
+      otherDeviceCount: Math.max(0, (devices.get(userId)?.size ?? 1) - 1),
+    }
+  } catch (err) {
+    // Reported, never swallowed (G-tc05). Null propagates as "we do not know",
+    // which every caller must treat as "do nothing destructive".
+    console.error('[crypto] could not read the account identity', err)
+    return null
+  }
+}
+
+// Perform the non-destructive setup actions, and only those.
+//
+// This function CANNOT reset. The SDK's reset option -- the single option that
+// replaces an existing identity -- is absent by construction rather than passed
+// as false, so no future edit can flip a boolean here. The reset lives in its
+// own gated path (E11), the only place `resetPermitted` is consulted, and
+// `checks/cryptoIdentity.check.ts` fails the build if that option's name
+// appears in any other module.
+export async function applySilentIdentityAction(
+  client: MatrixClient,
+  action: IdentityAction,
+): Promise<boolean> {
+  if (!isSilentAction(action) || action === 'ready') return action === 'ready'
+  const crypto = client.getCrypto()
+  if (!crypto) return false
+  try {
+    await crypto.bootstrapCrossSigning({})
+    return true
+  } catch (err) {
+    console.error('[crypto] non-destructive cross-signing setup failed', err)
     return false
   }
 }
