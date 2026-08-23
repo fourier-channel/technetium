@@ -334,7 +334,7 @@ E6 is deferred -- with an honest placeholder, per E5.
 | id | step | status | commit | result / pendings |
 | --- | --- | --- | --- | --- |
 | D1 | Attachment decryption: decide the dependency | todo | | Recommendation: NO new dependency. Hand-roll `client/encryptedFile.ts` on WebCrypto and record the decision in DEPENDENCIES.md as a decision NOT to take one. Belongs with E6, so it moves with E6. |
-| E1 | `initRustCrypto` + IndexedDB crypto store, with the load surfaced | landed | `ff5231e` | Behind `VITE_E2EE=1`; DEFAULT OFF, so nothing changed for anyone. `client/cryptoProgress.ts` (pure, 30 checks) + `client/crypto.ts` (11 checks) + `onboarding/KeysArrival.tsx` + `CryptoArrivalHost`. Checks 981 -> 1022. **PENDING: E1-a..E1-e.** |
+| E1 | `initRustCrypto` + IndexedDB crypto store, with the load surfaced | landed | `83df9c7` | Behind `VITE_E2EE=1`; DEFAULT OFF, so nothing changed for anyone. `client/cryptoProgress.ts` (pure, 30 checks) + `client/crypto.ts` (11 checks) + `onboarding/KeysArrival.tsx` + `CryptoArrivalHost`. Checks 981 -> 1022. **PENDING: E1-a..E1-f.** |
 | E2 | Adopt or create the cross-signing identity | todo | | First-time bootstrap needs no UI. The work is DETECTING an existing identity and not clobbering it (D-e1). |
 | E3 | Secret storage + recovery key, incl. RESTORE | todo | | Restore-from-recovery-key is the MVP-critical half, not creation. Show a new key ONCE and make the user confirm they have it. A recovery key shown twice is a recovery key in a screenshot. |
 | E4 | New DMs are created encrypted, WITH the D-e4 guard | todo | | `startDm()` gains an `m.room.encryption` initial state event ONLY when the other party has device keys. New DMs only. |
