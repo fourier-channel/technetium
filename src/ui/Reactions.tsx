@@ -5,7 +5,7 @@ import type { ReactionTally } from '../client/relations'
 import { EmojiPicker } from './EmojiPicker'
 import { useReactTarget } from './reactTarget'
 import { useRoving } from './roving'
-import { isCustomEmojiKey } from '../client/emojiPacks'
+import { allPacks, isCustomEmojiKey } from '../client/emojiPacks'
 import { AuthedImage } from './AuthedImage'
 import { reportAlways } from '../client/report'
 
@@ -115,6 +115,11 @@ export function ReactionAdd({
       </button>
       {pickerOpen && (
         <EmojiPicker
+          // Reactions are the one surface that can use a custom emoji today:
+          // an annotation's KEY is the mxc, and the strip above already renders
+          // those as images. Inline sending needs a sanitizer widening and is
+          // deliberately not half-done here.
+          packs={allPacks(client, client?.getRoom(roomId) ?? null)}
           onPick={(emoji) => {
             closePicker()
             void toggle(
@@ -162,7 +167,15 @@ export function ReactionPills({
           {...roving.itemProps(i)}
         >
           {/* A custom-emoji reaction's KEY is an mxc uri (MSC2545), so it
-              renders as an image rather than as literal "mxc://..." text. */}
+              renders as an image rather than as literal "mxc://..." text.
+
+              An emoji is CHROME, and the gate now knows that: fourier-auth
+              classifies image-pack media as a site asset and authorizes it on
+              "is this user on my server", not on room membership. This used to
+              need viaHomeserver to bypass the gate entirely, because the gate
+              authorized by post and a pack emoji has no post behind it by
+              design (D-in06 keeps them out of the booru) -- which looked like
+              emoji working when first posted and 404ing on reload. */}
           <span className="tc-reaction-key">
             {isCustomEmojiKey(t.key) ? (
               <AuthedImage mxc={t.key} width={180} fill transparentLoading alt="" fallback="?" />

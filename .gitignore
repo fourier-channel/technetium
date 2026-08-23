@@ -33,3 +33,9 @@ CLAUDE.md
 devlog-fourier-*.md
 *.bak
 *.bak.*
+
+# ...except the deployed build's configuration. It holds no secret -- a public
+# OAuth client id and a homeserver URL, both readable in any built bundle -- and
+# keeping it untracked is what let a rebuild from a clean clone fall back to the
+# DEVWEB defaults and break login on tc.41chan.net.
+!.env.production

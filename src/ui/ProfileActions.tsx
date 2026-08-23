@@ -4,6 +4,7 @@ import { canIgnore, isIgnored, setIgnored } from '../client/ignoredUsers'
 import { startDm } from '../client/dm'
 import { clearAvatar, setDisplayName, uploadAndSetAvatar } from '../client/profile'
 import { describeInviteError } from '../client/userDirectory'
+import { AVATAR_SHAPES, useAvatarShape } from './avatarShape'
 
 // W4.2/W4.3/W4.4 -- what fills the shared ProfileCard's `actions` slot.
 //
@@ -120,6 +121,7 @@ function OwnProfileActions({ client }: { client: MatrixClient }) {
       <ActionBtn onClick={() => void clearAvatar(client)} disabled={busy}>
         Remove avatar
       </ActionBtn>
+      <AvatarShapePicker />
       <input
         ref={fileRef}
         type="file"
@@ -265,6 +267,63 @@ function Notice({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
+    </div>
+  )
+}
+
+// The avatar's mask. Swatches rather than a dropdown: a keyhole and a torn hole
+// are not things a word describes usefully, and the swatch IS the shape.
+//
+// Local-only today (O-in6) and the row says so rather than implying that other
+// people can see it -- a customisation that silently only exists on your own
+// screen is worse than one that admits it.
+function AvatarShapePicker() {
+  const { shape, setShape } = useAvatarShape()
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 2 }}>
+      <div style={{ fontSize: 11, color: 'var(--cpd-color-text-secondary)' }}>
+        Avatar shape (only you see this for now)
+      </div>
+      <div role="radiogroup" aria-label="Avatar shape" style={{ display: 'flex', gap: 6 }}>
+        {AVATAR_SHAPES.map((s) => {
+          const selected = s.id === shape
+          return (
+            <button
+              key={s.id}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              title={s.label}
+              aria-label={s.label}
+              onClick={() => setShape(s.id)}
+              style={{
+                width: 30,
+                height: 30,
+                padding: 2,
+                borderRadius: 6,
+                border: selected
+                  ? '1px solid var(--tc-link)'
+                  : '1px solid rgba(128,128,128,0.28)',
+                background: 'transparent',
+                cursor: 'pointer',
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  height: '100%',
+                  clipPath: s.clipPath,
+                  background: selected
+                    ? 'var(--tc-link)'
+                    : 'var(--cpd-color-text-secondary, #a8b0bd)',
+                }}
+              />
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }

@@ -1038,7 +1038,7 @@ function RoomIcon({ node, size = 20, isDm = false }: { node: TreeNode; size?: nu
       <span style={frame} aria-hidden>
         {/* Avatars come from the homeserver's authenticated media (the fourier-auth
             content gate 403s them); degrade to the initial if even that fails. */}
-        <AuthedImage mxc={avatarMxc} width={180} fill transparentLoading alt="" fallback={initial} viaHomeserver />
+        <AuthedImage mxc={avatarMxc} width={180} fill transparentLoading alt="" fallback={initial} />
       </span>
     )
   return (

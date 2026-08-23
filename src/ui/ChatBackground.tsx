@@ -12,7 +12,7 @@ import type { ChatBg } from './chatBackground'
 // (upload an image -> mxc, or paste a URL) with a dim slider and Clear.
 // ---------------------------------------------------------------------------
 
-export function ChatBackdrop({ bg }: { bg: ChatBg }) {
+export function ChatBackdrop({ bg, roomId }: { bg: ChatBg; roomId?: string }) {
   // An mxc renders through AuthedImage -- the same component every timeline
   // image uses. A raw pasted URL is a plain CSS background, since we do not own
   // its lifetime and there is nothing to authenticate.
@@ -24,7 +24,7 @@ export function ChatBackdrop({ bg }: { bg: ChatBg }) {
     <div aria-hidden style={{ position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
       {bg.mxc ? (
         <div style={{ position: 'absolute', inset: 0 }}>
-          <AuthedImage mxc={bg.mxc} width={850} fill transparentLoading alt="" />
+          <AuthedImage mxc={bg.mxc} width={850} roomId={roomId} fill transparentLoading alt="" />
         </div>
       ) : (
         <div

@@ -36,7 +36,6 @@ export function ReceiptCluster({ room, userIds }: { room: Room | null; userIds: 
                 transparentLoading
                 alt=""
                 fallback={initials(name)}
-                viaHomeserver
               />
             ) : (
               initials(name)

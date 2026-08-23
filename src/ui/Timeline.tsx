@@ -5,9 +5,14 @@ import { useTimeline, type TimelineItem, type GalleryLayout } from '../client/us
 import type { ReplyRef } from '../client/relations'
 import { eventPreview } from '../client/eventPreview'
 import { renderMessageBody } from '../client/messageBody'
+import { bubbleTone } from '../client/bubbleTone'
 import { parseMxc } from '../client/media'
 import { AuthedImage } from './AuthedImage'
-import { AvatarPill } from './AvatarPill'
+import { AvatarDisc } from './AvatarDisc'
+import { Drench } from './Drench'
+import { FaceFlash } from './FaceFlash'
+import { detectFace } from '../client/faces'
+import { SenderIdentity } from './SenderIdentity'
 import { MemberEvent } from './MemberEvent'
 import { useLightbox, type LightboxItem } from './Lightbox'
 import { linkify } from './linkify'
@@ -37,6 +42,10 @@ import { ProfileActions } from './ProfileActions'
 import { usePresence } from '../client/usePresence'
 import { useRoomReceipts } from '../client/useReceipts'
 import { ReceiptsContext, useReceipts } from './receiptsContext'
+import { useChatInteractions } from '../client/useChatInteractions'
+import { InteractionLayer } from './InteractionLayer'
+import { InteractionMenu } from './InteractionMenu'
+import { InteractionTargetContext, useInteractionTarget } from './interactionTarget'
 
 // How many pages of history a click-to-jump will paginate before giving up.
 const MAX_JUMP_PAGES = 8
@@ -117,6 +126,10 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
   // each open their own.
   const [profile, setProfile] = useState<{ userId: string; x: number; y: number } | null>(null)
   const profilePresence = usePresence(client, profile ? [profile.userId] : [])
+  const interactions = useChatInteractions(client, room)
+  // One menu for the whole timeline, owned here so two rows cannot each open
+  // their own -- the same reason the profile card is owned here (W4.2).
+  const [ixMenu, setIxMenu] = useState<{ userId: string; x: number; y: number } | null>(null)
   const chatBg = useChatBackground()
   const tagPrefs = useMediaTagPrefs()
   const [bgMenuOpen, setBgMenuOpen] = useState(false)
@@ -340,7 +353,7 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
         </div>
       </header>
       <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        {bg && client && <ChatBackdrop bg={bg} />}
+        {bg && client && <ChatBackdrop bg={bg} roomId={room.roomId} />}
         <div
           ref={scrollRef}
           style={{
@@ -360,6 +373,9 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
 
           <ProfileOpenerContext.Provider
             value={(userId, x, y) => setProfile({ userId, x, y })}
+          >
+          <InteractionTargetContext.Provider
+            value={(userId, x, y) => setIxMenu({ userId, x, y })}
           >
           <JumpContext.Provider value={jumpApi}>
             {searchOpen && client && (
@@ -393,7 +409,22 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
             </MessageVerbsProvider>
             </ReceiptsContext.Provider>
           </JumpContext.Provider>
+          </InteractionTargetContext.Provider>
           </ProfileOpenerContext.Provider>
+          {ixMenu && client && (
+            <InteractionMenu
+              x={ixMenu.x}
+              y={ixMenu.y}
+              targetUserId={ixMenu.userId}
+              targetName={room.getMember(ixMenu.userId)?.name || ixMenu.userId}
+              isSelf={ixMenu.userId === client.getUserId()}
+              disabled={!interactions.canTrigger()}
+              onPick={(def, userId) =>
+                interactions.trigger(def.id, def.shape === 'targeted' ? userId : undefined)
+              }
+              onClose={() => setIxMenu(null)}
+            />
+          )}
           {profile && client && (
             <ProfileCard
               x={profile.x}
@@ -413,32 +444,17 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
             />
           )}
         </div>
+        {/* Above the log and OUTSIDE the scroller, deliberately: an absolutely
+            positioned child of a scrolling element is pinned to the top of its
+            content, not to the visible box, so mounting this one step deeper
+            drew every play scrollTop pixels off screen. */}
+        <InteractionLayer
+          plays={interactions.plays}
+          containerRef={scrollRef}
+          nameFor={(userId) => room.getMember(userId)?.name || userId}
+          avatarFor={(userId) => room.getMember(userId)?.getMxcAvatarUrl() ?? null}
+        />
       </div>
-    </div>
-  )
-}
-
-// The sender identity shown at the top of a message row: the shared AvatarPill
-// with the timestamp trailing outside it. The pill itself lives in
-// ./AvatarPill so the membership rows show the same one, not a copy of it.
-function SenderPill({
-  event,
-  time,
-  onOpenProfile,
-}: {
-  event: MatrixEvent
-  time: string
-  onOpenProfile?: (userId: string, x: number, y: number) => void
-}) {
-  const { client } = useClient()
-  const senderId = event.getSender() ?? '(unknown)'
-  const member = client?.getRoom(event.getRoomId() ?? '')?.getMember(senderId) ?? null
-  const name = member?.name || senderId
-  const avatarMxc = member?.getMxcAvatarUrl() ?? null
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-      <AvatarPill userId={senderId} name={name} avatarMxc={avatarMxc} onOpen={onOpenProfile} />
-      <span style={{ fontSize: 11, color: 'var(--cpd-color-text-secondary)', flexShrink: 0 }}>{time}</span>
     </div>
   )
 }
@@ -449,6 +465,7 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
   const { client } = useClient()
   const actions = useMessageActions(item)
   const openProfile = useProfileOpener()
+  const openInteractions = useInteractionTarget()
   // One preview per message: a wall of cards under a link-heavy message is its
   // own problem. Opt-in, because a preview makes the SERVER fetch a third-party
   // URL on the reader's behalf.
@@ -463,6 +480,12 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
   })
 
   const roomId = event.getRoomId() ?? ''
+  // Read once and shared by the identity block and the avatar column, which
+  // are now two elements describing the same person rather than one pill.
+  const senderId = event.getSender() ?? '(unknown)'
+  const senderMember = client?.getRoom(roomId)?.getMember(senderId) ?? null
+  const senderName = senderMember?.name || senderId
+  const senderAvatar = senderMember?.getMxcAvatarUrl() ?? null
   const canReact = kind === 'message' || kind === 'gallery'
   // Where this row's reaction affordance goes. A MEDIA body takes the rail
   // beside the picture; a text body takes the reserved slot trailing the text.
@@ -474,6 +497,20 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
     (kind === 'message' &&
       item.content.msgtype === 'm.image' &&
       !!parseMxc(typeof item.content.url === 'string' ? item.content.url : ''))
+
+  // A face typed into the message flashes over the sender's avatar. Text
+  // messages only -- there is nothing to read a face out of a picture.
+  const face =
+    kind === 'message' && !isMediaRow
+      ? detectFace(typeof item.content.body === 'string' ? item.content.body : '')
+      : null
+
+  // Bubbles are for words. A picture in a speech bubble is not a speech bubble,
+  // and a gallery's geometry is its own.
+  const bubble =
+    kind === 'message' && !isMediaRow
+      ? bubbleTone(typeof item.content.body === 'string' ? item.content.body : '')
+      : null
 
   let body: React.ReactNode
   if (kind === 'gallery' && cells) {
@@ -490,9 +527,11 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
           <AuthedImage
             mxc={mxc}
             width={320}
+            roomId={roomId}
+            lazy
             reserve={reserveBox(content)}
             alt={typeof content.body === 'string' ? content.body : undefined}
-            onClick={() => open([{ mxc, ...imageMeta(event) }], 0)}
+            onClick={() => open([{ mxc, roomId, ...imageMeta(event) }], 0)}
           />
           <MediaTags mxc={mxc} roomId={event.getRoomId()} />
         </div>
@@ -542,32 +581,87 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
       data-grouped={item.showHeader === false ? 'true' : undefined}
       style={{ padding: '4px 0' }}
     >
-      {/* A grouped message loses its pillbox, so its time is shown in the
-          gutter on hover -- otherwise the timestamp becomes unreachable for
-          every message after the first in a run. */}
-      {item.showHeader === false && <span className="tc-row-gutter-time">{time}</span>}
+      {/* Water left by a squirt. Renders null when dry, which is nearly always
+          -- it sits on every row, so the empty path is the cheap one. */}
+      <Drench rowId={item.id} />
       {/* Overlays the row's top-right; revealed by CSS on hover/focus-within so
           no React state churns per pointer crossing. */}
       <MessageActionBar actions={actions} />
-      {/* Grouping hides the HEADER only. Every decoration below -- reply
-          pill, body, edited marker, reactions, receipts, thread chip -- is
-          untouched, which is why grouping could land last without revisiting
-          any of them. */}
+      {/* Grouping hides the IDENTITY BLOCK only -- the name and its guild tag.
+          The avatar repeats on every line of the run, and every decoration
+          below (reply pill, body, edited marker, reactions, receipts, thread
+          chip) is untouched either way. */}
       {item.showHeader !== false && (
-        <SenderPill event={event} time={time} onOpenProfile={openProfile} />
+        <SenderIdentity
+          userId={senderId}
+          name={senderName}
+          onOpenProfile={openProfile}
+          onOpenInteractions={openInteractions}
+        />
       )}
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 2,
-          minWidth: 0,
-          paddingLeft: 16,
-          marginTop: 1,
-        }}
-      >
+      <div className="tc-row-line">
+        {/* The avatar column, left-justified and out of flow, so its width is
+            fixed whether or not the image has loaded and nothing shifts when
+            it does.
+
+            EVERY message row is an interaction anchor, not just the lead one.
+            resolveAnchor takes the LAST match on screen, so anchoring only the
+            cluster head meant a slap aimed at somebody whose latest line was
+            directly above you flew to the TOP of their run instead -- which is
+            further the more they had said. Their most recent line is where you
+            think of them as being, and now that is what it is. */}
+        <span
+          className="tc-row-av"
+          data-user-anchor={senderId}
+          role={openProfile ? 'button' : undefined}
+          tabIndex={openProfile ? 0 : undefined}
+          title={senderName}
+          onClick={openProfile ? (e) => openProfile(senderId, e.clientX, e.clientY) : undefined}
+          onKeyDown={
+            openProfile
+              ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    const r = e.currentTarget.getBoundingClientRect()
+                    openProfile(senderId, r.left, r.bottom)
+                  }
+                }
+              : undefined
+          }
+          onContextMenu={
+            openInteractions
+              ? (e) => {
+                  e.preventDefault()
+                  openInteractions(senderId, e.clientX, e.clientY)
+                }
+              : undefined
+          }
+        >
+          <AvatarDisc userId={senderId} name={senderName} avatarMxc={senderAvatar} size={40} />
+          {face && <FaceFlash face={face} seed={item.id} />}
+        </span>
+        <div
+          className="tc-row-col"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            minWidth: 0,
+            flex: 1,
+          }}
+        >
+        {/* Stacked ON TOP of the output it labels, inside the body column
+            rather than in a gutter of its own. Its height and the first line's
+            are set independently of the avatar: together they come to the same
+            height, but they are NOT derived from it, because the avatar's size
+            is not a constant and tying them would make a change to one silently
+            retune the other. */}
+        <span className="tc-row-time">{time}</span>
         {item.replyTo && <ReplyPill replyTo={item.replyTo} />}
-        <div style={{ fontSize: 14, wordBreak: 'break-word', minWidth: 0 }}>
+        <div
+          className={bubble ? 'tc-bubble' : undefined}
+          data-bubble={bubble ?? undefined}
+          style={{ fontSize: 14, wordBreak: 'break-word', minWidth: 0 }}
+        >
           {isMediaRow && roomId ? (
             // The picture and its rail sit side by side. The picture is FIRST,
             // so the rail appearing on hover cannot shift it.
@@ -603,7 +697,8 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
             </span>
           )}
         </div>
-        <RowFooter item={item} onOpenThread={onOpenThread} pillsInRail={isMediaRow} />
+          <RowFooter item={item} onOpenThread={onOpenThread} pillsInRail={isMediaRow} />
+        </div>
       </div>
     </div>
   )
@@ -712,8 +807,10 @@ function GalleryCell({ ev, onOpen }: { ev: MatrixEvent | null; onOpen?: () => vo
           <AuthedImage
             mxc={mxc}
             width={360}
+            roomId={ev?.getRoomId()}
             alt={typeof c?.body === 'string' ? c.body : undefined}
             fill
+            lazy
             transparentLoading
             onClick={onOpen}
           />

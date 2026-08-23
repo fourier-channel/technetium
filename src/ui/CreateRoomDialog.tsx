@@ -25,6 +25,9 @@ export function CreateRoomDialog({
   const [topic, setTopic] = useState('')
   const [isSpace, setIsSpace] = useState(false)
   const [joinRule, setJoinRule] = useState<HouseJoinRule>('invite')
+  // Default OFF. This is the one setting on this form that cannot be changed
+  // afterwards, which is why it defaults to the safe direction and says so.
+  const [federate, setFederate] = useState(false)
   const [parentSpaceId, setParentSpaceId] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -52,6 +55,7 @@ export function CreateRoomDialog({
         topic,
         isSpace,
         joinRule,
+        federate,
         parentSpaceId: parentSpaceId || undefined,
       })
       if (result.parentError) {
@@ -169,6 +173,41 @@ export function CreateRoomDialog({
         </select>
         <div style={{ fontSize: 11, color: 'var(--cpd-color-text-secondary)', marginTop: -6, marginBottom: 10 }}>
           {JOIN_RULES.find((r) => r.value === joinRule)?.hint}
+        </div>
+
+        <label style={labelStyle} htmlFor="tc-create-federate">
+          Other servers
+        </label>
+        <label
+          htmlFor="tc-create-federate"
+          style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 4, cursor: 'pointer' }}
+        >
+          <input
+            id="tc-create-federate"
+            type="checkbox"
+            checked={federate}
+            onChange={(e) => setFederate(e.target.checked)}
+            style={{ marginTop: 2, flexShrink: 0 }}
+          />
+          <span style={{ fontSize: 13 }}>
+            Allow people from other Matrix servers to join
+          </span>
+        </label>
+        <div
+          style={{
+            fontSize: 11,
+            lineHeight: 1.5,
+            color: federate
+              ? 'var(--cpd-color-text-critical-primary, #ff6b6b)'
+              : 'var(--cpd-color-text-secondary)',
+            marginBottom: 12,
+          }}
+        >
+          {federate
+            ? 'Cannot be undone later. Every server a member joins from receives a permanent copy of everything posted here, and can fetch any image it has seen.'
+            : 'This ' +
+              (isSpace ? 'space' : 'room') +
+              ' will exist only on this server. Permanent either way -- this cannot be changed after creation.'}
         </div>
 
         {spaces.length > 0 && (

@@ -74,5 +74,40 @@ console.log('\n-- describeInviteError --')
   check('never returns empty', describeInviteError(null).length > 0)
 }
 
+console.log('\n-- candidates carry their SOURCE (confidence is not flattened) --')
+{
+  const local = [{ userId: '@a:x.net', displayName: 'Ay' }]
+  const dir = [{ userId: '@b:x.net' }]
+  const out = mergeCandidates(local, dir, '@c:x.net', new Set())
+
+  check('a local member is tagged local', out.find((u) => u.userId === '@a:x.net')?.source === 'local')
+  check('a directory hit is tagged directory', out.find((u) => u.userId === '@b:x.net')?.source === 'directory')
+  // The one that matters: a well-formed id nobody has confirmed exists must
+  // never be presentable as though it were a real match.
+  check('a hand-typed id is tagged raw', out.find((u) => u.userId === '@c:x.net')?.source === 'raw')
+  check('the raw id still sorts last', out[out.length - 1].userId === '@c:x.net')
+  check('every candidate has a source', out.every((u) => !!u.source))
+
+  // Precedence: the first source to claim an id keeps it, so someone already
+  // in your rooms is never relabelled as an unverified guess just because the
+  // same id was also typed.
+  const typedSameAsLocal = mergeCandidates(local, [], '@a:x.net', new Set())
+  check('typing an id you already share a room with stays "local"',
+    typedSameAsLocal.find((u) => u.userId === '@a:x.net')?.source === 'local')
+  check('and is not duplicated', typedSameAsLocal.length === 1)
+
+  const typedSameAsDirectory = mergeCandidates([], dir, '@b:x.net', new Set())
+  check('a directory hit outranks the same id typed by hand',
+    typedSameAsDirectory.find((u) => u.userId === '@b:x.net')?.source === 'directory')
+
+  // An excluded id must not reappear as a raw candidate through the back door.
+  const excludedRaw = mergeCandidates([], [], '@x:x.net', new Set(['@x:x.net']))
+  check('an excluded id cannot return as a raw candidate', excludedRaw.length === 0)
+
+  // Malformed input must not become a candidate at all.
+  check('a malformed id is not offered', mergeCandidates([], [], 'not-an-id', new Set()).length === 0)
+  check('an empty query offers nothing extra', mergeCandidates([], [], '   ', new Set()).length === 0)
+}
+
 console.log('\n' + (failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'))
 process.exit(failures === 0 ? 0 : 1)

@@ -260,6 +260,19 @@ code {
    revealing it never reflows the message under the pointer.
    --------------------------------------------------------------------------- */
 .tc-row {
+  /* The gutter measurements live here and nowhere else, so the whole left
+     margin retunes from one place. On the ROW rather than on the line, because
+     the identity block is a sibling of the line and has to centre itself on the
+     same avatar the line positions. */
+  --tc-av-w: 40px;
+  --tc-body-x: 52px;
+  /* The two stacked lines beside the avatar. Chosen so their sum matches the
+     avatar today, but deliberately NOT derived from --tc-av-w: the avatar's
+     size is not a constant, and a calc() off it would make resizing the avatar
+     silently restyle the timestamp and the message text along with it. */
+  --tc-row-time-h: 14px;
+  --tc-row-text-h: 26px;
+
   position: relative;
 }
 
@@ -992,26 +1005,119 @@ code {
 .tc-row[data-grouped='true'] {
   padding-top: 0 !important;
 }
-.tc-row-gutter-time {
+/* ---------------------------------------------------------------------------
+   Row layout: an identity block on the first message of a cluster, and an
+   avatar on every line of it.
+
+   The avatar column is a FIXED width whether or not its image has loaded, and
+   the two things that share it -- the avatar and a grouped row's timestamp --
+   are stacked in the same box and cross-faded by opacity alone. Nothing here
+   changes size on hover, because the timeline re-pins to the bottom while
+   following and any hover-driven growth slides the whole conversation
+   (G-tp19, G-tp20).
+   --------------------------------------------------------------------------- */
+.tc-row-line {
+  position: relative;
+  min-width: 0;
+  /* The avatar is out of flow, so the line's height would otherwise be the
+     text's alone and a one-line message would let the avatar hang into the row
+     below it. */
+  min-height: var(--tc-av-w);
+  padding-left: var(--tc-body-x);
+}
+/* Left-justified and out of flow. Out of flow because the row's height must be
+   the text's, not the avatar's -- and because nothing to its right may ever
+   move it sideways. */
+.tc-row-av {
   position: absolute;
   left: 0;
-  top: 2px;
-  width: 44px;
-  text-align: right;
+  top: 0;
+  width: var(--tc-av-w);
+  height: var(--tc-av-w);
+  display: block;
+  cursor: pointer;
+}
+/* Stacked directly above the output it labels, in the body column. Fixed
+   height, so a row is the same height whether or not the clock reading is
+   wider this minute than last. */
+.tc-row-time {
+  display: block;
+  height: var(--tc-row-time-h);
+  line-height: var(--tc-row-time-h);
   font-size: 10px;
-  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
   color: var(--cpd-color-text-secondary, #a8b0bd);
-  opacity: 0;
+  opacity: 0.55;
   pointer-events: none;
   user-select: none;
-  transition: opacity 90ms ease-out;
+  white-space: nowrap;
 }
-.tc-row:hover > .tc-row-gutter-time,
-.tc-row:focus-within > .tc-row-gutter-time {
-  opacity: 0.75;
+/* The first line of output sits on the second of the two stacked rows. */
+.tc-row-col {
+  min-height: var(--tc-row-text-h);
 }
-@media (prefers-reduced-motion: reduce) {
-  .tc-row-gutter-time { transition: none; }
+.tc-row:hover .tc-row-time,
+.tc-row:focus-within .tc-row-time {
+  opacity: 0.9;
+}
+.tc-row-av:focus-visible {
+  outline: 2px solid var(--tc-link);
+  outline-offset: 2px;
+  border-radius: 50%;
+}
+
+/* The identity block: name, and the guild tag centred beneath it -- the pair
+   centred over the AVATAR rather than aligned to the row's left edge.
+
+   It is a ZERO-WIDTH flex box parked on the avatar's centre line. A zero-width
+   centred container puts its child's midpoint exactly on that line and lets the
+   child overflow equally both ways, so the name stays centred at any length
+   instead of being pushed right by the gutter or clipped to fit it. Long names
+   spill, which is the intended behaviour here and not an oversight. */
+/* Left-aligned, because the avatar is now at x=0: centring a name over a
+   left-justified avatar would push half of every name off the left edge of the
+   timeline. The guild tag stays centred UNDER THE NAME, which still works and
+   is the part of that decision worth keeping. */
+.tc-ident-row {
+  display: flex;
+  min-width: 0;
+}
+.tc-ident {
+  /* Exactly as wide as the name -- which is what makes "centred under the name"
+     mean centred under the NAME rather than under anything else, for a name of
+     any length. */
+  display: inline-block;
+  text-align: center;
+}
+.tc-ident-name {
+  display: block;
+  font-family: var(--tc-ui-font, inherit);
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.25;
+  color: var(--cpd-color-text-primary);
+  /* No ellipsis: a centred name that truncates would be centred on its stub
+     rather than on the person, and the point of this pass is to see what long
+     names actually do. */
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tc-ident-name:focus-visible {
+  outline: 2px solid var(--tc-link);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+.tc-ident-guild {
+  display: block;
+  text-align: center;
+  font-size: 10px;
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1190,4 +1296,1197 @@ code {
   .tc-member-pop::after {
     animation: none !important;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   Chat interactions (Area 1). Drawn on an overlay above the timeline, never
+   inside a Row -- rows are recycled by scrolling and re-laid-out by grouping, so
+   an animation parented to one dies mid-play.
+
+   The layer never occupies layout and never takes pointer events, so nothing
+   here can move, block or reflow a message (G-tp19). Every play is positioned
+   from --ix-from-* / --ix-to-*, resolved from the DOM when it starts.
+   --------------------------------------------------------------------------- */
+.tc-ix-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.tc-ix-self,
+.tc-ix-travel,
+.tc-ix-approach {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+.tc-ix-glyph {
+  position: absolute;
+  left: -14px;
+  top: -14px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
+}
+
+/* --- travel: whip out along an arc, STICK, get pulled home ----------------
+   The stick is the point. A hand that touches and leaves in the same motion
+   reads as a glyph sliding past somebody; a hand that arrives and STAYS there
+   for the better part of a second reads as stuck to them. Roughly 40% of the
+   duration is spent doing nothing at the far end, and that idle stretch is
+   what the first pass did not have.
+
+   The outbound leg bows through --ix-mid-*, computed perpendicular to the
+   flight and sided by a hash of the play id, so both clients bow the same slap
+   the same way. The return leg ignores the midpoint entirely: it is pulled
+   STRAIGHT back, because an elastic under tension does not retrace an arc. */
+.tc-ix-travel {
+  animation: ixTravel var(--ix-dur, 2400ms) linear both;
+}
+@keyframes ixTravel {
+  0%   { transform: translate(var(--ix-from-x), var(--ix-from-y)); }
+  /* Wind-up: load the elastic before it lets go. */
+  8%   { transform: translate(calc(var(--ix-from-x) - 8px), calc(var(--ix-from-y) + 3px)); }
+  /* Out along the bow. */
+  22%  { animation-timing-function: cubic-bezier(0.35, 0, 0.15, 1);
+         transform: translate(var(--ix-mid-x, var(--ix-to-x)), var(--ix-mid-y, var(--ix-to-y))); }
+  /* Contact. */
+  34%  { transform: translate(var(--ix-to-x), var(--ix-to-y)); }
+  /* Stuck. Nothing moves here on purpose. */
+  72%  { transform: translate(var(--ix-to-x), var(--ix-to-y)); }
+  /* Snapped straight home, overshooting slightly past the hand's start. */
+  90%  { animation-timing-function: cubic-bezier(0.6, 0, 0.3, 1);
+         transform: translate(calc(var(--ix-from-x) - 5px), var(--ix-from-y)); }
+  100% { opacity: 0; transform: translate(var(--ix-from-x), var(--ix-from-y)); }
+}
+/* The stretch rides on the glyph so it does not fight the travel transform. */
+.tc-ix-travel .tc-ix-glyph {
+  animation: ixStretch var(--ix-dur, 2400ms) ease-in-out both;
+}
+@keyframes ixStretch {
+  0%   { transform: scale(0.6) rotate(-20deg); opacity: 0; }
+  8%   { transform: scale(1) scaleX(0.78) rotate(-26deg); opacity: 1; }
+  /* Drawn thin along the flight path -- the elastic part. */
+  22%  { transform: scaleX(2) scaleY(0.62) rotate(8deg); }
+  /* Splat. */
+  34%  { transform: scaleX(0.72) scaleY(1.32) rotate(16deg); }
+  42%  { transform: scaleX(1.05) scaleY(0.95) rotate(12deg); }
+  /* Stuck: barely breathing, so it reads as adhered rather than frozen. */
+  56%  { transform: scaleX(0.98) scaleY(1.02) rotate(13deg); }
+  72%  { transform: scaleX(1) scaleY(1) rotate(12deg); }
+  /* Torn off and dragged back. */
+  82%  { transform: scaleX(1.85) scaleY(0.66) rotate(-6deg); }
+  100% { transform: scale(0.7) rotate(0deg); opacity: 0; }
+}
+.tc-ix-impact {
+  position: absolute;
+  left: calc(var(--ix-to-x) - var(--ix-from-x) - 16px);
+  top: calc(var(--ix-to-y) - var(--ix-from-y) - 16px);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 235, 190, 0.9) 0%, rgba(255, 190, 120, 0.35) 45%, transparent 70%);
+  opacity: 0;
+  animation: ixImpact var(--ix-dur, 2400ms) ease-out both;
+}
+@keyframes ixImpact {
+  0%, 30%  { opacity: 0; transform: scale(0.3); }
+  38%      { opacity: 1; transform: scale(1.25); }
+  62%      { opacity: 0; transform: scale(2); }
+  100%     { opacity: 0; transform: scale(2); }
+}
+
+/* The arm. Pinned at the actor, rotating to follow the hand and stretching to
+   reach it -- so it swings around with the hand's arc rather than bending along
+   it, which is what a rubber arm does. 1px wide at rest, so scaleX IS its
+   length in pixels; scaleY thins it as it draws out and bunches it when slack.
+   Both are transforms, so the arm never touches layout (G-tp19). */
+.tc-ix-arm-anchor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(var(--ix-from-x), var(--ix-from-y));
+  pointer-events: none;
+}
+.tc-ix-arm {
+  position: absolute;
+  left: 0;
+  top: -3px;
+  width: 1px;
+  height: 6px;
+  border-radius: 3px;
+  transform-origin: 0 50%;
+  background: linear-gradient(
+    90deg,
+    rgba(226, 108, 132, 0.35) 0%,
+    rgba(238, 140, 158, 0.9) 22%,
+    rgba(244, 168, 182, 0.95) 100%
+  );
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+  will-change: transform;
+  animation: ixArm var(--ix-dur, 2400ms) linear both;
+}
+@keyframes ixArm {
+  0%   { opacity: 0; transform: rotate(var(--ix-arm-a1, 0deg)) scale(0.01, 1); }
+  /* Bunched up at the wind-up. */
+  8%   { opacity: 1; transform: rotate(var(--ix-arm-a1, 0deg)) scale(var(--ix-arm-l1, 1), 1.5); }
+  /* Drawn thin as it swings out through the bow. */
+  22%  { animation-timing-function: cubic-bezier(0.35, 0, 0.15, 1);
+         transform: rotate(var(--ix-arm-a2, 0deg)) scale(var(--ix-arm-l2, 1), 0.5); }
+  34%  { transform: rotate(var(--ix-arm-a3, 0deg)) scale(var(--ix-arm-l3, 1), 0.75); }
+  /* Held taut for as long as the hand is stuck. */
+  72%  { transform: rotate(var(--ix-arm-a3, 0deg)) scale(var(--ix-arm-l3, 1), 0.68); }
+  90%  { animation-timing-function: cubic-bezier(0.6, 0, 0.3, 1);
+         transform: rotate(var(--ix-arm-a4, 0deg)) scale(var(--ix-arm-l4, 1), 1.3); }
+  100% { opacity: 0; transform: rotate(var(--ix-arm-a1, 0deg)) scale(0.01, 1); }
+}
+
+.tc-ix-travel[data-action='highfive'] .tc-ix-impact {
+  background: radial-gradient(circle, rgba(210, 235, 255, 0.95) 0%, rgba(150, 200, 255, 0.35) 45%, transparent 70%);
+}
+
+/* --- approach: the actor comes to them ------------------------------------
+   Poke, boop and hug are not thrown things -- they are you turning up next to
+   somebody. The overlay draws the actor's own avatar disc arriving beside the
+   target and acting on them there, which is why these need only the TARGET's
+   anchor: the actor is drawn, not located. */
+.tc-ix-approach {
+  transform: translate(var(--ix-from-x), var(--ix-from-y));
+}
+.tc-ix-actor {
+  position: absolute;
+  left: -15px;
+  top: -15px;
+  display: block;
+}
+
+/* Poke and boop: turn up, jab, go. */
+.tc-ix-approach[data-action='poke'],
+.tc-ix-approach[data-action='boop'] {
+  animation: ixApproachHold var(--ix-dur, 1500ms) both;
+}
+@keyframes ixApproachHold {
+  /* Parked beside them for the whole play: the jab is the glyph's job, not the
+     avatar's, so the avatar has somewhere to jab FROM. */
+  0%, 100% { transform: translate(var(--ix-from-x), var(--ix-from-y)); }
+}
+.tc-ix-approach[data-action='poke'] .tc-ix-actor,
+.tc-ix-approach[data-action='boop'] .tc-ix-actor {
+  animation: ixActorBlink var(--ix-dur, 1500ms) ease-out both;
+}
+@keyframes ixActorBlink {
+  0%   { opacity: 0; transform: scale(0.55); }
+  14%  { opacity: 1; transform: scale(1.06); }
+  22%  { transform: scale(1); }
+  78%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.85); }
+}
+.tc-ix-approach[data-action='poke'] .tc-ix-glyph {
+  animation: ixJab var(--ix-dur, 1500ms) cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+/* The jab reaches from the avatar toward the target -- that vector is exactly
+   to-minus-from, so it needs no separate variable. --ix-face flips the glyph so
+   a pointing finger points at the person rather than away from them. */
+@keyframes ixJab {
+  0%   { opacity: 0; transform: translateX(0) scaleX(var(--ix-face, 1)) scale(0.6); }
+  16%  { opacity: 1; transform: translateX(0) scaleX(var(--ix-face, 1)) scale(1); }
+  36%  { transform: translateX(calc((var(--ix-to-x) - var(--ix-from-x)) * 0.92)) scaleX(var(--ix-face, 1)) scale(1); }
+  50%  { transform: translateX(calc((var(--ix-to-x) - var(--ix-from-x)) * 0.3)) scaleX(var(--ix-face, 1)) scale(1); }
+  68%  { transform: translateX(calc((var(--ix-to-x) - var(--ix-from-x)) * 0.92)) scaleX(var(--ix-face, 1)) scale(1); }
+  84%  { opacity: 1; transform: translateX(0) scaleX(var(--ix-face, 1)) scale(1); }
+  100% { opacity: 0; transform: translateX(0) scaleX(var(--ix-face, 1)) scale(0.8); }
+}
+/* A boop is one deliberate touch, arriving from slightly above. */
+.tc-ix-approach[data-action='boop'] .tc-ix-glyph {
+  animation: ixBoop var(--ix-dur, 1500ms) cubic-bezier(0.3, 0, 0.2, 1) both;
+}
+@keyframes ixBoop {
+  0%   { opacity: 0; transform: translate(0, -14px) scaleX(var(--ix-face, 1)) scale(0.6); }
+  18%  { opacity: 1; transform: translate(0, -10px) scaleX(var(--ix-face, 1)) scale(1); }
+  46%  { transform: translate(calc((var(--ix-to-x) - var(--ix-from-x)) * 0.9), 0) scaleX(var(--ix-face, 1)) scale(1.08); }
+  60%  { transform: translate(calc((var(--ix-to-x) - var(--ix-from-x)) * 0.75), -4px) scaleX(var(--ix-face, 1)) scale(1); }
+  86%  { opacity: 1; transform: translate(0, -8px) scaleX(var(--ix-face, 1)) scale(1); }
+  100% { opacity: 0; transform: translate(0, -14px) scaleX(var(--ix-face, 1)) scale(0.85); }
+}
+
+/* Hug: arrive from the right, converge, hold, lift away. */
+.tc-ix-approach[data-action='hug'] {
+  animation: ixConverge var(--ix-dur, 2600ms) cubic-bezier(0.25, 0.9, 0.3, 1) both;
+}
+@keyframes ixConverge {
+  0%   { transform: translate(var(--ix-from-x), var(--ix-from-y)); }
+  /* Closed, and fully on top of them. Everything after this is the gesture. */
+  36%  { transform: translate(var(--ix-to-x), var(--ix-to-y)); }
+  100% { transform: translate(var(--ix-to-x), var(--ix-to-y)); }
+}
+.tc-ix-approach[data-action='hug'] .tc-ix-actor {
+  animation: ixActorArrive var(--ix-dur, 2600ms) ease-out both;
+}
+@keyframes ixActorArrive {
+  0%   { opacity: 0; transform: scale(0.75); }
+  12%  { opacity: 1; transform: scale(1); }
+  /* Holds through the full eclipse -- the two discs are stacked here, which is
+     the beat the emoji then lands on. */
+  40%  { opacity: 1; transform: scale(1); }
+  /* Then gets out of the way, quickly, leaving the gesture to play alone. */
+  52%  { opacity: 0; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1); }
+}
+.tc-ix-approach[data-action='hug'] .tc-ix-glyph {
+  animation: ixHug var(--ix-dur, 2600ms) ease-out both;
+}
+@keyframes ixHug {
+  /* Nothing until they are fully eclipsed -- the emoji is the RESULT of the
+     converge, so showing it early gives the punchline before the setup. It
+     comes up as the actor's disc goes, directly on top of where they met. */
+  0%, 40% { opacity: 0; transform: rotate(0deg) scale(0.5); }
+  50%     { opacity: 1; transform: rotate(0deg) scale(1.18); }
+  57%     { transform: rotate(-11deg) scale(1.05); }
+  65%     { transform: rotate(10deg) scale(1.05); }
+  73%     { transform: rotate(-7deg) scale(1.05); }
+  80%     { transform: rotate(0deg) scale(1.05); }
+  /* Bounce up and out. */
+  88%     { opacity: 1; transform: translateY(-16px) rotate(0deg) scale(1.1); }
+  100%    { opacity: 0; transform: translateY(-42px) rotate(0deg) scale(0.95); }
+}
+
+/* --- self: plays beside the actor ---------------------------------------- */
+.tc-ix-self {
+  transform: translate(var(--ix-from-x), var(--ix-from-y));
+}
+.tc-ix-self .tc-ix-glyph {
+  animation: ixSelf var(--ix-dur, 1200ms) ease-out both;
+}
+@keyframes ixSelf {
+  0%   { opacity: 0; transform: translate(18px, -6px) scale(0.4); }
+  18%  { opacity: 1; transform: translate(22px, -14px) scale(1.1); }
+  70%  { opacity: 1; transform: translate(22px, -16px) scale(1); }
+  100% { opacity: 0; transform: translate(22px, -26px) scale(0.9); }
+}
+.tc-ix-self[data-action='wave'] .tc-ix-glyph { animation-name: ixWave; }
+@keyframes ixWave {
+  0%   { opacity: 0; transform: translate(20px, -12px) rotate(0deg) scale(0.5); }
+  15%  { opacity: 1; transform: translate(22px, -14px) rotate(-18deg) scale(1); }
+  35%  { transform: translate(22px, -14px) rotate(20deg) scale(1); }
+  55%  { transform: translate(22px, -14px) rotate(-16deg) scale(1); }
+  75%  { transform: translate(22px, -14px) rotate(14deg) scale(1); }
+  100% { opacity: 0; transform: translate(22px, -18px) rotate(0deg) scale(0.9); }
+}
+.tc-ix-self[data-action='rip'] .tc-ix-glyph { animation-name: ixRip; }
+@keyframes ixRip {
+  0%   { opacity: 0; transform: translate(22px, -46px) scale(0.9); }
+  40%  { opacity: 1; transform: translate(22px, -12px) scale(1); }
+  52%  { transform: translate(22px, -16px) scale(1.04); }
+  62%  { transform: translate(22px, -12px) scale(1); }
+  100% { opacity: 0; transform: translate(22px, -12px) scale(1); }
+}
+
+/* Reduced motion: say it in words, parked where the actor is. Feedback is not
+   the thing being removed -- movement is. */
+.tc-ix-reduced {
+  position: absolute;
+  transform: translate(24px, -10px);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--cpd-color-text-primary, #e7ebf0);
+  background: var(--cpd-color-bg-canvas-default, #16181d);
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tc-ix-self,
+  .tc-ix-travel,
+  .tc-ix-approach,
+  .tc-ix-self .tc-ix-glyph,
+  .tc-ix-travel .tc-ix-glyph,
+  .tc-ix-approach .tc-ix-glyph,
+  .tc-ix-actor,
+  .tc-ix-arm,
+  .tc-ix-impact {
+    animation: none !important;
+  }
+}
+
+/* Interaction picker (right-click a person in the chat). */
+.tc-ix-menu {
+  z-index: 40;
+  min-width: 168px;
+  padding: 4px;
+  border-radius: 8px;
+  background: var(--cpd-color-bg-canvas-default, #16181d);
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  font-family: var(--tc-ui-font, inherit);
+  font-size: 13px;
+  color: var(--cpd-color-text-primary, #e7ebf0);
+}
+.tc-ix-menu-head {
+  padding: 4px 8px 2px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+.tc-ix-menu-sep {
+  height: 1px;
+  margin: 4px 2px;
+  background: rgba(128, 128, 128, 0.25);
+}
+.tc-ix-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.tc-ix-menu-item:hover:not(:disabled) {
+  background: var(--cpd-color-bg-subtle-secondary, rgba(128, 128, 128, 0.18));
+}
+.tc-ix-menu-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.tc-ix-menu-item:focus-visible {
+  outline: 2px solid var(--tc-link);
+  outline-offset: -2px;
+}
+.tc-ix-menu-glyph {
+  width: 18px;
+  text-align: center;
+  font-size: 15px;
+  line-height: 1;
+}
+.tc-ix-menu-note {
+  padding: 4px 8px 2px;
+  font-size: 11px;
+  color: var(--cpd-color-text-secondary, #a8b0bd);
+}
+
+/* ---------------------------------------------------------------------------
+   Media placeholder: the space a picture will occupy, held before it arrives.
+
+   It is not a grey box for decoration -- it is the reservation. The loaded
+   image is given the SAME box, so the row is settled from first paint and the
+   picture letterboxes into it rather than resizing the conversation around it
+   (G-tp19, G-tp20).
+   --------------------------------------------------------------------------- */
+.tc-media-ph {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--cpd-color-bg-subtle-secondary, rgba(128, 128, 128, 0.14));
+  /* A slow diagonal sheen, so a slot that is waiting reads differently from one
+     that has finished and happens to be blank. */
+  background-image: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.07) 45%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.07) 55%,
+    transparent 70%
+  );
+  background-size: 220% 100%;
+  animation: tcMediaWait 1.9s ease-in-out infinite;
+}
+/* A quiet mark in the middle, so an empty rectangle still says "picture". */
+.tc-media-ph::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22px;
+  height: 18px;
+  margin: -9px 0 0 -11px;
+  border-radius: 3px;
+  border: 1.5px solid var(--cpd-color-text-secondary, #a8b0bd);
+  opacity: 0.25;
+}
+@keyframes tcMediaWait {
+  0%   { background-position: 140% 0; }
+  100% { background-position: -40% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tc-media-ph {
+    animation: none;
+    background-image: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Speech bubbles.
+
+   The tail points LEFT, at the avatar, from near the bubble's top -- which is
+   where the avatar is, since it sits at x=0 at the top of its row. Each variant
+   sets --tc-bub-bg and --tc-bub-line and the tail follows, so a new tone is a
+   colour pair and a shape, never a second place to keep the tail in sync.
+
+   Shrink-to-fit via align-self, so a three-word line gets a three-word bubble
+   rather than a rectangle across the whole timeline.
+   --------------------------------------------------------------------------- */
+/* How wide the conversation column runs. ONE number, because the domain panel
+   fills the space to the right of it -- if the bubble's width and the panel's
+   left edge were separate values they would overlap the day either changed. */
+:root {
+  --tc-chat-w: 560px;
+}
+
+.tc-bubble {
+  --tc-bub-bg: var(--cpd-color-bg-subtle-secondary, rgba(128, 128, 128, 0.14));
+  --tc-bub-line: rgba(128, 128, 128, 0.28);
+
+  position: relative;
+  align-self: flex-start;
+  max-width: min(100%, var(--tc-chat-w));
+  padding: 7px 12px;
+  border-radius: 12px;
+  background: var(--tc-bub-bg);
+  border: 1px solid var(--tc-bub-line);
+}
+
+/* The tail: two triangles, the outer one the border colour and the inner one
+   the fill, so a bordered bubble keeps its outline all the way to the point. */
+.tc-bubble[data-bubble='standard']::before,
+.tc-bubble[data-bubble='questioning']::before,
+.tc-bubble[data-bubble='standard']::after,
+.tc-bubble[data-bubble='questioning']::after {
+  content: '';
+  position: absolute;
+  top: 11px;
+  width: 0;
+  height: 0;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+}
+.tc-bubble[data-bubble='standard']::before,
+.tc-bubble[data-bubble='questioning']::before {
+  left: -10px;
+  border-right: 10px solid var(--tc-bub-line);
+}
+.tc-bubble[data-bubble='standard']::after,
+.tc-bubble[data-bubble='questioning']::after {
+  left: -8px;
+  border-right: 10px solid var(--tc-bub-bg);
+}
+
+/* Questioning: cooler, and the corner nearest the speaker is opened up -- the
+   bubble tilts its head. */
+.tc-bubble[data-bubble='questioning'] {
+  --tc-bub-bg: rgba(96, 150, 220, 0.16);
+  --tc-bub-line: rgba(120, 170, 235, 0.42);
+  border-top-left-radius: 20px;
+}
+
+/* Thinking: no tail. Two circles drifting back toward the speaker, and a soft
+   dashed outline, because a thought was never said out loud. */
+.tc-bubble[data-bubble='thinking'] {
+  --tc-bub-bg: rgba(128, 128, 128, 0.10);
+  --tc-bub-line: rgba(150, 150, 150, 0.34);
+  border-radius: 20px;
+  border-style: dashed;
+  font-style: italic;
+  opacity: 0.92;
+}
+.tc-bubble[data-bubble='thinking']::before,
+.tc-bubble[data-bubble='thinking']::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  background: var(--tc-bub-bg);
+  border: 1px solid var(--tc-bub-line);
+}
+.tc-bubble[data-bubble='thinking']::before {
+  left: -12px;
+  top: 12px;
+  width: 9px;
+  height: 9px;
+}
+.tc-bubble[data-bubble='thinking']::after {
+  left: -21px;
+  top: 21px;
+  width: 5px;
+  height: 5px;
+}
+
+/* Yelling: a burst. The jagged edge AND the spike toward the speaker are one
+   clip-path, because a pseudo-element tail would be clipped away by it -- so
+   the spike lives inside the box, and the extra left padding is the room it
+   needs. No border: clip-path cuts through one, leaving a half-drawn outline.
+   The fill carries the shape instead. */
+.tc-bubble[data-bubble='yelling'] {
+  --tc-bub-bg: rgba(232, 128, 92, 0.20);
+  --tc-bub-line: transparent;
+
+  border: 0;
+  border-radius: 0;
+  padding: 10px 16px 10px 22px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  background: var(--tc-bub-bg);
+  box-shadow: inset 0 0 0 9999px rgba(232, 128, 92, 0.06);
+  clip-path: polygon(
+    8% 14%, 12% 4%, 20% 12%, 29% 2%, 38% 11%, 48% 3%, 57% 12%, 66% 3%, 75% 12%, 84% 4%,
+    92% 13%, 100% 6%, 96% 22%, 100% 38%, 95% 52%, 100% 66%, 96% 82%, 100% 96%,
+    91% 88%, 82% 97%, 73% 88%, 63% 97%, 53% 88%, 43% 97%, 34% 88%, 24% 97%, 15% 88%,
+    9% 96%, 10% 74%, 0% 52%, 10% 40%, 6% 26%
+  );
+}
+.tc-bubble[data-bubble='yelling']::before,
+.tc-bubble[data-bubble='yelling']::after {
+  content: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Panels: the domain and the thread strip.
+
+   Both arrive by transform and leave the same way, from one mechanism
+   (useReveal), because the requirement was that they behave EXACTLY alike and
+   the only way two things stay alike is for there to be one of them.
+
+   transform and opacity only -- no width, height or inset animation, so a panel
+   sliding in cannot reflow the conversation underneath it (G-tp19, G-tp20).
+   The duration is set inline from the hook, so JS and CSS cannot disagree about
+   how long to wait before unmounting.
+   --------------------------------------------------------------------------- */
+.tc-panel {
+  position: absolute;
+  z-index: 12;
+  background: var(--cpd-color-bg-canvas-default, #16181d);
+  transition-property: transform, opacity;
+  transition-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: transform, opacity;
+}
+
+/* The domain fills the open space to the RIGHT of the conversation, floor to
+   ceiling. It is not an overlay on the chat: the bubbles stop at --tc-chat-w
+   and everything past that was empty, so the domain expands into it and the
+   conversation keeps reading beside it. Capped at 60% so a narrow window gives
+   the words the room rather than the canvas. */
+.tc-panel-right {
+  top: 0;
+  bottom: 0;
+  right: 0;
+  left: min(calc(var(--tc-chat-w) + 88px), 60%);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  opacity: 0.6;
+  box-shadow: -14px 0 34px rgba(0, 0, 0, 0.38);
+}
+.tc-panel-right[data-shown='true'] {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+/* The thread strip comes down across the top. */
+.tc-panel-top {
+  left: 0;
+  right: 0;
+  top: 0;
+  /* The header is one row now, and the card is the reason the strip exists, so
+     the card gets the rest. Budgeted for BOTH, which the first two attempts at
+     this number were not. */
+  height: 208px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+  transform: translateY(-100%);
+  opacity: 0.6;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.34);
+}
+.tc-panel-top[data-shown='true'] {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tc-panel {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Thread carousel: the results come to the reader.
+
+   The track slides so the focused card sits under the middle of the strip. The
+   reading position never moves, which is the point -- a scrollbar asks the
+   reader to go to the results.
+   --------------------------------------------------------------------------- */
+.tc-carousel {
+  height: 100%;
+  overflow: hidden;
+  outline: none;
+}
+.tc-carousel:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--tc-link);
+}
+.tc-carousel-track {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /* No run-up padding here on purpose. trackOffset() already centres the
+     focused card against the measured strip width, and a padding would be
+     added on TOP of that translate -- every card centred, and every one of them
+     off by the padding. The pure function is the only authority for where the
+     track sits. The first and last cards simply translate past the edge, which
+     the strip's overflow hides. */
+  will-change: transform;
+}
+
+/* Compact in the strip: the header is competing with the cards for 208px, and
+   the cards are the reason the strip exists. */
+.tc-carousel-head {
+  padding: 5px 10px 4px !important;
+  font-size: 11px;
+}
+.tc-carousel-head select,
+.tc-carousel-head button {
+  font-size: 11px;
+}
+
+.tc-carousel-card {
+  flex: 0 0 348px;
+  width: 348px;
+  height: 124px;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid rgba(128, 128, 128, 0.22);
+  background: var(--cpd-color-bg-canvas-default, #16181d);
+  transition: transform 320ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 320ms ease-out;
+  will-change: transform, opacity;
+}
+/* Distance from the reader, capped at 3 by visualDistance -- a card six away
+   and one sixty away are both simply "not near" and must not generate sixty
+   visual states. */
+.tc-carousel-card[data-distance='0'] {
+  transform: scale(1);
+  opacity: 1;
+  border-color: rgba(150, 150, 150, 0.5);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.tc-carousel-card[data-distance='1'] { transform: scale(0.92); opacity: 0.72; }
+.tc-carousel-card[data-distance='2'] { transform: scale(0.86); opacity: 0.5; }
+.tc-carousel-card[data-distance='3'] { transform: scale(0.82); opacity: 0.34; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tc-carousel-card {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Squirt: the jet, and the water it leaves behind.
+   --------------------------------------------------------------------------- */
+/* The blast travels flatter and faster than a slap -- water is thrown, not
+   swung -- so it barely bows and does not come back. */
+.tc-ix-travel[data-action='squirt'] .tc-ix-glyph {
+  animation-name: ixJet;
+}
+@keyframes ixJet {
+  0%   { opacity: 0; transform: scale(0.4) scaleX(0.6); }
+  12%  { opacity: 1; transform: scaleX(1.8) scaleY(0.7); }
+  34%  { transform: scaleX(2.4) scaleY(0.6); }
+  46%  { transform: scaleX(1) scaleY(1.25); }
+  70%  { opacity: 0.9; transform: scale(1.1); }
+  100% { opacity: 0; transform: scale(1.5); }
+}
+.tc-ix-travel[data-action='squirt'] .tc-ix-impact {
+  background: radial-gradient(
+    circle,
+    rgba(150, 205, 255, 0.95) 0%,
+    rgba(90, 160, 230, 0.4) 45%,
+    transparent 72%
+  );
+}
+
+/* Droplets on a soaked row. Absolutely positioned, pointer-events none: they
+   hold no layout, so a wet row is exactly the height of a dry one (G-tp19). */
+.tc-drench {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.tc-drop {
+  position: absolute;
+  width: 7px;
+  height: 9px;
+  border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%;
+  background: linear-gradient(180deg, rgba(190, 228, 255, 0.85), rgba(96, 165, 230, 0.55));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), inset 0 -1px 1px rgba(255, 255, 255, 0.5);
+  transform: scale(var(--tc-drop-scale, 1));
+  opacity: 0.85;
+}
+.tc-drench[data-level='secondary'] .tc-drop {
+  opacity: 0.5;
+  filter: saturate(0.8);
+}
+/* Drying: they break up and drift off rather than blinking out. */
+.tc-drench[data-drying='true'] .tc-drop {
+  animation: tcDropDry 1200ms ease-in both;
+  animation-delay: var(--tc-drop-delay, 0ms);
+}
+@keyframes tcDropDry {
+  0%   { opacity: 0.85; transform: scale(var(--tc-drop-scale, 1)) translateY(0); }
+  55%  { opacity: 0.5; transform: scale(calc(var(--tc-drop-scale, 1) * 0.7)) translateY(-9px); }
+  100% { opacity: 0; transform: scale(calc(var(--tc-drop-scale, 1) * 0.35)) translateY(-22px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tc-drench[data-drying='true'] .tc-drop { animation: none; opacity: 0; }
+}
+
+/* ---------------------------------------------------------------------------
+   Guard: the shield, and what a deflected play looks like.
+   --------------------------------------------------------------------------- */
+.tc-ix-shield {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  transform: translate(var(--ix-from-x), var(--ix-from-y));
+}
+.tc-ix-shield > span {
+  position: absolute;
+  left: -16px;
+  top: -16px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  filter: drop-shadow(0 0 8px rgba(140, 200, 255, 0.7));
+  animation: ixShield var(--ix-dur, 2000ms) ease-out both;
+}
+@keyframes ixShield {
+  0%   { opacity: 0; transform: scale(0.5); }
+  18%  { opacity: 1; transform: scale(1.15); }
+  30%  { transform: scale(1); }
+  72%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.3); }
+}
+
+/* A deflected play stops short and loses its impact -- nothing landed. */
+.tc-ix-travel[data-deflected='true'] .tc-ix-impact,
+.tc-ix-approach[data-deflected='true'] .tc-ix-glyph {
+  opacity: 0.35;
+}
+
+/* ---------------------------------------------------------------------------
+   Faces: typed into a message, flashed over the sender's avatar.
+
+   The variant names are the SAME six the arrivals use (memberEvents'
+   ARRIVAL_ANIMATIONS), so the vocabulary is shared even though the keyframes
+   are their own -- a pill bursting into a log and a face landing on a 40px disc
+   want different motion at different scales.
+
+   Enter and exit are chosen independently, so a face rarely leaves the way it
+   arrived. Both are transform/opacity/filter only: the overlay holds no layout
+   and cannot move the row it sits on (G-tp19).
+   --------------------------------------------------------------------------- */
+.tc-face-anchor {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.tc-face {
+  position: absolute;
+  inset: -2px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(12, 14, 18, 0.72);
+  backdrop-filter: blur(1px);
+  z-index: 3;
+}
+.tc-face-text {
+  font-family: var(--tc-ui-font, ui-monospace, monospace);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #f2f6ff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
+}
+
+/* --- entering ------------------------------------------------------------ */
+.tc-face[data-phase='in'][data-anim='poof']    { animation: faceInPoof 620ms cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+.tc-face[data-phase='in'][data-anim='warp']    { animation: faceInWarp 620ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.tc-face[data-phase='in'][data-anim='slam']    { animation: faceInSlam 620ms cubic-bezier(0.3, 1.5, 0.5, 1) both; }
+.tc-face[data-phase='in'][data-anim='sparkle'] { animation: faceInSparkle 620ms cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+.tc-face[data-phase='in'][data-anim='glitch']  { animation: faceInGlitch 620ms steps(9, end) both; }
+.tc-face[data-phase='in'][data-anim='iris']    { animation: faceInIris 620ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@keyframes faceInPoof {
+  0%   { opacity: 0; transform: scale(0.2); filter: blur(3px); }
+  60%  { opacity: 1; transform: scale(1.18); filter: blur(0); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes faceInWarp {
+  0%   { opacity: 0; transform: scale(2.2) rotate(-24deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+@keyframes faceInSlam {
+  0%   { opacity: 0; transform: translateY(-22px) scale(1.4); }
+  70%  { opacity: 1; transform: translateY(2px) scale(0.94); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes faceInSparkle {
+  0%   { opacity: 0; transform: scale(0.6) rotate(12deg); filter: brightness(2.4); }
+  55%  { opacity: 1; transform: scale(1.12) rotate(-4deg); filter: brightness(1.5); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); filter: brightness(1); }
+}
+@keyframes faceInGlitch {
+  0%   { opacity: 0; transform: translateX(-6px); }
+  20%  { opacity: 1; transform: translateX(5px); }
+  40%  { transform: translateX(-3px) scaleY(1.15); }
+  60%  { transform: translateX(3px) scaleY(0.9); }
+  80%  { transform: translateX(-1px); }
+  100% { opacity: 1; transform: translateX(0) scaleY(1); }
+}
+@keyframes faceInIris {
+  0%   { opacity: 0; clip-path: circle(0% at 50% 50%); }
+  100% { opacity: 1; clip-path: circle(75% at 50% 50%); }
+}
+
+/* --- leaving -------------------------------------------------------------- */
+.tc-face[data-phase='out'][data-anim='poof']    { animation: faceOutPoof 620ms cubic-bezier(0.4, 0, 0.9, 0.4) both; }
+.tc-face[data-phase='out'][data-anim='warp']    { animation: faceOutWarp 620ms cubic-bezier(0.5, 0, 1, 0.5) both; }
+.tc-face[data-phase='out'][data-anim='slam']    { animation: faceOutSlam 620ms cubic-bezier(0.5, -0.4, 0.8, 0.5) both; }
+.tc-face[data-phase='out'][data-anim='sparkle'] { animation: faceOutSparkle 620ms ease-in both; }
+.tc-face[data-phase='out'][data-anim='glitch']  { animation: faceOutGlitch 620ms steps(9, end) both; }
+.tc-face[data-phase='out'][data-anim='iris']    { animation: faceOutIris 620ms cubic-bezier(0.5, 0, 1, 0.5) both; }
+
+@keyframes faceOutPoof {
+  0%   { opacity: 1; transform: scale(1); filter: blur(0); }
+  100% { opacity: 0; transform: scale(1.8); filter: blur(4px); }
+}
+@keyframes faceOutWarp {
+  0%   { opacity: 1; transform: scale(1) rotate(0deg); }
+  100% { opacity: 0; transform: scale(0.1) rotate(28deg); }
+}
+@keyframes faceOutSlam {
+  0%   { opacity: 1; transform: translateY(0) scale(1); }
+  25%  { transform: translateY(-6px) scale(1.08); }
+  100% { opacity: 0; transform: translateY(26px) scale(0.85); }
+}
+@keyframes faceOutSparkle {
+  0%   { opacity: 1; transform: scale(1); filter: brightness(1); }
+  40%  { opacity: 1; transform: scale(1.15); filter: brightness(2.2); }
+  100% { opacity: 0; transform: scale(0.5); filter: brightness(3); }
+}
+@keyframes faceOutGlitch {
+  0%   { opacity: 1; transform: translateX(0); }
+  25%  { transform: translateX(6px) scaleY(1.2); }
+  50%  { opacity: 0.7; transform: translateX(-7px) scaleY(0.8); }
+  75%  { transform: translateX(4px); }
+  100% { opacity: 0; transform: translateX(0); }
+}
+@keyframes faceOutIris {
+  0%   { opacity: 1; clip-path: circle(75% at 50% 50%); }
+  100% { opacity: 0; clip-path: circle(0% at 50% 50%); }
+}
+
+/* Reduced motion never mounts a face at all -- FaceFlash checks it before
+   playing, so there is nothing here to disable. */
+
+/* The thread reading pane: same arrival as the domain, from the same hook, but
+   it keeps a draggable width so it is anchored to the right edge and sized
+   inline rather than offset from the left. */
+.tc-panel-thread {
+  top: 0;
+  bottom: 0;
+  right: 0;
+  display: flex;
+  transform: translateX(100%);
+  opacity: 0.6;
+  box-shadow: -14px 0 34px rgba(0, 0, 0, 0.38);
+}
+.tc-panel-thread[data-shown='true'] {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+/* Which thread is open, said on the card itself.
+   Being READ and being under the reader's eyes are now different things -- the
+   carousel is free to scroll away from the open thread -- so the card carries
+   the fact at any distance, and does not rely on being the focused one. */
+.tc-carousel-card[data-active='true'] {
+  border-color: var(--tc-link, #6ea8fe);
+  box-shadow: 0 0 0 1px var(--tc-link, #6ea8fe), 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+/* Legible even at the far end of the track, where cards are dimmed to 0.34. */
+.tc-carousel-card[data-active='true'][data-distance='2'],
+.tc-carousel-card[data-active='true'][data-distance='3'] {
+  opacity: 0.78;
+}
+.tc-tcard-reading {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 8px;
+  color: var(--cpd-color-text-on-solid-primary, #fff);
+  background: var(--tc-link, #6ea8fe);
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Thread card, after fourier-sampling's curate .card.
+
+   The shape is theirs: a small square cover, a column beside it carrying an
+   accent id line with a right-aligned date, a one-line subject, FIRST/LAST in
+   fixed columns, and a meters row -- with a narrow liveness column on the far
+   right and a chip strip along the bottom.
+
+   Three things are adapted rather than copied.
+     - There is no board or post number, so the id line is the ROOM.
+     - The completion bar is absent on purpose. It measures how much of a
+       finished thread has been captured, and a live Matrix thread is never
+       finished, so the bar would be a gauge wired to nothing.
+     - The liveness column asks the same question of the only signal Matrix
+       offers: how long since somebody last posted.
+   --------------------------------------------------------------------------- */
+.tc-tcard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  padding: 9px 10px;
+  cursor: pointer;
+  color: var(--cpd-color-text-primary, #e6e9ef);
+  min-width: 0;
+}
+.tc-tcard-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+  flex: 1;
+}
+.tc-tcard-cover {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  border-radius: 7px;
+  overflow: hidden;
+  object-fit: cover;
+  background: #0b0e12;
+  border: 1px solid rgba(128, 128, 128, 0.22);
+}
+/* Scoped name, not `.nocover`: the sampling repo lost an afternoon to exactly
+   this, where a placeholder reused a global class and inherited an 80px margin
+   that inflated every card in the grid. */
+.tc-tcard-cover[data-nocover='true'] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: pre-line;
+  text-align: center;
+  border-style: dashed;
+  font-family: var(--tc-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 9px;
+  line-height: 1.25;
+  color: var(--cpd-color-text-secondary, #6b7480);
+}
+/* min-width: 0 is load-bearing. Without it a long subject makes this flex item
+   refuse to shrink and pushes the liveness column clean off the card. */
+.tc-tcard-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tc-tcard-idrow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.tc-tcard-room {
+  font-family: var(--tc-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 11px;
+  color: var(--tc-link, #6ea8fe);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tc-tcard-date {
+  font-family: var(--tc-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 10px;
+  color: var(--cpd-color-text-secondary, #6b7480);
+  margin-left: auto;
+  white-space: nowrap;
+}
+.tc-tcard-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* An image root's only "subject" is its filename, which was never written to be
+   a headline -- and the cover beside it already says what the thread is. */
+.tc-tcard-title.untitled {
+  font-weight: 400;
+  font-style: italic;
+  color: var(--cpd-color-text-secondary, #6b7480);
+}
+
+.tc-tcard-times {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 116px));
+  gap: 0 6px;
+  align-items: baseline;
+  font-size: 10px;
+  font-family: var(--tc-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
+}
+.tc-tcard-tcol {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+.tc-tcard-tcol > span {
+  font-family: var(--tc-ui-font, inherit);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #4d5663;
+  flex: 0 0 26px;
+}
+.tc-tcard-tcol > b {
+  color: var(--cpd-color-text-secondary, #9aa4b2);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tc-tcard-meters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-top: auto;
+}
+/* The counts as one dark pill, the way the sampling card sets its own counts
+   apart from the text around them. */
+.tc-tcard-meters .tc-stat {
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: rgba(35, 48, 63, 0.55);
+}
+
+/* Liveness and elapsed time, one narrow column on the right. */
+.tc-tcard-life {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding-left: 2px;
+}
+.tc-tcard-life > b {
+  font-family: var(--tc-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--cpd-color-text-secondary, #6b7480);
+}
+.tc-tcard-life[data-live='true'] > b {
+  color: #7ee0c0;
+}
+.tc-tcard-pulse {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #0a1f16;
+  border: 2px solid #2c5346;
+}
+.tc-tcard-life[data-live='true'] .tc-tcard-pulse {
+  border-color: #7ee0c0;
+  box-shadow: 0 0 8px rgba(126, 224, 192, 0.45);
+}
+
+.tc-tcard-foot {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+.tc-tcard-chip {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: #23303f;
+  color: var(--cpd-color-text-secondary, #9aa4b2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tc-tcard-chip-new {
+  background: var(--cpd-color-bg-action-primary-rest, #3d7bfd);
+  color: var(--cpd-color-text-on-solid-primary, #fff);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.tc-tcard-chip-author {
+  background: transparent;
+  border: 1px solid rgba(128, 128, 128, 0.28);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 10px;
+  min-width: 0;
+}
+
+.tc-tcard-reading {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 8px;
+  color: var(--cpd-color-text-on-solid-primary, #fff);
+  background: var(--tc-link, #6ea8fe);
+  pointer-events: none;
 }

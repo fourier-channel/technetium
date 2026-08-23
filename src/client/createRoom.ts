@@ -22,6 +22,17 @@ export interface CreateRoomInput {
   topic?: string
   isSpace: boolean
   joinRule: HouseJoinRule
+  // Whether this room may be replicated to other homeservers.
+  //
+  // DEFAULT OFF, and PERMANENT. `m.federate` lives in `m.room.create` and
+  // cannot be changed afterwards -- a room created federating federates
+  // forever, and the only remedy is creating a new one and migrating.
+  //
+  // Default-off is a reversal of Matrix's default, chosen deliberately on
+  // 2026-08-15: every existing room had been created federating without
+  // anyone deciding to, and by the time that was noticed it could not be
+  // undone. A default you can opt out of beats a default you cannot undo.
+  federate?: boolean
   // Space to parent the new room under, if any.
   parentSpaceId?: string
 }
@@ -34,6 +45,25 @@ export interface CreateRoomOutcome {
   parentError?: string
 }
 
+
+// creation_content carries BOTH the space marker and the federation flag,
+// because both are properties of m.room.create and NEITHER can be set
+// afterwards. Extracted so the permanent decision is checkable.
+//
+// m.federate is emitted only when DISABLING federation: omitting it means
+// true, which is the spec default, so writing `m.federate: true` explicitly
+// would add noise without changing anything. Returns undefined when there is
+// nothing to say, so an ordinary room sends no creation_content at all.
+export function buildCreationContent(input: {
+  isSpace: boolean
+  federate?: boolean
+}): Record<string, unknown> | undefined {
+  const content: Record<string, unknown> = {}
+  if (input.isSpace) content.type = 'm.space'
+  if (input.federate === false) content['m.federate'] = false
+  return Object.keys(content).length > 0 ? content : undefined
+}
+
 function presetFor(rule: HouseJoinRule): Preset {
   return rule === 'public' ? Preset.PublicChat : Preset.PrivateChat
 }
@@ -44,6 +74,8 @@ export async function createRoom(
 ): Promise<CreateRoomOutcome> {
   const name = input.name.trim()
   if (!name) throw new Error('A name is required.')
+
+  const creationContent = buildCreationContent(input)
 
   const initialState: { type: string; state_key: string; content: object }[] = []
   // knock is not expressible through a preset, so it goes in as initial state.
@@ -62,9 +94,7 @@ export async function createRoom(
     // A public room being listed in the directory is a separate decision from
     // its join rule; keep creation quiet and let it be published deliberately.
     visibility: Visibility.Private,
-    ...(input.isSpace
-      ? { creation_content: { type: 'm.space' } }
-      : {}),
+    ...(creationContent ? { creation_content: creationContent } : {}),
     ...(initialState.length > 0 ? { initial_state: initialState } : {}),
   })
 

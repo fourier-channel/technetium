@@ -6,6 +6,7 @@ import {
   isValidMxid,
   mergeCandidates,
   searchDirectory,
+  type Candidate,
   type DirectoryUser,
 } from '../client/userDirectory'
 import { AuthedImage } from './AuthedImage'
@@ -25,6 +26,7 @@ export function UserPicker({
   actionLabel,
   // Usually the room being invited to: offering someone already in it is noise.
   excludeFromRoom,
+  existingDmWith,
   onPick,
   onClose,
 }: {
@@ -32,6 +34,11 @@ export function UserPicker({
   title: string
   actionLabel: string
   excludeFromRoom?: Room | null
+  // Supplied by the start-a-DM caller. Answers, per candidate, whether picking
+  // them REOPENS an existing conversation rather than starting a new one --
+  // the single most confusing thing about this picker, because W3.8 silently
+  // reuses an existing DM and the user could not tell that was going to happen.
+  existingDmWith?: (userId: string) => boolean
   onPick: (userId: string) => void
   onClose: () => void
 }) {
@@ -241,7 +248,6 @@ export function UserPicker({
                       transparentLoading
                       alt=""
                       fallback={initials(u.displayName || u.userId)}
-                      viaHomeserver
                     />
                   ) : (
                     initials(u.displayName || u.userId)
@@ -272,6 +278,7 @@ export function UserPicker({
                   >
                     {u.userId}
                   </span>
+                  <CandidateNote candidate={u} hasDm={!!existingDmWith?.(u.userId)} />
                 </span>
               </button>
             ))
@@ -301,5 +308,55 @@ export function UserPicker({
       </div>
     </div>,
     document.body,
+  )
+}
+
+// What we actually know about this candidate, said plainly.
+//
+// The picker merges three sources of very different confidence into one list
+// (see CandidateSource). Rendered undifferentiated, a well-formed typo looked
+// exactly like a real person, and a pick that would REOPEN an existing DM
+// looked exactly like one that would start a new one. Both are now stated
+// before the click rather than discovered after it.
+function CandidateNote({ candidate, hasDm }: { candidate: Candidate; hasDm: boolean }) {
+  const bits: { text: string; tone: 'good' | 'warn' | 'plain' }[] = []
+
+  if (hasDm) bits.push({ text: 'opens your existing chat', tone: 'good' })
+
+  if (candidate.source === 'local') {
+    bits.push({ text: 'in your rooms', tone: 'good' })
+  } else if (candidate.source === 'directory') {
+    bits.push({ text: 'found on the directory', tone: 'plain' })
+  } else {
+    // The important one. A valid SHAPE is not a valid PERSON, and the server
+    // will not tell us otherwise until the invite is attempted.
+    bits.push({ text: 'typed by you -- not verified to exist', tone: 'warn' })
+  }
+
+  return (
+    <span style={{ display: 'flex', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+      {bits.map((b) => (
+        <span
+          key={b.text}
+          style={{
+            fontSize: 10,
+            lineHeight: 1.6,
+            padding: '0 6px',
+            borderRadius: 8,
+            whiteSpace: 'nowrap',
+            color:
+              b.tone === 'good'
+                ? 'var(--cpd-color-text-success-primary, #3bd16f)'
+                : b.tone === 'warn'
+                  ? 'var(--cpd-color-text-critical-primary, #ff6b6b)'
+                  : 'var(--cpd-color-text-secondary)',
+            border: '1px solid currentColor',
+            opacity: b.tone === 'plain' ? 0.65 : 0.9,
+          }}
+        >
+          {b.text}
+        </span>
+      ))}
+    </span>
   )
 }
