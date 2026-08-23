@@ -116,3 +116,4 @@ console.log('\n-- the default state is honest --')
 }
 
 if (failures) { console.log(`\n${failures} FAILED`); process.exit(1) }
+console.log('\nALL CHECKS PASSED')

@@ -18,7 +18,7 @@
 | campaign | e2ee-dms |
 | branch | `e2ee-dms`, cut off `main` at `41bd9b4` |
 | base | `main` at the interactions-v1 merge, deployed 2026-08-23 |
-| tsc / lint / check / build | CLEAN / 23 (HOLD) / 1048 / PASSING |
+| tsc / lint / check / build | CLEAN / 23 (HOLD) / 1070 / PASSING |
 | deploys | operator's call, `./deploy.sh` only |
 
 ---
@@ -194,6 +194,30 @@ transcript of the other person's words, signed by your new identity, renders in
 their client as your message, which is precisely the property E2EE exists to
 deny. And it broadcasts to the peer, resurrecting anything they redacted.
 
+### G-e4 -- `isEncrypted()` stays true after a SUCCESSFUL decryption
+
+Found by reading, before it could be found in a browser, where it would have
+been maddening: the SDK insisting decryption worked while every message
+rendered as a padlock.
+
+`MatrixEvent.isEncrypted()` returns `this.event.type === 'm.room.encrypted'` --
+the WIRE type, which never changes. It is therefore true forever after a
+message decrypts fine. `getType()` is the opposite: it returns `clearEvent.type`
+once decrypted, so it stops reporting `m.room.encrypted` at exactly the right
+moment.
+
+The pre-existing test `getType() === 'm.room.encrypted' || ev.isEncrypted()`
+would thus have classified EVERY decrypted message as encrypted, keeping the
+padlock on the whole conversation the moment E4 started encrypting.
+
+The correct tests are `isDecryptionFailure()` (could not) and
+`isBeingDecrypted()` (not yet). Anything else is simply its own kind.
+
+Corollary that cost a check run: the harness's `MatrixEvent` doubles omitted
+both methods, so they threw rather than misclassifying. That is the harness
+working -- a double that silently returns undefined would have passed while
+the real interface had moved.
+
 ### G-e3 -- the wasm progress meter has no hook, and its denominator lies
 
 Two traps, both in E1.
@@ -338,7 +362,7 @@ E6 is deferred -- with an honest placeholder, per E5.
 | E2 | Adopt or create the cross-signing identity | landed | `6f7288a` | `client/cryptoIdentity.ts` (pure decision) + `observeCryptoIdentity`/`applySilentIdentityAction` in `client/crypto.ts`. Silent actions run at boot; anything needing the user is published as state and WAITED on, never acted upon. 26 checks, incl. all four safety properties proved over the full 96-state input space and a source-level guard that the SDK's reset option cannot be named outside the (not yet written) reset module. **PENDING: E2-a.** |
 | E3 | Secret storage + recovery key, incl. RESTORE | todo | | Restore-from-recovery-key is the MVP-critical half, not creation. Show a new key ONCE and make the user confirm they have it. A recovery key shown twice is a recovery key in a screenshot. |
 | E4 | New DMs are created encrypted, WITH the D-e4 guard | todo | | `startDm()` gains an `m.room.encryption` initial state event ONLY when the other party has device keys. New DMs only. |
-| E5 | Decrypt and render encrypted timeline events | todo | | Replaces the "decryption coming later" placeholder. A failed decryption must say WHY (unknown session, no key, unverified device) rather than showing the padlock forever -- D-tp16 applied to the thing users will actually hit. Includes the honest placeholder for encrypted ATTACHMENTS while E6 is deferred (H3). |
+| E5 | Decrypt and render encrypted timeline events | landed (text) | `<e5>` | Fixes G-e4 -- `classify()` would have padlocked every SUCCESSFULLY decrypted message. `client/decryptionState.ts` explains WHY a message is unreadable and whether the user can fix it; the placeholder string is gone from the tree. 22 checks, incl. the taxonomy verified complete against the installed SDK enum. **Attachments (H3) still owed** -- moves with E6. **PENDING: E5-a, E5-b.** |
 | E6 | Encrypted attachments | DEFERRED | | H3 + D1 + D-e3. Read `content.file`, decrypt, feed the existing blob cache; downscale once on receipt for the thumbnail the server will never provide. Upload side encrypts before upload. |
 | E7 | Device verification UI | todo | | Emoji SAS. See your own devices, verify a new one, see whether the person you are talking to is verified. NOT deferrable -- see the premise section. |
 | E8 | Key backup | todo | | `checkKeyBackupAndEnable`. Mostly already true server-side for existing users; the client work is enabling it and never calling reset by accident. |
@@ -376,6 +400,10 @@ This box is headless; nothing below has been seen in a browser.
   stays, turns red, and says encryption could not be set up -- rather than
   spinning forever or vanishing silently.
 - **E1-f** The title renders with its spacing intact: `A r gh   the  Ke  y    s`.
+- **E5-a** In a real encrypted DM, decrypted messages render as MESSAGES, not
+  as padlocks (G-e4's regression, the one this step exists to prevent).
+- **E5-b** An undecryptable message shows its reason, and an actionable one
+  (unverified device) is visually distinct from a permanent one.
 - **E2-a** On a real account that already has an identity, the boot reaches
   `recover-from-secret-storage` or `verify-with-other-device` -- and NOT
   `bootstrap-new`. The decision is proved over its whole input space, but that

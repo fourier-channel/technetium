@@ -100,3 +100,4 @@ console.log('\n-- a bodyless response is passed through, not wrapped --')
 }
 
 if (failures) { console.log(`\n${failures} FAILED`); process.exit(1) }
+console.log('\nALL CHECKS PASSED')

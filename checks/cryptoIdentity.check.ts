@@ -218,3 +218,4 @@ console.log('\n-- the destructive flag exists in exactly one place --')
 }
 
 if (failures) { console.log(`\n${failures} FAILED`); process.exit(1) }
+console.log('\nALL CHECKS PASSED')

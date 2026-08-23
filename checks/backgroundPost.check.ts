@@ -27,6 +27,11 @@ console.log('\n-- background posts stay out of the chat log --')
     getTs: () => 1,
     getType: () => 'm.room.message',
     isRedacted: () => false,
+    // classify() asks these too; a double that omits them throws
+    // rather than being classified, which is the harness noticing that the
+    // real interface moved (E5).
+    isDecryptionFailure: () => false,
+    isBeingDecrypted: () => false,
     isEncrypted: () => false,
     getContent: () => content,
     getOriginalContent: () => content,

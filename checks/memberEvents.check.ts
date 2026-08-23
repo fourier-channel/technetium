@@ -215,6 +215,11 @@ console.log('\n-- end to end: a membership event survives toItems + applyLayout 
     getTs: () => 1_700_000_000_000,
     getType: () => type,
     isRedacted: () => false,
+    // classify() asks these too; a double that omits them throws
+    // rather than being classified, which is the harness noticing that the
+    // real interface moved (E5).
+    isDecryptionFailure: () => false,
+    isBeingDecrypted: () => false,
     isEncrypted: () => false,
     getContent: () => content,
     getPrevContent: () => prev,
