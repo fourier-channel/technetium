@@ -17,7 +17,7 @@
 | campaign | interactions-v1 (4 areas, plus the layout and media work that grew out of it) |
 | branch | `interactions-v1` off `main` (`aeab785`), pushed |
 | tsc / lint / build | CLEAN / 23 (HOLD) / PASSING |
-| checks | 571 at start -> **951** |
+| checks | 571 at start -> **981** |
 | deploys | operator's call, as always |
 | still unbuilt | -- (squirt and guard landed 2026-08-21) |
 
@@ -268,6 +268,9 @@ client offers.
 | T3 | The carousel stopped being leashed | **landed** | | The bring-to-reader effect depended on `focus`, so scrolling away made it haul the active card back -- opening a thread froze the carousel on it. Now recorded per activeRootId, so the pull is once per thread. **Consequence:** being read and being under the reader's eyes are now different things, so the open thread carries an accent border and a "reading" badge at any distance, held legible where cards otherwise dim to a third. |
 | T4 | Reading pane arrives like the domain | **landed** | | Same `useReveal`, so "like the domain" is a fact rather than a resemblance. Moved from a flex column between chat and member list to an overlay on the chat's right. Keeps its drag handle as its own left edge -- a panel floating over the chat has no column to put a handle beside. |
 | X1 | Cross-file constants are checked | **landed** | | `CAROUSEL_CARD_W`/`CAROUSEL_GAP` live in ThreadList (the centring arithmetic) and in the CSS (the actual card), and the strip must hold a card plus its header. Six checks read both files and compare. A drift there does not throw: every card is centred by the difference and the carousel aims quietly wrong, which reads as a rendering bug. Added after getting the strip height wrong twice. |
+| T5 | Card proportions, filename headline, author, zeroes | **landed** | | The first card had two voids -- a 76px cover parked in a 134px column, and `margin-top: auto` pushing the lower text away from the upper. Also: an image root's only "subject" is its filename, and setting that in bold makes it a headline it was never written to be; the author was an MXID rather than a person; and `📎 0` is noise crowding the counts that say something. |
+| T6 | The card is the CURATE card, not the sidebar one | **landed** | | **I had taken the wrong design.** fourier-sampling has two -- a compact `.tcard` in `style.css`'s sidebar and the richer `.card` in `curate.css`. The operator's screenshot was the latter. Now: 52px cover, accent id line with right-aligned date, one-line subject, **FIRST/LAST in fixed columns** (the archive's point being that absolute times sit at the same x on every card, which is what makes a column comparable -- and Matrix gives exactly those two instants), a counts pill, a liveness column, and a chip strip. 348x124. |
+| X2 | A clock components may read | **landed** | | `Date.now()` during render is impure and lint caught it, but "4h 25m" needs a ticking clock. `ui/useNow.ts`: one interval for the whole app, started on the first subscriber and stopped after the last, ticking once a minute because that is the smallest unit anything renders. |
 | E2 | Inline sending (shortcode -> MSC2545 img) | | | |
 | E3 | Sanitizer widening (SECURITY, own commit) | | | |
 | E4 | Animated emoji + preference | | | |
@@ -348,6 +351,16 @@ Headless box: gates are self-verified, behaviour is not.
 | IX-j | Reaction picker: a star tab appears when the room or your account has an MSC2545 pack; picking one reacts with the image. Searching matches shortcodes. | yes |
 | IX-k | **Judgement call: is the catalog right?** Ten entries, glyph-based. Naming, additions and removals are one array in `interactionCatalog.ts`. | no |
 
+### Added 2026-08-23 -- the curate card
+
+| id | what needs eyes | 2nd identity? |
+| --- | --- | --- |
+| TC-a | The card matches the curate design: 52px cover, accent room line with the date right-aligned beside it, one-line subject, FIRST/LAST in aligned columns, counts pill, liveness column, chip strip. | no |
+| TC-b | FIRST and LAST line up at the same x across every card in the strip -- that alignment is the whole reason for the fixed columns. | no |
+| TC-c | The liveness duration ticks (leave it a minute) and is green for a thread posted in within a day, dim otherwise. | no |
+| TC-d | An image thread shows its filename as a quiet italic caption, not a bold headline; a text thread shows its opening line in bold. | no |
+| TC-e | A thread with no image shows the dashed "no image" placeholder at the correct 52px, NOT an inflated card. | no |
+
 ### Added 2026-08-22 -- domain, threads, cards
 
 | id | what needs eyes | 2nd identity? |
@@ -355,7 +368,7 @@ Headless box: gates are self-verified, behaviour is not.
 | TD-a | Opening the domain shows ONE chat, not two, and the canvas fills the panel. | no |
 | TD-b | With the domain open, a message sent from the normal composer still carries a time-to-die; with it closed, it does not. | no |
 | TD-c | Thread strip header is one row -- Threads, Here, Everywhere, sort, close -- and a whole card fits below it. | no |
-| TD-d | The card looks like fourier-sampling's: 76px cover (or a glyph), accent room line, two-line subject, count pills, author/time footer. **Reported as not taking; verified live in the built stylesheet, so this needs a hard reload before it is a bug.** | no |
+| TD-d | ~~The card looks like fourier-sampling's~~ **RESOLVED, and I was answering the wrong question.** The design WAS rendering; it was the wrong design. fourier-sampling has two cards and I built from the sidebar `.tcard` when the operator meant the curate `.card`. Superseded by TC-a below. | -- |
 | TD-e | Open a thread, then scroll the carousel freely -- it does NOT snap back. The open thread stays marked with a border and a "reading" badge wherever it sits. | no |
 | TD-f | The reading pane slides in from the right like the domain, and its drag handle still resizes it. | no |
 

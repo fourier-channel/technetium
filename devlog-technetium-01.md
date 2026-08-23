@@ -3344,3 +3344,72 @@ did not take. It is live -- the markup branch renders, the rules are in
 src/index.css, and `tc-tcard-cover` is present in the built stylesheet -- so the
 next step is a hard reload, and if it still does not appear the fault is
 somewhere I have not looked yet rather than somewhere I have.
+
+## 2026-08-23 -- the wrong card, and how long it took to find out
+
+### Two cards, and I built the other one
+
+The operator asked for fourier-sampling's thread card design. I searched the
+repo, found `.tcard` in `public/style.css`, built from it, and reported it done.
+They said the design had not taken. I checked the markup, the stylesheet and the
+built bundle, confirmed all three were correct, and said so.
+
+We were both right, which is why it took three exchanges. fourier-sampling has
+TWO thread cards: the compact `.tcard` in the sidebar of `style.css`, and the
+much richer `.card` in `curate.css`. I had built the first faithfully. They
+meant the second.
+
+The screenshot is what ended it, and it should have come first from my side --
+not from theirs. When somebody says a design does not match and the code
+provably renders, the remaining possibilities are that they are looking at a
+stale build or that we are looking at different designs. I checked the first
+exhaustively and never checked the second, which is the one that costs nothing:
+grep the repo for a SECOND card before insisting the first one is live.
+
+### What transferred, and what could not
+
+FIRST/LAST transferred without adaptation, and it is the best part. Its purpose
+in the archive is that two absolute times sit at the same x on every card down a
+page -- fixed-width columns, tabular numerals -- because that alignment is the
+only thing that makes a column of them comparable. Matrix hands us exactly those
+two instants for a thread. Nothing to translate.
+
+The completion bar could not transfer, and the reason is sharper than "it does
+not apply here". It measures how much of a FINISHED thread has been captured. A
+live Matrix thread is never finished, so the bar has no value to display -- it
+would be a gauge wired to nothing, which is worse than an absent gauge because
+it looks like it is telling you something.
+
+The liveness column did transfer, by asking the archive's question -- is this
+still happening, and for how long -- of the only signal Matrix offers, which is
+when somebody last posted.
+
+### A clock a component may not read
+
+`Date.now()` during render is impure, and the compiler rule says so plainly: the
+same render can produce different output on a re-render nobody asked for. But a
+card reading "4h 25m" genuinely needs the time, and needs it to tick.
+
+So the clock moved out of React and is read through a store. One interval for
+the whole app, started on the first subscriber and stopped after the last,
+ticking once a minute because a minute is the smallest unit anything renders.
+The alternative -- a timer inside each card -- is dozens of them firing to say
+the same thing.
+
+### A mistake borrowed along with the design
+
+The sampling repo's CSS carries a comment about a placeholder that reused a
+global `.empty` class, inherited an 80px margin, and inflated every card in the
+grid from 62px to 216px. The catalog looked entirely correct and was simply
+enormous.
+
+Ours uses a scoped data attribute instead. Copying a design is a good moment to
+read the comments about what went wrong the first time, since they are written
+by somebody who has already made the mistake you are about to.
+
+### Gates
+
+tsc clean, lint at the 23 baseline, build passing. Checks 951 -> 981, the new
+ones covering the two formats -- durations that never print three units or a
+negative, and timestamps that are the same WIDTH for any date, since equal width
+is what the aligned columns actually depend on.
