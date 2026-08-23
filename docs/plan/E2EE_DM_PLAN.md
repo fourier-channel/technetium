@@ -107,6 +107,33 @@ Operator, 2026-08-23. These are canonical; do not relitigate.
 - **Crypto initialises at LOGIN**, not lazily on first DM. Most users have
   encrypted DMs waiting for them, so lazy buys little, and a shield that arrives
   three seconds late is a shield nobody trusts.
+- **D-e6 -- the crypto load is SHOWN, not hidden.** A one-time multi-megabyte
+  fetch that happens silently at login is indistinguishable from a hang. It
+  gets an arrival box with a real progress meter and copy that states plainly
+  what is being installed and what it will and will not encrypt. See E1 and
+  G-e3.
+- **D-e7 -- encrypted media gets its OWN R2 bucket.** Not for cost -- the spend
+  is negligible at realistic volume -- but for three things it makes possible:
+  independent growth tracking, an independent lifecycle policy (D-e8), and
+  immunity to a future tool that grabs the first bucket it enumerates rather
+  than the one it was configured for. Verified 2026-08-23: nothing we currently
+  run enumerates buckets (both consumers name theirs explicitly from config),
+  so this is a forward-looking guard taken while it is free. Operator-side.
+- **D-e8 -- encrypted DM media has a lifecycle, and its terminal state is
+  deletion.** DM media is revisited far less than room or thread media, and
+  vastly less than thread media; dormant DMs go fully cold. Tier by last read
+  toward deep storage, and purge outright once a conversation is dead.
+
+  The purge predicate is **all participants gone, never any participant
+  gone.** A deactivated account's peer may still hold the room keys and still
+  read their half. "No longer registered" applied per-user destroys live
+  conversations; applied to the whole room it destroys nothing, because
+  ciphertext whose keys are gone is not merely unwanted data -- it is
+  **unreadable by anyone forever**. That is the rare case where deletion
+  removes no information, since the information is already gone.
+
+  Explicitly NOT keyed on time since last login. Dormancy is a property of the
+  conversation, not of a login timestamp.
 
 ---
 
@@ -166,6 +193,24 @@ largely the case where nothing was going to be lost. It FORGES ATTRIBUTION -- a
 transcript of the other person's words, signed by your new identity, renders in
 their client as your message, which is precisely the property E2EE exists to
 deny. And it broadcasts to the peer, resurrecting anything they redacted.
+
+### G-e3 -- the wasm progress meter has no hook, and its denominator lies
+
+Two traps, both in E1.
+
+**There is no progress hook.** `initAsync()` does
+`WebAssembly.instantiateStreaming(fetch(url))` with nothing to observe. The
+way to a real meter is to prefetch the wasm ourselves with a streaming reader
+that counts bytes, then call `initAsync(ourUrl)` -- it memoizes its load
+promise, so the SDK's later no-arg call reuses ours and resolves off the warm
+HTTP cache. No forked SDK, no patched package.
+
+**`Content-Length` is the COMPRESSED length; the stream yields DECODED
+bytes.** The asset is served gzipped, so the obvious
+`received / contentLength` meter runs to roughly 290% and looks broken. The
+denominator must be the true decompressed size, which is known at build time.
+Per D-tc01 that constant lives in one place and a check reads the real asset
+and compares, so a drift fails the gate instead of quietly mis-aiming the bar.
 
 ### H1 -- the classic /sync poller must stay STATELESS. This is the big one.
 
@@ -243,11 +288,24 @@ what D-e5's copy has to be honest about, whenever D-e5 gets built.
 
 ## What already exists
 
-- **The crypto engine is already in the bundle.** matrix-js-sdk 41.6 uses Rust
-  crypto. The build emits `rust-crypto-*.js` (~231 KB) plus a ~5.58 MB
-  `matrix_sdk_crypto_wasm_bg.wasm` as separate chunks today. Both sit behind
-  `initRustCrypto`'s dynamic import, so nothing fetches them yet: E1 is the
-  commit that makes the cost real.
+- **The crypto engine is already in the bundle, and it is cheaper than it
+  looks.** matrix-js-sdk 41.6 uses Rust crypto. The build emits
+  `rust-crypto-*.js` (~231 KB) plus `matrix_sdk_crypto_wasm_bg.wasm` as
+  separate chunks. Both sit behind `initRustCrypto`'s dynamic import, so
+  nothing fetches them yet: E1 is the commit that makes the cost real.
+
+  **Measured against the deployed asset 2026-08-23, not estimated from the
+  build output:** 5.58 MB on disk, **1.94 MB gzip, 1.72 MB brotli on the
+  wire**. Served as `application/wasm` with `public, max-age=31536000,
+  immutable` and a content-hashed filename, so it is **downloaded once,
+  effectively ever** -- not per session, not per deploy. It re-downloads only
+  when the SDK's crypto wasm version changes, or when the user clears site
+  data.
+
+  That last case is the one that matters, and not for the 1.7 MB: clearing
+  site data also destroys the **IndexedDB crypto store**. The download is
+  cheap; the store is the thing whose loss costs a conversation. That is
+  E8's entire reason to exist.
 - **`classify()` already knows about encryption.** `useTimeline.ts` returns the
   `'encrypted'` kind for `m.room.encrypted`, and Row renders the padlock
   placeholder reading "Encrypted (decryption coming later)". That string is a
@@ -276,7 +334,7 @@ E6 is deferred -- with an honest placeholder, per E5.
 | id | step | status | commit | result / pendings |
 | --- | --- | --- | --- | --- |
 | D1 | Attachment decryption: decide the dependency | todo | | Recommendation: NO new dependency. Hand-roll `client/encryptedFile.ts` on WebCrypto and record the decision in DEPENDENCIES.md as a decision NOT to take one. Belongs with E6, so it moves with E6. |
-| E1 | `initRustCrypto` + IndexedDB crypto store | todo | | After `createClient`, before `startClient`. Init at LOGIN. Must not change behaviour for anyone until E4. Measure what the wasm actually costs at runtime. |
+| E1 | `initRustCrypto` + IndexedDB crypto store, with the load surfaced | todo | | After `createClient`, before `startClient`. Init at LOGIN. Must not change behaviour for anyone until E4. Includes the arrival box (D-e6) and its honest failure path (E10). |
 | E2 | Adopt or create the cross-signing identity | todo | | First-time bootstrap needs no UI. The work is DETECTING an existing identity and not clobbering it (D-e1). |
 | E3 | Secret storage + recovery key, incl. RESTORE | todo | | Restore-from-recovery-key is the MVP-critical half, not creation. Show a new key ONCE and make the user confirm they have it. A recovery key shown twice is a recovery key in a screenshot. |
 | E4 | New DMs are created encrypted, WITH the D-e4 guard | todo | | `startDm()` gains an `m.room.encryption` initial state event ONLY when the other party has device keys. New DMs only. |
@@ -299,6 +357,19 @@ All of O-e1..O-e5 are RESOLVED above. Nothing currently open.
 ## PENDING OPERATOR VERIFICATION
 
 Nothing yet. Everything visual and every real-server behaviour goes here.
+
+---
+
+## Operator-side items this campaign depends on
+
+Not client work; recorded here so they are not lost.
+
+- **Cloudflare is not edge-caching the wasm.** It answers `cf-cache-status:
+  DYNAMIC` because `.wasm` is not in the default cacheable-extension list, so
+  every user's first load pulls from origin. A Cache Rule on the asset path
+  fixes it. Cheap, and worth taking BEFORE this file starts loading for real.
+- **The separate encrypted-media bucket** (D-e7).
+- **The media lifecycle policy** (D-e8) -- tiering and purge.
 
 ---
 
