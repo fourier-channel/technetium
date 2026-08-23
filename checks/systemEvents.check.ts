@@ -58,6 +58,19 @@ console.log('\n-- what is hidden --')
     !isSystemEvent('com.evil.net.41chan.message'))
 }
 
+console.log('\n-- the one config event that is NOT noise (O-e1) --')
+{
+  // m.room.encryption was removed from the hidden list deliberately: it is the
+  // moment a conversation's privacy changed, and it cannot be undone. Hiding it
+  // makes that change invisible, which is the same class of failure as hiding
+  // an error. Asserted so it cannot drift back in with the furniture.
+  check('m.room.encryption is visible', isSystemEvent('m.room.encryption') === false)
+  // Its neighbours in the config block stay hidden -- this is one carve-out,
+  // not the list falling over.
+  check('m.room.join_rules is still hidden', isSystemEvent('m.room.join_rules') === true)
+  check('m.room.power_levels is still hidden', isSystemEvent('m.room.power_levels') === true)
+}
+
 if (failures > 0) {
   console.log(`\n${failures} FAILED`)
   process.exit(1)
