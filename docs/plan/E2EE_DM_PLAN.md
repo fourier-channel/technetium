@@ -18,7 +18,7 @@
 | campaign | e2ee-dms |
 | branch | `e2ee-dms`, cut off `main` at `41bd9b4` |
 | base | `main` at the interactions-v1 merge, deployed 2026-08-23 |
-| tsc / lint / check / build | CLEAN / 23 (HOLD) / 981 / PASSING |
+| tsc / lint / check / build | CLEAN / 23 (HOLD) / 1022 / PASSING |
 | deploys | operator's call, `./deploy.sh` only |
 
 ---
@@ -334,7 +334,7 @@ E6 is deferred -- with an honest placeholder, per E5.
 | id | step | status | commit | result / pendings |
 | --- | --- | --- | --- | --- |
 | D1 | Attachment decryption: decide the dependency | todo | | Recommendation: NO new dependency. Hand-roll `client/encryptedFile.ts` on WebCrypto and record the decision in DEPENDENCIES.md as a decision NOT to take one. Belongs with E6, so it moves with E6. |
-| E1 | `initRustCrypto` + IndexedDB crypto store, with the load surfaced | todo | | After `createClient`, before `startClient`. Init at LOGIN. Must not change behaviour for anyone until E4. Includes the arrival box (D-e6) and its honest failure path (E10). |
+| E1 | `initRustCrypto` + IndexedDB crypto store, with the load surfaced | landed | `ff5231e` | Behind `VITE_E2EE=1`; DEFAULT OFF, so nothing changed for anyone. `client/cryptoProgress.ts` (pure, 30 checks) + `client/crypto.ts` (11 checks) + `onboarding/KeysArrival.tsx` + `CryptoArrivalHost`. Checks 981 -> 1022. **PENDING: E1-a..E1-e.** |
 | E2 | Adopt or create the cross-signing identity | todo | | First-time bootstrap needs no UI. The work is DETECTING an existing identity and not clobbering it (D-e1). |
 | E3 | Secret storage + recovery key, incl. RESTORE | todo | | Restore-from-recovery-key is the MVP-critical half, not creation. Show a new key ONCE and make the user confirm they have it. A recovery key shown twice is a recovery key in a screenshot. |
 | E4 | New DMs are created encrypted, WITH the D-e4 guard | todo | | `startDm()` gains an `m.room.encryption` initial state event ONLY when the other party has device keys. New DMs only. |
@@ -356,7 +356,26 @@ All of O-e1..O-e5 are RESOLVED above. Nothing currently open.
 
 ## PENDING OPERATOR VERIFICATION
 
-Nothing yet. Everything visual and every real-server behaviour goes here.
+This box is headless; nothing below has been seen in a browser.
+
+- **E1-a** With `VITE_E2EE=1`, the arrival box appears at login, the bar moves,
+  and it leaves on its own once crypto is ready.
+- **E1-b** The reported total matches reality -- the bar reaches 100% as the
+  download completes rather than overshooting or stalling short (G-e3 is the
+  trap this is checking for).
+- **E1-c** On a SECOND login the box does not appear, or flashes only briefly:
+  the asset is content-hashed and immutable, so it should come from cache.
+  Confirmed statically -- a fresh build reproduces the deployed filename
+  `matrix_sdk_crypto_wasm_bg-B71jdgYD.wasm` byte-for-byte -- but not in a
+  browser.
+- **E1-d** With the flag OFF (the default), no wasm request is made at all and
+  the box never mounts. Confirmed in the build output (the wasm is referenced
+  only from the lazy `rust-crypto-*.js` chunk and is not preloaded from
+  `index.html`), but not at runtime.
+- **E1-e** The failure path: with the network blocked mid-download, the box
+  stays, turns red, and says encryption could not be set up -- rather than
+  spinning forever or vanishing silently.
+- **E1-f** The title renders with its spacing intact: `A r gh   the  Ke  y    s`.
 
 ---
 

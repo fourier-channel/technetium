@@ -10,6 +10,8 @@ import type { MatrixClient } from 'matrix-js-sdk'
 import { saveSession, loadSession, clearSession } from './session'
 import { buildClient, startAndWaitForSync } from './buildClient'
 import { createTokenRefreshFunction } from './tokenRefresher'
+import { e2eeEnabled, initCrypto } from './crypto'
+import { CRYPTO_LOAD_IDLE, type CryptoLoadState } from './cryptoProgress'
 
 // MAS redirect target + statically-registered public client id (see mas/config.yaml
 // on the remote server). REDIRECT_URI must match the browser's origin and the
@@ -33,6 +35,9 @@ interface ClientContextValue {
   status: ClientStatus
   error: string | null
   userId: string | null
+  // How the crypto engine's arrival is going, so the shell can show it (D-e6).
+  // Stays 'idle' for everyone while the flag is off.
+  cryptoLoad: CryptoLoadState
   login: (homeserver?: string) => Promise<void>
   logout: () => void
 }
@@ -56,6 +61,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<ClientStatus>('starting')
   const [error, setError] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
+  const [cryptoLoad, setCryptoLoad] = useState<CryptoLoadState>(CRYPTO_LOAD_IDLE)
 
   // Bootstrap on mount: finish an in-progress login, resume a stored session,
   // or fall through to awaiting_login.
@@ -89,6 +95,14 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     setStatus('syncing')
     const c = await buildClient(params)
     if (import.meta.env.DEV) (window as unknown as { mxClient?: unknown }).mxClient = c
+
+    // Crypto comes up BETWEEN createClient and startClient -- the SDK requires
+    // that order, and it is also the only window with no sync traffic for the
+    // progress wrapper to sit in front of. A failure here is reported and
+    // stepped past: an unencrypted client is still a working client, and E10
+    // says we then tell the truth about it rather than showing a dead shield.
+    if (e2eeEnabled()) await initCrypto(c, setCryptoLoad)
+
     setClient(c)
     await startAndWaitForSync(c)
     setStatus('ready')
@@ -220,6 +234,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
   const value: ClientContextValue = {
     client,
     status,
+    cryptoLoad,
     error,
     userId,
     login,
