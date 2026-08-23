@@ -18,7 +18,7 @@
 | campaign | e2ee-dms |
 | branch | `e2ee-dms`, cut off `main` at `41bd9b4` |
 | base | `main` at the interactions-v1 merge, deployed 2026-08-23 |
-| tsc / lint / check / build | CLEAN / 23 (HOLD) / 1070 / PASSING |
+| tsc / lint / check / build | CLEAN / 23 (HOLD) / 1088 / PASSING |
 | deploys | operator's call, `./deploy.sh` only |
 
 ---
@@ -361,7 +361,7 @@ E6 is deferred -- with an honest placeholder, per E5.
 | E1 | `initRustCrypto` + IndexedDB crypto store, with the load surfaced | landed | `83df9c7` | Behind `VITE_E2EE=1`; DEFAULT OFF, so nothing changed for anyone. `client/cryptoProgress.ts` (pure, 30 checks) + `client/crypto.ts` (11 checks) + `onboarding/KeysArrival.tsx` + `CryptoArrivalHost`. Checks 981 -> 1022. **PENDING: E1-a..E1-f.** |
 | E2 | Adopt or create the cross-signing identity | landed | `6f7288a` | `client/cryptoIdentity.ts` (pure decision) + `observeCryptoIdentity`/`applySilentIdentityAction` in `client/crypto.ts`. Silent actions run at boot; anything needing the user is published as state and WAITED on, never acted upon. 26 checks, incl. all four safety properties proved over the full 96-state input space and a source-level guard that the SDK's reset option cannot be named outside the (not yet written) reset module. **PENDING: E2-a.** |
 | E3 | Secret storage + recovery key, incl. RESTORE | todo | | Restore-from-recovery-key is the MVP-critical half, not creation. Show a new key ONCE and make the user confirm they have it. A recovery key shown twice is a recovery key in a screenshot. |
-| E4 | New DMs are created encrypted, WITH the D-e4 guard | todo | | `startDm()` gains an `m.room.encryption` initial state event ONLY when the other party has device keys. New DMs only. |
+| E4 | New DMs are created encrypted, WITH the D-e4 guard | landed | `<e4>` | `client/dmEncryption.ts` (pure) + `recipientCryptoCapability` in `dm.ts`. Encryption is `initial_state` at creation, never sent after. `startDm` returns the decision so E9 can state it. 18 checks; the D-e4 property proved over the full input space. **OWED BY E9: the decision is returned but not yet SHOWN** -- a DM that is quietly unencrypted is the E10 failure, and the notice text exists (`dmEncryptionNotice`) but has no surface. **PENDING: E4-a, E4-b.** |
 | E5 | Decrypt and render encrypted timeline events | landed (text) | `2f8788f` | Fixes G-e4 -- `classify()` would have padlocked every SUCCESSFULLY decrypted message. `client/decryptionState.ts` explains WHY a message is unreadable and whether the user can fix it; the placeholder string is gone from the tree. 22 checks, incl. the taxonomy verified complete against the installed SDK enum. **Attachments (H3) still owed** -- moves with E6. **PENDING: E5-a, E5-b.** |
 | E6 | Encrypted attachments | DEFERRED | | H3 + D1 + D-e3. Read `content.file`, decrypt, feed the existing blob cache; downscale once on receipt for the thumbnail the server will never provide. Upload side encrypts before upload. |
 | E7 | Device verification UI | todo | | Emoji SAS. See your own devices, verify a new one, see whether the person you are talking to is verified. NOT deferrable -- see the premise section. |
@@ -400,6 +400,11 @@ This box is headless; nothing below has been seen in a browser.
   stays, turns red, and says encryption could not be set up -- rather than
   spinning forever or vanishing silently.
 - **E1-f** The title renders with its spacing intact: `A r gh   the  Ke  y    s`.
+- **E4-a** A new DM with a person is created encrypted, and one with a bridge
+  bot is created in the clear with the reason shown.
+- **E4-b** The encrypted DM is readable by BOTH parties -- the guard prevents
+  the case where one side sends into the void, but only a live conversation
+  proves the ordinary case works.
 - **E5-a** In a real encrypted DM, decrypted messages render as MESSAGES, not
   as padlocks (G-e4's regression, the one this step exists to prevent).
 - **E5-b** An undecryptable message shows its reason, and an actionable one

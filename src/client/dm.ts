@@ -1,4 +1,5 @@
 import { EventType, Preset, Visibility, type MatrixClient } from 'matrix-js-sdk'
+import { decideDmEncryption, willEncrypt, type DmEncryptionDecision } from './dmEncryption'
 
 // ---------------------------------------------------------------------------
 // W3.8 -- direct messages.
@@ -69,11 +70,52 @@ export interface StartDmResult {
   roomId: string
   // True when an existing DM was reused rather than a new room created.
   existing: boolean
+  // Why this DM is or is not encrypted. Null when an existing room was reused,
+  // because its encryption was settled when it was created and nothing here
+  // decided it -- reporting a fresh decision for a room we did not create
+  // would describe a choice that was never made.
+  encryption: DmEncryptionDecision | null
+}
+
+// Can this user receive encrypted messages at all?
+//
+// The D-e4 capability check, expressed as the question with a real answer
+// rather than as a list of accounts to skip. A lookup failure returns
+// `known: false`, NOT a count of zero -- see decideDmEncryption for why the
+// two must not collapse.
+async function recipientCryptoCapability(
+  client: MatrixClient,
+  userId: string,
+): Promise<{ known: boolean; deviceCount: number }> {
+  const crypto = client.getCrypto()
+  if (!crypto) return { known: false, deviceCount: 0 }
+  try {
+    // downloadUncached: we have very likely never spoken to this person, so
+    // the local cache is empty and reading it would answer "no devices" for
+    // every first conversation -- the exact false negative that would leave
+    // every new DM unencrypted while looking like a considered decision.
+    const devices = await crypto.getUserDeviceInfo([userId], true)
+    return { known: true, deviceCount: devices.get(userId)?.size ?? 0 }
+  } catch (err) {
+    // Reported, never swallowed (G-tc05).
+    console.error('[dm] could not read the recipient device list', err)
+    return { known: false, deviceCount: 0 }
+  }
 }
 
 export async function startDm(client: MatrixClient, userId: string): Promise<StartDmResult> {
   const existing = findExistingDm(client, userId)
-  if (existing) return { roomId: existing, existing: true }
+  if (existing) return { roomId: existing, existing: true, encryption: null }
+
+  // NEW DMs only. An existing conversation is never silently upgraded: a room
+  // that becomes encrypted mid-history has two halves that mean different
+  // things, and the user is the one who gets to decide that (D-e5).
+  const capability = await recipientCryptoCapability(client, userId)
+  const encryption = decideDmEncryption({
+    cryptoAvailable: !!client.getCrypto(),
+    recipientDeviceCount: capability.deviceCount,
+    recipientDevicesKnown: capability.known,
+  })
 
   const { room_id: roomId } = await client.createRoom({
     is_direct: true,
@@ -83,10 +125,25 @@ export async function startDm(client: MatrixClient, userId: string): Promise<Sta
     preset: Preset.TrustedPrivateChat,
     visibility: Visibility.Private,
     invite: [userId],
+    // Encryption is set AT CREATION, as initial state, so there is no window
+    // in which the room exists and is readable by the server. Turning it on
+    // afterwards would leave the invite and any racing first message in the
+    // clear.
+    ...(willEncrypt(encryption)
+      ? {
+          initial_state: [
+            {
+              type: EventType.RoomEncryption,
+              state_key: '',
+              content: { algorithm: 'm.megolm.v1.aes-sha2' },
+            },
+          ],
+        }
+      : {}),
   })
 
   // Written AFTER creation and awaited: if this fails the room exists but is
   // not a DM anywhere, which the caller needs to be able to say.
   await addToDirectMap(client, userId, roomId)
-  return { roomId, existing: false }
+  return { roomId, existing: false, encryption }
 }
