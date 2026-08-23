@@ -5,6 +5,7 @@ import {
   type CryptoLoadState,
 } from './cryptoProgress'
 import { isSilentAction, type CryptoIdentityFacts, type IdentityAction } from './cryptoIdentity'
+import type { KeyBackupFacts } from './keyBackup'
 
 // ---------------------------------------------------------------------------
 // Bringing up the Rust crypto engine, and showing the user that it is
@@ -237,5 +238,34 @@ export async function applySilentIdentityAction(
   } catch (err) {
     console.error('[crypto] non-destructive cross-signing setup failed', err)
     return false
+  }
+}
+
+// Connect this session to an EXISTING key backup, if there is one.
+//
+// Strictly non-destructive: `checkKeyBackupAndEnable` reads what is on the
+// server and starts using it. It cannot create or replace a version -- the
+// call that replaces one deletes the keys in the old version (G-e1), and lives
+// with the gated reset, never here.
+//
+// Returns the facts rather than a boolean, so callers can tell "no backup
+// exists" from "we could not find out". Those need different sentences.
+export async function connectKeyBackup(client: MatrixClient): Promise<KeyBackupFacts | null> {
+  const crypto = client.getCrypto()
+  if (!crypto) return null
+  try {
+    const check = await crypto.checkKeyBackupAndEnable()
+    const activeVersion = await crypto.getActiveSessionBackupVersion()
+    return {
+      backupExists: !!check,
+      backupTrusted: check?.trustInfo?.trusted ?? false,
+      activeVersion,
+    }
+  } catch (err) {
+    // Reported, never swallowed (G-tc05). Null is "unknown", which callers
+    // must not render as "no backup" -- that would tell a protected user they
+    // are at risk, and an at-risk user nothing at all.
+    console.error('[crypto] could not check the key backup', err)
+    return null
   }
 }

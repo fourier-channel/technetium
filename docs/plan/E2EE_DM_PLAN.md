@@ -18,7 +18,7 @@
 | campaign | e2ee-dms |
 | branch | `e2ee-dms`, cut off `main` at `41bd9b4` |
 | base | `main` at the interactions-v1 merge, deployed 2026-08-23 |
-| tsc / lint / check / build | CLEAN / 23 (HOLD) / 1110 / PASSING |
+| tsc / lint / check / build | CLEAN / 23 (HOLD) / 1124 / PASSING |
 | deploys | operator's call, `./deploy.sh` only |
 
 ---
@@ -365,7 +365,7 @@ E6 is deferred -- with an honest placeholder, per E5.
 | E5 | Decrypt and render encrypted timeline events | landed (text) | `2f8788f` | Fixes G-e4 -- `classify()` would have padlocked every SUCCESSFULLY decrypted message. `client/decryptionState.ts` explains WHY a message is unreadable and whether the user can fix it; the placeholder string is gone from the tree. 22 checks, incl. the taxonomy verified complete against the installed SDK enum. **Attachments (H3) still owed** -- moves with E6. **PENDING: E5-a, E5-b.** |
 | E6 | Encrypted attachments | DEFERRED | | H3 + D1 + D-e3. Read `content.file`, decrypt, feed the existing blob cache; downscale once on receipt for the thumbnail the server will never provide. Upload side encrypts before upload. |
 | E7 | Device verification UI | todo | | Emoji SAS. See your own devices, verify a new one, see whether the person you are talking to is verified. NOT deferrable -- see the premise section. |
-| E8 | Key backup | todo | | `checkKeyBackupAndEnable`. Mostly already true server-side for existing users; the client work is enabling it and never calling reset by accident. |
+| E8 | Key backup (connect) | landed | `<e8>` | `client/keyBackup.ts` (pure, 14 checks) + `connectKeyBackup`. Strictly non-destructive -- it can connect to an existing backup, never create or replace one. Only ONE state claims the keys are safe: a backup that exists but this session is not connected to protects only what is already in it. The source guard now covers `resetKeyBackup`/`deleteKeyBackupVersion`/`disableKeyStorage` too, not just the cross-signing option. **OWED: creating a backup for an account that has none needs a recovery key, so it moves with E3.** **PENDING: E8-a.** |
 | E9 | Encryption is VISIBLE | landed | `e507b27` | `m.room.encryption` removed from the hidden list and PINNED visible by a check, with its neighbours asserted still hidden so the carve-out cannot become a hole. `ui/RoomShieldBadge.tsx` in the header, driven by E10's `roomShield`. Deliberately absent on content rooms -- a "not encrypted" badge on every one is noise that trains people to ignore it where it matters. **OWED: `dmEncryptionNotice` still has no surface.** **PENDING: E9-a.** |
 | E10 | Degrade honestly when crypto is unavailable | landed | `e507b27` | `client/roomShield.ts` (pure, 20 checks). The law proved over the full input space: **privacy is never claimed while crypto is unavailable.** Adds `unverifiable` -- a room marked encrypted that we cannot decrypt or check is neither private NOR plainly unencrypted, and reporting either is a false claim. The two warnings ("someone cannot read you" / "someone may not be who you think") stay distinct. |
 | E11 | The destructive reset, gated | todo | | D-e1 + D-e2 + G-e1 + G-e2. Type-your-Matrix-ID confirm with the ID displayed; mandatory key export first; honest copy about what is and is not lost. Last, because everything else exists to keep users out of it. |
@@ -400,6 +400,8 @@ This box is headless; nothing below has been seen in a browser.
   stays, turns red, and says encryption could not be set up -- rather than
   spinning forever or vanishing silently.
 - **E1-f** The title renders with its spacing intact: `A r gh   the  Ke  y    s`.
+- **E8-a** On an account with an existing backup, the session connects to it
+  and reports `active` rather than `present-disconnected`.
 - **E9-a** The shield badge renders in an encrypted DM's header, is absent on
   content rooms, and the `m.room.encryption` event now appears in the log.
 - **E4-a** A new DM with a person is created encrypted, and one with a bridge

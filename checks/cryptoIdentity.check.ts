@@ -202,6 +202,10 @@ console.log('\n-- the destructive flag exists in exactly one place --')
   // all, so that a future edit flipping a boolean is impossible rather than
   // merely unlikely. When E11 lands, the reset module is the ONE file allowed
   // to appear in this list.
+  // Every SDK call that destroys keys, not just the cross-signing one.
+  // resetKeyBackup REPLACES an existing backup, and replacing one deletes the
+  // keys in the old version (G-e1) -- so it belongs behind the same gate.
+  const DESTRUCTIVE = ['setupNewCrossSigning', 'resetKeyBackup', 'deleteKeyBackupVersion', 'disableKeyStorage']
   const ALLOWED = ['src/client/cryptoReset.ts']
   const roots = ['src/client', 'src/ui', 'src/onboarding', 'src/App.tsx', 'src/main.tsx']
   const offenders: string[] = []
@@ -210,10 +214,11 @@ console.log('\n-- the destructive flag exists in exactly one place --')
     if (!st) return
     if (st.isDirectory()) { for (const e of readdirSync(p)) walk(p + '/' + e); return }
     if (!/\.tsx?$/.test(p) || ALLOWED.includes(p)) return
-    if (readFileSync(p, 'utf8').includes('setupNewCrossSigning')) offenders.push(p)
+    const src = readFileSync(p, 'utf8')
+    for (const d of DESTRUCTIVE) if (src.includes(d)) offenders.push(`${p} :: ${d}`)
   }
   roots.forEach(walk)
-  check('no non-reset module can pass setupNewCrossSigning',
+  check('no non-reset module can name a key-destroying call',
     offenders.length === 0, offenders)
 }
 

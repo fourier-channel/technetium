@@ -10,7 +10,14 @@ import type { MatrixClient } from 'matrix-js-sdk'
 import { saveSession, loadSession, clearSession } from './session'
 import { buildClient, startAndWaitForSync } from './buildClient'
 import { createTokenRefreshFunction } from './tokenRefresher'
-import { e2eeEnabled, initCrypto, observeCryptoIdentity, applySilentIdentityAction } from './crypto'
+import {
+  e2eeEnabled,
+  initCrypto,
+  observeCryptoIdentity,
+  applySilentIdentityAction,
+  connectKeyBackup,
+} from './crypto'
+import type { KeyBackupFacts } from './keyBackup'
 import { CRYPTO_LOAD_IDLE, type CryptoLoadState } from './cryptoProgress'
 import {
   decideIdentityAction,
@@ -51,6 +58,10 @@ interface ClientContextValue {
   // The facts behind that decision, for surfaces that need more than the verb
   // (whether history is readable, whether a backup exists).
   identityFacts: CryptoIdentityFacts | null
+  // Whether this account's conversations would survive losing this device
+  // (E8). Null means we could not find out -- which callers must NOT render as
+  // "no backup", since that tells a protected user they are at risk.
+  keyBackup: KeyBackupFacts | null
   login: (homeserver?: string) => Promise<void>
   logout: () => void
 }
@@ -85,6 +96,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
   const [cryptoLoad, setCryptoLoad] = useState<CryptoLoadState>(CRYPTO_LOAD_IDLE)
   const [identityAction, setIdentityAction] = useState<IdentityAction | null>(null)
   const [identityFacts, setIdentityFacts] = useState<CryptoIdentityFacts | null>(null)
+  const [keyBackup, setKeyBackup] = useState<KeyBackupFacts | null>(null)
 
   // Bootstrap on mount: finish an in-progress login, resume a stored session,
   // or fall through to awaiting_login.
@@ -129,7 +141,13 @@ export function ClientProvider({ children }: { children: ReactNode }) {
       // Identity work only once the engine is actually up. Reading the account
       // through a half-initialised client is how a fresh device concludes that
       // no identity exists (E2).
-      if (up) await settleIdentity(c)
+      if (up) {
+        await settleIdentity(c)
+        // Connect to an EXISTING backup. Strictly non-destructive: this cannot
+        // create or replace a version, and replacing one destroys the keys in
+        // the old one (G-e1).
+        setKeyBackup(await connectKeyBackup(c))
+      }
     }
 
     setClient(c)
@@ -293,6 +311,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     cryptoLoad,
     identityAction,
     identityFacts,
+    keyBackup,
     error,
     userId,
     login,
