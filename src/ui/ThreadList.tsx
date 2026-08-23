@@ -4,6 +4,8 @@ import { useFlipList, flipIdOf, type FlipControl } from './flip'
 import { usePopOnIncrease } from './pop'
 import { useReducedMotion } from './reducedMotion'
 import { stepFocus, trackOffset, visualDistance } from './carousel'
+import { formatCardWhen, formatDuration, isRecent } from './threadCardFormat'
+import { useNow } from './useNow'
 import { useDeferredThreadOrder, arrangeByCustom } from './threadOrder'
 import { useThreadDrag } from './threadDrag'
 import { orderScopeKey, loadCustomOrder, saveCustomOrder } from './threadOrderStore'
@@ -33,7 +35,7 @@ const EMPTY_NEW_IDS: ReadonlySet<string> = new Set()
 // The card is a fixed size so the geometry is arithmetic rather than
 // measurement: every card the same width means the focused one can be centred
 // without reading the DOM for each.
-const CAROUSEL_CARD_W = 336
+const CAROUSEL_CARD_W = 348
 const CAROUSEL_GAP = 12
 
 export function ThreadList({
@@ -137,6 +139,10 @@ export function ThreadList({
   // position, each card's scale, what Enter opens -- is derived from it, so
   // there is no second place for "where are we" to disagree with itself.
   const [focus, setFocus] = useState(0)
+  // One clock for the whole list rather than a Date.now() inside each card:
+  // reading the time during render is impure (the compiler rule), and a timer
+  // per card would be dozens of them firing to say the same thing.
+  const now = useNow()
   const [viewportW, setViewportW] = useState(0)
   const stripRef = useRef<HTMLElement>(null)
   const reduced = useReducedMotion()
@@ -379,6 +385,7 @@ export function ThreadList({
               onSelect={onCardSelect}
               getCardHandlers={getCardHandlers}
               index={i}
+              now={now}
               carousel={carousel}
               distance={carousel ? visualDistance(i, focus) : 0}
             />
@@ -402,7 +409,8 @@ function threadTileEqual(a: ThreadTileProps, b: ThreadTileProps): boolean {
     a.getCardHandlers !== b.getCardHandlers ||
     a.carousel !== b.carousel ||
     a.distance !== b.distance ||
-    a.index !== b.index
+    a.index !== b.index ||
+    a.now !== b.now
   )
     return false
   const x = a.item
@@ -437,6 +445,8 @@ interface ThreadTileProps {
   onSelect: (roomId: string, rootId: string, index: number) => void
   getCardHandlers: (id: string) => CardHandlers
   index: number
+  /** Ticking wall clock, passed in because a component may not read one. */
+  now: number
   carousel: boolean
   // How far from the reader's position, capped. Drives the fade and shrink, so
   // the card under the eyes is unmistakably the one in play.
@@ -451,6 +461,7 @@ const ThreadTile = memo(function ThreadTile({
   onSelect,
   getCardHandlers,
   index,
+  now,
   carousel,
   distance,
 }: ThreadTileProps) {
@@ -516,44 +527,70 @@ const ThreadTile = memo(function ThreadTile({
           className="tc-tcard"
         >
           {active && <span className="tc-tcard-reading">reading</span>}
-          <div className="tc-tcard-cover">
-            {isImage ? (
-              <>
-                <AuthedImage mxc={mxc} width={180} roomId={roomId} fill transparentLoading alt={preview} />
-                <MediaTags mxc={mxc} roomId={roomId} variant="chip" max={8} />
-              </>
-            ) : (
-              // No picture: the opening glyph of the thread stands in, so the
-              // cover column is never an empty hole.
-              <span className="tc-tcard-cover-glyph" aria-hidden="true">
-                {'\u{1F5E8}'}
-              </span>
-            )}
-          </div>
-          <div className="tc-tcard-body">
-            <div className="tc-tcard-room">
-              {isNew && <span className="tc-tcard-new">new</span>}
-              {roomName}
+          <div className="tc-tcard-top">
+            <div className="tc-tcard-cover" data-nocover={isImage ? undefined : 'true'}>
+              {isImage ? (
+                <>
+                  <AuthedImage mxc={mxc} width={180} roomId={roomId} fill transparentLoading alt={preview} />
+                  <MediaTags mxc={mxc} roomId={roomId} variant="chip" max={8} />
+                </>
+              ) : (
+                'no\nimage'
+              )}
             </div>
-            {/* An image thread's "subject" is the file's name, because that is
-                all a Matrix root carries. Setting a filename in bold makes it a
-                headline it was never written to be -- and the cover directly
-                beside it already says what the thread is -- so it drops to a
-                quiet caption instead of competing with the picture. */}
+
+            <div className="tc-tcard-main">
+              {/* Room and the thread's start date share a line; the subject gets
+                  the next one to itself, clamped to ONE. Two lines where there
+                  were three, which is the height that made the card fit. */}
+              <div className="tc-tcard-idrow">
+                <span className="tc-tcard-room">{roomName}</span>
+                <span className="tc-tcard-date">{formatCardWhen(createdTs)}</span>
+              </div>
+              <div
+                className={'tc-tcard-title' + (isImage ? ' untitled' : '')}
+                title={preview}
+              >
+                {preview}
+              </div>
+
+              {/* FIRST and LAST on one line in fixed columns, so the two
+                  absolute times sit at the same x on every card in the strip --
+                  which is the only property that makes a row of them
+                  comparable. Matrix gives exactly these two instants. */}
+              <div className="tc-tcard-times">
+                <div className="tc-tcard-tcol">
+                  <span>first</span>
+                  <b>{formatCardWhen(createdTs)}</b>
+                </div>
+                <div className="tc-tcard-tcol">
+                  <span>last</span>
+                  <b>{formatCardWhen(lastTs)}</b>
+                </div>
+              </div>
+
+              <div className="tc-tcard-meters">
+                <StatCluster item={item} />
+              </div>
+            </div>
+
+            {/* Is this thread still happening, and for how long has it been
+                quiet -- one column, because they are one question. The bar the
+                sampling card puts here is capture completion, which a live
+                thread cannot have, so it is deliberately absent. */}
             <div
-              className="tc-tcard-sub"
-              data-kind={isImage ? 'file' : 'text'}
-              title={preview}
+              className="tc-tcard-life"
+              data-live={isRecent(lastTs, now) ? 'true' : 'false'}
+              title="Since the last post"
             >
-              {preview}
+              <span className="tc-tcard-pulse" aria-hidden="true" />
+              <b>{formatDuration(now - lastTs)}</b>
             </div>
-            <div className="tc-tcard-cnt">
-              <StatCluster item={item} />
-            </div>
-            <div className="tc-tcard-foot">
-              <span className="tc-tcard-author">{authorName}</span>
-              <span>{fmt(lastTs)}</span>
-            </div>
+          </div>
+
+          <div className="tc-tcard-foot">
+            {isNew && <span className="tc-tcard-chip tc-tcard-chip-new">new</span>}
+            <span className="tc-tcard-chip tc-tcard-chip-author">{authorName}</span>
           </div>
         </div>
       ) : (
@@ -641,6 +678,7 @@ function StatCluster({ item }: { item: ThreadListItem }) {
         e.stopPropagation()
         setShow((v) => !v)
       }}
+      className="tc-stat"
       style={{ position: 'relative', display: 'inline-flex', gap: 8, minWidth: 0 }}
     >
       <span style={{ fontSize: 10, color: 'var(--cpd-color-text-secondary)', whiteSpace: 'nowrap' }}>

@@ -1907,7 +1907,7 @@ code {
   /* The header is one row now, and the card is the reason the strip exists, so
      the card gets the rest. Budgeted for BOTH, which the first two attempts at
      this number were not. */
-  height: 236px;
+  height: 208px;
   border-bottom: 1px solid rgba(128, 128, 128, 0.25);
   transform: translateY(-100%);
   opacity: 0.6;
@@ -1966,9 +1966,9 @@ code {
 }
 
 .tc-carousel-card {
-  flex: 0 0 336px;
-  width: 336px;
-  height: 152px;
+  flex: 0 0 348px;
+  width: 348px;
+  height: 124px;
   overflow: hidden;
   border-radius: 10px;
   border: 1px solid rgba(128, 128, 128, 0.22);
@@ -2211,119 +2211,6 @@ code {
 /* Reduced motion never mounts a face at all -- FaceFlash checks it before
    playing, so there is nothing here to disable. */
 
-/* ---------------------------------------------------------------------------
-   Thread card, after fourier-sampling's .tcard.
-
-   A square cover, a small accent line saying where it came from, the subject in
-   bold, and a faint line of counts. Adapted rather than copied: there is no
-   board or post number here, so the accent line is the ROOM -- and the counts
-   are this client's own pills, because the archive's present/missing figures
-   describe a capture that can be complete, which a live Matrix thread never is.
-   --------------------------------------------------------------------------- */
-/* position: relative so the "reading" badge anchors to THE CARD. Without it the
-   badge finds the strip as its containing block and pins itself to the corner
-   of the whole thread bar, labelling nothing. */
-.tc-tcard {
-  position: relative;
-  display: flex;
-  gap: 10px;
-  height: 100%;
-  padding: 9px;
-  cursor: pointer;
-  color: var(--cpd-color-text-primary);
-  min-width: 0;
-}
-/* The cover fills the card's full height rather than sitting as a small square
-   in the top corner of a tall column. At 76px in a 134px space it left a hole
-   under itself, which is what made the card look unfinished. */
-.tc-tcard-cover {
-  position: relative;
-  flex: 0 0 134px;
-  width: 134px;
-  height: 100%;
-  border-radius: 6px;
-  overflow: hidden;
-  background: rgba(8, 11, 15, 0.6);
-  display: grid;
-  place-items: center;
-}
-.tc-tcard-cover-glyph {
-  font-size: 34px;
-  opacity: 0.35;
-}
-.tc-tcard-body {
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-/* The accent line: monospace and coloured, so the eye finds the room first --
-   the same job "/board/ 12345" does in the archive. */
-.tc-tcard-room {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-family: var(--tc-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
-  font-size: 11px;
-  color: var(--tc-link, #6ea8fe);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tc-tcard-new {
-  flex-shrink: 0;
-  font-family: inherit;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  padding: 1px 5px;
-  border-radius: 8px;
-  color: var(--cpd-color-text-on-solid-primary, #fff);
-  background: var(--cpd-color-bg-action-primary-rest, #3d7bfd);
-}
-/* The subject. Two lines rather than one: a Matrix thread has no title, so this
-   is the opening message standing in for one, and one line of it is usually not
-   enough to tell two threads apart. */
-.tc-tcard-sub {
-  font-size: 12.5px;
-  font-weight: 600;
-  line-height: 1.32;
-  display: -webkit-box;
-  /* Three, not two: the card is tall enough, and the extra line is what closes
-     the gap that was opening between the subject and the counts. */
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-/* A filename is not a headline. The cover beside it is already the subject. */
-.tc-tcard-sub[data-kind='file'] {
-  font-weight: 400;
-  font-size: 11.5px;
-  color: var(--cpd-color-text-secondary, #9aa4b2);
-}
-.tc-tcard-cnt {
-  margin-top: auto;
-  font-size: 11px;
-  color: var(--cpd-color-text-secondary, #6b7480);
-  min-width: 0;
-}
-.tc-tcard-foot {
-  display: flex;
-  justify-content: space-between;
-  gap: 6px;
-  font-size: 10px;
-  color: var(--cpd-color-text-secondary, #6b7480);
-  opacity: 0.75;
-  min-width: 0;
-}
-.tc-tcard-author {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* The thread reading pane: same arrival as the domain, from the same hook, but
    it keeps a draggable width so it is anchored to the right edge and sized
    inline rather than offset from the left. */
@@ -2354,6 +2241,240 @@ code {
 .tc-carousel-card[data-active='true'][data-distance='3'] {
   opacity: 0.78;
 }
+.tc-tcard-reading {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 8px;
+  color: var(--cpd-color-text-on-solid-primary, #fff);
+  background: var(--tc-link, #6ea8fe);
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Thread card, after fourier-sampling's curate .card.
+
+   The shape is theirs: a small square cover, a column beside it carrying an
+   accent id line with a right-aligned date, a one-line subject, FIRST/LAST in
+   fixed columns, and a meters row -- with a narrow liveness column on the far
+   right and a chip strip along the bottom.
+
+   Three things are adapted rather than copied.
+     - There is no board or post number, so the id line is the ROOM.
+     - The completion bar is absent on purpose. It measures how much of a
+       finished thread has been captured, and a live Matrix thread is never
+       finished, so the bar would be a gauge wired to nothing.
+     - The liveness column asks the same question of the only signal Matrix
+       offers: how long since somebody last posted.
+   --------------------------------------------------------------------------- */
+.tc-tcard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  padding: 9px 10px;
+  cursor: pointer;
+  color: var(--cpd-color-text-primary, #e6e9ef);
+  min-width: 0;
+}
+.tc-tcard-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+  flex: 1;
+}
+.tc-tcard-cover {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  border-radius: 7px;
+  overflow: hidden;
+  object-fit: cover;
+  background: #0b0e12;
+  border: 1px solid rgba(128, 128, 128, 0.22);
+}
+/* Scoped name, not `.nocover`: the sampling repo lost an afternoon to exactly
+   this, where a placeholder reused a global class and inherited an 80px margin
+   that inflated every card in the grid. */
+.tc-tcard-cover[data-nocover='true'] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: pre-line;
+  text-align: center;
+  border-style: dashed;
+  font-family: var(--tc-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 9px;
+  line-height: 1.25;
+  color: var(--cpd-color-text-secondary, #6b7480);
+}
+/* min-width: 0 is load-bearing. Without it a long subject makes this flex item
+   refuse to shrink and pushes the liveness column clean off the card. */
+.tc-tcard-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tc-tcard-idrow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.tc-tcard-room {
+  font-family: var(--tc-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 11px;
+  color: var(--tc-link, #6ea8fe);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tc-tcard-date {
+  font-family: var(--tc-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 10px;
+  color: var(--cpd-color-text-secondary, #6b7480);
+  margin-left: auto;
+  white-space: nowrap;
+}
+.tc-tcard-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* An image root's only "subject" is its filename, which was never written to be
+   a headline -- and the cover beside it already says what the thread is. */
+.tc-tcard-title.untitled {
+  font-weight: 400;
+  font-style: italic;
+  color: var(--cpd-color-text-secondary, #6b7480);
+}
+
+.tc-tcard-times {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 116px));
+  gap: 0 6px;
+  align-items: baseline;
+  font-size: 10px;
+  font-family: var(--tc-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
+}
+.tc-tcard-tcol {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+.tc-tcard-tcol > span {
+  font-family: var(--tc-ui-font, inherit);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #4d5663;
+  flex: 0 0 26px;
+}
+.tc-tcard-tcol > b {
+  color: var(--cpd-color-text-secondary, #9aa4b2);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tc-tcard-meters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-top: auto;
+}
+/* The counts as one dark pill, the way the sampling card sets its own counts
+   apart from the text around them. */
+.tc-tcard-meters .tc-stat {
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: rgba(35, 48, 63, 0.55);
+}
+
+/* Liveness and elapsed time, one narrow column on the right. */
+.tc-tcard-life {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding-left: 2px;
+}
+.tc-tcard-life > b {
+  font-family: var(--tc-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--cpd-color-text-secondary, #6b7480);
+}
+.tc-tcard-life[data-live='true'] > b {
+  color: #7ee0c0;
+}
+.tc-tcard-pulse {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #0a1f16;
+  border: 2px solid #2c5346;
+}
+.tc-tcard-life[data-live='true'] .tc-tcard-pulse {
+  border-color: #7ee0c0;
+  box-shadow: 0 0 8px rgba(126, 224, 192, 0.45);
+}
+
+.tc-tcard-foot {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+.tc-tcard-chip {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: #23303f;
+  color: var(--cpd-color-text-secondary, #9aa4b2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tc-tcard-chip-new {
+  background: var(--cpd-color-bg-action-primary-rest, #3d7bfd);
+  color: var(--cpd-color-text-on-solid-primary, #fff);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.tc-tcard-chip-author {
+  background: transparent;
+  border: 1px solid rgba(128, 128, 128, 0.28);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 10px;
+  min-width: 0;
+}
+
 .tc-tcard-reading {
   position: absolute;
   top: 6px;
