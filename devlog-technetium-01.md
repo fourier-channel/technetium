@@ -3413,3 +3413,161 @@ tsc clean, lint at the 23 baseline, build passing. Checks 951 -> 981, the new
 ones covering the two formats -- durations that never print three units or a
 negative, and timestamps that are the same WIDTH for any date, since equal width
 is what the aligned columns actually depend on.
+
+---
+
+## 2026-08-23 (later) -- e2ee-dms: the premise was wrong, and that was the finding
+
+Opened the encryption campaign, and the first real work was not code. The
+ledger had been written on the premise "add encryption to a client that has
+none". Checking the deployed server rather than assuming it replaced that
+premise outright: users arriving at this client overwhelmingly ALREADY hold a
+cross-signing identity and a live key backup, made by another client that
+encrypts DMs by default. Human-to-human DMs here are already encrypted.
+Technetium is the LAST client on this network to adopt E2EE, not the first.
+
+That reorders everything. The dangerous call stops being "set encryption up"
+and becomes "set encryption up on an account that already has it", which is
+the same call wearing the same word. Bootstrapping cross-signing with the
+SDK's reset option against an existing identity replaces working credentials
+and orphans every key in the user's backup.
+
+Three consequences fell straight out of it. Device verification left the
+deferred pile, because a fresh login is an unverified device on an account
+that already has cross-signing and therefore receives no room keys. The
+"encrypt every new DM" step turned out to be a bug as written -- it would have
+broken DMs with the bridge bots, which is the onboarding path. And "should we
+offer to encrypt existing DMs" stopped being hypothetical in the other
+direction: there were no human plaintext DMs left to offer it on.
+
+### Two things the documentation says that are not true
+
+**A docstring that lies about deleting keys.** Synapse's
+`delete_e2e_room_keys_version` carries the line "Doesn't delete their actual
+key data." The transaction underneath it runs a delete against the room-keys
+table before flagging the version deleted. Every deleted backup version on the
+deployed server holds zero keys, against thirty-seven in a live one. Anyone
+reading upstream's own documentation would build the opposite safety
+assumption and ship a reset flow that quietly incinerates history.
+
+**A method that stays true after it stops being true.**
+`MatrixEvent.isEncrypted()` reads the WIRE event type, so it remains true
+forever after a message decrypts perfectly well. The timeline's classifier
+tested `getType() === 'm.room.encrypted' || ev.isEncrypted()`, which means
+every SUCCESSFULLY decrypted message would have kept rendering as the padlock,
+with the SDK insisting decryption was working. The moment encryption switched
+on, whole conversations would have looked broken while nothing was wrong.
+
+The second was found by reading the SDK, not in a browser, and that is the
+whole point: in a browser the symptom points nowhere near the cause. The
+correct tests are `isDecryptionFailure()` and `isBeingDecrypted()`;
+`getType()` returns the CLEAR type once decrypted and stops saying
+`m.room.encrypted` at exactly the right moment.
+
+### Proving the thing that cannot be undone
+
+The identity decision is a pure function over six observed facts, and its
+checks enumerate all 96 reachable states rather than testing examples. Four
+properties hold across every one of them: a reset is permitted for exactly one
+decision; a reset is never reached while any non-destructive route remains; an
+identity is never created over an existing one; and an account with no
+identity is never sent to a recovery prompt for a key that does not exist.
+
+An example test proves the case you thought of. The states worth worrying
+about here are the ones nobody writes an example for.
+
+Underneath that sits a source-level guard: the four SDK calls that destroy
+keys may not be NAMED in any module outside the gated reset. Not "passed as
+false" -- absent, so a future edit cannot flip a boolean. It failed on first
+run against two of my own comments, which is why neither comment says those
+words any more.
+
+### Reading is not a zero, and unknown is not a no
+
+The same distinction came up three times in one night, in three unrelated
+modules, which is usually a sign it is the real rule.
+
+A failed device lookup is not "they have no keys". A crypto state we could not
+read is not "no identity exists". A backup we could not check is not "no
+backup". Each of those collapses would produce a confident, wrong sentence
+about someone's privacy -- and in two of the three, the wrong sentence is the
+one that makes a destructive act look safe.
+
+So every one of them gets its own outcome and its own words. The device lookup
+uses `downloadUncached` for the same reason: on a first conversation the local
+cache is empty, and reading it would answer "no devices" for every new DM,
+leaving them all unencrypted while looking like a considered decision.
+
+### What we are allowed to claim
+
+A padlock is cheap to draw and enormously expensive to be wrong about.
+Somebody who believes a conversation is end-to-end encrypted will say things
+in it they would not otherwise say.
+
+So "the room has an encryption state event" is not sufficient grounds to draw
+one. With our own engine down we cannot decrypt, cannot check the recipients,
+and cannot tell a working encrypted room from a broken one. That produced a
+fourth shield state -- unverifiable -- which is neither private nor plainly
+unencrypted, because reporting either would be false in a different direction.
+One tells the user to trust it; the other tells them the server can read
+messages the server in fact cannot.
+
+The badge deliberately does not appear on content rooms. A "not encrypted"
+badge on every one of them is noise that trains people to ignore the badge in
+the one place it matters, and content rooms are unencrypted by design.
+
+### The engine, and a meter that would have lied
+
+The crypto wasm is 5.58MB on disk and 1.9MB gzipped on the wire, served
+immutable under a content-hashed name -- so it is fetched once, effectively
+ever. A fresh build reproduces the deployed filename byte for byte, which is
+as close to proving that as a headless box can get.
+
+Showing its arrival needed two things the SDK does not offer. There is no
+progress hook, and the URL cannot be named from our source at all: the crypto
+package's exports map has no subpaths, so importing the wasm with `?url` is a
+hard build error. Verified, not assumed. So the URL is never named -- `fetch`
+is wrapped for the duration of the load, the one response ending in `.wasm` is
+teed through a byte counter, and `fetch` is restored in a `finally`.
+
+The alternative was aliasing the asset in the Vite config and prefetching it
+by URL, which emits the file down a second path and warms a URL the SDK may
+not be the one asking for. A meter measuring a different download than the one
+being waited on is worse than no meter.
+
+And the denominator lies: `Content-Length` is the COMPRESSED length while the
+stream yields DECODED bytes, so the obvious meter runs to about 290%. The true
+size is a constant, and a check reads the real asset out of `node_modules` and
+compares -- drift fails the gate rather than shipping a bar that aims wrong
+without ever throwing.
+
+### The harness noticing
+
+Extending the classifier broke four check files, because their `MatrixEvent`
+doubles did not implement the methods it now calls. They threw rather than
+misclassifying, which is the harness working: a double that silently returned
+undefined would have passed while the real interface had moved underneath it.
+
+One check in the shield batch failed against correct code -- the assertion
+tested a string I had not written. The copy was right and the test was wrong,
+so the test changed.
+
+### Gates
+
+tsc clean, lint at the 23 baseline throughout, build passing. Checks 981 ->
+1124, essentially all of them properties over whole input spaces rather than
+examples, because this is the part of the client where being wrong is
+permanent.
+
+Seven steps landed behind a default-off flag: the engine and its arrival, the
+identity decision, encrypted DM creation with the capability guard, the
+decryption taxonomy, key-backup connection, visibility, and honest
+degradation. Recovery-key entry and device verification are next, and they are
+the two that most need a human looking at them, which is why they were not
+started unattended.
+
+Draft nodes for later minting: G-e1 (the docstring that lies about deleting
+keys), G-e2 (resetting cross-signing does not make old messages unreadable),
+G-e3 (the progress meter with no hook and a lying denominator), G-e4
+(`isEncrypted()` after successful decryption); D-e1..D-e8 (the operator's
+rulings, recorded in the campaign ledger).

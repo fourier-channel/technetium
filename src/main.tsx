@@ -24,11 +24,13 @@ import '@fontsource/space-grotesk/700.css'
 import './index.css'
 import App from './App.tsx'
 import { ClientProvider } from './client/ClientContext'
+import { CryptoArrivalHost } from './onboarding/CryptoArrivalHost'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ClientProvider>
       <App />
+      <CryptoArrivalHost />
     </ClientProvider>
   </StrictMode>,
 )

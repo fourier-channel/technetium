@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { EventType, RoomStateEvent, type MatrixClient, type Room } from 'matrix-js-sdk'
 import { useRoomListSettings } from './roomListSettings'
+import { RoomShieldBadge } from './RoomShieldBadge'
 
 // ---------------------------------------------------------------------------
 // W3.2 -- the room title line: name, joined member count, and topic.
@@ -50,6 +51,10 @@ export function RoomHeaderInfo({ client, room }: { client: MatrixClient | null; 
       <span className="tc-room-header-name" title={label}>
         {label}
       </span>
+      {/* Sits next to the name, not at the end: the privacy of a conversation
+          is part of what the conversation IS, and a badge after the topic gets
+          pushed off the end of a long one. */}
+      <RoomShieldBadge room={room} />
       {count > 0 && (
         <span className="tc-room-header-count" title={`${count} joined`}>
           {count}

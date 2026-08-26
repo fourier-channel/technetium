@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ThreadEvent, type IContent, type Room, type MatrixEvent } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
+import { explainUnreadable } from '../client/decryptionState'
 import { useTimeline, type TimelineItem, type GalleryLayout } from '../client/useTimeline'
 import type { ReplyRef } from '../client/relations'
 import { eventPreview } from '../client/eventPreview'
@@ -113,8 +114,8 @@ function onSpoilerKey(e: React.KeyboardEvent) {
 }
 
 // Read-only timeline. Message bodies render sanitized rich HTML (via DOMPurify)
-// when present, else plaintext. Encrypted events show a placeholder until the
-// crypto phase.
+// when present, else plaintext. Events we could not decrypt render the REASON
+// they are unreadable, not a bare padlock (see client/decryptionState).
 export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadList }: { room: Room; onOpenThread?: (roomId: string, rootId: string) => void; threadListOpen?: boolean; onToggleThreadList?: () => void }) {
   const { client } = useClient()
   const { items, loadOlder, loadingOlder, atStart } = useTimeline(client, room)
@@ -561,7 +562,27 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
     // toItems and would otherwise render as `[m.poll.start]`.
     body = <PollBody client={client} room={client?.getRoom(event.getRoomId() ?? '') ?? null} event={event} />
   } else if (kind === 'encrypted') {
-    body = <span style={{ fontStyle: 'italic', opacity: 0.7 }}>🔒 Encrypted (decryption coming later)</span>
+    // Not "Encrypted" -- WHY it is unreadable, and whether the user can do
+    // anything about it (D-tp16). An unreadable message and a lost message look
+    // identical from where the reader sits, so the difference between "verify
+    // this device" and "this can never be recovered" has to be on the row.
+    // Whether anything could have decrypted this. With the engine absent the
+    // row must say so, not report a failure that never happened (E10).
+    const why = explainUnreadable(event.decryptionFailureReason, !!client?.getCrypto())
+    body = (
+      <span
+        style={{
+          fontStyle: 'italic',
+          opacity: why.outlook === 'pending' ? 0.55 : 0.75,
+          color:
+            why.outlook === 'actionable'
+              ? 'var(--cpd-color-text-critical-primary, #d6483b)'
+              : undefined,
+        }}
+      >
+        {why.outlook === 'pending' ? '🔓' : '🔒'} {why.text}
+      </span>
+    )
   } else if (kind === 'redacted') {
     body = <span style={{ fontStyle: 'italic', opacity: 0.6 }}>(message deleted)</span>
   } else {

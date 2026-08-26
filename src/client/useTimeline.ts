@@ -161,8 +161,19 @@ export interface ToItemsOptions {
 
 function classify(ev: MatrixEvent): TimelineItemKind {
   if (ev.isRedacted()) return 'redacted'
-  // Encrypted but not yet decrypted (crypto is a later phase) -> placeholder.
-  if (ev.getType() === 'm.room.encrypted' || ev.isEncrypted()) return 'encrypted'
+  // ONLY events we could not decrypt render as the padlock.
+  //
+  // The obvious test is wrong, and was wrong here until E5. `isEncrypted()`
+  // reads the WIRE type, so it stays true forever after a SUCCESSFUL
+  // decryption -- meaning every decrypted message would have kept rendering as
+  // "Encrypted", with the SDK insisting decryption worked. `getType()` is the
+  // opposite: it returns the CLEAR type once decrypted, so it stops saying
+  // `m.room.encrypted` at exactly the right moment.
+  //
+  // So: a decryption failure is a padlock; an event still in flight is a
+  // padlock; a decrypted event is simply its own kind.
+  if (ev.isDecryptionFailure() || ev.isBeingDecrypted()) return 'encrypted'
+  if (ev.getType() === 'm.room.encrypted') return 'encrypted'
   if (ev.getType() === 'm.room.message') return 'message'
   // Without this these fall through to the unknown-type branch and render as
   // the literal string `[m.room.member]`.

@@ -64,6 +64,11 @@ console.log('\n-- ignore filtering at toItems (W4.4) --')
     getTs: () => 1,
     getType: () => 'm.room.message',
     isRedacted: () => false,
+    // classify() asks these too; a double that omits them throws
+    // rather than being classified, which is the harness noticing that the
+    // real interface moved (E5).
+    isDecryptionFailure: () => false,
+    isBeingDecrypted: () => false,
     isEncrypted: () => false,
     getContent: () => ({ msgtype: 'm.text', body }),
     getOriginalContent: () => ({ msgtype: 'm.text', body }),

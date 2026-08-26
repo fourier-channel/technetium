@@ -16,6 +16,13 @@
 //     wrong: m.room.message and m.room.member are the whole point of the
 //     client, so this one is enumerated on purpose.
 //
+// One event was REMOVED from this list rather than added to it (O-e1).
+// `m.room.encryption` is the single room-config event with a security meaning:
+// it is the moment a conversation's privacy changed, and it is irreversible.
+// Hiding it made that change invisible, which is the same failure as hiding an
+// error. Everything else here is furniture; that one is a fact about who can
+// read you.
+//
 // Anything unrecognised stays VISIBLE. Hiding by default whatever we failed to
 // classify is how a real event disappears and nobody finds out for a month.
 //
@@ -34,7 +41,6 @@ const ROOM_CONFIG = new Set([
   'm.room.guest_access',
   'm.room.canonical_alias',
   'm.room.related_groups',
-  'm.room.encryption',
   'm.room.pinned_events',
   'm.room.tombstone',
   'm.room.create',
