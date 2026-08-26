@@ -446,6 +446,26 @@ encrypted:
   conversations here. Silence would be the dishonest option (E10).
 - `m.room.encryption` is now visible in the log where it was hidden (O-e1).
 
+## Standing law added during this campaign
+
+**NO BRANCHES. Commit to `main`.** Ruled by the operator 2026-08-26,
+superseding "trunk-based, ONE integration branch, merge at approved
+boundaries". Recorded HERE as well as in CLAUDE.md because CLAUDE.md is
+gitignored and does not travel with the repo.
+
+Every step is a gated commit straight onto `main`, pushed after each one.
+
+The reason, which is the part that matters: a branch lets a later session
+treat earlier work as somebody else's finished artifact -- "that other
+branch's work" -- and defer to it rather than judge it, when it was the same
+operator and the same assistant a day earlier. Work parked on a branch
+acquires a false authority the moment it stops being visibly in progress.
+
+The gate does the job the branch was pretending to do. If a step is not safe
+to put on `main` it is not finished, and a flag defaulted OFF is how an
+unfinished feature ships without shipping -- which is exactly how this
+campaign's seven landed steps sit on `main` today.
+
 ## Operator-side items -- the human-fingers batch
 
 Not client work, and deliberately grouped: the operator handles these in one
