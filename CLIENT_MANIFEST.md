@@ -196,3 +196,35 @@ so a later lift is a move, not a rewrite.
 **Dev server:** runs in a persistent `tmux` session (`vite`) on vesper; port 5173
 forwarded manually via VS Code PORTS tab (tmux decouples it from VS Code's
 auto-forward).
+
+---
+
+## 8. Desktop shell (`electron/`) -- added 2026-08-19
+
+The shell is a **separate npm package** under `electron/`, with its own
+`package.json`, lockfile, `node_modules` and `.gitignore`. The root manifest is
+deliberately untouched. Two reasons, and the second is the load-bearing one:
+
+1. Under wrapper A the shell shares no code with the SPA -- it loads the deployed
+   origin, so it has no build-time relationship to `src/` at all.
+2. `package.json` / `package-lock.json` are the worst merge conflicts a repo can
+   produce, and UI work runs concurrently on other branches. Keeping shell
+   dependencies out of the root manifest means the shell merges as a pure file
+   addition, with nothing to resolve.
+
+| Package | Version | Rationale |
+|---|---|---|
+| `electron` | `^43.4.0` | The desktop runtime. Chosen over Tauri because the org already runs Electron (`fourier-synthesis`) and its packaging lessons transfer; Tauri would add Rust to a TypeScript codebase to save binary size we are not paying for. **Version is not incidental:** `^32` was pinned first and `npm audit` reported four high-severity Electron advisories plus a transitive `extract-zip` path traversal. Only recent majors get security backports. `^43.4.0` audits clean. Re-check on every bump -- this dependency ships to users' machines. |
+
+**No C#/.NET, and no second binary.** The context-menu verb points at
+`Technetium.exe` itself with `MultiSelectModel=Player`, which hands the whole
+selection to one invocation instead of spawning a process per file. That was the
+only thing a separate native helper was buying. An `IExplorerCommand` handler in
+a signed MSIX would buy the Windows 11 *primary* menu, and only that -- deferred,
+and explicitly not required.
+
+**Build/run split (G-29ec55, A-0d0fa5):** vesper can PACKAGE Electron but cannot
+RUN it -- the GTK/ATK libraries are absent. `electron-builder` only repacks
+prebuilt binaries, so it needs no display. Anything that has to be *seen* runs on
+CABAL or in the `claude-sandbox` VM. Corollary: `npm start` is not a command that
+works on vesper, by design of the machine, not of this package.
