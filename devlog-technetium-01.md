@@ -3571,3 +3571,100 @@ keys), G-e2 (resetting cross-signing does not make old messages unreadable),
 G-e3 (the progress meter with no hook and a lying denominator), G-e4
 (`isEncrypted()` after successful decryption); D-e1..D-e8 (the operator's
 rulings, recorded in the campaign ledger).
+
+---
+
+## 2026-08-26 -- everything on main, and one branch too many
+
+Merged the campaign and every other outstanding branch to `main`, then
+removed branches from the project entirely.
+
+### What "default off" did not mean
+
+The merge question was asked before the merge rather than after, which is the
+only reason the next part was caught. E2EE sits behind `VITE_E2EE`, off by
+default, so merging looked inert. It was not. Three things changed for every
+user with the flag off, and all three landed on DMs that another client had
+already encrypted: the unreadable-row text, a new red badge in the header, and
+`m.room.encryption` becoming visible in the log.
+
+The badge and the log change were intended. The row text was a regression,
+and a self-inflicted one. Rows said "This message could not be decrypted" --
+but with no engine present nothing had ATTEMPTED to decrypt them. That
+describes an event that did not happen and implies a fault where there is only
+an unshipped feature.
+
+The fix was a fifth outlook, `unavailable`, rather than letting "there is no
+decryptor" fall into the same bucket as "the decryptor failed". This campaign
+has refused that collapse everywhere else -- a failed lookup is not a zero, an
+unreadable crypto state is not an absent one -- and the flag-off path deserved
+the same treatment. It short-circuits before consulting the failure code,
+because with no engine every per-code reason is not unknown but inapplicable.
+
+The flag was also PINNED. `VITE_E2EE=0` now sits in `.env.production` with its
+precondition written beside it, because it previously appeared in neither env
+file: the only record that it must stay off lived in ledger prose, and an
+undocumented flag next to `VITE_SLIDING_SYNC=1` is one a future session could
+reasonably switch on. A flag that is off because nobody set it looks identical
+to one that is off on purpose.
+
+### No branches
+
+Ruled by the operator, and the reasoning is worth more than the rule:
+
+> We go off on adventures and apparently write branches willy-nilly then
+> another session declares "that other branch's" work sacred like it wasn't
+> literally me and you in the other room.
+
+That is a real failure mode and not a stylistic preference. Work parked on a
+branch acquires a false authority the moment it stops being visibly in
+progress; a later session inherits it as somebody else's finished artifact and
+defers to it rather than judging it. On `main` there is one history and
+everything in it is equally open to being wrong.
+
+The gate already does the job the branch was pretending to do. Nothing lands
+unless typecheck, lint at baseline, checks and build all pass -- and an
+unfinished feature ships behind a flag defaulted off, which is exactly how
+seven E2EE steps are sitting on `main` today doing nothing.
+
+Recorded in CLAUDE.md and ALSO in the committed ledger, because CLAUDE.md is
+gitignored and would not have travelled. A rule that exists on one machine is
+how the superseded rule survives.
+
+### The branch I created while removing branches
+
+The sweep found three branches, which is what the first sweep had found. But
+I reported them piecemeal -- once as branches, again as a worktree, again as
+local-versus-remote refs -- which read as discovering new problems when it was
+one list the whole time. Same branch, three framings.
+
+One was genuinely new, and it was mine. "Merge all branches" had included
+`renovate/configure`, whose single file is the on-switch for a dependency bot
+installed at the org level. Merging it put that config on the default branch,
+which woke the bot, which began doing its job: one branch per outdated
+package. Two appeared within the hour. I had merged a branch generator about
+an hour before being told branches were unworkable.
+
+Then the fix for that was wrong too, in a way that would have recreated the
+problem. Deleting `renovate.json` does not uninstall an org-level app -- it
+makes the repo look UNCONFIGURED, which is the exact state that makes the bot
+open a fresh onboarding branch. Delete file, bot opens branch, delete branch,
+bot opens it again. The file came back containing nothing but an off switch,
+because the documented way to tell that bot to leave a repo alone is a config
+saying so. The repo now reads as configured-and-disabled rather than awaiting
+setup, and neither state produces a branch.
+
+The general shape, which is the part worth keeping: **removing a tool's
+configuration is not the same as removing the tool, and for anything that
+watches a repo from outside, an absent config is an invitation rather than a
+refusal.**
+
+### Gates
+
+Every merge gated on `main` afterwards rather than only on the branches,
+because merges interact in ways the branches never showed. tsc clean, lint at
+the 23 baseline throughout, build passing, checks 1124 -> 1131.
+
+Final state: one branch, `main`, locally and on the remote, one worktree, in
+sync. E2EE inert behind a pinned flag. E3, E7 and E11 still open, E6 still
+deferred, and the nine browser verifications still outstanding.
