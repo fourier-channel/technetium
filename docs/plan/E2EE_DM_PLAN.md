@@ -16,9 +16,9 @@
 | field | value |
 | --- | --- |
 | campaign | e2ee-dms |
-| branch | `e2ee-dms`, cut off `main` at `41bd9b4` |
+| branch | MERGED to `main` 2026-08-26 (flag off) |
 | base | `main` at the interactions-v1 merge, deployed 2026-08-23 |
-| tsc / lint / check / build | CLEAN / 23 (HOLD) / 1124 / PASSING |
+| tsc / lint / check / build | CLEAN / 23 (HOLD) / 1131 / PASSING |
 | deploys | operator's call, `./deploy.sh` only |
 
 ---
@@ -420,6 +420,31 @@ This box is headless; nothing below has been seen in a browser.
   headless box can show.
 
 ---
+
+## Merged to main with the flag OFF -- what that did and did not change
+
+Merged 2026-08-26 on the operator's instruction. `VITE_E2EE=0` is now PINNED
+in `.env.production` with its precondition written next to it, because a flag
+that is off because nobody set it looks identical to one that is off on
+purpose.
+
+**Do not enable it until E3 and E7 land.** They are the two ways a new device
+gets the keys to read existing conversations; without them, enabling this
+means people create encrypted DMs their next device cannot read.
+
+Merging is not deploying. Three things DO change for users at the next deploy,
+even with the flag off, and all three land on DMs that other clients already
+encrypted:
+
+- Unreadable rows say "Encrypted. This client cannot read encrypted messages
+  yet." rather than promising decryption later. A fifth outlook, `unavailable`,
+  exists precisely so this is not reported as a decryption FAILURE -- with no
+  engine present nothing was attempted, and saying otherwise describes an event
+  that did not happen.
+- Those DMs' headers gain a red "Encryption unavailable" badge. Kept
+  deliberately: it is true, and the user genuinely cannot read those
+  conversations here. Silence would be the dishonest option (E10).
+- `m.room.encryption` is now visible in the log where it was hidden (O-e1).
 
 ## Operator-side items -- the human-fingers batch
 

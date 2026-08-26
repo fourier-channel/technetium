@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ThreadEvent, type IContent, type Room, type MatrixEvent } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
-import { explainDecryptionFailure } from '../client/decryptionState'
+import { explainUnreadable } from '../client/decryptionState'
 import { useTimeline, type TimelineItem, type GalleryLayout } from '../client/useTimeline'
 import type { ReplyRef } from '../client/relations'
 import { eventPreview } from '../client/eventPreview'
@@ -566,7 +566,9 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
     // anything about it (D-tp16). An unreadable message and a lost message look
     // identical from where the reader sits, so the difference between "verify
     // this device" and "this can never be recovered" has to be on the row.
-    const why = explainDecryptionFailure(event.decryptionFailureReason)
+    // Whether anything could have decrypted this. With the engine absent the
+    // row must say so, not report a failure that never happened (E10).
+    const why = explainUnreadable(event.decryptionFailureReason, !!client?.getCrypto())
     body = (
       <span
         style={{

@@ -27,6 +27,12 @@ export type DecryptionOutlook =
   | 'permanent'
   // We do not recognise the reason. Never dressed up as one of the above.
   | 'unknown'
+  // There is no decryptor at all -- encryption is not enabled in this build.
+  // Distinct from every reason above, which describe a decryptor that TRIED
+  // and could not. Collapsing the two would tell a user their message failed
+  // when nothing ever attempted it, and would imply a fault where there is
+  // only an unshipped feature.
+  | 'unavailable'
 
 export interface DecryptionExplanation {
   outlook: DecryptionOutlook
@@ -106,6 +112,25 @@ const EXPLANATIONS: Record<string, DecryptionExplanation> = {
 export function explainDecryptionFailure(code: string | null | undefined): DecryptionExplanation {
   if (!code) return { outlook: 'unknown', text: 'This message could not be decrypted.' }
   return EXPLANATIONS[code] ?? { outlook: 'unknown', text: 'This message could not be decrypted.' }
+}
+
+// The explanation for a row, accounting for whether we can decrypt AT ALL.
+//
+// Crypto being switched off is not a decryption failure, and must not be
+// reported as one. With the engine absent nothing was attempted, so every
+// per-code reason below is not merely unknown but inapplicable -- which is why
+// this short-circuits before consulting the code at all.
+export function explainUnreadable(
+  code: string | null | undefined,
+  cryptoAvailable: boolean,
+): DecryptionExplanation {
+  if (!cryptoAvailable) {
+    return {
+      outlook: 'unavailable',
+      text: 'Encrypted. This client cannot read encrypted messages yet.',
+    }
+  }
+  return explainDecryptionFailure(code)
 }
 
 // Whether the client should keep hoping. Drives whether the row shows a

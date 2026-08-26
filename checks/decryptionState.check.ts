@@ -13,6 +13,7 @@
 import { readFileSync } from 'node:fs'
 import {
   explainDecryptionFailure,
+  explainUnreadable,
   isDecryptionPending,
   knownFailureCodes,
   type DecryptionOutlook,
@@ -112,6 +113,35 @@ console.log('\n-- pending is exactly the retryable set --')
     knownFailureCodes()
       .filter((c) => explainDecryptionFailure(c).outlook === 'permanent')
       .every((c) => !isDecryptionPending(c)))
+}
+
+console.log('\n-- "there is no decryptor" is not "decryption failed" --')
+{
+  // The flag-off case, and the reason this distinction exists: with the engine
+  // absent nothing ever ATTEMPTED to decrypt, so reporting a failure would
+  // describe an event that did not happen and imply a fault where there is
+  // only an unshipped feature.
+  const off = explainUnreadable('MEGOLM_UNKNOWN_INBOUND_SESSION_ID', false)
+  check('crypto unavailable short-circuits every per-code reason',
+    off.outlook === 'unavailable', off)
+  check('it still says the message is encrypted', off.text.includes('Encrypted'))
+  check('it says the limitation is THIS CLIENT, not the message',
+    off.text.includes('cannot read encrypted messages'))
+
+  // It must not masquerade as any of the four decryption outcomes.
+  check('unavailable is not unknown', explainUnreadable(null, false).outlook !== 'unknown')
+  check('unavailable is not permanent', off.outlook !== 'permanent')
+  // And nothing may spin on it -- there is no retry that helps (G-tc06).
+  check('unavailable never implies pending', isDecryptionPending('MEGOLM_KEY_WITHHELD') === false
+    && explainUnreadable(null, false).outlook !== 'pending')
+
+  // With crypto present it must defer to the real reason, unchanged.
+  for (const c of knownFailureCodes()) {
+    if (explainUnreadable(c, true).outlook !== explainDecryptionFailure(c).outlook) failures++
+  }
+  check('with crypto available it defers to the per-code explanation',
+    knownFailureCodes().every((c) =>
+      explainUnreadable(c, true).text === explainDecryptionFailure(c).text))
 }
 
 if (failures) { console.log(`\n${failures} FAILED`); process.exit(1) }
