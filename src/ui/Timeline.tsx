@@ -15,7 +15,8 @@ import { FaceFlash } from './FaceFlash'
 import { detectFace } from '../client/faces'
 import { SenderIdentity } from './SenderIdentity'
 import { MemberEvent } from './MemberEvent'
-import { useLightbox, type LightboxItem } from './Lightbox'
+import { useLightbox, type LightboxItem, type LightboxThread } from './Lightbox'
+import { buildMediaSequence, imageMeta, lightboxItem, type MediaSequence } from './mediaSequence'
 import { linkify } from './linkify'
 import { useChatBackground } from './chatBackground'
 import { ChatBackdrop, ChatBackgroundMenu } from './ChatBackground'
@@ -119,6 +120,9 @@ function onSpoilerKey(e: React.KeyboardEvent) {
 export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadList }: { room: Room; onOpenThread?: (roomId: string, rootId: string) => void; threadListOpen?: boolean; onToggleThreadList?: () => void }) {
   const { client } = useClient()
   const { items, loadOlder, loadingOlder, atStart } = useTimeline(client, room)
+  // The lightbox's vertical axis for this room: every image in the loaded
+  // window, in order, so up/down in the viewer walks the conversation.
+  const sequence = useMemo(() => buildMediaSequence(items), [items])
   const receipts = useRoomReceipts(client, room)
   const pins = usePinnedEvents(client, room)
   const [pinnedOpen, setPinnedOpen] = useState(false)
@@ -404,7 +408,7 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
                 ) : item.kind === 'member' ? (
                   <MemberEvent key={item.id} event={item.event} />
                 ) : (
-                  <Row key={item.id} item={item} onOpenThread={onOpenThread} />
+                  <Row key={item.id} item={item} onOpenThread={onOpenThread} sequence={sequence} />
                 ),
               )}
             </MessageVerbsProvider>
@@ -460,7 +464,7 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
   )
 }
 
-export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?: (roomId: string, rootId: string) => void }) {
+export function Row({ item, onOpenThread, sequence }: { item: TimelineItem; onOpenThread?: (roomId: string, rootId: string) => void; sequence?: MediaSequence }) {
   const { event, kind, cells, layout } = item
   const { open } = useLightbox()
   const { client } = useClient()
@@ -487,6 +491,14 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
   const senderMember = client?.getRoom(roomId)?.getMember(senderId) ?? null
   const senderName = senderMember?.name || senderId
   const senderAvatar = senderMember?.getMxcAvatarUrl() ?? null
+  // This row's place in the conversation's image sequence, handed to the
+  // lightbox as its vertical axis. Undefined for a row with no images, and for
+  // any surface that did not build a sequence -- then the viewer simply has no
+  // up/down, which is the honest state rather than a dead key.
+  const stop = sequence?.stopOf.get(item.id)
+  const thread: LightboxThread | undefined =
+    sequence && stop !== undefined ? { stops: sequence.stops, stop } : undefined
+
   const canReact = kind === 'message' || kind === 'gallery'
   // Where this row's reaction affordance goes. A MEDIA body takes the rail
   // beside the picture; a text body takes the reserved slot trailing the text.
@@ -515,7 +527,7 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
 
   let body: React.ReactNode
   if (kind === 'gallery' && cells) {
-    body = <GalleryBody cells={cells} layout={layout ?? 'grid'} />
+    body = <GalleryBody cells={cells} layout={layout ?? 'grid'} thread={thread} />
   } else if (kind === 'message') {
     const content = item.content
     const mxc = typeof content.url === 'string' ? content.url : ''
@@ -532,7 +544,7 @@ export function Row({ item, onOpenThread }: { item: TimelineItem; onOpenThread?:
             lazy
             reserve={reserveBox(content)}
             alt={typeof content.body === 'string' ? content.body : undefined}
-            onClick={() => open([{ mxc, roomId, ...imageMeta(event) }], 0)}
+            onClick={() => open([{ mxc, roomId, ...imageMeta(event) }], 0, thread)}
           />
           <MediaTags mxc={mxc} roomId={event.getRoomId()} />
         </div>
@@ -770,18 +782,6 @@ function RowFooter({
 // One grid cell: a static "pending upload" graphic as the background, with the
 // thumbnail layered over it (transparentLoading, so the graphic shows through
 // until the real image paints). A null / loading / failed slot shows the graphic.
-// Pull a friendly filename + mimetype off an m.image content for the lightbox
-// (download name + extension hinting). filename wins (MSC2530 caption case),
-// else body; the mediaId is the downstream fallback.
-function imageMeta(ev: MatrixEvent): { name?: string; mimetype?: string } {
-  const c = ev.getContent()
-  const name =
-    typeof c.filename === 'string' ? c.filename : typeof c.body === 'string' ? c.body : undefined
-  const info = c.info as { mimetype?: unknown } | undefined
-  const mimetype = info && typeof info.mimetype === 'string' ? info.mimetype : undefined
-  return { name, mimetype }
-}
-
 function GalleryCell({ ev, onOpen }: { ev: MatrixEvent | null; onOpen?: () => void }) {
   const c = ev?.getContent()
   const mxc = c && typeof c.url === 'string' ? c.url : ''
@@ -853,7 +853,7 @@ function GalleryCell({ ev, onOpen }: { ev: MatrixEvent | null; onOpen?: () => vo
 const GALLERY_CELL = 118 // px square; 3 cols + 2 gaps = 360, matching stack/strip width
 const GALLERY_GAP = 3
 
-function GalleryBody({ cells, layout }: { cells: (MatrixEvent | null)[]; layout: GalleryLayout }) {
+function GalleryBody({ cells, layout, thread }: { cells: (MatrixEvent | null)[]; layout: GalleryLayout; thread?: LightboxThread }) {
   const n = cells.length
   const { open } = useLightbox()
   // Present (non-null, valid) images in cell order, plus a map from cell index
@@ -862,12 +862,13 @@ function GalleryBody({ cells, layout }: { cells: (MatrixEvent | null)[]; layout:
   const present: LightboxItem[] = []
   const presentIndexByCell = new Map<number, number>()
   cells.forEach((ev, idx) => {
-    if (!ev) return
-    const cc = ev.getContent()
-    const cmxc = typeof cc.url === 'string' ? cc.url : ''
-    if (!parseMxc(cmxc)) return
+    // Built through the shared helper, which carries roomId -- without it the
+    // gateway cannot resolve an mxc from an ENCRYPTED room, so those cells
+    // opened to a broken viewer.
+    const li = lightboxItem(ev)
+    if (!li) return
     presentIndexByCell.set(idx, present.length)
-    present.push({ mxc: cmxc, ...imageMeta(ev) })
+    present.push(li)
   })
   const first = cells[0]
   const fc = first?.getContent()
@@ -926,7 +927,7 @@ function GalleryBody({ cells, layout }: { cells: (MatrixEvent | null)[]; layout:
               ev={ev}
               onOpen={
                 presentIndexByCell.has(idx)
-                  ? () => open(present, presentIndexByCell.get(idx)!)
+                  ? () => open(present, presentIndexByCell.get(idx)!, thread)
                   : undefined
               }
             />

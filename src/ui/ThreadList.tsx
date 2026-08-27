@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { axisFromKey, isTypingTarget, HORIZONTAL } from './axisKeys'
 import { useClient } from '../client/ClientContext'
 import { useFlipList, flipIdOf, type FlipControl } from './flip'
 import { usePopOnIncrease } from './pop'
@@ -220,9 +221,16 @@ export function ThreadList({
   // and the compiler could not preserve the manual memo anyway.
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (!carousel || count === 0) return
-    if (e.key === 'ArrowRight') { e.preventDefault(); step(1) }
-    else if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1) }
-    else if (e.key === 'Home') { e.preventDefault(); setFocus(0) }
+    // formant grammar: the guard against typing, and preventDefault on the
+    // vertical only, are the parts every surface got wrong differently. This
+    // list has no vertical axis -- a thread list is one sequence -- so up and
+    // down are left alone to scroll the page, which is what a reader expects
+    // of a list taller than the window.
+    const axis = axisFromKey(e, HORIZONTAL)
+    if (axis === 'next') { step(1); return }
+    if (axis === 'prev') { step(-1); return }
+    if (isTypingTarget(e.target)) return
+    if (e.key === 'Home') { e.preventDefault(); setFocus(0) }
     else if (e.key === 'End') { e.preventDefault(); setFocus(count - 1) }
     else if (e.key === 'Enter' || e.key === ' ') {
       const e0 = entries[focus]

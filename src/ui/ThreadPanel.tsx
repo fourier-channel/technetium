@@ -3,6 +3,7 @@ import { EventTimeline, ThreadEvent } from 'matrix-js-sdk'
 import { useClient } from '../client/ClientContext'
 import { applyLayout, toItems } from '../client/useTimeline'
 import { DaySeparator, Row } from './Timeline'
+import { buildMediaSequence } from './mediaSequence'
 import { MemberEvent } from './MemberEvent'
 import { Composer } from './Composer'
 import { ComposerModeProvider } from './ComposerModeProvider'
@@ -77,6 +78,10 @@ export function ThreadPanel({
   // when toggling one off -- the thread panel shares the Row, so it needs the
   // same item model the main timeline gets.
   const items = applyLayout(toItems(events, { myUserId: client?.getUserId() ?? null }))
+  // The lightbox's vertical axis inside a thread: the thread's own images, in
+  // order. The panel paginates the thread to exhaustion on open, so this is the
+  // whole thread and not a window of it -- up/down really does walk the thread.
+  const sequence = buildMediaSequence(items)
 
   return (
     // Its own composer-mode scope: a reply started in the thread panel must not
@@ -125,7 +130,7 @@ export function ThreadPanel({
               ) : item.kind === 'day' ? (
                 <DaySeparator key={item.id} item={item} />
               ) : (
-                <Row key={item.id} item={item} />
+                <Row key={item.id} item={item} sequence={sequence} />
               ),
             )}
           </MessageVerbsProvider>

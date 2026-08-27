@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { useClient } from '../client/ClientContext'
 import { fetchMediaSrc, parseMxc } from '../client/media'
 import { MediaTags } from './MediaTags'
+import { axisFromKey, isTypingTarget, BOTH } from './axisKeys'
+import { flatIndex, stepImage, totalImages } from './mediaSequence'
 
 // Full-screen image viewer, mounted once at App root as a provider so any
 // descendant (timeline, thread panel) opens it via useLightbox() with no
@@ -23,10 +25,22 @@ export interface LightboxItem {
   mimetype?: string
 }
 
+// The conversation the open image came from, supplying the VERTICAL axis:
+// every image-bearing message in it, in timeline order, as a list of stops (a
+// lone image is a one-item stop, a gallery batch is one stop of N). Built by
+// the surface that rendered the messages -- see mediaSequence.ts -- because the
+// viewer is mounted at App root and has no idea what the reader is reading.
+export interface LightboxThread {
+  stops: LightboxItem[][]
+  /** Which stop the opened set is. */
+  stop: number
+}
+
 interface LightboxApi {
   // Open the viewer on a set of images at startIndex (clamped). A one-element
-  // set shows no navigation.
-  open: (items: LightboxItem[], startIndex?: number) => void
+  // set shows no horizontal navigation. Pass `thread` to give up/down a
+  // conversation to walk; without it the viewer has no vertical axis.
+  open: (items: LightboxItem[], startIndex?: number, thread?: LightboxThread) => void
 }
 
 const LightboxContext = createContext<LightboxApi | null>(null)
@@ -89,10 +103,23 @@ const navBtn: React.CSSProperties = {
   cursor: 'pointer',
 }
 
+// The vertical pair. Same look, turned through ninety degrees, because they are
+// the same kind of control on the other axis and should read that way.
+const vertNavBtn: React.CSSProperties = {
+  ...navBtn,
+  top: undefined,
+  left: '50%',
+  transform: 'translateX(-50%)',
+  width: 64,
+  height: 40,
+  fontSize: 20,
+}
+
 export function LightboxProvider({ children }: { children: React.ReactNode }) {
   const { client } = useClient()
   const [items, setItems] = useState<LightboxItem[] | null>(null)
   const [index, setIndex] = useState(0)
+  const [thread, setThread] = useState<LightboxThread | null>(null)
   const [src, setSrc] = useState<string | null>(null)
   const [error, setError] = useState(false)
   // The fetched full-res object URL, retained so Save reuses the exact blob the
@@ -104,16 +131,51 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
   const atFirst = index <= 0
   const atLast = !items || index >= items.length - 1
 
-  const open = useCallback((next: LightboxItem[], startIndex = 0) => {
-    if (next.length === 0) return
-    setItems(next)
-    setIndex(Math.min(Math.max(0, startIndex), next.length - 1))
+  // Where the current image sits in the whole conversation, and whether there
+  // is anywhere to go on that axis. Counted in IMAGES, not messages: "next" on
+  // the vertical means the next picture, which is what a reader holding an
+  // arrow key is actually asking for.
+  const threadTotal = thread ? totalImages(thread.stops) : 0
+  const threadPos = thread ? flatIndex(thread.stops, { stop: thread.stop, index }) : 0
+  const hasThread = !!thread && threadTotal > 1
+  const atThreadFirst = threadPos <= 0
+  const atThreadLast = threadPos >= threadTotal - 1
+
+  const open = useCallback(
+    (next: LightboxItem[], startIndex = 0, nextThread?: LightboxThread) => {
+      if (next.length === 0) return
+      setItems(next)
+      setIndex(Math.min(Math.max(0, startIndex), next.length - 1))
+      setThread(nextThread && nextThread.stops.length > 0 ? nextThread : null)
+    },
+    [],
+  )
+  const close = useCallback(() => {
+    setItems(null)
+    setThread(null)
   }, [])
-  const close = useCallback(() => setItems(null), [])
   const prev = useCallback(() => setIndex((i) => Math.max(0, i - 1)), [])
   const next = useCallback(
     () => setIndex((i) => (items ? Math.min(items.length - 1, i + 1) : i)),
     [items],
+  )
+
+  // Vertical: step one image along the conversation, crossing into the next
+  // message when the current batch runs out. Clamped at both ends -- a move
+  // that cannot happen does nothing, and this sequence is not a ring. Landing
+  // in another message REPLACES the horizontal set with that message's batch,
+  // so left/right keeps meaning "within the thing you are looking at".
+  const goVertical = useCallback(
+    (delta: 1 | -1) => {
+      if (!thread) return
+      const { stops } = thread
+      const next = stepImage(stops, { stop: thread.stop, index }, delta)
+      if (!next) return
+      setThread({ stops, stop: next.stop })
+      setItems(stops[next.stop])
+      setIndex(next.index)
+    },
+    [thread, index],
   )
 
   // Fetch the current image full-res whenever it changes; revoke the prior blob.
@@ -150,17 +212,36 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
     }
   }, [client, items, index])
 
-  // Keyboard: Escape closes; arrows navigate (when a set is open).
+  // Keyboard, per the formant axis grammar: Escape leaves the innermost open
+  // thing, left/right walk the set you opened, up/down walk the conversation
+  // that set came from. axisFromKey holds the two parts that were wrong in
+  // different places across the estate -- the typing guard, and preventDefault
+  // on the vertical only.
   useEffect(() => {
     if (!items) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close()
-      else if (e.key === 'ArrowLeft') prev()
-      else if (e.key === 'ArrowRight') next()
+      if (e.key === 'Escape') {
+        if (!isTypingTarget(e.target)) close()
+        return
+      }
+      switch (axisFromKey(e, BOTH)) {
+        case 'prev':
+          prev()
+          break
+        case 'next':
+          next()
+          break
+        case 'up':
+          goVertical(-1)
+          break
+        case 'down':
+          goVertical(1)
+          break
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [items, close, prev, next])
+  }, [items, close, prev, next, goVertical])
 
   // Download the already-fetched blob under a friendly filename. Reuses the
   // viewer's object URL, so no network round-trip.
@@ -200,6 +281,11 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
                 {index + 1} / {items!.length}
               </span>
             )}
+            {hasThread && (
+              <span style={{ fontSize: 13, color: 'var(--cpd-color-text-secondary)', marginRight: 4 }}>
+                {threadPos + 1} / {threadTotal} in thread
+              </span>
+            )}
             <button type="button" onClick={save} disabled={!src} style={toolbarBtn}>
               Save
             </button>
@@ -220,6 +306,23 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
               style={{ ...navBtn, left: 16, opacity: atFirst ? 0.35 : 1 }}
             >
               {'\u2039'}
+            </button>
+          )}
+
+          {/* The pointer can do what the keys do: the vertical axis gets real
+              controls, not a keyboard-only secret. */}
+          {hasThread && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                goVertical(-1)
+              }}
+              disabled={atThreadFirst}
+              aria-label="Previous image in thread"
+              style={{ ...vertNavBtn, top: 12, opacity: atThreadFirst ? 0.35 : 1 }}
+            >
+              {'\u25b4'}
             </button>
           )}
 
@@ -246,7 +349,7 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
                 alt={current.name ?? 'image'}
                 style={{
                   maxWidth: '92vw',
-                  maxHeight: '82vh',
+                  maxHeight: hasThread ? '72vh' : '82vh',
                   objectFit: 'contain',
                   display: 'block',
                   borderRadius: 4,
@@ -274,6 +377,21 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
               style={{ ...navBtn, right: 16, opacity: atLast ? 0.35 : 1 }}
             >
               {'\u203a'}
+            </button>
+          )}
+
+          {hasThread && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                goVertical(1)
+              }}
+              disabled={atThreadLast}
+              aria-label="Next image in thread"
+              style={{ ...vertNavBtn, bottom: 12, opacity: atThreadLast ? 0.35 : 1 }}
+            >
+              {'\u25be'}
             </button>
           )}
         </div>
