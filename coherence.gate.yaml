@@ -1,0 +1,16 @@
+# How this repo is gated, declared by the repo itself.
+#
+# `coherence gate` reads this. It lives HERE and not in a machine column
+# because the gate command is a fact about the repo, and a column describes
+# one machine -- there are three, hand-maintained, and nothing compares them.
+# Declared here, it travels to every box because it is the repo.
+#
+#   gate    the class B command: this repo's own toolchain. `class-a-only`
+#           states there is none, and coherence VERIFIES that claim.
+#   suite   the command whose run reports the test count (WORKING-RULES
+#           rule 6), quoted back in a derived-facts denial.
+#   exclude paths held out of the confusable check: vendored or upstream
+#           content that is not ours to normalize.
+
+gate: npm run check
+suite: npm run check
