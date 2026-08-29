@@ -916,6 +916,7 @@ function RoomName({
             className="room-pulse-letter"
             style={{ animationDelay: `${i * 90}ms` }}
           >
+            {/* confusable-ok: a literal space collapses in JSX; NBSP is the rendered glyph */}
             {ch === ' ' ? ' ' : ch}
           </span>
         ))}

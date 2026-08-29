@@ -352,7 +352,8 @@ export function DomainCanvas({
           ]
           if (admin) {
             const permItem = (perm: MovePerm, label: string): CanvasMenuItem => ({
-              label: (o.perm === perm ? '• ' : '  ') + label,
+              // confusable-ok: two FIGURE SPACEs match the width of the bullet + space above
+        label: (o.perm === perm ? '• ' : '  ') + label,
               onClick: () => {
                 objects.setPerm(o.id, perm, perm === 'whitelist' ? o.allow : undefined)
                 setObjectMenu(null)
