@@ -7,8 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "check": "for f in checks/*.check.ts; do echo \"== $f\"; node --import ./checks/_hooks.mjs \"$f\" || exit 1; done",
-    "preview": "vite preview"
+    "check": "npm run check:derived && for f in checks/*.check.ts; do echo \"== $f\"; node --import ./checks/_hooks.mjs \"$f\" || exit 1; done",
+    "preview": "vite preview",
+    "check:derived": "python3 tools/derived-facts.py --suite \"npm run check\""
   },
   "dependencies": {
     "@fontsource/inconsolata": "^5.2.8",
