@@ -16,7 +16,7 @@ custom web client, plus a pipeline that feeds them and a gate that guards them.
 Six of those pieces are separate repositories, and the separations are load
 bearing rather than organisational.
 
-    Matrix (Synapse + MAS) ... identity, rooms, and the ONLY store of media bytes
+    Matrix (Synapse + MAS) ... identity, rooms, and site assets only
       |
       +-- fourier-auth ...... the gate. every image request is authorised here
       +-- fourier-tunnel .... bridges images posted in Matrix into the booru
@@ -33,24 +33,43 @@ bearing rather than organisational.
 
 ## The one idea underneath all of it
 
-**The booru holds no media.**
+**Nothing stores the image except R2, and both surfaces show the same object.**
 
-A normal Danbooru stores images and serves them. Here, Synapse is the single
-authority for both storage and authorisation, and the booru holds metadata that
-*references* media it does not have. Every byte a viewer receives has been
-authorised, for that viewer, at request time.
+A normal Danbooru stores images and serves them. A normal Matrix homeserver
+stores what its users post. Here neither does.
 
-This is the decision the rest of the design follows from, and it is why several
-things work in ways that look roundabout:
+No user-posted media is kept on the homeserver at all. The only bytes it holds
+are SITE ASSETS -- avatars, emojis, room icons -- the chrome the interface is
+made of. Everything else goes to Cloudflare R2 and is served directly from R2.
 
-- An exposed media URI is only a pointer. It grants nothing on its own.
+**Viewing an image on the booru and viewing it in Matrix are the same object at
+the same URL.** Not two copies kept in step; one file, referenced twice. One
+URL, one check, one copy.
+
+Three consequences, and they are the point:
+
+- **It is fast for everyone.** R2 egress is free and Cloudflare caches at the
+  edge, so an image is served from a location near the viewer rather than from
+  one machine in one datacentre.
+- **Storage does not multiply.** A picture posted in a room and mirrored to the
+  booru is stored once, not twice, and the two can never disagree about what it
+  is.
+- **A leaked URL grants nothing.** Access is decided per request, before the
+  redirect is issued, and the signed URL that results is short-lived.
+
+Permission is enforced once, in one place, by the system that already knows who
+may see what -- rather than being re-implemented in every surface that displays
+an image. Synapse remains the single authority for AUTHORISATION. It is not the
+store.
+
+Two things that follow, and both explain a whole class of confusion:
+
 - Deleting a post from the booru does not delete the image, and never could.
+  The booru holds a reference; the bytes are somewhere else and belong to
+  another system.
 - "The page loads but images are broken" is a completely different failure from
-  "the page is broken", because they are different systems.
-
-The benefit is that permission is enforced once, in one place, by the system
-that already knows who may see what -- rather than being re-implemented in every
-surface that displays an image.
+  "the page is broken", because they are different systems reached by different
+  routes.
 
 ---
 
@@ -62,23 +81,45 @@ the bytes.
 **How it works.** A user proves a Matrix identity. A server-side session in
 Redis maps an opaque cookie to that user's Matrix access token. When the browser
 requests an image it sends only the cookie; fourier-auth resolves it
-server-side, calls Synapse's authenticated media API with the token, and Synapse
-decides. The token never reaches the browser.
+server-side and asks Synapse. The token never reaches the browser.
 
-**Two routes, because there are two questions.**
+If the answer is yes, the caller is redirected to a short-lived signed R2 URL.
+**No media byte passes through this service.** It decides and steps out of the
+way, which is why the images are fast: the bytes come from Cloudflare's edge,
+not from one host in one datacentre.
 
-| route | asks |
+An earlier version proxied from Synapse whenever R2 could not answer. That was
+deleted rather than switched off, for two reasons: it put media bytes through
+this host, and -- worse -- it meant a request this gate had already refused
+could still be served through the fallback. A gate with a path around it is not
+a gate.
+
+**It classifies the object first, then asks the right question.** This is the
+part that is easy to get wrong, and it was wrong once:
+
+| the object is | the question |
 |---|---|
-| `/fourier/media/<server>/<id>` | does this user share the room this media is in? |
-| `/fourier/booru/<md5>.<ext>` | does this user hold a valid fourier session? |
+| a site asset -- avatar, emoji, room icon | is this token one of ours? |
+| content -- anything a user posted | is the caller in a room containing it? |
 
-The second exists because an image scraped from 4chan lives in no Matrix room,
-so the room-membership question is meaningless for it. Same login, different
-question, and conflating them would have meant either inventing a fake room or
-weakening the real check.
+Both fail closed and there is no third answer.
+
+The distinction is not fussiness. Asking "which room is this in" about an avatar
+is asking a question that has no answer: an avatar is in no room and in all of
+them at once, so the honest answer was zero rooms and fail-closed denied it.
+Every profile picture on the server 403'd. The client had already routed around
+the gate for avatars -- and a client working around a gate is the clearest
+possible evidence the gate is answering the wrong question.
+
+**A third route exists for content with no room at all.** An image scraped from
+4chan lives in no Matrix room, so the membership question is meaningless for it;
+it is authorised by the fourier session instead. Same login, different question.
+Conflating them would have meant either inventing a fake room or weakening the
+real check.
 
 **Why this is unusual.** Most sites check permission when the page is built.
-This checks on every byte, which means a leaked URL is not a leak.
+This checks per request, before any URL is handed out, and the URL it hands out
+expires -- so a leaked link is not a leak.
 
 ---
 
@@ -94,8 +135,13 @@ event keyed by the image's MXC URI -- ready for a client to render and edit.
 
 **The reasoning.** The MXC URI is the link between the two systems. Tags live in
 both places on purpose: the booru can search them, and the Matrix room can show
-them without asking the booru anything. Access to the underlying media is always
-the homeserver's decision, in both directions.
+them without asking the booru anything.
+
+What is NOT copied is the image. The homeserver pushes what it receives straight
+to R2, and the booru is given a reference to that same object -- so a picture
+posted in a room and searchable on the booru is one file with two names, not two
+files that have to be kept in step. Authorisation is the homeserver's decision
+in both directions; storage is neither system's job.
 
 ---
 
