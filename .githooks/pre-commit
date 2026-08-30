@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+#
+# The Go/No-Go, run before a commit rather than remembered.
+#
+# CANON, established 2026-08-30. Lives in fourier-basis; hydrated into every
+# consumer as .githooks/pre-commit by `coherence hydrate`. This file is the only
+# copy anyone edits.
+#
+# WHY THIS EXISTS. `coherence gate` was built, passed on all twelve repos, and
+# nothing invoked it. That is the fourth time in one day a capability was found
+# correct, tested and uncalled -- docsync uncalled since July, gitobs currency
+# never called by the gate, backfill-tags run once by hand, and the jail's own
+# booru sync reachable only from one UI. The doctrine's own line is that
+# diligence is what runs out at 2am, so a gate that depends on somebody typing
+# it is not a gate.
+#
+# CLASS A ONLY, DELIBERATELY. The universal checks cost about 1.2 seconds per
+# repo. A repo's own suite costs between 16 seconds and two and a half minutes,
+# and a pre-commit hook that takes minutes is a hook people disable -- which
+# would cost more than it caught. Class B stays a deliberate act before a push
+# or a deploy.
+#
+# THE ESCAPE IS GIT'S OWN. `git commit --no-verify` skips this, and that is
+# correct: a bypass that exists and is standard beats one somebody invents by
+# deleting the hook. It is loud in the sense that matters -- you have to type it,
+# and coherence can see afterwards that the commit did not pass.
+#
+# INSTALLING IT is one line per checkout, and deliberately NOT tracked:
+#
+#     git config core.hooksPath .githooks
+#
+# That setting is per-checkout config, so it drifts -- which is the useful part.
+# A checkout with the hook uninstalled is exactly the kind of divergence
+# `coherence sweep` exists to observe, so the gate's own installation becomes
+# something the gate can report on.
+
+set -uo pipefail
+
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+repo_name="$(basename "$repo_root")"
+
+# Where coherence lives. An explicit override first, then the sibling checkout,
+# which is the layout on every machine that has one.
+home="${COHERENCE_HOME:-$(dirname "$repo_root")/fourier-coherence}"
+column="${COHERENCE_COLUMN:-coherence.vesper.yaml}"
+
+if [ ! -d "$home" ] || [ ! -f "$home/$column" ]; then
+  # A MISSING PREREQUISITE IS A FAILURE WITH AN INSTRUCTION, NOT A SKIP. The
+  # doctrine is explicit, and the alternative -- pass quietly when the checker is
+  # absent -- turns "I did not check" into "it passed", which is rule 1 violated
+  # by the tool meant to enforce it.
+  echo "pre-commit: cannot reach coherence, so this commit was NOT gated." >&2
+  echo "  looked for: $home/$column" >&2
+  echo "  fix:  export COHERENCE_HOME=/path/to/fourier-coherence" >&2
+  echo "  or:   git commit --no-verify   (and know that it was not checked)" >&2
+  exit 1
+fi
+
+out="$(cd "$home" && python3 -m coherence.cli gate \
+        --config "$column" --repo "$repo_name" --class-a-only 2>&1)"
+status=$?
+
+if [ $status -eq 0 ]; then
+  exit 0
+fi
+
+echo "$out" >&2
+echo >&2
+case $status in
+  1) echo "pre-commit: NO-GO -- a check failed. Nothing was committed." >&2 ;;
+  3) echo "pre-commit: NO-GO -- PARTIAL. Something was not measured, which is not a pass." >&2 ;;
+  *) echo "pre-commit: coherence could not reach a verdict (exit $status)." >&2 ;;
+esac
+echo "  Fix what it names, or commit with --no-verify if you know better." >&2
+exit 1
