@@ -64,7 +64,12 @@ MARKER = re.compile(r"derived-ok\s*:\s*(.+?)\s*(?:-->|$)", re.I)
 # A devlog entry and a diary entry are both DATED by construction -- the date is
 # part of the claim, so the number stays true forever. (fourier-chan's diary is
 # her own canon besides, and nothing here mints or edits I-nodes.)
-EXEMPT_SEGMENTS = ("devlog", "devlogs", "diary", "diaries")
+# A memory is the same artifact under another name: it records what was true
+# when it was written, and the memory system's own contract says a recalled
+# memory "reflects what was true when written". Added 2026-08-31 when the
+# consolidation of 21 stranded memories into canon was refused by this check
+# over a count that was correct on the day someone wrote it down.
+EXEMPT_SEGMENTS = ("devlog", "devlogs", "diary", "diaries", "memory", "memories")
 EXEMPT_SUBSTRINGS = (".superseded", ".moved-to-", ".bak", ".orig")
 
 DEFAULT_FIX = "delete the number and name the command that prints it"

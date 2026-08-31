@@ -39,3 +39,6 @@ devlog-fourier-*.md
 # keeping it untracked is what let a rebuild from a clean clone fall back to the
 # DEVWEB defaults and break login on tc.41chan.net.
 !.env.production
+docs/VERIFICATION-DOCTRINE.md
+docs/WORKING-RULES.md
+docs/CLAUDE-HEADER.md
