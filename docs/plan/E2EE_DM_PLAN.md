@@ -1,3 +1,7 @@
+<!-- coherence:hydrated -- canon is fourier-basis/docs/repos/technetium/docs/plan/E2EE_DM_PLAN.md
+     Edit canon and run `coherence hydrate`, never this delivered copy.
+     An edit here is drift: hydration will refuse to overwrite it and the
+     doc axis reports it edited-in-place until someone promotes or discards it. -->
 # E2EE_DM_PLAN.md -- end-to-end encryption for direct messages
 
 > Spec + ledger for the campaign opened 2026-08-23.

@@ -1,3 +1,7 @@
+<!-- coherence:hydrated -- canon is fourier-basis/docs/repos/technetium/TESTING-chatbox-domain-v1.md
+     Edit canon and run `coherence hydrate`, never this delivered copy.
+     An edit here is drift: hydration will refuse to overwrite it and the
+     doc axis reports it edited-in-place until someone promotes or discards it. -->
 # Test pass — branch `chatbox-domain-v1`
 
 Unattended auto run of 2026-07-20. 6 feature commits, 2272 insertions / 15 files.

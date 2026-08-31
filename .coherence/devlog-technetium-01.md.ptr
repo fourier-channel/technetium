@@ -1,7 +1,7 @@
 {
   "build_stamp": null,
-  "hydrated_at": "2026-08-30T20:31:39Z",
-  "hydrated_hash": "sha256c:4cfca46ea7e6c104ac487737740bb0fffc4f903e7f5a2f62e96174ff0c318d41",
+  "hydrated_at": null,
+  "hydrated_hash": "sha256c:ffdcc216825e0dc26e708f5a887dbc636ad260300fc54d8bc8cd1e4290599af7",
   "pinned": null,
   "source": "coherence://brain/devlog-technetium-01.md"
 }

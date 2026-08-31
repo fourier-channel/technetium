@@ -1,3 +1,7 @@
+<!-- coherence:hydrated -- canon is fourier-basis/docs/repos/technetium/docs/smoke-login-flow.md
+     Edit canon and run `coherence hydrate`, never this delivered copy.
+     An edit here is drift: hydration will refuse to overwrite it and the
+     doc axis reports it edited-in-place until someone promotes or discards it. -->
 # Login flow — "need to feel it" smoke list
 
 > Things that compiled + self-verified (tsc / eslint / build) but that only a

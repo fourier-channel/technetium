@@ -1,3 +1,7 @@
+<!-- coherence:hydrated -- canon is fourier-basis/docs/repos/technetium/electron/README.md
+     Edit canon and run `coherence hydrate`, never this delivered copy.
+     An edit here is drift: hydration will refuse to overwrite it and the
+     doc axis reports it edited-in-place until someone promotes or discards it. -->
 # Technetium desktop shell
 
 Wrapper A: this shell loads the **deployed** client (`https://tc.41chan.net`)

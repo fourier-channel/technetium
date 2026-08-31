@@ -1,3 +1,7 @@
+<!-- coherence:hydrated -- canon is fourier-basis/docs/repos/technetium/docs/plan/EGRESS_CONSENT_PLAN.md
+     Edit canon and run `coherence hydrate`, never this delivered copy.
+     An edit here is drift: hydration will refuse to overwrite it and the
+     doc axis reports it edited-in-place until someone promotes or discards it. -->
 # EGRESS_CONSENT_PLAN.md -- informed egress, and the record of it
 
 > Spec + ledger for the consent system requested 2026-08-15. Client-clean:

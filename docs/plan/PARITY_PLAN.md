@@ -1,3 +1,7 @@
+<!-- coherence:hydrated -- canon is fourier-basis/docs/repos/technetium/docs/plan/PARITY_PLAN.md
+     Edit canon and run `coherence hydrate`, never this delivered copy.
+     An edit here is drift: hydration will refuse to overwrite it and the
+     doc axis reports it edited-in-place until someone promotes or discards it. -->
 # PARITY_PLAN.md -- technetium parity-v1 campaign ledger
 
 > The spine of the parity-v1 campaign. A fresh session re-orients from

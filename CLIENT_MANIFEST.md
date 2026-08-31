@@ -1,3 +1,7 @@
+<!-- coherence:hydrated -- canon is fourier-basis/docs/repos/technetium/CLIENT_MANIFEST.md
+     Edit canon and run `coherence hydrate`, never this delivered copy.
+     An edit here is drift: hydration will refuse to overwrite it and the
+     doc axis reports it edited-in-place until someone promotes or discards it. -->
 # matrix-client — Starter Dependency Manifest & Scoping
 
 > Planning document for the from-scratch Discord-shaped Matrix client.

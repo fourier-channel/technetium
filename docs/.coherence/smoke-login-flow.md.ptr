@@ -1,7 +1,7 @@
 {
   "build_stamp": null,
-  "hydrated_at": "2026-08-30T20:31:39Z",
-  "hydrated_hash": "sha256c:2773b88eb74ecd44aa0d2c9eaacc43b6978816af7add80adb2312464422ba5fd",
+  "hydrated_at": null,
+  "hydrated_hash": "sha256c:93f37bc0fdf9518cf213abdd2034b6a0cdcabedd3363a2fce635c08fda442e45",
   "pinned": null,
   "source": "coherence://brain/smoke-login-flow.md"
 }
