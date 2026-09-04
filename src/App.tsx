@@ -4,6 +4,8 @@ import { useClient } from './client/ClientContext'
 import { Sidebar } from './ui/Sidebar'
 import { Timeline } from './ui/Timeline'
 import { Composer } from './ui/Composer'
+import { Ticker } from './ui/Ticker'
+import { placeholderTickerSource } from './ui/tickerSource'
 import { ComposerModeProvider } from './ui/ComposerModeProvider'
 import { TypingBar } from './ui/TypingBar'
 import { MemberList } from './ui/MemberList'
@@ -159,6 +161,10 @@ function App() {
                 <Timeline room={selectedRoom} onOpenThread={(roomId, rootId) => setOpenThread({ roomId, rootId })} threadListOpen={threadListOpen} onToggleThreadList={() => setThreadListOpen((o) => !o)} />
               </div>
               <TypingBar client={client} room={selectedRoom} />
+              {/* The dedicated strip above the chat box. Placeholder source
+                  for the MVP -- the mechanism is live; point it at real data
+                  by swapping the source (see tickerSource.ts). */}
+              <Ticker source={placeholderTickerSource} />
               {/* Undefined unless the domain is open, so an ordinary message
                   in an ordinary room never acquires a lifetime. */}
               <Composer room={selectedRoom} domainTtd={domainExpanded ? domainTtd : undefined} />

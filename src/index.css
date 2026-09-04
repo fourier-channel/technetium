@@ -2490,3 +2490,46 @@ code {
   background: var(--tc-link, #6ea8fe);
   pointer-events: none;
 }
+
+/* ---- ticker strip (above the chat box) ---------------------------------- */
+/* The track is the two-run crawl; animating to exactly -50% of its own
+   width makes the loop point invisible. Duration is set per delivery by
+   Ticker.tsx (--tc-ticker-ms) so speed stays constant at any length. */
+.tc-ticker {
+  overflow: hidden;
+  flex-shrink: 0;
+  border-top: 1px solid var(--cpd-color-gray-400);
+  background: var(--cpd-color-bg-subtle-secondary);
+}
+.tc-ticker-track {
+  display: flex;
+  width: max-content;
+  animation: tc-ticker-crawl var(--tc-ticker-ms, 30000ms) linear infinite;
+}
+.tc-ticker:hover .tc-ticker-track {
+  animation-play-state: paused;
+}
+.tc-ticker-run {
+  display: flex;
+  white-space: nowrap;
+}
+.tc-ticker-item {
+  padding: 4px 22px;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--cpd-color-text-secondary);
+}
+.tc-ticker-item a {
+  color: var(--cpd-color-text-primary);
+  text-decoration: none;
+}
+.tc-ticker-item a:hover {
+  text-decoration: underline;
+}
+@keyframes tc-ticker-crawl {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tc-ticker-track { animation: none; }
+}
