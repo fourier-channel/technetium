@@ -3672,3 +3672,28 @@ the 23 baseline throughout, build passing, checks 1124 -> 1131.
 Final state: one branch, `main`, locally and on the remote, one worktree, in
 sync. E2EE inert behind a pinned flag. E3, E7 and E11 still open, E6 still
 deferred, and the nine browser verifications still outstanding.
+
+## 2026-09-04 -- the ticker strip [auto]
+
+A dedicated strip above the chat box: one slow continuous crawl, hover to
+pause, still under reduced motion. The MVP is the MECHANISM -- the operator's
+words: "the actual content isn't relevant for the MVP, I just need the
+mechanism to function and the ability to point it at a source of data."
+
+The pointing is `TickerSource` (src/ui/tickerSource.ts): `subscribe(onItems)`
+delivering `{id, text, href?}` items now and on change. `staticTickerSource`
+feeds the placeholder run mounted in App.tsx; `pollingTickerSource(url,
+interval, map)` is the one-line path to "top 10 tags of the last hour" once an
+endpoint exists. A failed poll delivers nothing, so a flaky source degrades to
+stale, never to blank.
+
+The crawl renders the run twice and animates the track by exactly half its own
+width, so the loop point is invisible; the duration is derived from measured
+content width (written straight onto the element -- no state, no re-render)
+so speed stays constant at any length.
+
+Verified: tsc clean, eslint clean on the three touched files, build passing.
+**PENDING OPERATOR VERIFICATION** (needs a signed-in room): the strip sits
+between the typing bar and the composer, crawls smoothly, pauses on hover,
+and holds still with reduced motion on. Repro: open any room; the placeholder
+run ("TICKER ONLINE -- awaiting a data source", sample tags) should crawl.
