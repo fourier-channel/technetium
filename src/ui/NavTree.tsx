@@ -14,6 +14,7 @@ import { useReducedMotion } from './reducedMotion'
 import { AuthedImage } from './AuthedImage'
 import { RoomContextMenu } from './RoomContextMenu'
 import { reportAlways } from '../client/report'
+import { adoptDm, pendingDmInviter } from '../client/dm'
 import { directRoomIds } from '../client/dm'
 
 // Room-list row metrics. Vertical pitch = ROW_HEIGHT + 2 * ROW_MARGIN_Y.
@@ -488,12 +489,19 @@ export function NavTree({
                         // Opening an invited conversation means accepting it:
                         // the invite was personal, and the click is the answer.
                         if (node.membership === 'invite' && client) {
+                          // Read the is_direct flag BEFORE the join replaces
+                          // our member event, then mirror the inviter's
+                          // m.direct entry -- without this the accepted DM is
+                          // a DM for one side only (seen live 2026-09-05:
+                          // ticker and room-chrome on the acceptor's side).
+                          const inviter = pendingDmInviter(client, node.roomId)
                           try {
                             await client.joinRoom(node.roomId)
                           } catch (err) {
                             reportAlways('dm: accept invite', err)
                             return
                           }
+                          if (inviter) await adoptDm(client, inviter, node.roomId)
                         }
                         const live = client?.getRoom(node.roomId) ?? node.room ?? null
                         if (live) onSelectRoom?.(live)
@@ -689,11 +697,15 @@ function TreeRow({
       }
       return
     }
-    // joinable: join, then open the room once it materializes.
+    // joinable: join, then open the room once it materializes. A pending DM
+    // invite can land here too (nodeMode folds invites into joinable), so the
+    // same m.direct adoption applies -- see the DM strip's click handler.
     setBusy(true)
     setActionError(false)
+    const inviter = node.membership === 'invite' ? pendingDmInviter(client, node.roomId) : null
     try {
       await client.joinRoom(node.roomId)
+      if (inviter) await adoptDm(client, inviter, node.roomId)
       const room = client.getRoom(node.roomId)
       if (room && !node.isSpace) onSelectRoom?.(room)
     } catch (err) {

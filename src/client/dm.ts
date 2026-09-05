@@ -66,6 +66,35 @@ async function addToDirectMap(
   await client.setAccountData(EventType.Direct, { ...map, [userId]: [...existing, roomId] })
 }
 
+// A DM is only a DM for whoever has it in their m.direct. The creator writes
+// their side in startDm; the ACCEPTOR has only the invite event's is_direct
+// flag to go on, read here BEFORE joining (after the join, our member event
+// is the join and the flag lives in prev_content at best). Returns the
+// inviter -- the person the conversation is with -- or null when the pending
+// invite is not a DM invite.
+export function pendingDmInviter(client: MatrixClient, roomId: string): string | null {
+  const myId = client.getUserId()
+  const room = client.getRoom(roomId)
+  const me = myId ? room?.getMember(myId) : null
+  const ev = me?.events.member
+  if (!ev || me?.membership !== 'invite') return null
+  const content = ev.getContent()
+  if (!content.is_direct) return null
+  const inviter = ev.getSender()
+  return inviter && inviter !== myId ? inviter : null
+}
+
+// The acceptor's half of the m.direct handshake. Failure is reported, not
+// raised: the join already happened, and a conversation that opens but is
+// drawn as a room beats one that refuses to open.
+export async function adoptDm(client: MatrixClient, userId: string, roomId: string): Promise<void> {
+  try {
+    await addToDirectMap(client, userId, roomId)
+  } catch (err) {
+    console.error('[dm] could not adopt the accepted DM into m.direct', err)
+  }
+}
+
 export interface StartDmResult {
   roomId: string
   // True when an existing DM was reused rather than a new room created.
