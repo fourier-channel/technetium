@@ -28,6 +28,7 @@ const EMPTY_ROOM_IDS: ReadonlySet<string> = new Set()
 function dmTitle(node: TreeNode, isDm: boolean, counts: NotifCounts | undefined): string {
   const member = isDm ? node.room?.getAvatarFallbackMember() : undefined
   const who = member?.name || node.name || node.roomId
+  if (node.membership === 'invite') return `${who} -- invitation waiting, click to accept`
   if (!counts || counts.total < 1) return who
   const ping = counts.highlight > 0 ? `, ${counts.highlight} ping` : ''
   return `${who} (${counts.total} unread${ping})`
@@ -44,7 +45,11 @@ function dmStripRooms(
   notifs: NotifMap,
   isMutedNow: (roomId: string) => boolean,
 ): TreeNode[] {
-  const waiting = (n: TreeNode) => !isMutedNow(n.roomId) && ((notifs.get(n.roomId)?.total ?? 0) > 0)
+  // An invite IS a waiting message -- the server keeps no unread count for a
+  // room you have not joined, so membership is the only signal it sends.
+  const waiting = (n: TreeNode) =>
+    !isMutedNow(n.roomId) &&
+    (n.membership === 'invite' || (notifs.get(n.roomId)?.total ?? 0) > 0)
   if (filter === 'all') return rooms
   if (filter === 'favorites') return rooms.filter((n) => isFavorite(n.roomId) || waiting(n))
   // recent: the most recently active dozen, by the room's own clock.
@@ -53,6 +58,17 @@ function dmStripRooms(
     [...rooms].sort((a, b) => ts(b) - ts(a)).slice(0, 12).map((n) => n.roomId),
   )
   return rooms.filter((n) => recent.has(n.roomId) || waiting(n))
+}
+
+// The rows a CLOSED strip still shows. Collapsing tucks away the quiet
+// conversations; it must never tuck away the pulse -- same law as the
+// filter above, applied to the disclosure itself.
+function dmWaitingRooms(rooms: TreeNode[], notifs: NotifMap, isMutedNow: (roomId: string) => boolean): TreeNode[] {
+  return rooms.filter(
+    (n) =>
+      !isMutedNow(n.roomId) &&
+      (n.membership === 'invite' || (notifs.get(n.roomId)?.total ?? 0) > 0),
+  )
 }
 
 type Mode = 'joined' | 'joinable' | 'knock'
@@ -438,31 +454,48 @@ export function NavTree({
           <div
             style={{
               display: 'grid',
-              gridTemplateRows: dmOpen ? '1fr' : '0fr',
+              gridTemplateRows: dmOpen || dmWaitingRooms(tree.orphanRooms, notifs, isMutedNow).length > 0 ? '1fr' : '0fr',
               transition: animate ? 'grid-template-rows 240ms ease' : undefined,
             }}
           >
             <div style={{ overflow: 'hidden', minHeight: 0 }}>
               {/* gap widened from 7 (operator: too tightly packed). */}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 13, padding: '8px 10px 4px' }}>
-                {dmStripRooms(tree.orphanRooms, dmFilter, isFavorite, notifs, isMutedNow).map((node) => {
+                {(dmOpen
+                  ? dmStripRooms(tree.orphanRooms, dmFilter, isFavorite, notifs, isMutedNow)
+                  : dmWaitingRooms(tree.orphanRooms, notifs, isMutedNow)
+                ).map((node) => {
                   // A DM is drawn as the PERSON on the other end. Reduced to
                   // icons, a DM has nothing else to identify it: DM rooms
                   // almost never carry an avatar of their own, so the room
                   // avatar path left every one of them as a generic initial.
                   const isDm = dmIds.has(node.roomId)
                   const counts = isMutedNow(node.roomId) ? undefined : notifs.get(node.roomId)
-                  const unread = (counts?.total ?? 0) > 0
-                  const ping = (counts?.highlight ?? 0) > 0
+                  const invited = node.membership === 'invite'
+                  // A DM invite is a personal summons: ping-grade, not merely
+                  // unread. It carries no server-side count, so membership is
+                  // the whole signal.
+                  const unread = invited || (counts?.total ?? 0) > 0
+                  const ping = invited || (counts?.highlight ?? 0) > 0
                   return (
                     <button
                       key={`${node.roomId}:${dmRevealKey}`}
                       type="button"
-                      onClick={() => {
+                      onClick={async () => {
                         // Cache-revived nodes carry room: null until the live
                         // refresh lands; resolve by id at click time so the
                         // click is never a silent no-op (seen live 2026-09-05).
-                        const live = node.room ?? client?.getRoom(node.roomId) ?? null
+                        // Opening an invited conversation means accepting it:
+                        // the invite was personal, and the click is the answer.
+                        if (node.membership === 'invite' && client) {
+                          try {
+                            await client.joinRoom(node.roomId)
+                          } catch (err) {
+                            reportAlways('dm: accept invite', err)
+                            return
+                          }
+                        }
+                        const live = client?.getRoom(node.roomId) ?? node.room ?? null
                         if (live) onSelectRoom?.(live)
                       }}
                       onContextMenu={(e) => onContext(node, e)}
