@@ -7,7 +7,17 @@ import type { TickerItem, TickerSource } from './tickerSource'
 // motion stills it entirely (index.css owns both).
 const SPEED_PX_PER_S = 28
 
-export function Ticker({ source }: { source: TickerSource }) {
+export function Ticker({
+  source,
+  collapsed = false,
+  onToggle,
+}: {
+  source: TickerSource
+  // Collapsed shows only a slim re-expand strip; the crawl and its layout
+  // cost are gone entirely. State is the caller's (account data).
+  collapsed?: boolean
+  onToggle?: () => void
+}) {
   const [items, setItems] = useState<TickerItem[]>([])
   const trackRef = useRef<HTMLDivElement | null>(null)
 
@@ -24,6 +34,18 @@ export function Ticker({ source }: { source: TickerSource }) {
   }, [items])
 
   if (items.length === 0) return null
+
+  if (collapsed) {
+    return (
+      <div className="tc-ticker tc-ticker--collapsed">
+        {onToggle && (
+          <button type="button" className="tc-ticker-toggle" onClick={onToggle} aria-label="Expand ticker" title="Expand ticker">
+            &#9662;
+          </button>
+        )}
+      </div>
+    )
+  }
 
   const run = (suffix: string, hidden: boolean) => (
     <div className="tc-ticker-run" aria-hidden={hidden || undefined}>
@@ -43,6 +65,11 @@ export function Ticker({ source }: { source: TickerSource }) {
         {run('', false)}
         {run(':loop', true)}
       </div>
+      {onToggle && (
+        <button type="button" className="tc-ticker-toggle" onClick={onToggle} aria-label="Collapse ticker" title="Collapse ticker">
+          &#9652;
+        </button>
+      )}
     </div>
   )
 }
