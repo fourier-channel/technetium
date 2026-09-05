@@ -6,6 +6,8 @@ import { Timeline } from './ui/Timeline'
 import { Composer } from './ui/Composer'
 import { Ticker } from './ui/Ticker'
 import { placeholderTickerSource } from './ui/tickerSource'
+import { useTickerCollapsed } from './ui/tickerCollapse'
+import { directRoomIds } from './client/dm'
 import { ComposerModeProvider } from './ui/ComposerModeProvider'
 import { TypingBar } from './ui/TypingBar'
 import { MemberList } from './ui/MemberList'
@@ -19,6 +21,8 @@ import { useReadMarker } from './client/useReadMarker'
 import { useMediaTagSync } from './client/useMediaTags'
 import { DomainView } from './ui/DomainView'
 import { AuthLanding } from './onboarding/AuthLanding'
+import { AlphaBanner } from './ui/AlphaBanner'
+import { AvatarDisc } from './ui/AvatarDisc'
 import { BootScreen } from './onboarding/BootScreen'
 
 // Thin shell: render purely by client lifecycle status. All auth/client logic
@@ -46,6 +50,8 @@ function App() {
   // Mark the viewed room read so its unread glow/ping clears (base client sent
   // no read receipts). Called before any early return to keep hook order stable.
   useReadMarker(client, selectedRoom)
+  // Ticker collapse follows the user via account data. Same hook-order rule.
+  const [tickerCollapsed, setTickerCollapsed] = useTickerCollapsed(client)
   // Keep the media-tag store fed from room state for every room, so any image
   // anywhere in the tree can resolve its tags without props being threaded.
   useMediaTagSync(client)
@@ -95,21 +101,48 @@ function App() {
         `}</style>
       </div>
     )}
-    <div style={{ display: 'flex', height: '100vh', fontFamily: 'sans-serif' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'sans-serif' }}>
+      <AlphaBanner />
+      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <Sidebar
         selectedRoomId={selectedRoom?.roomId}
         onSelectRoom={setSelectedRoom}
         header={
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '4px 8px 8px',
-            }}
-          >
-            <strong>{userId}</strong>
-            <button type="button" onClick={logout} style={{ fontSize: 12 }}>Log out</button>
+          <div style={{ padding: '4px 8px 8px' }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: 8,
+                minWidth: 0,
+              }}
+            >
+              {/* Smaller than the old <strong> default: the name must fit the
+                  width most people leave the room list at, and it ellipsizes
+                  rather than wrapping the header. */}
+              <strong
+                style={{
+                  fontSize: 12.5,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={userId ?? undefined}
+              >
+                {userId}
+              </strong>
+              <button type="button" onClick={logout} style={{ fontSize: 12, flexShrink: 0 }}>Log out</button>
+            </div>
+            {/* The user's own avatar, under the name at the panel's top left. */}
+            <div style={{ marginTop: 6 }}>
+              <AvatarDisc
+                userId={userId ?? ''}
+                name={client?.getUser(userId ?? '')?.displayName ?? userId ?? ''}
+                avatarMxc={client?.getUser(userId ?? '')?.avatarUrl ?? null}
+                size={34}
+              />
+            </div>
           </div>
         }
       />
@@ -162,9 +195,18 @@ function App() {
               </div>
               <TypingBar client={client} room={selectedRoom} />
               {/* The dedicated strip above the chat box. Placeholder source
-                  for the MVP -- the mechanism is live; point it at real data
-                  by swapping the source (see tickerSource.ts). */}
-              <Ticker source={placeholderTickerSource} />
+                  for the MVP -- point it at real data by swapping the source
+                  (see tickerSource.ts). Absent in DMs entirely -- not even a
+                  re-expand element (operator ruling 2026-09-05) -- and
+                  collapsible everywhere else, with the state riding account
+                  data so it follows the user. */}
+              {!(client && selectedRoom && directRoomIds(client).has(selectedRoom.roomId)) && (
+                <Ticker
+                  source={placeholderTickerSource}
+                  collapsed={tickerCollapsed}
+                  onToggle={() => setTickerCollapsed(!tickerCollapsed)}
+                />
+              )}
               {/* Undefined unless the domain is open, so an ordinary message
                   in an ordinary room never acquires a lifetime. */}
               <Composer room={selectedRoom} domainTtd={domainExpanded ? domainTtd : undefined} />
@@ -238,6 +280,7 @@ function App() {
       </main>
 
       <MemberList room={selectedRoom} />
+      </div>
     </div>
     </RoomListSettingsProvider>
     </LightboxProvider>
