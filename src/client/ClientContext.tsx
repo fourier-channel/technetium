@@ -9,6 +9,7 @@ import * as sdk from 'matrix-js-sdk'
 import type { MatrixClient } from 'matrix-js-sdk'
 import { saveSession, loadSession, clearSession } from './session'
 import { buildClient, deleteSyncStore, startAndWaitForSync } from './buildClient'
+import { watchRoomEncryptionConfig } from './roomEncryptionConfig'
 import { createTokenRefreshFunction } from './tokenRefresher'
 import {
   e2eeEnabled,
@@ -147,6 +148,10 @@ export function ClientProvider({ children }: { children: ReactNode }) {
         // create or replace a version, and replacing one destroys the keys in
         // the old one (G-e1).
         setKeyBackup(await connectKeyBackup(c))
+        // Configure crypto for rooms we join into already-encrypted -- the SDK
+        // only does this for encryption events it sees as fresh, which an
+        // accepted invite is not. See roomEncryptionConfig.ts.
+        watchRoomEncryptionConfig(c)
       }
     }
 
