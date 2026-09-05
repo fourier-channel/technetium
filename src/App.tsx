@@ -33,6 +33,23 @@ function App() {
   const { client, status, error, userId, login, logout } = useClient()
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   const [openThread, setOpenThread] = useState<{ roomId: string; rootId: string } | null>(null)
+
+  // Open a room the caller knows only by id -- the just-created-DM case.
+  // createRoom answers before the room reaches the client store via sync, so
+  // "create then open" lands in that gap; retry briefly rather than dropping
+  // the navigation. Seen live 2026-09-05: "Direct message created." with the
+  // pane still saying select-a-room and nothing clickable.
+  const openRoomById = (roomId: string) => {
+    const attempt = (triesLeft: number) => {
+      const room = client?.getRoom(roomId)
+      if (room) {
+        setSelectedRoom(room)
+        return
+      }
+      if (triesLeft > 0) setTimeout(() => attempt(triesLeft - 1), 500)
+    }
+    attempt(12)
+  }
   const [threadListOpen, setThreadListOpen] = useState(false)
   const [threadPanelWidth, setThreadPanelWidth] = useState(380)
   const [domainExpanded, setDomainExpanded] = useState(false)
@@ -172,7 +189,7 @@ function App() {
                   edge, rendered after the panels below so it travels with
                   the domain. */}
               <div style={{ flex: 1, minHeight: 0 }}>
-                <Timeline room={selectedRoom} onOpenThread={(roomId, rootId) => setOpenThread({ roomId, rootId })} threadListOpen={threadListOpen} onToggleThreadList={() => setThreadListOpen((o) => !o)} />
+                <Timeline room={selectedRoom} onOpenThread={(roomId, rootId) => setOpenThread({ roomId, rootId })} onOpenRoom={openRoomById} threadListOpen={threadListOpen} onToggleThreadList={() => setThreadListOpen((o) => !o)} />
               </div>
               <TypingBar client={client} room={selectedRoom} />
               {/* The dedicated strip above the chat box. Placeholder source
@@ -267,7 +284,7 @@ function App() {
         )}
       </main>
 
-      <MemberList room={selectedRoom} />
+      <MemberList room={selectedRoom} onOpenRoom={openRoomById} />
       </div>
     </div>
     </RoomListSettingsProvider>

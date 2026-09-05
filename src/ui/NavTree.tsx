@@ -458,7 +458,13 @@ export function NavTree({
                     <button
                       key={`${node.roomId}:${dmRevealKey}`}
                       type="button"
-                      onClick={() => node.room && onSelectRoom?.(node.room)}
+                      onClick={() => {
+                        // Cache-revived nodes carry room: null until the live
+                        // refresh lands; resolve by id at click time so the
+                        // click is never a silent no-op (seen live 2026-09-05).
+                        const live = node.room ?? client?.getRoom(node.roomId) ?? null
+                        if (live) onSelectRoom?.(live)
+                      }}
                       onContextMenu={(e) => onContext(node, e)}
                       title={dmTitle(node, isDm, counts)}
                       style={{
@@ -629,7 +635,10 @@ function TreeRow({
       return
     }
     if (mode === 'joined') {
-      if (node.room) onSelectRoom?.(node.room)
+      // Same id-time resolution as the DM strip: a node revived from the
+      // cached server shape has room: null, and the click must still work.
+      const live = node.room ?? client?.getRoom(node.roomId) ?? null
+      if (live) onSelectRoom?.(live)
       return
     }
     if (!client || busy) return
