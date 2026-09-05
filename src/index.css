@@ -2559,3 +2559,15 @@ code {
 }
 .tc-ticker-toggle:hover { color: var(--cpd-color-text-primary); }
 .tc-ticker--collapsed .tc-ticker-toggle { position: static; transform: none; }
+
+/* DM strip: the waiting pulse. The inline static ring is the reduced-motion
+   base; this animates it. Ping pulses faster and hotter. */
+@keyframes tcDmPulse {
+  0%, 100% { box-shadow: 0 0 0 2px var(--tc-unread-base), 0 0 7px 1px rgba(255, 150, 40, 0.3); }
+  50% { box-shadow: 0 0 0 2px var(--tc-unread), 0 0 16px 4px rgba(255, 150, 40, 0.8); }
+}
+.tc-dm-waiting { animation: tcDmPulse 1.7s ease-in-out infinite; }
+.tc-dm-waiting--ping { animation-duration: 1s; }
+@media (prefers-reduced-motion: reduce) {
+  .tc-dm-waiting { animation: none; }
+}

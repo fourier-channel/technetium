@@ -27,6 +27,7 @@ function loadSettings(): RoomListSettings {
       soundVolume: typeof p.soundVolume === 'number' ? Math.max(0, Math.min(100, p.soundVolume)) : 5,
       panelWidth: typeof p.panelWidth === 'number' ? p.panelWidth : null,
       panelLocked: p.panelLocked === true,
+      dmFilter: p.dmFilter === 'favorites' || p.dmFilter === 'all' ? p.dmFilter : 'recent',
     }
   } catch (err) {
     reportIgnored('room list settings: read', err)
@@ -86,6 +87,10 @@ export function RoomListSettingsProvider({ children }: { children: ReactNode }) 
   )
   const setPanelLocked = useCallback(
     (locked: boolean) => setSettings((s) => ({ ...s, panelLocked: locked })),
+    [],
+  )
+  const setDmFilter = useCallback(
+    (f: RoomListSettings['dmFilter']) => setSettings((s) => ({ ...s, dmFilter: f })),
     [],
   )
   const toggleFavorite = useCallback(
@@ -188,6 +193,8 @@ export function RoomListSettingsProvider({ children }: { children: ReactNode }) 
       setPanelWidth,
       panelLocked: settings.panelLocked,
       setPanelLocked,
+      dmFilter: settings.dmFilter,
+      setDmFilter,
       isFavorite: (roomId) => settings.favorites.includes(roomId),
       toggleFavorite,
       getIcon: (roomId) => settings.icons[roomId],
@@ -221,6 +228,7 @@ export function RoomListSettingsProvider({ children }: { children: ReactNode }) 
       setSoundVolume,
       setPanelWidth,
       setPanelLocked,
+      setDmFilter,
       toggleFavorite,
       setIcon,
       clearIcon,

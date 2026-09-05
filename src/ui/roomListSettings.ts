@@ -36,6 +36,15 @@ export interface RoomListSettings {
   soundVolume: number // 0..100
   panelWidth: number | null // px; null = use the computed default
   panelLocked: boolean
+  // The DM strip's listing mode, cycled from its header pill.
+  dmFilter: DmFilter
+}
+
+export type DmFilter = 'recent' | 'favorites' | 'all'
+
+// The cycle order the header pill walks: Recent -> Favorites Only -> All.
+export function nextDmFilter(f: DmFilter): DmFilter {
+  return f === 'recent' ? 'favorites' : f === 'favorites' ? 'all' : 'recent'
 }
 
 export function defaultRoomListSettings(): RoomListSettings {
@@ -50,6 +59,7 @@ export function defaultRoomListSettings(): RoomListSettings {
     soundVolume: 5,
     panelWidth: null,
     panelLocked: false,
+    dmFilter: 'recent',
   }
 }
 
@@ -64,6 +74,8 @@ export interface RoomListSettingsApi {
   setPanelWidth: (w: number | null) => void
   panelLocked: boolean
   setPanelLocked: (locked: boolean) => void
+  dmFilter: DmFilter
+  setDmFilter: (f: DmFilter) => void
   isFavorite: (roomId: string) => boolean
   toggleFavorite: (roomId: string) => void
   getIcon: (roomId: string) => string | undefined
