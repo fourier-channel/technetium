@@ -23,7 +23,14 @@ const HONOR_COLOR: Record<string, string> = {
   '+': 'var(--cpd-color-text-warning-primary, #d4a72c)', // voice
 }
 
-export function MemberList({ room }: { room: Room | null }) {
+export function MemberList({
+  room,
+  onOpenRoom,
+}: {
+  room: Room | null
+  // Navigates to a room by id -- how "start a DM" actually OPENS the DM.
+  onOpenRoom?: (roomId: string) => void
+}) {
   const { client } = useClient()
   const members = useMembers(client)
   const [mode, setMode] = useState<Mode>('all-highlight')
@@ -186,6 +193,7 @@ export function MemberList({ room }: { room: Room | null }) {
               client={client}
               userId={profile.userId}
               room={room}
+              onOpenRoom={onOpenRoom}
               onClose={() => setProfile(null)}
             />
           }
@@ -217,6 +225,9 @@ export function MemberList({ room }: { room: Room | null }) {
                       ? 'You already have a direct message with them -- opening it.'
                       : 'Direct message created.',
                   )
+                  // Both notices say "opening" -- this is the opening. Without
+                  // it the DM existed but the pane stayed on select-a-room.
+                  onOpenRoom?.(result.roomId)
                 } else if (room) {
                   await client.invite(room.roomId, userId)
                   setNotice('Invite sent.')

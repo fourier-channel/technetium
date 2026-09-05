@@ -117,7 +117,7 @@ function onSpoilerKey(e: React.KeyboardEvent) {
 // Read-only timeline. Message bodies render sanitized rich HTML (via DOMPurify)
 // when present, else plaintext. Events we could not decrypt render the REASON
 // they are unreadable, not a bare padlock (see client/decryptionState).
-export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadList }: { room: Room; onOpenThread?: (roomId: string, rootId: string) => void; threadListOpen?: boolean; onToggleThreadList?: () => void }) {
+export function Timeline({ room, onOpenThread, onOpenRoom, threadListOpen, onToggleThreadList }: { room: Room; onOpenThread?: (roomId: string, rootId: string) => void; onOpenRoom?: (roomId: string) => void; threadListOpen?: boolean; onToggleThreadList?: () => void }) {
   const { client } = useClient()
   const { items, loadOlder, loadingOlder, atStart } = useTimeline(client, room)
   // The lightbox's vertical axis for this room: every image in the loaded
@@ -442,6 +442,7 @@ export function Timeline({ room, onOpenThread, threadListOpen, onToggleThreadLis
                   client={client}
                   userId={profile.userId}
                   room={room}
+                  onOpenRoom={onOpenRoom}
                   onClose={() => setProfile(null)}
                 />
               }
