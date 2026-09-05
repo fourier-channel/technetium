@@ -25,7 +25,11 @@
 
 const reported = new Set<string>()
 
-function detail(err: unknown): string {
+// The human-readable core of an error, whatever shape it arrived in: a real
+// Error, a Matrix API error object, or something else entirely. Exported
+// because callers outside this module were each hand-rolling `err.message ??
+// String(err)` behind `catch (err: any)`, which is how the any-casts got in.
+export function detail(err: unknown): string {
   if (err instanceof Error) return err.message
   const e = err as { errcode?: string; httpStatus?: number; message?: string } | null
   if (e && typeof e === 'object') {

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import type { Room } from 'matrix-js-sdk'
-import { useClient } from './client/ClientContext'
+import { useClient } from './client/clientContextValue'
 import { Sidebar } from './ui/Sidebar'
 import { Timeline } from './ui/Timeline'
 import { Composer } from './ui/Composer'

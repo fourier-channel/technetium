@@ -40,7 +40,10 @@ export function useMembers(client: MatrixClient | null) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    setMembers(mergeSources(sources))
+    // Not a synchronous setState in the effect body (G-tc01). The initial
+    // value already came from the lazy initializer; this reseeds when the
+    // sources change, which only happens when the client does.
+    queueMicrotask(() => setMembers(mergeSources(sources)))
 
     const refresh = () => {
       if (timer.current) clearTimeout(timer.current)

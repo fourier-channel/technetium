@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { Room } from 'matrix-js-sdk'
-import { useClient } from '../client/ClientContext'
+import { useClient } from '../client/clientContextValue'
 import { startDm } from '../client/dm'
 import { describeInviteError } from '../client/userDirectory'
 import { UserPicker } from './UserPicker'

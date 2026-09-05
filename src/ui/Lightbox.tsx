@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
-import { useClient } from '../client/ClientContext'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { LightboxContext, type LightboxItem, type LightboxThread } from './lightboxContext'
+import { useClient } from '../client/clientContextValue'
 import { fetchMediaSrc, parseMxc } from '../client/media'
 import { MediaTags } from './MediaTags'
 import { axisFromKey, isTypingTarget, BOTH } from './axisKeys'
@@ -16,41 +17,10 @@ import { flatIndex, stepImage, totalImages } from './mediaSequence'
 
 // A single image in the viewer: the mxc to show, an optional name for the
 // download filename / alt text, and an optional mimetype to derive an extension.
-export interface LightboxItem {
-  mxc: string
-  /** The room this image was rendered from. Needed for ENCRYPTED rooms, where
-   *  the server cannot see which room an mxc belongs to. */
-  roomId?: string
-  name?: string
-  mimetype?: string
-}
 
-// The conversation the open image came from, supplying the VERTICAL axis:
-// every image-bearing message in it, in timeline order, as a list of stops (a
-// lone image is a one-item stop, a gallery batch is one stop of N). Built by
-// the surface that rendered the messages -- see mediaSequence.ts -- because the
-// viewer is mounted at App root and has no idea what the reader is reading.
-export interface LightboxThread {
-  stops: LightboxItem[][]
-  /** Which stop the opened set is. */
-  stop: number
-}
 
-interface LightboxApi {
-  // Open the viewer on a set of images at startIndex (clamped). A one-element
-  // set shows no horizontal navigation. Pass `thread` to give up/down a
-  // conversation to walk; without it the viewer has no vertical axis.
-  open: (items: LightboxItem[], startIndex?: number, thread?: LightboxThread) => void
-}
 
-const LightboxContext = createContext<LightboxApi | null>(null)
 
-// Hook for any descendant of LightboxProvider to open the viewer.
-export function useLightbox(): LightboxApi {
-  const ctx = useContext(LightboxContext)
-  if (!ctx) throw new Error('useLightbox must be used within a LightboxProvider')
-  return ctx
-}
 
 const MIME_EXT: Record<string, string> = {
   'image/png': 'png',
@@ -182,13 +152,21 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const cur = items && index >= 0 && index < items.length ? items[index] : null
     if (!client || !cur) {
-      setSrc(null)
-      setError(false)
+      // Not a synchronous setState in the effect body (G-tc01).
+      queueMicrotask(() => {
+        setSrc(null)
+        setError(false)
+      })
       return
     }
     let cancelled = false
-    setSrc(null)
-    setError(false)
+    // Not a synchronous setState in the effect body (G-tc01). Clears the
+    // previous image before the new one resolves, one microtask later.
+    queueMicrotask(() => {
+      if (cancelled) return
+      setSrc(null)
+      setError(false)
+    })
 
     fetchMediaSrc(client, cur.mxc, undefined, cur.roomId)
       .then(({ src: resolved, revoke }) => {

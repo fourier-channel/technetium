@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { EventTimeline, ThreadEvent } from 'matrix-js-sdk'
-import { useClient } from '../client/ClientContext'
+import { useClient } from '../client/clientContextValue'
 import { applyLayout, toItems } from '../client/useTimeline'
 import { DaySeparator, Row } from './Timeline'
 import { buildMediaSequence } from './mediaSequence'

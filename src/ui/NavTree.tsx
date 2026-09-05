@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Room } from 'matrix-js-sdk'
-import { useClient } from '../client/ClientContext'
+import { useClient } from '../client/clientContextValue'
 import { computeRevealOrder, type TreeNode } from '../client/spaces'
 import { useNavTree } from '../client/useNavTree'
 import { useRoomNotifications, type NotifMap, type NotifCounts } from '../client/useRoomNotifications'

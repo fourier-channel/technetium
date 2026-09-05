@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { TreeNode } from '../client/spaces'
-import { useClient } from '../client/ClientContext'
+import { useClient } from '../client/clientContextValue'
 import { useRoomListSettings } from './roomListSettings'
 import { markNodeRead } from '../client/markRead'
 import { describeInviteError } from '../client/userDirectory'

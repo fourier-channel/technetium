@@ -137,13 +137,18 @@ export function useNavTree(client: MatrixClient | null): NavTreeState {
 
   useEffect(() => {
     if (!client) {
-      setTree(null)
-      setLoading(false)
+      // Not a synchronous setState in the effect body (G-tc01).
+      queueMicrotask(() => {
+        setTree(null)
+        setLoading(false)
+      })
       cacheRef.current = []
       return
     }
 
-    void refetch() // initial load
+    // Initial load, deferred one microtask so the state it sets does not land
+    // synchronously in the effect body (G-tc01).
+    queueMicrotask(() => void refetch())
 
     const scheduleRefetch = () => {
       if (debounce.current) clearTimeout(debounce.current)
@@ -173,6 +178,11 @@ export function useNavTree(client: MatrixClient | null): NavTreeState {
 
     return () => {
       if (debounce.current) clearTimeout(debounce.current)
+      // Deliberate exception: this is a cancellation token, so it MUST bump
+      // the LIVE ref at cleanup time. The rule's advice -- copy the value into
+      // the effect -- would bump a stale copy and leave the in-flight fetch
+      // running, which is the very bug the rule exists to prevent.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       fetchSeq.current++ // cancel any in-flight fetch
       client.off(RoomEvent.MyMembership, onMembership)
       client.off(RoomEvent.Name, rebuildFromCache)

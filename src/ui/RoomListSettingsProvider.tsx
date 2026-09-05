@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ClientEvent } from 'matrix-js-sdk'
-import { useClient } from '../client/ClientContext'
+import { useClient } from '../client/clientContextValue'
 import { serverMutedRooms, setRoomMutedOnServer } from '../client/pushRules'
 import { reportIgnored } from '../client/report'
 import {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { RoomStateEvent, type Room } from 'matrix-js-sdk'
-import { useClient } from '../client/ClientContext'
+import { useClient } from '../client/clientContextValue'
 import { roomShieldState, shieldCopy, type RoomShieldFacts } from '../client/roomShield'
 
 // ---------------------------------------------------------------------------

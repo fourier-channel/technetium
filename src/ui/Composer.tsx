@@ -8,7 +8,7 @@ import {
   type DragEvent,
 } from 'react'
 import type { Room, RoomMember } from 'matrix-js-sdk'
-import { useClient } from '../client/ClientContext'
+import { useClient } from '../client/clientContextValue'
 import { formatMessage } from '../client/messageFormat'
 import { EmojiPicker } from './EmojiPicker'
 import { useComposerMode, type ComposerMode } from './composerMode'
@@ -184,7 +184,11 @@ export function Composer({
   // Mirror attachments into a ref so the unmount cleanup revokes whatever is
   // still pending without re-subscribing on every change.
   const attachmentsRef = useRef<PendingAttachment[]>([])
-  attachmentsRef.current = attachments
+  // Written in an effect, not during render: a ref mutated while rendering is
+  // a torn read under concurrent rendering, and React flags it.
+  useEffect(() => {
+    attachmentsRef.current = attachments
+  })
   useEffect(() => {
     return () => {
       for (const a of attachmentsRef.current) URL.revokeObjectURL(a.previewUrl)

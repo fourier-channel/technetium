@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { axisFromKey, isTypingTarget, HORIZONTAL } from './axisKeys'
-import { useClient } from '../client/ClientContext'
+import { useClient } from '../client/clientContextValue'
 import { useFlipList, flipIdOf, type FlipControl } from './flip'
 import { usePopOnIncrease } from './pop'
 import { useReducedMotion } from './reducedMotion'

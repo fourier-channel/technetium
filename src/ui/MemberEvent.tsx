@@ -1,5 +1,5 @@
 import type { MatrixEvent } from 'matrix-js-sdk'
-import { useClient } from '../client/ClientContext'
+import { useClient } from '../client/clientContextValue'
 import {
   arrivalAnimation,
   describeMemberEvent,

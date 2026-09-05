@@ -15,7 +15,7 @@ import { DomainTtdControl } from './DomainTtdControl'
 import { DomainUserMenu } from './DomainUserMenu'
 import { ProfileCard } from './ProfileCard'
 import { isDomainAdmin } from './domainRoles'
-import { useLightbox } from './Lightbox'
+import { useLightbox } from './lightboxContext'
 import { transformToStyle, type Transform } from './uitransform/transform'
 
 const PRESET_AVATARS = ['😀', '😎', '🤖', '👾', '🐱', '🦊', '🐸', '👻', '🎧', '🕹️', '🌟', '🔥']

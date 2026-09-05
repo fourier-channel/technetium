@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { IContent, MatrixEvent, Room } from 'matrix-js-sdk'
-import { useClient } from '../client/ClientContext'
+import { useClient } from '../client/clientContextValue'
 import { isEditableContent } from '../client/editContent'
 import { eventPreview } from '../client/eventPreview'
 import { usePinnedEvents } from '../client/usePinnedEvents'
