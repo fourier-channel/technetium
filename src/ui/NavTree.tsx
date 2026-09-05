@@ -15,6 +15,7 @@ import { AuthedImage } from './AuthedImage'
 import { RoomContextMenu } from './RoomContextMenu'
 import { reportAlways } from '../client/report'
 import { adoptDm, pendingDmInviter } from '../client/dm'
+import { configureRoomEncryptionNow } from '../client/roomEncryptionConfig'
 import { directRoomIds } from '../client/dm'
 
 // Room-list row metrics. Vertical pitch = ROW_HEIGHT + 2 * ROW_MARGIN_Y.
@@ -502,6 +503,13 @@ export function NavTree({
                             return
                           }
                           if (inviter) await adoptDm(client, inviter, node.roomId)
+                          // Joining an already-encrypted room does not build
+                          // the outbound encryptor on its own; do it so the
+                          // first reply does not fail (roomEncryptionConfig.ts).
+                          // NOT awaited: opening the conversation must never
+                          // wait on key setup, and the SDK re-resolves members
+                          // on send anyway.
+                          void configureRoomEncryptionNow(client, node.roomId, { waitForUserId: inviter })
                         }
                         const live = client?.getRoom(node.roomId) ?? node.room ?? null
                         if (live) onSelectRoom?.(live)
@@ -706,6 +714,9 @@ function TreeRow({
     try {
       await client.joinRoom(node.roomId)
       if (inviter) await adoptDm(client, inviter, node.roomId)
+      // Same as the DM strip: configure crypto for a room joined
+      // already-encrypted, in the background so the join stays responsive.
+      void configureRoomEncryptionNow(client, node.roomId, { waitForUserId: inviter })
       const room = client.getRoom(node.roomId)
       if (room && !node.isSpace) onSelectRoom?.(room)
     } catch (err) {

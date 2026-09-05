@@ -1,5 +1,6 @@
 import { EventType, Preset, Visibility, type MatrixClient } from 'matrix-js-sdk'
 import { decideDmEncryption, willEncrypt, type DmEncryptionDecision } from './dmEncryption'
+import { configureRoomEncryptionNow } from './roomEncryptionConfig'
 
 // ---------------------------------------------------------------------------
 // W3.8 -- direct messages.
@@ -174,5 +175,18 @@ export async function startDm(client: MatrixClient, userId: string): Promise<Sta
   // Written AFTER creation and awaited: if this fails the room exists but is
   // not a DM anywhere, which the caller needs to be able to say.
   await addToDirectMap(client, userId, roomId)
+
+  // Establish the megolm session now, in the background, rather than on the
+  // sender's first keystroke. RoomEncryptor shares the room key with the
+  // members it can SEE, and for the first second or so after createRoom the
+  // invitee's membership has not reached us through sync -- so a message typed
+  // immediately is encrypted to nobody and the recipient reads "could not be
+  // decrypted" (seen live 2026-09-05). Not awaited: the user is still opening
+  // the conversation, and a failure here is recovered by the SDK's own
+  // member-load on send.
+  if (willEncrypt(encryption)) {
+    void configureRoomEncryptionNow(client, roomId, { waitForUserId: userId })
+  }
+
   return { roomId, existing: false, encryption }
 }
