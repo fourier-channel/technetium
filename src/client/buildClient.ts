@@ -13,6 +13,28 @@ export interface BuildClientParams {
   tokenRefreshFunction?: TokenRefreshFunction
 }
 
+// The sync cache is keyed BY USER, not by browser. One shared db meant
+// store.startup() handed a fresh login the previous account's entire synced
+// world -- rooms, DMs, and a sync token belonging to someone else -- which is
+// exactly what the operator hit logging in as a test user on 2026-09-05: the
+// admin's room list rendered, and the test user's own new DM was unopenable.
+const SYNC_DB_BASENAME = 'matrix-client-sync'
+
+const syncDbNameFor = (userId: string) => `${SYNC_DB_BASENAME}::${userId}`
+
+// Best-effort delete of one user's sync cache (used on explicit logout, so a
+// shared machine does not keep the departed user's room list readable). The
+// SDK prefixes db names with "matrix-js-sdk:"; failures are swallowed because
+// a cache that outlives its welcome is a nuisance, not a reason to break
+// logout.
+export function deleteSyncStore(userId: string): void {
+  try {
+    window.indexedDB.deleteDatabase(`matrix-js-sdk:${syncDbNameFor(userId)}`)
+  } catch {
+    // Nothing to do: the db either never existed or the browser refused.
+  }
+}
+
 // Centralized client construction. Both fresh-login and resume go through here,
 // so the persistent-store wiring lives in exactly one place.
 //
@@ -21,10 +43,20 @@ export interface BuildClientParams {
 // next launch — so a refresh resumes from the saved sync token instead of doing
 // a full initial sync. (This is also where crypto key storage will hang later.)
 export async function buildClient(params: BuildClientParams): Promise<MatrixClient> {
+  // The pre-fix shared db may still hold another account's world on machines
+  // that logged in before the per-user keying landed. Nothing reads it any
+  // more; deleting it is fire-and-forget (deleteDatabase blocks while an old
+  // tab holds it open, which is why this is not awaited).
+  try {
+    window.indexedDB.deleteDatabase(`matrix-js-sdk:${SYNC_DB_BASENAME}`)
+  } catch {
+    // Best effort only.
+  }
+
   const store = new sdk.IndexedDBStore({
     indexedDB: window.indexedDB,
     localStorage: window.localStorage,
-    dbName: 'matrix-client-sync',
+    dbName: syncDbNameFor(params.userId),
   })
 
   const client = sdk.createClient({
