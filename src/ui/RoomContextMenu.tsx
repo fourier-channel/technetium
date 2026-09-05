@@ -20,11 +20,14 @@ export function RoomContextMenu({
   x,
   y,
   onClose,
+  onInvite,
 }: {
   node: TreeNode
   x: number
   y: number
   onClose: () => void
+  // Present only when the viewer has invite power here; opens the picker.
+  onInvite?: () => void
 }) {
   const { client } = useClient()
   const settings = useRoomListSettings()
@@ -318,6 +321,15 @@ export function RoomContextMenu({
         <MenuItem onClick={() => { settings.clearIcon(node.roomId); onClose() }}>
           ✕ Clear icon
         </MenuItem>
+      )}
+
+      {joined && onInvite && (
+        <>
+          <Divider />
+          <MenuItem onClick={() => { onInvite(); onClose() }}>
+            {node.isSpace ? '+ Invite people to this space' : '+ Invite people to this room'}
+          </MenuItem>
+        </>
       )}
 
       {joined && (

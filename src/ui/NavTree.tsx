@@ -5,6 +5,8 @@ import { computeRevealOrder, type TreeNode } from '../client/spaces'
 import { useNavTree } from '../client/useNavTree'
 import { useRoomNotifications, type NotifMap, type NotifCounts } from '../client/useRoomNotifications'
 import { useRoomListSettings, nextDmFilter, type DmFilter } from './roomListSettings'
+import { UserPicker } from './UserPicker'
+import { describeInviteError } from '../client/userDirectory'
 import { useFlipList, type FlipControl } from './flip'
 import { useThreadDrag } from './threadDrag'
 import { arrangeSiblings, roomOrderScope } from './roomOrder'
@@ -115,6 +117,9 @@ export function NavTree({
   const [dmOpen, setDmOpen] = useState(false)
   const [dmRevealKey, setDmRevealKey] = useState(0)
   const [menu, setMenu] = useState<{ node: TreeNode; x: number; y: number } | null>(null)
+  // The invite picker's target: a joined room/space whose menu offered it.
+  const [inviteNode, setInviteNode] = useState<TreeNode | null>(null)
+  const [inviteNotice, setInviteNotice] = useState<string | null>(null)
 
   // Intro sequence: rows spawn in one at a time (41chan -> sub-spaces -> their
   // rooms), each growing open + revealing. `introActive` gates a row's
@@ -509,7 +514,51 @@ export function NavTree({
           x={menu.x}
           y={menu.y}
           onClose={() => setMenu(null)}
+          onInvite={
+            // Offered only where the room itself says this viewer may invite
+            // -- the power question answered by room state, not by role.
+            menu.node.membership === 'join' && menu.node.room && client && menu.node.room.canInvite(client.getUserId() ?? '')
+              ? () => setInviteNode(menu.node)
+              : undefined
+          }
         />
+      )}
+      {inviteNode && client && (
+        <UserPicker
+          client={client}
+          title={inviteNode.isSpace ? `Invite to space: ${inviteNode.name}` : `Invite to: ${inviteNode.name}`}
+          actionLabel="Inviting"
+          excludeFromRoom={inviteNode.room}
+          onPick={(userId) => {
+            const run = async () => {
+              try {
+                await client.invite(inviteNode.roomId, userId)
+                setInviteNotice('Invite sent.')
+              } catch (err) {
+                setInviteNotice(describeInviteError(err))
+              }
+              setInviteNode(null)
+            }
+            void run()
+          }}
+          onClose={() => setInviteNode(null)}
+        />
+      )}
+      {inviteNotice && (
+        <div
+          style={{
+            margin: '6px 8px',
+            padding: '5px 8px',
+            borderRadius: 6,
+            fontSize: 11,
+            border: '1px solid rgba(128,128,128,0.35)',
+            color: 'var(--cpd-color-text-secondary)',
+          }}
+          role="status"
+          onClick={() => setInviteNotice(null)}
+        >
+          {inviteNotice}
+        </div>
       )}
     </nav>
   )

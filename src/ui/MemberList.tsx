@@ -76,6 +76,30 @@ export function MemberList({ room }: { room: Room | null }) {
   useFlipList(listRef, orderKey)
   usePopEnter(listRef, orderKey)
 
+  // Pending knocks, surfaced to anyone whose power can act on them. This is
+  // the missing half of "request access": the knock itself always worked
+  // server-side; nothing ever SHOWED it to someone who could answer. Approve
+  // is an invite (a knocker with an invite may join); deny is the kick,
+  // which is how Matrix rejects a knock.
+  const myId = client?.getUserId() ?? ''
+  const knockers = room ? room.getMembersWithMembership('knock') : []
+  const canApprove = !!(room && client && room.canInvite(myId))
+  const myPower = room?.getMember(myId)?.powerLevel ?? 0
+  const canDeny = !!(room && room.currentState.hasSufficientPowerLevelFor('kick', myPower))
+  const answerKnock = (userId: string, approve: boolean) => {
+    if (!room || !client) return
+    const run = async () => {
+      try {
+        if (approve) await client.invite(room.roomId, userId)
+        else await client.kick(room.roomId, userId, 'Request declined')
+        setNotice(approve ? 'Approved -- they can join now.' : 'Request declined.')
+      } catch (err) {
+        setNotice(describeInviteError(err))
+      }
+    }
+    void run()
+  }
+
   return (
     <div
       style={{
@@ -113,6 +137,41 @@ export function MemberList({ room }: { room: Room | null }) {
           </button>
         )}
       </div>
+
+      {room && canApprove && knockers.length > 0 && (
+        <div style={{ padding: '0 6px 6px' }}>
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: 0.4,
+              textTransform: 'uppercase',
+              color: 'var(--tc-unread, #ff9628)',
+              padding: '2px 2px 4px',
+            }}
+          >
+            Requesting access
+          </div>
+          {knockers.map((m) => (
+            <div
+              key={m.userId}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 2px', fontSize: 12 }}
+            >
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={m.userId}>
+                {m.name || m.userId}
+              </span>
+              <button type="button" style={miniBtn} onClick={() => answerKnock(m.userId, true)}>
+                Approve
+              </button>
+              {canDeny && (
+                <button type="button" style={miniBtn} onClick={() => answerKnock(m.userId, false)}>
+                  Deny
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {profile && client && (
         <ProfileCard
