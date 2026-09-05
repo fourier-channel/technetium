@@ -44,8 +44,15 @@ export function e2eeEnabled(): boolean {
 }
 
 // Where the crypto store lives in IndexedDB. Named, not inlined, because
-// changing it orphans every key the user has -- see E8.
+// changing it orphans every key the user has -- see E8. Keyed BY USER for the
+// same reason the sync store is (buildClient.ts): a fixed name means the next
+// account to log in on this browser inherits the previous account's device
+// keys, which for the crypto store is not a stale room list but a security
+// hole. Changed 2026-09-05, while VITE_E2EE is still off in every deployed
+// build -- the one moment the rename orphans nothing.
 const CRYPTO_STORE_PREFIX = 'matrix-js-sdk::matrix-sdk-crypto'
+
+const cryptoStorePrefixFor = (userId: string) => `${CRYPTO_STORE_PREFIX}::${userId}`
 
 type Report = (state: CryptoLoadState) => void
 
@@ -142,6 +149,19 @@ export async function initCrypto(client: MatrixClient, report: Report): Promise<
   }
   emit({})
 
+  // No user id means no place to keep keys that is provably THIS account's.
+  // Refusing here is the same shape as ownDevices below: the answer to a
+  // failed precondition is "not up", never a shared default.
+  const userId = client.getUserId()
+  if (!userId) {
+    emit({
+      phase: 'failed',
+      error: 'Encryption could not be set up. Private chats will not be encrypted.',
+    })
+    console.error('[crypto] initCrypto called on a client with no user id')
+    return false
+  }
+
   try {
     await withWasmProgress(
       (received) => emit({ received: Math.min(received, CRYPTO_WASM_BYTES) }),
@@ -151,7 +171,7 @@ export async function initCrypto(client: MatrixClient, report: Report): Promise<
       async () => {
         // The wasm arrives during this call; the store opens after it, which is
         // why 'installing' is a separate phase rather than a spinner at 100%.
-        await client.initRustCrypto({ useIndexedDB: true, cryptoDatabasePrefix: CRYPTO_STORE_PREFIX })
+        await client.initRustCrypto({ useIndexedDB: true, cryptoDatabasePrefix: cryptoStorePrefixFor(userId) })
       },
     )
     emit({ phase: 'ready', received: CRYPTO_WASM_BYTES })

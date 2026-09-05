@@ -8,7 +8,7 @@ import {
 import * as sdk from 'matrix-js-sdk'
 import type { MatrixClient } from 'matrix-js-sdk'
 import { saveSession, loadSession, clearSession } from './session'
-import { buildClient, startAndWaitForSync } from './buildClient'
+import { buildClient, deleteSyncStore, startAndWaitForSync } from './buildClient'
 import { createTokenRefreshFunction } from './tokenRefresher'
 import {
   e2eeEnabled,
@@ -299,6 +299,12 @@ export function ClientProvider({ children }: { children: ReactNode }) {
   // Stop syncing, drop the session, return to the login screen.
   const logout = () => {
     client?.stopClient()
+    // Explicit logout also drops this user's sync cache, so a shared machine
+    // does not keep the room list readable after they walk away. Only here:
+    // a resume failure (dead refresh token) keeps the cache, because that
+    // user coming back is the likely next event. The crypto store is NEVER
+    // deleted -- losing device keys is the harm E8 exists to prevent.
+    if (userId) deleteSyncStore(userId)
     clearSession()
     setClient(null)
     setUserId(null)
