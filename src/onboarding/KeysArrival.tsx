@@ -20,7 +20,7 @@ import {
 // that makes people trust the wrong room.
 // ---------------------------------------------------------------------------
 
-export function KeysArrival({ state }: { state: CryptoLoadState }) {
+export function KeysArrival({ state, onDismiss }: { state: CryptoLoadState; onDismiss?: () => void }) {
   if (!shouldShowCryptoBox(state)) return null
 
   const pct = cryptoPercent(state)
@@ -69,6 +69,14 @@ export function KeysArrival({ state }: { state: CryptoLoadState }) {
              role="status" aria-live="polite">
           {cryptoProgressLabel(state)}
         </div>
+
+        {failed && onDismiss && (
+          // The way on. The message above already told the truth about the
+          // consequence; trapping the reader behind it taught nothing more.
+          <button type="button" onClick={onDismiss} style={continueBtn} data-keys-continue autoFocus>
+            Continue without encryption
+          </button>
+        )}
 
         <style>{`
           @keyframes keysIndeterminate {
@@ -136,4 +144,15 @@ const meta: CSSProperties = {
   fontSize: '0.8rem',
   fontVariantNumeric: 'tabular-nums',
   color: 'var(--cpd-color-text-secondary, #a9b2bc)',
+}
+
+const continueBtn: CSSProperties = {
+  marginTop: 14,
+  padding: '8px 18px',
+  borderRadius: 8,
+  border: '1px solid var(--cpd-color-border-interactive-primary, #4a4a4a)',
+  background: 'transparent',
+  color: 'var(--cpd-color-text-primary, #e7ebf0)',
+  font: 'inherit',
+  cursor: 'pointer',
 }

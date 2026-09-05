@@ -34,8 +34,13 @@ import type { KeyBackupFacts } from './keyBackup'
 
 // Opt-in via env so the default path is untouched until this is proven against
 // a live login. Set VITE_E2EE=1 to enable.
+//
+// Compared against the string '1', not truthiness: Vite env values are
+// STRINGS, so !!'0' is true and the .env.production line VITE_E2EE=0 --
+// written to pin the flag OFF -- was what switched it on in the first
+// production build to carry it (2026-09-05, found live and unproven).
 export function e2eeEnabled(): boolean {
-  return !!import.meta.env.VITE_E2EE
+  return import.meta.env.VITE_E2EE === '1'
 }
 
 // Where the crypto store lives in IndexedDB. Named, not inlined, because
