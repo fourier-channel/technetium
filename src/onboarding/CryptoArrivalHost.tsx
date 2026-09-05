@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useClient } from '../client/ClientContext'
 import { KeysArrival } from './KeysArrival'
 
@@ -7,7 +8,14 @@ import { KeysArrival } from './KeysArrival'
 // shell. Hosting it here means one mount point and no duplicate overlay.
 //
 // Renders nothing at all unless there is something to say (shouldShowCryptoBox).
+//
+// Dismissal lives HERE, not in the state machine: 'failed' is a fact about
+// crypto and stays one, but the user has read it and the client underneath
+// works. Found the hard way -- the failed modal had no exit, and the operator
+// was trapped behind a veil over a functioning client (2026-09-05).
 export function CryptoArrivalHost() {
   const { cryptoLoad } = useClient()
-  return <KeysArrival state={cryptoLoad} />
+  const [dismissed, setDismissed] = useState(false)
+  if (dismissed && cryptoLoad.phase === 'failed') return null
+  return <KeysArrival state={cryptoLoad} onDismiss={() => setDismissed(true)} />
 }

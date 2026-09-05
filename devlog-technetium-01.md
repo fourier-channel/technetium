@@ -3697,3 +3697,35 @@ Verified: tsc clean, eslint clean on the three touched files, build passing.
 between the typing bar and the composer, crawls smoothly, pauses on hover,
 and holds still with reduced motion on. Repro: open any room; the placeholder
 run ("TICKER ONLINE -- awaiting a data source", sample tags) should crawl.
+
+## 2026-09-05 -- the pin that pointed the wrong way [auto]
+
+Production incident, minutes after the first deploy to carry the E2EE
+arrival flow: every login met "Argh the Keys" failing red, with no way
+past it. Rolled back to the 2026-08-23 release inside two minutes (the
+release ledger is the rollback), then diagnosed.
+
+Two defects, one lesson each:
+
+1. `VITE_E2EE=0` -- the line WRITTEN to pin the flag off (ed7a11f) -- is
+   what turned it on. Vite env values are strings; `!!'0'` is true. Dev
+   never noticed because dev doesn't load .env.production, so the flag
+   read as absent-false there and present-true in the one environment
+   nobody had proven it in. e2eeEnabled() now compares === '1'. A pin
+   that cannot hold the thing it pins is worse than no pin: it reads as
+   configured-off while being on.
+
+2. The failed arrival was a trap: shouldShowCryptoBox keeps answering
+   true for 'failed' (correct -- it IS something to say), but the modal
+   had no dismiss and nothing ever leaves 'failed', so the truth-telling
+   box sat forever over a WORKING client. The state machine keeps its
+   fact; dismissal now lives in CryptoArrivalHost, and the box gains one
+   button: "Continue without encryption".
+
+E2EE returns to genuinely-off until the E3/E7/E11 work and the browser
+verifications happen against a live login. The initRustCrypto failure
+itself is still undiagnosed -- it never got to run anywhere proven, and
+that diagnosis belongs to the E2EE effort, not to this incident.
+
+Verified: tsc, eslint, build, ALL CHECKS PASSED. Redeployed and
+confirmed live post-fix; rollback release retained.
