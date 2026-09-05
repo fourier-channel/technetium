@@ -3729,3 +3729,62 @@ that diagnosis belongs to the E2EE effort, not to this incident.
 
 Verified: tsc, eslint, build, ALL CHECKS PASSED. Redeployed and
 confirmed live post-fix; rollback release retained.
+
+## 2026-09-05 -- the launch batch [auto]
+
+Eight operator asks for the weekend launch, all landed, all pending the
+visual pass (no test account yet -- see the standing request below):
+
+- ALPHA banner across the shell header: things WILL break, message
+  @saber, and "I'm not sure what I should be clicking on" named as the
+  most valuable report there is.
+- "+ New room or space" removed (client-side; Synapse has no vanilla
+  "rooms no, DMs yes" switch -- server enforcement would be a small
+  spam-checker module, recorded as an open option).
+- Room panel identity: name shrunk to the tree's scale, own avatar
+  beneath it.
+- "<-- Click to join" beside green joinable rooms (not spaces, not
+  invites).
+- DM strip: wider spacing, pulsing orange ring on waiting messages,
+  and a Recent -> Favorites Only -> All cycle pill; waiting rooms
+  always show through any filter.
+- Expand Domain: header button retired for a tab on the chatbox's
+  right edge (room icon + chevron, orange hover glow, immediate
+  tooltip) that travels with the panel and flips to Collapse Domain.
+- Moderation: invite-to-space/room from the right-click menu (power-
+  gated by room state), Remove-from-room on profile cards (two-click,
+  kick-threshold + outrank gates), and knock answering in the member
+  panel -- the missing half of "request access" was that nobody who
+  could answer ever SAW the knock.
+- Ticker: absent in DMs entirely, collapsible elsewhere, state in
+  account data so it follows the user.
+
+### E2EE review (operator-requested second opinion)
+
+The architecture is genuinely strong: pure decision cores checked over
+their whole input spaces, the honest-unknown discipline held
+everywhere, and the one destructive path (reset) reachable from
+exactly one decision that is never defaulted into. Three real bugs
+found this session, all fixed: the VITE_E2EE string-truthiness
+inversion (the pin that pointed the wrong way), the inescapable
+failure modal, and observeCryptoIdentity defaulting a failed device
+query toward the reset branch.
+
+What a live test must settle before the flag turns on:
+1. bootstrapCrossSigning({}) passes no UIA callback -- fine iff MAS
+   spares the upload (MSC3967); the first real login will say.
+2. The initRustCrypto production failure from the incident is still
+   undiagnosed; it has never run in a proven environment.
+3. The wasm progress tee assumes the module arrives via globalThis
+   .fetch with a .wasm URL; if vite loads it another way the meter
+   degrades to an honest jump-to-ready (cosmetic, but confirm).
+
+What is WRITTEN but has no UI: every non-silent identity action
+('recover-from-secret-storage', 'verify-with-other-device', the gated
+'reset-required' -- E11) and every key-backup attention state (E8).
+The state machines publish; nothing consumes. Turning E2EE on for
+real means building those surfaces, not just flipping the flag.
+
+**PENDING OPERATOR:** two test accounts (offered 2026-09-05) would let
+this session verify E2EE live end-to-end -- DM both ways, decryption
+states, the arrival flow -- plus the visual pass on everything above.

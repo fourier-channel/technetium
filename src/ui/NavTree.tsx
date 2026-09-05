@@ -4,7 +4,9 @@ import { useClient } from '../client/ClientContext'
 import { computeRevealOrder, type TreeNode } from '../client/spaces'
 import { useNavTree } from '../client/useNavTree'
 import { useRoomNotifications, type NotifMap, type NotifCounts } from '../client/useRoomNotifications'
-import { useRoomListSettings } from './roomListSettings'
+import { useRoomListSettings, nextDmFilter, type DmFilter } from './roomListSettings'
+import { UserPicker } from './UserPicker'
+import { describeInviteError } from '../client/userDirectory'
 import { useFlipList, type FlipControl } from './flip'
 import { useThreadDrag } from './threadDrag'
 import { arrangeSiblings, roomOrderScope } from './roomOrder'
@@ -32,6 +34,27 @@ function dmTitle(node: TreeNode, isDm: boolean, counts: NotifCounts | undefined)
 }
 
 // Membership/join classification for a node's visual + click behavior.
+// Which orphan rooms the DM strip shows under the current filter. A room
+// with a message waiting ALWAYS shows: a filter that can hide the pulse it
+// exists to surface would be a mute nobody asked for.
+function dmStripRooms(
+  rooms: TreeNode[],
+  filter: DmFilter,
+  isFavorite: (roomId: string) => boolean,
+  notifs: NotifMap,
+  isMutedNow: (roomId: string) => boolean,
+): TreeNode[] {
+  const waiting = (n: TreeNode) => !isMutedNow(n.roomId) && ((notifs.get(n.roomId)?.total ?? 0) > 0)
+  if (filter === 'all') return rooms
+  if (filter === 'favorites') return rooms.filter((n) => isFavorite(n.roomId) || waiting(n))
+  // recent: the most recently active dozen, by the room's own clock.
+  const ts = (n: TreeNode) => n.room?.getLastActiveTimestamp() ?? 0
+  const recent = new Set(
+    [...rooms].sort((a, b) => ts(b) - ts(a)).slice(0, 12).map((n) => n.roomId),
+  )
+  return rooms.filter((n) => recent.has(n.roomId) || waiting(n))
+}
+
 type Mode = 'joined' | 'joinable' | 'knock'
 function nodeMode(node: TreeNode): Mode {
   if (node.membership === 'join') return 'joined'
@@ -81,7 +104,7 @@ export function NavTree({
   const { client } = useClient()
   const { tree, loading, stale } = useNavTree(client)
   const notifs = useRoomNotifications(client)
-  const { animationsEnabled, setAnimationsEnabled, soundEnabled, setSoundEnabled, soundVolume, setSoundVolume, isMutedNow } =
+  const { animationsEnabled, setAnimationsEnabled, soundEnabled, setSoundEnabled, soundVolume, setSoundVolume, isMutedNow, isFavorite, dmFilter, setDmFilter } =
     useRoomListSettings()
   // Recomputed each render rather than memoized on `client`: m.direct changes
   // when a DM is created, and a memo keyed on the client would never see it.
@@ -94,6 +117,9 @@ export function NavTree({
   const [dmOpen, setDmOpen] = useState(false)
   const [dmRevealKey, setDmRevealKey] = useState(0)
   const [menu, setMenu] = useState<{ node: TreeNode; x: number; y: number } | null>(null)
+  // The invite picker's target: a joined room/space whose menu offered it.
+  const [inviteNode, setInviteNode] = useState<TreeNode | null>(null)
+  const [inviteNotice, setInviteNotice] = useState<string | null>(null)
 
   // Intro sequence: rows spawn in one at a time (41chan -> sub-spaces -> their
   // rooms), each growing open + revealing. `introActive` gates a row's
@@ -387,6 +413,28 @@ export function NavTree({
             Direct Messages
             <span style={{ marginLeft: 'auto', opacity: 0.7 }}>{tree.orphanRooms.length}</span>
           </button>
+          {dmOpen && (
+            <button
+              type="button"
+              onClick={() => setDmFilter(nextDmFilter(dmFilter))}
+              title={'Cycle which conversations show: Recent -> Favorites Only -> All'}
+              style={{
+                display: 'block',
+                margin: '4px 0 0 10px',
+                padding: '2px 9px',
+                borderRadius: 999,
+                border: '1px solid rgba(128,128,128,0.35)',
+                background: 'transparent',
+                color: 'var(--cpd-color-text-secondary)',
+                fontSize: 10,
+                letterSpacing: 0.4,
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+              }}
+            >
+              {dmFilter === 'recent' ? 'Recent' : dmFilter === 'favorites' ? 'Favorites Only' : 'All'}
+            </button>
+          )}
           <div
             style={{
               display: 'grid',
@@ -395,8 +443,9 @@ export function NavTree({
             }}
           >
             <div style={{ overflow: 'hidden', minHeight: 0 }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, padding: '7px 8px 3px' }}>
-                {tree.orphanRooms.map((node) => {
+              {/* gap widened from 7 (operator: too tightly packed). */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 13, padding: '8px 10px 4px' }}>
+                {dmStripRooms(tree.orphanRooms, dmFilter, isFavorite, notifs, isMutedNow).map((node) => {
                   // A DM is drawn as the PERSON on the other end. Reduced to
                   // icons, a DM has nothing else to identify it: DM rooms
                   // almost never carry an avatar of their own, so the room
@@ -421,13 +470,15 @@ export function NavTree({
                         borderRadius: '50%',
                         // Glow, not a badge: at 30px there is no room for a
                         // counter, and the ring reads at a glance across a
-                        // wrapped grid of faces.
+                        // wrapped grid of faces. The static ring stays as the
+                        // reduced-motion base; the class pulses it.
                         boxShadow: ping
                           ? '0 0 0 2px var(--tc-unread), 0 0 12px 2px rgba(255,150,40,0.75)'
                           : unread
                             ? '0 0 0 2px var(--tc-unread-base), 0 0 9px rgba(255,150,40,0.45)'
                             : undefined,
                       }}
+                      className={ping ? 'tc-dm-waiting tc-dm-waiting--ping' : unread ? 'tc-dm-waiting' : undefined}
                     >
                       <EpicycleReveal seed={node.roomId} play={animate}>
                         <RoomIcon node={node} size={30} isDm={isDm} />
@@ -463,7 +514,51 @@ export function NavTree({
           x={menu.x}
           y={menu.y}
           onClose={() => setMenu(null)}
+          onInvite={
+            // Offered only where the room itself says this viewer may invite
+            // -- the power question answered by room state, not by role.
+            menu.node.membership === 'join' && menu.node.room && client && menu.node.room.canInvite(client.getUserId() ?? '')
+              ? () => setInviteNode(menu.node)
+              : undefined
+          }
         />
+      )}
+      {inviteNode && client && (
+        <UserPicker
+          client={client}
+          title={inviteNode.isSpace ? `Invite to space: ${inviteNode.name}` : `Invite to: ${inviteNode.name}`}
+          actionLabel="Inviting"
+          excludeFromRoom={inviteNode.room}
+          onPick={(userId) => {
+            const run = async () => {
+              try {
+                await client.invite(inviteNode.roomId, userId)
+                setInviteNotice('Invite sent.')
+              } catch (err) {
+                setInviteNotice(describeInviteError(err))
+              }
+              setInviteNode(null)
+            }
+            void run()
+          }}
+          onClose={() => setInviteNode(null)}
+        />
+      )}
+      {inviteNotice && (
+        <div
+          style={{
+            margin: '6px 8px',
+            padding: '5px 8px',
+            borderRadius: 6,
+            fontSize: 11,
+            border: '1px solid rgba(128,128,128,0.35)',
+            color: 'var(--cpd-color-text-secondary)',
+          }}
+          role="status"
+          onClick={() => setInviteNotice(null)}
+        >
+          {inviteNotice}
+        </div>
       )}
     </nav>
   )
@@ -718,6 +813,17 @@ function TreeRow({
             </span>
           )}
           {knocked && <span style={{ fontSize: 10, opacity: 0.8 }}>requested</span>}
+          {/* The join affordance, said out loud (operator ruling 2026-09-05):
+              green means clickable, and this says so for the rooms where a
+              click IS the join. Spaces are excluded -- they are the blocks
+              for the mod channels and get their own handling -- and so are
+              invites, which say "accept", not "join". Outside FourierReveal
+              so it does not inherit the name's wipe. */}
+          {mode === 'joinable' && !node.isSpace && node.membership !== 'invite' && (
+            <span style={{ fontSize: 9.5, color: '#3bd16f', opacity: 0.85, whiteSpace: 'nowrap' }}>
+              {'<-- Click to join'}
+            </span>
+          )}
         </span>
       </div>
         </div>

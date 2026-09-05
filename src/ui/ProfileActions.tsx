@@ -200,6 +200,38 @@ function OtherProfileActions({
 
   const alreadyHere = !!room?.getMember(userId)
 
+  // Removal is a power question answered by the room itself, not a role list:
+  // my level must clear the room's kick threshold AND exceed theirs. Same
+  // click-again confirmation as leaving -- destructive acts get two clicks.
+  const myId = client.getUserId()
+  const me = myId && room ? room.getMember(myId) : null
+  const target = room?.getMember(userId) ?? null
+  const canKick = !!(
+    room &&
+    me &&
+    target &&
+    userId !== myId &&
+    ['join', 'invite', 'knock'].includes(target.membership ?? '') &&
+    room.currentState.hasSufficientPowerLevelFor('kick', me.powerLevel) &&
+    me.powerLevel > target.powerLevel
+  )
+  const [confirmKick, setConfirmKick] = useState(false)
+
+  const kick = async () => {
+    if (!room) return
+    setBusy(true)
+    setNotice(null)
+    try {
+      await client.kick(room.roomId, userId)
+      setNotice('Removed from this room.')
+      setConfirmKick(false)
+    } catch (err) {
+      setNotice(describeInviteError(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <>
       <ActionBtn onClick={() => void message()} disabled={busy}>
@@ -213,6 +245,15 @@ function OtherProfileActions({
       {canIgnore(client, userId) && (
         <ActionBtn onClick={() => void toggleIgnore()} disabled={busy} danger={!ignored}>
           {ignored ? 'Unblock' : 'Block'}
+        </ActionBtn>
+      )}
+      {canKick && (
+        <ActionBtn
+          onClick={() => (confirmKick ? void kick() : setConfirmKick(true))}
+          disabled={busy}
+          danger
+        >
+          {confirmKick ? 'Click again to remove' : room?.isSpaceRoom() ? 'Remove from this space' : 'Remove from this room'}
         </ActionBtn>
       )}
       {notice && <Notice>{notice}</Notice>}

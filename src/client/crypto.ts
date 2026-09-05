@@ -202,6 +202,12 @@ export async function observeCryptoIdentity(
     const backup = await crypto.getKeyBackupInfo()
     const deviceStatus = await crypto.getDeviceVerificationStatus(userId, deviceId)
     const devices = await crypto.getUserDeviceInfo([userId])
+    const ownDevices = devices.get(userId)
+    // Our own user missing from our own device query is not "no devices" --
+    // it is a failed observation, and the one default this module must never
+    // take is the one that walks a user toward the reset branch. Throwing
+    // lands in the catch below, which answers null: "we do not know".
+    if (!ownDevices) throw new Error('device query returned no entry for our own user')
 
     return {
       accountHasIdentity,
@@ -212,7 +218,7 @@ export async function observeCryptoIdentity(
       privateKeysInSecretStorage: status.privateKeysInSecretStorage,
       keyBackupVersion: backup?.version ?? null,
       thisDeviceVerified: deviceStatus?.crossSigningVerified ?? false,
-      otherDeviceCount: Math.max(0, (devices.get(userId)?.size ?? 1) - 1),
+      otherDeviceCount: Math.max(0, ownDevices.size - 1),
     }
   } catch (err) {
     // Reported, never swallowed (G-tc05). Null propagates as "we do not know",

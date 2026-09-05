@@ -6,6 +6,8 @@ import { Timeline } from './ui/Timeline'
 import { Composer } from './ui/Composer'
 import { Ticker } from './ui/Ticker'
 import { placeholderTickerSource } from './ui/tickerSource'
+import { useTickerCollapsed } from './ui/tickerCollapse'
+import { directRoomIds } from './client/dm'
 import { ComposerModeProvider } from './ui/ComposerModeProvider'
 import { TypingBar } from './ui/TypingBar'
 import { MemberList } from './ui/MemberList'
@@ -19,6 +21,9 @@ import { useReadMarker } from './client/useReadMarker'
 import { useMediaTagSync } from './client/useMediaTags'
 import { DomainView } from './ui/DomainView'
 import { AuthLanding } from './onboarding/AuthLanding'
+import { AlphaBanner } from './ui/AlphaBanner'
+import { AvatarDisc } from './ui/AvatarDisc'
+import { AuthedImage } from './ui/AuthedImage'
 import { BootScreen } from './onboarding/BootScreen'
 
 // Thin shell: render purely by client lifecycle status. All auth/client logic
@@ -46,6 +51,8 @@ function App() {
   // Mark the viewed room read so its unread glow/ping clears (base client sent
   // no read receipts). Called before any early return to keep hook order stable.
   useReadMarker(client, selectedRoom)
+  // Ticker collapse follows the user via account data. Same hook-order rule.
+  const [tickerCollapsed, setTickerCollapsed] = useTickerCollapsed(client)
   // Keep the media-tag store fed from room state for every room, so any image
   // anywhere in the tree can resolve its tags without props being threaded.
   useMediaTagSync(client)
@@ -95,21 +102,48 @@ function App() {
         `}</style>
       </div>
     )}
-    <div style={{ display: 'flex', height: '100vh', fontFamily: 'sans-serif' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'sans-serif' }}>
+      <AlphaBanner />
+      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <Sidebar
         selectedRoomId={selectedRoom?.roomId}
         onSelectRoom={setSelectedRoom}
         header={
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '4px 8px 8px',
-            }}
-          >
-            <strong>{userId}</strong>
-            <button type="button" onClick={logout} style={{ fontSize: 12 }}>Log out</button>
+          <div style={{ padding: '4px 8px 8px' }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: 8,
+                minWidth: 0,
+              }}
+            >
+              {/* Smaller than the old <strong> default: the name must fit the
+                  width most people leave the room list at, and it ellipsizes
+                  rather than wrapping the header. */}
+              <strong
+                style={{
+                  fontSize: 12.5,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={userId ?? undefined}
+              >
+                {userId}
+              </strong>
+              <button type="button" onClick={logout} style={{ fontSize: 12, flexShrink: 0 }}>Log out</button>
+            </div>
+            {/* The user's own avatar, under the name at the panel's top left. */}
+            <div style={{ marginTop: 6 }}>
+              <AvatarDisc
+                userId={userId ?? ''}
+                name={client?.getUser(userId ?? '')?.displayName ?? userId ?? ''}
+                avatarMxc={client?.getUser(userId ?? '')?.avatarUrl ?? null}
+                size={34}
+              />
+            </div>
           </div>
         }
       />
@@ -133,38 +167,27 @@ function App() {
             // composer share a reply/edit target, and the thread panel keeps
             // its own so replying in a thread cannot hijack the room composer.
             <ComposerModeProvider>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                  padding: '4px 10px 0',
-                  flexShrink: 0,
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => setDomainExpanded(true)}
-                  title="Expand this room into its domain"
-                  style={{
-                    fontSize: 12,
-                    padding: '3px 10px',
-                    borderRadius: 8,
-                    border: '1px solid rgba(128,128,128,0.35)',
-                    background: 'transparent',
-                    color: 'var(--cpd-color-text-primary)',
-                    cursor: 'pointer',
-                  }}
-                >Expand Domain
-                </button>
-              </div>
+              {/* Expand Domain retired from the header (operator ruling
+                  2026-09-05): it is now the tab riding the chatbox's right
+                  edge, rendered after the panels below so it travels with
+                  the domain. */}
               <div style={{ flex: 1, minHeight: 0 }}>
                 <Timeline room={selectedRoom} onOpenThread={(roomId, rootId) => setOpenThread({ roomId, rootId })} threadListOpen={threadListOpen} onToggleThreadList={() => setThreadListOpen((o) => !o)} />
               </div>
               <TypingBar client={client} room={selectedRoom} />
               {/* The dedicated strip above the chat box. Placeholder source
-                  for the MVP -- the mechanism is live; point it at real data
-                  by swapping the source (see tickerSource.ts). */}
-              <Ticker source={placeholderTickerSource} />
+                  for the MVP -- point it at real data by swapping the source
+                  (see tickerSource.ts). Absent in DMs entirely -- not even a
+                  re-expand element (operator ruling 2026-09-05) -- and
+                  collapsible everywhere else, with the state riding account
+                  data so it follows the user. */}
+              {!(client && selectedRoom && directRoomIds(client).has(selectedRoom.roomId)) && (
+                <Ticker
+                  source={placeholderTickerSource}
+                  collapsed={tickerCollapsed}
+                  onToggle={() => setTickerCollapsed(!tickerCollapsed)}
+                />
+              )}
               {/* Undefined unless the domain is open, so an ordinary message
                   in an ordinary room never acquires a lifetime. */}
               <Composer room={selectedRoom} domainTtd={domainExpanded ? domainTtd : undefined} />
@@ -231,6 +254,13 @@ function App() {
                   />
                 </div>
               )}
+
+              <DomainTab
+                room={selectedRoom}
+                open={domainExpanded}
+                shown={domainReveal.shown}
+                onToggle={() => setDomainExpanded((o) => !o)}
+              />
             </ComposerModeProvider>
         ) : (
           <div style={{ padding: 24, opacity: 0.6 }}>Select a room from the left.</div>
@@ -238,9 +268,52 @@ function App() {
       </main>
 
       <MemberList room={selectedRoom} />
+      </div>
     </div>
     </RoomListSettingsProvider>
     </LightboxProvider>
+  )
+}
+
+// The domain's handle: a tab riding the chatbox's right edge, wearing the
+// room's icon and a chevron pointing the way the panel will come. It travels
+// with the panel (same 420ms family, driven by the reveal's shown flag so
+// tab and panel move on the same frame) and its tooltip says which way the
+// next click goes. Custom tooltip rather than title= because the ask is an
+// immediate labelled glow, not the UA's delayed grey box.
+function DomainTab({
+  room,
+  open,
+  shown,
+  onToggle,
+}: {
+  room: Room
+  open: boolean
+  shown: boolean
+  onToggle: () => void
+}) {
+  const mxc = room.getMxcAvatarUrl()
+  const initial = (room.name || room.roomId).replace(/^[#!@]/, '').slice(0, 1).toUpperCase()
+  const label = open ? 'Collapse Domain' : 'Expand Domain'
+  return (
+    <button
+      type="button"
+      className="tc-domain-tab"
+      data-open={shown ? 'true' : 'false'}
+      onClick={onToggle}
+      aria-label={label}
+      aria-expanded={open}
+    >
+      <span className="tc-domain-tab-tip">{label}</span>
+      <span aria-hidden="true" style={{ fontSize: 10, lineHeight: 1 }}>{shown ? '>' : '<'}</span>
+      <span className="tc-domain-tab-icon">
+        {mxc ? (
+          <AuthedImage mxc={mxc} width={180} fill transparentLoading alt="" fallback={initial} />
+        ) : (
+          initial
+        )}
+      </span>
+    </button>
   )
 }
 

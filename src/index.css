@@ -2533,3 +2533,102 @@ code {
 @media (prefers-reduced-motion: reduce) {
   .tc-ticker-track { animation: none; }
 }
+
+/* Ticker collapse: the collapsed strip is a discoverable sliver, and the
+   toggle floats at the strip's right end over the crawl when expanded. */
+.tc-ticker { position: relative; }
+.tc-ticker--collapsed {
+  height: 12px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+.tc-ticker-toggle {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  border: none;
+  background: transparent;
+  color: var(--cpd-color-text-secondary);
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+.tc-ticker-toggle:hover { color: var(--cpd-color-text-primary); }
+.tc-ticker--collapsed .tc-ticker-toggle { position: static; transform: none; }
+
+/* DM strip: the waiting pulse. The inline static ring is the reduced-motion
+   base; this animates it. Ping pulses faster and hotter. */
+@keyframes tcDmPulse {
+  0%, 100% { box-shadow: 0 0 0 2px var(--tc-unread-base), 0 0 7px 1px rgba(255, 150, 40, 0.3); }
+  50% { box-shadow: 0 0 0 2px var(--tc-unread), 0 0 16px 4px rgba(255, 150, 40, 0.8); }
+}
+.tc-dm-waiting { animation: tcDmPulse 1.7s ease-in-out infinite; }
+.tc-dm-waiting--ping { animation-duration: 1s; }
+@media (prefers-reduced-motion: reduce) {
+  .tc-dm-waiting { animation: none; }
+}
+
+/* The domain tab: rides the chatbox's right edge; when the domain is open it
+   sits on the panel's left edge instead -- same travel, same clock as
+   .tc-panel-right (420ms, same curve), so tab and panel move as one thing.
+   Hover glows orange and surfaces the label. */
+.tc-domain-tab {
+  position: absolute;
+  right: 0;
+  bottom: 118px;
+  z-index: 13;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 9px 6px;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  border-right: none;
+  border-radius: 10px 0 0 10px;
+  background: var(--cpd-color-bg-canvas-default, #16181d);
+  color: var(--cpd-color-text-secondary);
+  cursor: pointer;
+  transition: right 420ms cubic-bezier(0.22, 0.61, 0.36, 1), box-shadow 150ms ease, color 150ms ease;
+}
+.tc-domain-tab[data-open='true'] {
+  right: max(calc(100% - var(--tc-chat-w) - 88px), 40%);
+}
+.tc-domain-tab:hover {
+  color: var(--tc-unread);
+  box-shadow: 0 0 0 1px var(--tc-unread), 0 0 14px rgba(255, 150, 40, 0.55);
+}
+.tc-domain-tab-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(128, 128, 128, 0.25);
+}
+.tc-domain-tab-tip {
+  position: absolute;
+  right: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  background: var(--cpd-color-bg-canvas-default, #16181d);
+  color: var(--cpd-color-text-primary);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.tc-domain-tab:hover .tc-domain-tab-tip { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .tc-domain-tab { transition: box-shadow 150ms ease, color 150ms ease; }
+}
