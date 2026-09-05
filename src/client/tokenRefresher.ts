@@ -1,5 +1,6 @@
 import { OidcTokenRefresher } from 'matrix-js-sdk'
 import type { TokenRefreshFunction } from 'matrix-js-sdk'
+import type { IdTokenClaims } from 'oidc-client-ts'
 import { loadSession, saveSession } from './session'
 
 // Wraps the SDK's OidcTokenRefresher so that whenever the access token is
@@ -42,9 +43,11 @@ export function createTokenRefreshFunction(
     params.clientId,
     params.redirectUri,
     params.deviceId,
-    // idTokenClaims is typed loosely in our session store; the refresher expects
-    // the OIDC IdTokenClaims shape, which is what we persisted from the grant.
-    params.idTokenClaims as any,
+    // idTokenClaims is stored as `unknown` (the session store does not model
+    // the OIDC claim set); the refresher wants IdTokenClaims, which is exactly
+    // what we persisted from the grant. Narrowed through the SDK's own type
+    // rather than `any`, so a future signature change is a compile error.
+    params.idTokenClaims as IdTokenClaims,
   )
 
   return (refreshToken: string) => refresher.doRefreshAccessToken(refreshToken)

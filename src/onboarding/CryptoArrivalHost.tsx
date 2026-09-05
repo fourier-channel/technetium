@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useClient } from '../client/ClientContext'
+import { useClient } from '../client/clientContextValue'
 import { KeysArrival } from './KeysArrival'
 
 // Mounted once, beside <App/>, because the crypto load straddles App's render

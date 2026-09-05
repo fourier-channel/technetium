@@ -12,5 +12,9 @@
 #   exclude paths held out of the confusable check: vendored or upstream
 #           content that is not ours to normalize.
 
-gate: npm run check
+# Was `npm run check` alone, which meant eslint was enforced by nothing and
+# drifted to 22 errors across twelve sessions -- every one of which reported
+# "pre-existing, not mine" and moved on. A check nothing runs is not a check.
+# `npm run gate` is lint + the decision-core harness + the typechecking build.
+gate: npm run gate
 suite: npm run check

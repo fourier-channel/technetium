@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { useClient } from '../client/ClientContext'
+import { useClient } from '../client/clientContextValue'
 import { fetchMediaSrc, type ThumbSize } from '../client/media'
 import { reportIgnored } from '../client/report'
 

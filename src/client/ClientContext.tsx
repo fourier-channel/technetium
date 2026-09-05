@@ -1,6 +1,4 @@
 import {
-  createContext,
-  useContext,
   useEffect,
   useState,
   type ReactNode,
@@ -11,6 +9,8 @@ import { saveSession, loadSession, clearSession } from './session'
 import { buildClient, deleteSyncStore, startAndWaitForSync } from './buildClient'
 import { watchRoomEncryptionConfig } from './roomEncryptionConfig'
 import { createTokenRefreshFunction } from './tokenRefresher'
+import { ClientContext, type ClientContextValue, type ClientStatus } from './clientContextValue'
+import { detail } from './report'
 import {
   e2eeEnabled,
   initCrypto,
@@ -36,45 +36,9 @@ const CLIENT_ID =
 const DEFAULT_HOMESERVER =
   (import.meta.env.VITE_HOMESERVER as string | undefined) ?? 'https://41chan.net'
 
-// Lifecycle of the client, so the UI can render the right thing per phase.
-export type ClientStatus =
-  | 'starting' // bootstrap in progress (deciding which path)
-  | 'awaiting_login' // no session — show the login UI
-  | 'syncing' // client built, initial sync running
-  | 'ready' // synced and usable
-  | 'error'
 
-interface ClientContextValue {
-  client: MatrixClient | null
-  status: ClientStatus
-  error: string | null
-  userId: string | null
-  // How the crypto engine's arrival is going, so the shell can show it (D-e6).
-  // Stays 'idle' for everyone while the flag is off.
-  cryptoLoad: CryptoLoadState
-  // What this account's encryption identity needs, if anything. Null until
-  // crypto is up, or when we could not read it -- which is NOT the same as
-  // "nothing needed", and callers must not collapse the two.
-  identityAction: IdentityAction | null
-  // The facts behind that decision, for surfaces that need more than the verb
-  // (whether history is readable, whether a backup exists).
-  identityFacts: CryptoIdentityFacts | null
-  // Whether this account's conversations would survive losing this device
-  // (E8). Null means we could not find out -- which callers must NOT render as
-  // "no backup", since that tells a protected user they are at risk.
-  keyBackup: KeyBackupFacts | null
-  login: (homeserver?: string) => Promise<void>
-  logout: () => void
-}
 
-const ClientContext = createContext<ClientContextValue | null>(null)
 
-// Hook every component uses to reach the live client + lifecycle state.
-export function useClient(): ClientContextValue {
-  const ctx = useContext(ClientContext)
-  if (!ctx) throw new Error('useClient must be used within <ClientProvider>')
-  return ctx
-}
 
 // Hoisted out of the component on purpose. Writing to `window` inside
 // ClientProvider is a react-hooks/immutability error under the React Compiler
@@ -98,26 +62,6 @@ export function ClientProvider({ children }: { children: ReactNode }) {
   const [identityAction, setIdentityAction] = useState<IdentityAction | null>(null)
   const [identityFacts, setIdentityFacts] = useState<CryptoIdentityFacts | null>(null)
   const [keyBackup, setKeyBackup] = useState<KeyBackupFacts | null>(null)
-
-  // Bootstrap on mount: finish an in-progress login, resume a stored session,
-  // or fall through to awaiting_login.
-  useEffect(() => {
-    if (bootstrapStarted) return
-    bootstrapStarted = true
-
-    const params = new URLSearchParams(window.location.search)
-    const code = params.get('code')
-    const state = params.get('state')
-
-    if (code && state) {
-      void completeLogin(code, state)
-    } else if (loadSession()) {
-      void resumeSession()
-    } else {
-      setStatus('awaiting_login')
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   // Shared: build the persistent-store client, sync, and publish it to context.
   const startSyncedClient = async (params: {
@@ -188,7 +132,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
   }
 
   // Path 1: exchange the MAS authorization code, persist the session, sync.
-  const completeLogin = async (code: string, state: string) => {
+  async function completeLogin(code: string, state: string) {
     try {
       const result = await sdk.completeAuthorizationCodeGrant(code, state)
       const accessToken = result.tokenResponse.access_token
@@ -232,15 +176,15 @@ export function ClientProvider({ children }: { children: ReactNode }) {
           idTokenClaims: oidc.idTokenClaims,
         }),
       })
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Login failed:', err)
-      setError(err.message ?? String(err))
+      setError(detail(err))
       setStatus('error')
     }
   }
 
   // Path 2: rebuild the client from the stored session — no MAS visit.
-  const resumeSession = async () => {
+  async function resumeSession() {
     const s = loadSession()
     if (!s) {
       setStatus('awaiting_login')
@@ -262,7 +206,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
           idTokenClaims: s.oidc.idTokenClaims,
         }),
       })
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Resume failed:', err)
       // Refresh also failed (refresh token dead) -> session is truly gone.
       clearSession()
@@ -272,6 +216,38 @@ export function ClientProvider({ children }: { children: ReactNode }) {
   }
 
   // Begin a fresh login: discover homeserver, build the MAS auth URL, redirect.
+  // Boot decision, placed AFTER completeLogin/resumeSession: the React
+  // Compiler reads a reference to a value declared later in the component
+  // body as use-before-declare, hoisted function or not. Effects run after
+  // the whole body regardless, so this position is what the runtime always
+  // did -- it is now also what the compiler can see.
+
+  // Bootstrap on mount: finish an in-progress login, resume a stored session,
+  // or fall through to awaiting_login.
+  useEffect(() => {
+    if (bootstrapStarted) return
+    bootstrapStarted = true
+
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('code')
+    const state = params.get('state')
+
+    // Deferred one microtask: `setStatus` here would be a synchronous setState
+    // in an effect body (G-tc01), and completeLogin/resumeSession are consts
+    // declared below this effect, which the compiler reads as use-before-declare
+    // even though the body has finished evaluating by the time an effect runs.
+    queueMicrotask(() => {
+      if (code && state) {
+        void completeLogin(code, state)
+      } else if (loadSession()) {
+        void resumeSession()
+      } else {
+        setStatus('awaiting_login')
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const login = async (homeserver: string = DEFAULT_HOMESERVER) => {
     try {
       const discovery = await sdk.AutoDiscovery.findClientConfig(homeserver)
@@ -294,9 +270,9 @@ export function ClientProvider({ children }: { children: ReactNode }) {
         nonce,
       })
       window.location.href = authUrl
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Login start failed:', err)
-      setError(err.message ?? String(err))
+      setError(detail(err))
       setStatus('error')
     }
   }

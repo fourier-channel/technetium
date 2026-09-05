@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "check": "npm run check:derived && for f in checks/*.check.ts; do echo \"== $f\"; node --import ./checks/_hooks.mjs \"$f\" || exit 1; done",
     "preview": "vite preview",
-    "check:derived": "python3 tools/derived-facts.py --suite \"npm run check\""
+    "check:derived": "python3 tools/derived-facts.py --suite \"npm run check\"",
+    "gate": "npm run lint && npm run check && npm run build"
   },
   "dependencies": {
     "@fontsource/inconsolata": "^5.2.8",

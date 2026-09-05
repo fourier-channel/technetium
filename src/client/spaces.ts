@@ -16,6 +16,10 @@ export interface TreeNode {
   // the real value at runtime, so we widen to string for the render to decide
   // joinable (green) vs knock (pill).
   joinRule: string | null
+  // The m.space.child `order` string, stamped while building the tree and used
+  // only to sort siblings. Declared here rather than bolted on with a cast:
+  // it is a real field of a node, and typing it is what lets the sort read it.
+  _order?: string
   // The live Room, present only when joined/synced; null for unjoined entries.
   room: Room | null
   children: TreeNode[]
@@ -48,8 +52,8 @@ function hierarchyChildIds(h: HierarchyRoom): { id: string; order: string }[] {
 // Sort by the m.space.child `order` string (lexicographic), then room name.
 function sortChildren(children: TreeNode[]): TreeNode[] {
   return [...children].sort((a, b) => {
-    const oa = (a as any)._order ?? ''
-    const ob = (b as any)._order ?? ''
+    const oa = a._order ?? ''
+    const ob = b._order ?? ''
     if (oa !== ob) return oa < ob ? -1 : 1
     return (a.name || '').localeCompare(b.name || '')
   })
@@ -145,7 +149,7 @@ export function buildNavTree(
         const childH = byId.get(id)
         if (!childH) continue // child not returned by hierarchy (not visible)
         const childNode = buildNode(childH, nextSeen)
-        ;(childNode as any)._order = order
+        childNode._order = order
         kids.push(childNode)
       }
       node.children = sortChildren(kids)

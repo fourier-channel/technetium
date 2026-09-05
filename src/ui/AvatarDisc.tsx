@@ -1,4 +1,4 @@
-import { useClient } from '../client/ClientContext'
+import { useClient } from '../client/clientContextValue'
 import { AuthedImage } from './AuthedImage'
 import { colorFor, initialsFor } from './avatarLook'
 import { clipPathFor, resolveAvatarShape, useAvatarShape } from './avatarShape'

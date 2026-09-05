@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Room } from 'matrix-js-sdk'
-import { useClient } from '../client/ClientContext'
+import { useClient } from '../client/clientContextValue'
 import { DomainCanvas } from './DomainCanvas'
 import { useDomainSettings } from './domainSettings'
 import { DomainOptions } from './DomainOptions'

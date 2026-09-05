@@ -1,7 +1,7 @@
 import type { MatrixEvent } from 'matrix-js-sdk'
 import type { TimelineItem } from '../client/useTimeline'
 import { parseMxc } from '../client/media'
-import type { LightboxItem } from './Lightbox'
+import type { LightboxItem } from './lightboxContext'
 
 // The vertical axis of the image viewer, built once per rendered conversation.
 //
