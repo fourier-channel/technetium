@@ -23,6 +23,7 @@ import { DomainView } from './ui/DomainView'
 import { AuthLanding } from './onboarding/AuthLanding'
 import { AlphaBanner } from './ui/AlphaBanner'
 import { AvatarDisc } from './ui/AvatarDisc'
+import { AuthedImage } from './ui/AuthedImage'
 import { BootScreen } from './onboarding/BootScreen'
 
 // Thin shell: render purely by client lifecycle status. All auth/client logic
@@ -166,30 +167,10 @@ function App() {
             // composer share a reply/edit target, and the thread panel keeps
             // its own so replying in a thread cannot hijack the room composer.
             <ComposerModeProvider>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                  padding: '4px 10px 0',
-                  flexShrink: 0,
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => setDomainExpanded(true)}
-                  title="Expand this room into its domain"
-                  style={{
-                    fontSize: 12,
-                    padding: '3px 10px',
-                    borderRadius: 8,
-                    border: '1px solid rgba(128,128,128,0.35)',
-                    background: 'transparent',
-                    color: 'var(--cpd-color-text-primary)',
-                    cursor: 'pointer',
-                  }}
-                >Expand Domain
-                </button>
-              </div>
+              {/* Expand Domain retired from the header (operator ruling
+                  2026-09-05): it is now the tab riding the chatbox's right
+                  edge, rendered after the panels below so it travels with
+                  the domain. */}
               <div style={{ flex: 1, minHeight: 0 }}>
                 <Timeline room={selectedRoom} onOpenThread={(roomId, rootId) => setOpenThread({ roomId, rootId })} threadListOpen={threadListOpen} onToggleThreadList={() => setThreadListOpen((o) => !o)} />
               </div>
@@ -273,6 +254,13 @@ function App() {
                   />
                 </div>
               )}
+
+              <DomainTab
+                room={selectedRoom}
+                open={domainExpanded}
+                shown={domainReveal.shown}
+                onToggle={() => setDomainExpanded((o) => !o)}
+              />
             </ComposerModeProvider>
         ) : (
           <div style={{ padding: 24, opacity: 0.6 }}>Select a room from the left.</div>
@@ -284,6 +272,48 @@ function App() {
     </div>
     </RoomListSettingsProvider>
     </LightboxProvider>
+  )
+}
+
+// The domain's handle: a tab riding the chatbox's right edge, wearing the
+// room's icon and a chevron pointing the way the panel will come. It travels
+// with the panel (same 420ms family, driven by the reveal's shown flag so
+// tab and panel move on the same frame) and its tooltip says which way the
+// next click goes. Custom tooltip rather than title= because the ask is an
+// immediate labelled glow, not the UA's delayed grey box.
+function DomainTab({
+  room,
+  open,
+  shown,
+  onToggle,
+}: {
+  room: Room
+  open: boolean
+  shown: boolean
+  onToggle: () => void
+}) {
+  const mxc = room.getMxcAvatarUrl()
+  const initial = (room.name || room.roomId).replace(/^[#!@]/, '').slice(0, 1).toUpperCase()
+  const label = open ? 'Collapse Domain' : 'Expand Domain'
+  return (
+    <button
+      type="button"
+      className="tc-domain-tab"
+      data-open={shown ? 'true' : 'false'}
+      onClick={onToggle}
+      aria-label={label}
+      aria-expanded={open}
+    >
+      <span className="tc-domain-tab-tip">{label}</span>
+      <span aria-hidden="true" style={{ fontSize: 10, lineHeight: 1 }}>{shown ? '>' : '<'}</span>
+      <span className="tc-domain-tab-icon">
+        {mxc ? (
+          <AuthedImage mxc={mxc} width={180} fill transparentLoading alt="" fallback={initial} />
+        ) : (
+          initial
+        )}
+      </span>
+    </button>
   )
 }
 
