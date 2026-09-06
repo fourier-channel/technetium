@@ -311,6 +311,68 @@ export function closeInColumn(s: Space, id: PanelId): Space {
   return feasible(n) ? n : s
 }
 
+// The region's x-extent: what the dock spans -- the column plus the domain.
+function regionX(s: Space): { x0: number; x1: number } {
+  const m = s.leaves.main
+  const d = s.leaves.domain
+  return { x0: m.x0, x1: d.open ? Math.max(m.x1, d.x1) : m.x1 }
+}
+
+// Open the DOMAIN as a tile to the right of the chat column, below the dock.
+// It takes `fraction` of the region's width from the thread list and the
+// chat (the dock keeps its span, so the domain's top is the dock's bottom --
+// it owns its space "up past the thread list"). Refused if the column would
+// go under the chat's minimum.
+export function openDomain(s: Space, fraction: number): Space {
+  if (s.leaves.domain.open) return s
+  const n = clone(s)
+  const r = regionX(n)
+  const w = (r.x1 - r.x0) * Math.max(0.2, Math.min(0.6, fraction))
+  const top = n.leaves.dock.open ? n.leaves.dock.y1 : Math.min(...COLUMN_STACK.filter((k) => n.leaves[k].open).map((k) => n.leaves[k].y0))
+  for (const k of ['threads', 'main'] as PanelId[]) if (n.leaves[k].open) n.leaves[k].x1 = r.x1 - w
+  Object.assign(n.leaves.domain, { x0: r.x1 - w, x1: r.x1, y0: top, y1: n.leaves.main.y1, open: true })
+  return feasible(n) ? n : s
+}
+
+export function closeDomain(s: Space): Space {
+  if (!s.leaves.domain.open) return s
+  const n = clone(s)
+  const d = n.leaves.domain
+  for (const k of ['threads', 'main'] as PanelId[]) if (n.leaves[k].open && near(n.leaves[k].x1, d.x0)) n.leaves[k].x1 = d.x1
+  d.open = false
+  return feasible(n) ? n : s
+}
+
+// Open the THREAD VIEW (the reading pane) as a full-height tile between the
+// region and the member list. It takes `fraction` of the region's width from
+// EVERY tile in the region -- dock, thread list, chat, domain -- because it
+// owns its entire vertical space, period.
+export function openThreadView(s: Space, fraction: number): Space {
+  if (s.leaves.thread.open) return s
+  const n = clone(s)
+  const r = regionX(n)
+  const w = (r.x1 - r.x0) * Math.max(0.2, Math.min(0.6, fraction))
+  for (const k of ['dock', 'threads', 'main', 'domain'] as PanelId[]) {
+    const l = n.leaves[k]
+    if (!l.open) continue
+    if (near(l.x1, r.x1)) l.x1 = r.x1 - w
+  }
+  Object.assign(n.leaves.thread, { x0: r.x1 - w, x1: r.x1, y0: 0, y1: 1, open: true })
+  return feasible(n) ? n : s
+}
+
+export function closeThreadView(s: Space): Space {
+  if (!s.leaves.thread.open) return s
+  const n = clone(s)
+  const t = n.leaves.thread
+  for (const k of ['dock', 'threads', 'main', 'domain'] as PanelId[]) {
+    const l = n.leaves[k]
+    if (l.open && near(l.x1, t.x0)) l.x1 = t.x1
+  }
+  t.open = false
+  return feasible(n) ? n : s
+}
+
 // Close a panel: its space goes to the neighbour that shares its full edge
 // along the panel's last axis (or x), so the tiling stays whole.
 export function closePanel(s: Space, id: PanelId): Space {

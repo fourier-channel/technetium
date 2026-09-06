@@ -1,7 +1,7 @@
 // Checks for the space: the tiling, divider pushes, lock (translate), pin
 // (warp about center), the wall, minimums, last-vector-wins, open/close, and
 // the number.
-import { defaultSpace, moveDivider, pushEdge, resizePanel, setFlag, setMin, openPanel, closePanel, openInColumn, closeInColumn, validTiling, dividers, serialize, deserialize } from '../src/ui/space.ts'
+import { defaultSpace, moveDivider, pushEdge, resizePanel, setFlag, setMin, openPanel, closePanel, openInColumn, closeInColumn, openDomain, closeDomain, openThreadView, closeThreadView, validTiling, dividers, serialize, deserialize } from '../src/ui/space.ts'
 
 let failures = 0
 const check = (name: string, cond: boolean, extra?: unknown) => { if (cond) console.log('  ok   ' + name); else { failures++; console.log('  FAIL ' + name, extra ?? '') } }
@@ -143,6 +143,33 @@ check('preset dock is locked, not pinned (its neighbours stay draggable)', S.lea
   // setMin caps at 0.5; a 0.3 list under a 0.28 dock leaves the chat 0.42.
   const starved = setMin(openInColumn(S, 'dock', 0.28), 'main', 0.5)
   check('a list that would starve the chat is refused', openInColumn(starved, 'threads', 0.3) === starved)
+}
+
+// Attachment points (operator ruling): the domain takes width from the chat
+// column BELOW the dock; the thread view takes width from everything at full
+// height; closing the thread list with both open gives its height to the chat
+// and touches neither.
+{
+  let x = openInColumn(S, 'dock', 0.28)
+  x = openInColumn(x, 'threads', 0.22)
+  const dom = openDomain(x, 0.45)
+  check('domain opened: top is the dock bottom', near(dom.leaves.domain.y0, 0.28) && near(dom.leaves.domain.y1, 1))
+  check('domain took width from thread list and chat, not the dock', near(dom.leaves.main.x1, dom.leaves.domain.x0) && near(dom.leaves.threads.x1, dom.leaves.domain.x0) && near(dom.leaves.dock.x1, 0.85))
+  check('domain: still a tiling', validTiling(dom))
+  const tv = openThreadView(dom, 0.38)
+  check('thread view is full height', near(tv.leaves.thread.y0, 0) && near(tv.leaves.thread.y1, 1))
+  check('thread view took width from the dock AND the domain', near(tv.leaves.dock.x1, tv.leaves.thread.x0) && near(tv.leaves.domain.x1, tv.leaves.thread.x0))
+  check('thread view: still a tiling', validTiling(tv))
+  // The operator's example.
+  const closedList = closeInColumn(tv, 'threads')
+  check('closing the thread list: chat expands into its height', near(closedList.leaves.main.y0, 0.28))
+  check('closing the thread list: domain unaffected', near(closedList.leaves.domain.y0, 0.28) && near(closedList.leaves.domain.x0, tv.leaves.domain.x0) && near(closedList.leaves.domain.x1, tv.leaves.domain.x1))
+  check('closing the thread list: thread view unaffected', near(closedList.leaves.thread.x0, tv.leaves.thread.x0) && near(closedList.leaves.thread.y0, 0) && near(closedList.leaves.thread.y1, 1))
+  check('closing the thread list: still a tiling', validTiling(closedList))
+  const backDom = closeDomain(closedList)
+  check('closing the domain hands its width back to the chat', near(backDom.leaves.main.x1, tv.leaves.domain.x1))
+  const backAll = closeThreadView(backDom)
+  check('closing the thread view hands its width back to dock and chat', near(backAll.leaves.dock.x1, 0.85) && near(backAll.leaves.main.x1, 0.85) && validTiling(backAll))
 }
 
 if (failures) { console.log(`\n${failures} FAILED`); process.exit(1) }

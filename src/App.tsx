@@ -35,7 +35,7 @@ import { BootScreen } from './onboarding/BootScreen'
 // mounts the three-pane layout (nav tree | timeline+composer | member list).
 function App() {
   const { client, status, error, userId, login, logout } = useClient()
-  const { space, pushEdge, editMode, setEditMode, showInDock, openThreadPane, closeThreadPane, openThreadList, closeThreadList } = useSpace()
+  const { space, pushEdge, editMode, setEditMode, showInDock, openThreadPane, closeThreadPane, openThreadList, closeThreadList, openDomain, closeDomain } = useSpace()
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   // DMs live in the dock, rooms in the main pane. Choosing a person opens
   // them across the top; the room being read stays where it is.
@@ -76,8 +76,8 @@ function App() {
   // the chat's bottom): how the dock, thread list and domain divide it.
   const colTop = Math.min(...(['dock', 'threads', 'main'] as const).filter((k) => space.leaves[k].open).map((k) => space.leaves[k].y0))
   const colH = Math.max(1e-6, space.leaves.main.y1 - colTop)
-  const dockShare = space.leaves.dock.open ? (space.leaves.dock.y1 - space.leaves.dock.y0) / colH : 0
   const threadsShare = space.leaves.threads.open ? (space.leaves.threads.y1 - space.leaves.threads.y0) / colH : 0
+  const domainWidth = Math.round((space.leaves.domain.x1 - space.leaves.domain.x0) * vw)
   const [domainExpanded, setDomainExpanded] = useState(false)
   // The canvas's time-to-die lives here rather than inside DomainView, so the
   // ONE composer can stamp it onto a post while the domain is open. The domain
@@ -87,6 +87,15 @@ function App() {
   // Both panels arrive and leave the same way, from one mechanism -- the only
   // way two things stay exactly the same is for there to be one of them.
   const domainReveal = useReveal(domainExpanded, 420)
+  // The thread list descends from the dock's bottom edge (no sudden jumps):
+  // mounted for the whole choreography, its height going 0 -> share -> 0.
+  const threadListReveal = useReveal(threadListOpen, 380)
+  // The domain is a TILE that takes width from the chat column below the
+  // dock; opening carves it out of the space, closing hands the width back.
+  useEffect(() => {
+    if (domainExpanded) openDomain(); else closeDomain()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [domainExpanded])
   // The reading pane arrives the same way the domain does. Same hook, same
   // duration family, so "like the domain" is a fact rather than a resemblance.
   const threadPanelReveal = useReveal(!!openThread, 420)
@@ -221,108 +230,99 @@ function App() {
         {/* The DM window, across the top, before anything the selected room
             renders: it is its own space and by default it wins. */}
         <DmDock />
-        {/* The thread list: attached to the bottom of the DM window, taking
-            its height from the chat and never from the dock. */}
-        {threadListOpen && selectedRoom && (
-          <div className="tc-threads-tile" style={{ height: `${Math.round(threadsShare * 1000) / 10}%` }}>
-            <ThreadList
-              layout="carousel"
-              onSelect={(roomId, rootId) => setOpenThread({ roomId, rootId })}
-              activeRootId={openThread?.rootId}
-              roomId={selectedRoom?.roomId}
-              onClose={() => setThreadListOpen(false)}
-            />
-          </div>
-        )}
-        {selectedRoom ? (
-            // One composer-mode scope per composer: the room timeline and its
-            // composer share a reply/edit target, and the thread panel keeps
-            // its own so replying in a thread cannot hijack the room composer.
-            <ComposerModeProvider>
-              {/* Expand Domain retired from the header (operator ruling
-                  2026-09-05): it is now the tab riding the chatbox's right
-                  edge, rendered after the panels below so it travels with
-                  the domain. */}
-              <div style={{ flex: 1, minHeight: 0 }}>
-                <Timeline room={selectedRoom} onOpenThread={(roomId, rootId) => setOpenThread({ roomId, rootId })} onOpenRoom={openRoomById} threadListOpen={threadListOpen} onToggleThreadList={() => setThreadListOpen((o) => !o)} />
-              </div>
-              <TypingBar client={client} room={selectedRoom} />
-              {/* The dedicated strip above the chat box. Placeholder source
-                  for the MVP -- point it at real data by swapping the source
-                  (see tickerSource.ts). Absent in DMs entirely -- not even a
-                  re-expand element (operator ruling 2026-09-05) -- and
-                  collapsible everywhere else, with the state riding account
-                  data so it follows the user. */}
-              {!(client && selectedRoom && directRoomIds(client).has(selectedRoom.roomId)) && (
-                <Ticker
-                  source={placeholderTickerSource}
-                  collapsed={tickerCollapsed}
-                  onToggle={() => setTickerCollapsed(!tickerCollapsed)}
+        {/* Below the dock: the chat column and, to its right, the domain --
+            a tile that takes width from the column, so the thread list and
+            the chat SHRINK for it rather than being covered. The dock keeps
+            its span, so the domain owns its space up past the thread list. */}
+        <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+            {/* The thread list: attached to the bottom of the DM window, taking
+                its height from the chat and never from the dock. */}
+            {threadListReveal.mounted && selectedRoom && (
+              <div
+                className="tc-threads-tile"
+                style={{
+                  height: threadListReveal.shown ? `${Math.round(threadsShare * 1000) / 10}%` : 0,
+                  transitionDuration: `${threadListReveal.durationMs}ms`,
+                }}
+              >
+                <ThreadList
+                  layout="carousel"
+                  onSelect={(roomId, rootId) => setOpenThread({ roomId, rootId })}
+                  activeRootId={openThread?.rootId}
+                  roomId={selectedRoom?.roomId}
+                  onClose={() => setThreadListOpen(false)}
                 />
-              )}
-              {/* Undefined unless the domain is open, so an ordinary message
-                  in an ordinary room never acquires a lifetime. */}
-              <Composer room={selectedRoom} domainTtd={domainExpanded ? domainTtd : undefined} />
-
-              {/* Across the top, over the oldest messages on screen -- which is
-                  the part the reader is least likely to be reading, since the
-                  timeline follows the bottom. */}
-
-
-              {/* The thread reading pane, arriving from the right like the
-                  domain. It keeps its drag handle, as its own left edge rather
-                  than as a separate column -- a panel that floats over the chat
-                  has no column to put a handle beside. */}
-              {threadPanelReveal.mounted && openThread && (
-                <div
-                  className="tc-panel tc-panel-thread"
-                  data-shown={threadPanelReveal.shown ? 'true' : 'false'}
-                  style={{
-                    width: threadPanelWidth,
-                    transitionDuration: `${threadPanelReveal.durationMs}ms`,
-                  }}
-                >
-                  <ResizeHandle onDrag={(dx) => pushEdge('thread', 'x', 'lo', dx / vw)} />
-                  <ThreadPanel
-                    roomId={openThread.roomId}
-                    rootId={openThread.rootId}
-                    onClose={() => setOpenThread(null)}
-                    width={threadPanelWidth}
-                  />
+              </div>
+            )}
+            {selectedRoom ? (
+              // One composer-mode scope per composer: the room timeline and its
+              // composer share a reply/edit target, and the thread panel keeps
+              // its own so replying in a thread cannot hijack the room composer.
+              <ComposerModeProvider>
+                <div style={{ flex: 1, minHeight: 0 }}>
+                  <Timeline room={selectedRoom} onOpenThread={(roomId, rootId) => setOpenThread({ roomId, rootId })} onOpenRoom={openRoomById} threadListOpen={threadListOpen} onToggleThreadList={() => setThreadListOpen((o) => !o)} />
                 </div>
-              )}
-
-              {/* Rendered last so it covers the strip: opening the domain is a
-                  bigger statement than browsing threads. */}
-              {domainReveal.mounted && (
-                <div
-                  className="tc-panel tc-panel-right"
-                  data-shown={domainReveal.shown ? 'true' : 'false'}
-                  // The domain owns its whole height EXCEPT the DM window,
-                  // which has priority in that space; the thread list and the
-                  // chat shrink under it.
-                  style={{ transitionDuration: `${domainReveal.durationMs}ms`, top: `${Math.round(dockShare * 1000) / 10}%` }}
-                >
-                  <DomainView
-                    room={selectedRoom}
-                    onExit={() => setDomainExpanded(false)}
-                    ttd={domainTtd}
-                    onTtdChange={setDomainTtd}
+                <TypingBar client={client} room={selectedRoom} />
+                {/* The dedicated strip above the chat box. Absent in DMs
+                    entirely (operator ruling 2026-09-05); collapsible
+                    elsewhere, the state riding account data. */}
+                {!(client && selectedRoom && directRoomIds(client).has(selectedRoom.roomId)) && (
+                  <Ticker
+                    source={placeholderTickerSource}
+                    collapsed={tickerCollapsed}
+                    onToggle={() => setTickerCollapsed(!tickerCollapsed)}
                   />
-                </div>
-              )}
-
-              <DomainTab
+                )}
+                {/* Undefined unless the domain is open, so an ordinary message
+                    in an ordinary room never acquires a lifetime. */}
+                <Composer room={selectedRoom} domainTtd={domainExpanded ? domainTtd : undefined} />
+                <DomainTab
+                  room={selectedRoom}
+                  open={domainExpanded}
+                  shown={domainReveal.shown}
+                  onToggle={() => setDomainExpanded((o) => !o)}
+                />
+              </ComposerModeProvider>
+            ) : (
+              <div style={{ padding: 24, opacity: 0.6 }}>Select a room from the left.</div>
+            )}
+          </div>
+          {/* The domain, coming out of the thread view (or the user list when
+              no thread is open): width from the space, animated, never a jump. */}
+          {domainReveal.mounted && selectedRoom && (
+            <div
+              className="tc-domain-tile"
+              style={{ width: domainReveal.shown ? domainWidth : 0, transitionDuration: `${domainReveal.durationMs}ms` }}
+            >
+              <DomainView
                 room={selectedRoom}
-                open={domainExpanded}
-                shown={domainReveal.shown}
-                onToggle={() => setDomainExpanded((o) => !o)}
+                onExit={() => setDomainExpanded(false)}
+                ttd={domainTtd}
+                onTtdChange={setDomainTtd}
               />
-            </ComposerModeProvider>
-        ) : (
-          <div style={{ padding: 24, opacity: 0.6 }}>Select a room from the left.</div>
-        )}
+            </div>
+          )}
+        </div>
       </main>
+
+      {/* The thread reading pane: a full-height tile between the region and
+          the user list -- it owns its entire vertical space, period. It comes
+          out of the user list; the domain comes out of it. */}
+      {threadPanelReveal.mounted && openThread && (
+        <div
+          className="tc-threadview-tile"
+          style={{ width: threadPanelReveal.shown ? threadPanelWidth : 0, transitionDuration: `${threadPanelReveal.durationMs}ms` }}
+        >
+          <ResizeHandle onDrag={(dx) => pushEdge('thread', 'x', 'lo', dx / vw)} />
+          <ThreadPanel
+            roomId={openThread.roomId}
+            rootId={openThread.rootId}
+            onClose={() => setOpenThread(null)}
+            width={threadPanelWidth}
+          />
+        </div>
+      )}
 
       <ResizeHandle onDrag={(dx) => pushEdge('members', 'x', 'lo', dx / vw)} />
       <MemberList room={selectedRoom} onOpenRoom={openRoomById} width={membersWidth} />
