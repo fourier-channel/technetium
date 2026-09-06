@@ -15,6 +15,7 @@ import { ResizeHandle } from './ui/ResizeHandle'
 import { DmDock } from './ui/DmDock'
 import { LayoutEditor } from './ui/LayoutEditor'
 import { PullTab } from './ui/PullTab'
+import { BooruFrame } from './ui/BooruFrame'
 import { useSpace } from './ui/spaceContext'
 import { ThreadPanel } from './ui/ThreadPanel'
 import { ThreadList } from './ui/ThreadList'
@@ -316,7 +317,7 @@ function App() {
                 />
               </ComposerModeProvider>
             ) : (
-              <div style={{ padding: 24, opacity: 0.6 }}>Select a room from the left.</div>
+              <BooruFrame />
             )}
           </div>
           {/* The domain, coming out of the thread view (or the user list when
