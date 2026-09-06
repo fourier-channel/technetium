@@ -2773,3 +2773,6 @@ code {
   border-bottom: 1px solid rgba(128, 128, 128, 0.25);
 }
 .tc-booru-frame-iframe { flex: 1; min-height: 0; width: 100%; border: 0; background: var(--cpd-color-bg-canvas-default, #16181d); }
+.tc-booru-frame-hint { display: flex; align-items: center; gap: 12px; }
+.tc-booru-frame-signin { margin-left: auto; font-size: 11px; padding: 2px 9px; border-radius: 999px; border: 1px solid rgba(128, 128, 128, 0.4); background: transparent; color: inherit; cursor: pointer; }
+.tc-booru-frame-signin:hover { color: var(--tc-unread, #ff9628); border-color: var(--tc-unread, #ff9628); }
