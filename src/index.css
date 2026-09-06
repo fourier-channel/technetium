@@ -2689,3 +2689,15 @@ code {
 .tc-layout-editor-row input { flex: 1; min-width: 0; font-family: monospace; font-size: 11px; padding: 3px 6px; }
 .tc-layout-editor-help { font-size: 11px; opacity: 0.7; }
 .tc-layout-editor-note { font-size: 11px; opacity: 0.8; }
+
+/* The thread list as a tile in the main column: under the dock, above the
+   chat; its height is the space's number. */
+.tc-threads-tile {
+  flex-shrink: 0;
+  overflow: hidden;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+  background: var(--cpd-color-bg-canvas-default);
+  transition: height 380ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+/* The thread READING pane owns its entire vertical space, dock included. */
+.tc-panel-thread { top: 0; bottom: 0; }

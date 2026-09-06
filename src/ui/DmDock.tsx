@@ -22,7 +22,7 @@ export function DmDock() {
   const panel = space.leaves.dock
   const shown = panel.open && !!dockRoom
   // Height as a share of the main column's height; the column measures itself.
-  const share = shown ? (panel.y1 - panel.y0) / Math.max(1e-6, space.leaves.main.y1 - space.leaves.dock.y0) : 0
+  const share = shown ? (panel.y1 - panel.y0) / Math.max(1e-6, space.leaves.main.y1 - panel.y0) : 0
 
   const title = useMemo(() => {
     if (!dockRoom || !client) return ''
