@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Room } from 'matrix-js-sdk'
 import { useClient } from './client/clientContextValue'
 import { Sidebar } from './ui/Sidebar'
@@ -14,7 +14,7 @@ import { MemberList } from './ui/MemberList'
 import { ResizeHandle } from './ui/ResizeHandle'
 import { DmDock } from './ui/DmDock'
 import { LayoutEditor } from './ui/LayoutEditor'
-import { useLayout } from './ui/layoutContext'
+import { useSpace } from './ui/spaceContext'
 import { ThreadPanel } from './ui/ThreadPanel'
 import { ThreadList } from './ui/ThreadList'
 import { useReveal } from './ui/useReveal'
@@ -35,7 +35,7 @@ import { BootScreen } from './onboarding/BootScreen'
 // mounts the three-pane layout (nav tree | timeline+composer | member list).
 function App() {
   const { client, status, error, userId, login, logout } = useClient()
-  const { layout, resizePanel, editMode, setEditMode, showInDock } = useLayout()
+  const { space, pushEdge, editMode, setEditMode, showInDock, openThreadPane, closeThreadPane } = useSpace()
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   // DMs live in the dock, rooms in the main pane. Choosing a person opens
   // them across the top; the room being read stays where it is.
@@ -62,7 +62,10 @@ function App() {
     attempt(12)
   }
   const [threadListOpen, setThreadListOpen] = useState(false)
-  const threadPanelWidth = layout.panels.thread.size
+  // Thread and member widths are their shares of the space, in viewport px.
+  const vw = window.innerWidth
+  const threadPanelWidth = Math.round((space.leaves.thread.x1 - space.leaves.thread.x0) * vw) || 380
+  const membersWidth = Math.round((space.leaves.members.x1 - space.leaves.members.x0) * vw) || 220
   const [domainExpanded, setDomainExpanded] = useState(false)
   // The canvas's time-to-die lives here rather than inside DomainView, so the
   // ONE composer can stamp it onto a post while the domain is open. The domain
@@ -76,6 +79,12 @@ function App() {
   // The reading pane arrives the same way the domain does. Same hook, same
   // duration family, so "like the domain" is a fact rather than a resemblance.
   const threadPanelReveal = useReveal(!!openThread, 420)
+  // The thread pane is a tile: carve it out of main when a thread opens, give
+  // the space back when it closes.
+  useEffect(() => {
+    if (openThread) openThreadPane(); else closeThreadPane()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!openThread])
   // Mark the viewed room read so its unread glow/ping clears (base client sent
   // no read receipts). Called before any early return to keep hook order stable.
   useReadMarker(client, selectedRoom)
@@ -263,9 +272,7 @@ function App() {
                     transitionDuration: `${threadPanelReveal.durationMs}ms`,
                   }}
                 >
-                  {!layout.panels.thread.locked && (
-                    <ResizeHandle onDrag={(dx) => resizePanel('thread', -dx)} />
-                  )}
+                  <ResizeHandle onDrag={(dx) => pushEdge('thread', 'x', 'lo', dx / vw)} />
                   <ThreadPanel
                     roomId={openThread.roomId}
                     rootId={openThread.rootId}
@@ -304,10 +311,8 @@ function App() {
         )}
       </main>
 
-      {!layout.panels.members.locked && (
-        <ResizeHandle onDrag={(dx) => resizePanel('members', -dx)} />
-      )}
-      <MemberList room={selectedRoom} onOpenRoom={openRoomById} width={layout.panels.members.size} />
+      <ResizeHandle onDrag={(dx) => pushEdge('members', 'x', 'lo', dx / vw)} />
+      <MemberList room={selectedRoom} onOpenRoom={openRoomById} width={membersWidth} />
       </div>
     </div>
     <LayoutEditor />

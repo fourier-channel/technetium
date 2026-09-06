@@ -5,7 +5,7 @@ import { Timeline } from './Timeline'
 import { Composer } from './Composer'
 import { ComposerModeProvider } from './ComposerModeProvider'
 import { ResizeHandle } from './ResizeHandle'
-import { useLayout } from './layoutContext'
+import { useSpace } from './spaceContext'
 import { PanelChrome } from './PanelChrome'
 
 // The DM window. Across the top of the main column, its own space, and by
@@ -18,9 +18,11 @@ import { PanelChrome } from './PanelChrome'
 // messages to a new user stay in view whatever that user clicks next.
 export function DmDock() {
   const { client } = useClient()
-  const { layout, dockRoom, closeDock, resizePanel, editMode } = useLayout()
-  const panel = layout.panels.dmDock
+  const { space, dockRoom, closeDock, pushEdge, editMode } = useSpace()
+  const panel = space.leaves.dock
   const shown = panel.open && !!dockRoom
+  // Height as a share of the main column's height; the column measures itself.
+  const share = shown ? (panel.y1 - panel.y0) / Math.max(1e-6, space.leaves.main.y1 - space.leaves.dock.y0) : 0
 
   const title = useMemo(() => {
     if (!dockRoom || !client) return ''
@@ -34,7 +36,7 @@ export function DmDock() {
     <div
       className="tc-dmdock"
       data-shown={shown ? 'true' : 'false'}
-      style={{ height: shown ? panel.size : 0 }}
+      style={{ height: shown ? `${Math.round(share * 1000) / 10}%` : 0 }}
       aria-hidden={!shown}
     >
       {dockRoom && (
@@ -42,7 +44,7 @@ export function DmDock() {
           <div className="tc-dmdock-head">
             <span className="tc-dmdock-title">{title}</span>
             <span className="tc-dmdock-hint">Direct message</span>
-            {editMode && <PanelChrome id="dmDock" inline />}
+            {editMode && <PanelChrome id="dock" inline />}
             <button type="button" className="tc-dmdock-close" onClick={closeDock} title="Hide the DM window">
               Hide
             </button>
@@ -54,11 +56,11 @@ export function DmDock() {
             <Composer room={dockRoom as Room} />
           </ComposerModeProvider>
           {/* Bottom edge: drag to change the dock's height, unless locked. */}
-          {!panel.locked && (
-            <div className="tc-dmdock-grip">
-              <ResizeHandle vertical onDrag={(d) => resizePanel('dmDock', d)} />
-            </div>
-          )}
+          {/* The divider under the dock. Dragging it pushes dock and main
+              alike -- a locked dock refuses, a pinned one warps. */}
+          <div className="tc-dmdock-grip">
+            <ResizeHandle vertical onDrag={(d) => pushEdge('dock', 'y', 'hi', d / Math.max(1, window.innerHeight))} />
+          </div>
         </div>
       )}
     </div>

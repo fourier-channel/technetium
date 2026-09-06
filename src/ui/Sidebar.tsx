@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Reac
 import { createPortal } from 'react-dom'
 import type { Room } from 'matrix-js-sdk'
 import { NavTree } from './NavTree'
-import { useLayout } from './layoutContext'
+import { useSpace } from './spaceContext'
 import { PanelChrome } from './PanelChrome'
 
 // ---------------------------------------------------------------------------
@@ -28,14 +28,16 @@ export function Sidebar({
   // Width and lock come from the LAYOUT (account data, one number for the
   // whole screen) rather than this panel's own localStorage entry, so the
   // sidebar obeys the same real-estate rules as every other panel.
-  const { layout, resizePanel, setPanelFlag, editMode } = useLayout()
+  const { space, pushEdge, setPanelFlag, editMode } = useSpace()
   const [defaultWidth, setDefaultWidth] = useState<number | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
-  const width = layout.panels.sidebar.size || defaultWidth || FALLBACK_W
-  const panelLocked = layout.panels.sidebar.locked
+  // The sidebar's share of the space, as pixels of the viewport.
+  const leaf = space.leaves.sidebar
+  const width = Math.round((leaf.x1 - leaf.x0) * window.innerWidth) || defaultWidth || FALLBACK_W
+  const panelLocked = leaf.locked
   const setPanelLocked = (v: boolean) => setPanelFlag('sidebar', 'locked', v)
-  // Reset = back to the computed default width.
-  const setPanelWidth = (w: number | null) => resizePanel('sidebar', (w ?? defaultWidth ?? FALLBACK_W) - width)
+  // Reset = push the divider back to where the computed default width puts it.
+  const setPanelWidth = (w: number | null) => pushEdge('sidebar', 'x', 'hi', ((w ?? defaultWidth ?? FALLBACK_W) - width) / window.innerWidth)
 
   const onDefaultWidth = useCallback((w: number) => setDefaultWidth(w), [])
 
@@ -48,7 +50,7 @@ export function Sidebar({
       // renders, so an absolute width from a stale closure would jump.
       const dx = me.clientX - lastX
       lastX = me.clientX
-      if (dx !== 0) resizePanel('sidebar', dx)
+      if (dx !== 0) pushEdge('sidebar', 'x', 'hi', dx / window.innerWidth)
     }
     const onUp = () => {
       window.removeEventListener('pointermove', onMove)
