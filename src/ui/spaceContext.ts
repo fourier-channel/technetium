@@ -28,6 +28,8 @@ export interface SpaceApi {
   closeThreadPane: () => void
   openThreadList: () => void
   closeThreadList: () => void
+  openDomain: () => void
+  closeDomain: () => void
 }
 
 export const SpaceCtx = createContext<SpaceApi | null>(null)

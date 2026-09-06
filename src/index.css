@@ -2701,3 +2701,21 @@ code {
 }
 /* The thread READING pane owns its entire vertical space, dock included. */
 .tc-panel-thread { top: 0; bottom: 0; }
+
+/* Tiles that take space: they grow and shrink, never appear. The domain comes
+   out of the thread view, which comes out of the user list; each is a flex
+   child whose width is the space's number and whose transition is the same
+   420ms family as everything else that moves. */
+.tc-domain-tile, .tc-threadview-tile {
+  flex-shrink: 0;
+  overflow: hidden;
+  min-width: 0;
+  transition: width 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  background: var(--cpd-color-bg-canvas-default, #16181d);
+}
+.tc-domain-tile { border-left: 1px solid rgba(128, 128, 128, 0.25); display: flex; flex-direction: column; }
+.tc-threadview-tile { border-left: 1px solid rgba(128, 128, 128, 0.25); display: flex; }
+.tc-threads-tile { transition: height 380ms cubic-bezier(0.22, 0.61, 0.36, 1); }
+@media (prefers-reduced-motion: reduce) {
+  .tc-domain-tile, .tc-threadview-tile, .tc-threads-tile { transition: none; }
+}

@@ -47,10 +47,41 @@ export function useMemberBackfill(client: MatrixClient | null): void {
     }
     client.on(ClientEvent.Room, onRoom)
 
+    // The roster is a snapshot: loadMembersIfNeeded never asks again, and a
+    // room outside the sliding window sends no member events, so a join that
+    // happened after the first load was invisible until reload ("load once at
+    // start and never update", operator 2026-09-06). Re-hydrate on a slow
+    // cadence and whenever the window regains focus: clear the loaded flag,
+    // ask again. Throttled like the initial pass.
+    const REHYDRATE_MS = 60_000
+    let rehydrating = false
+    const rehydrate = async () => {
+      if (rehydrating) return
+      rehydrating = true
+      try {
+        const rooms = client.getRooms().filter((r) => r.getMyMembership() === 'join')
+        for (let i = 0; i < rooms.length; i += CONCURRENCY) {
+          await Promise.all(
+            rooms.slice(i, i + CONCURRENCY).map(async (r) => {
+              await r.clearLoadedMembersIfNeeded().catch(() => undefined)
+              await r.loadMembersIfNeeded().catch(() => undefined)
+            }),
+          )
+        }
+      } finally {
+        rehydrating = false
+      }
+    }
+    const interval = setInterval(() => void rehydrate(), REHYDRATE_MS)
+    const onFocus = () => void rehydrate()
+    window.addEventListener('focus', onFocus)
+
     return () => {
       cancelled = true
       if (timer) clearTimeout(timer)
       client.off(ClientEvent.Room, onRoom)
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
     }
   }, [client])
 }
