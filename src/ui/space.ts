@@ -265,36 +265,43 @@ export function openPanel(s: Space, id: PanelId, from: PanelId, axis: Axis, frac
 }
 
 // Open a column tile (dock or thread list) at its rank in the stack. It takes
-// `fraction` of the column's height from the top of the region below its
-// rank: higher-ranked open tiles above it stay put, lower-ranked ones are
-// pushed down whole, and the chat gives up the height. Refused if the chat
-// would go under its minimum.
+// `fraction` of the column's height from the region below its rank: tiles
+// ranked above stay put; every open tile touching the insertion line within
+// the new tile's span is pushed down -- column tiles ranked below move whole,
+// the chat and the domain give up the height. The DOCK spans the whole
+// region (chat column plus domain): the DM has priority in that space, so an
+// open domain loses its top to it. The thread LIST spans the chat column
+// only. Refused if anything would go under its minimum.
 export function openInColumn(s: Space, id: PanelId, fraction: number): Space {
   if (!COLUMN_STACK.includes(id) || id === 'main' || s.leaves[id].open) return s
   const n = clone(s)
   const main = n.leaves.main
-  const col = { x0: main.x0, x1: main.x1 }
+  const span = id === 'dock' ? regionX(n) : { x0: main.x0, x1: main.x1 }
   const top = Math.min(...COLUMN_STACK.filter((k) => n.leaves[k].open).map((k) => n.leaves[k].y0))
-  const bottom = main.y1
-  const h = (bottom - top) * Math.max(0.05, Math.min(0.6, fraction))
+  const h = (main.y1 - top) * Math.max(0.05, Math.min(0.6, fraction))
   const rank = COLUMN_STACK.indexOf(id)
-  // Where this tile's top goes: just under the lowest higher-ranked open tile.
   let y = top
   for (const k of COLUMN_STACK.slice(0, rank)) if (n.leaves[k].open) y = Math.max(y, n.leaves[k].y1)
-  const t = n.leaves[id]
-  Object.assign(t, { x0: col.x0, x1: col.x1, y0: y, y1: y + h, open: true })
+  // The column moves by RANK: every open tile ranked below shifts down by h --
+  // lower column tiles whole, the chat by its top edge -- whether or not it
+  // touches the insertion line (the tile under a translated list does not).
   for (const k of COLUMN_STACK.slice(rank + 1)) {
     const l = n.leaves[k]
     if (!l.open) continue
-    if (k === 'main') l.y0 += h
-    else { l.y0 += h; l.y1 += h }
+    if (k === 'main') l.y0 += h; else { l.y0 += h; l.y1 += h }
   }
+  // The domain is not in the column; it yields its top only where the new
+  // tile actually spans it (the dock does, the list does not).
+  const d = n.leaves.domain
+  if (d.open && d.x0 < span.x1 - EPS && d.x1 > span.x0 + EPS && near(d.y0, y)) d.y0 += h
+  Object.assign(n.leaves[id], { x0: span.x0, x1: span.x1, y0: y, y1: y + h, open: true })
   return feasible(n) ? n : s
 }
 
-// Close a column tile: everything ranked below it shifts up by its height
-// and the chat grows by it, so the thread list stays attached to whatever is
-// above it.
+// Close a column tile: every open tile touching its bottom edge within its
+// span comes up by its height -- lower-ranked column tiles move whole, the
+// chat and the domain grow into it -- so the thread list stays attached to
+// whatever is above it and nothing is left unclaimed.
 export function closeInColumn(s: Space, id: PanelId): Space {
   if (!COLUMN_STACK.includes(id) || id === 'main' || !s.leaves[id].open) return s
   const n = clone(s)
@@ -304,9 +311,10 @@ export function closeInColumn(s: Space, id: PanelId): Space {
   for (const k of COLUMN_STACK.slice(rank + 1)) {
     const l = n.leaves[k]
     if (!l.open) continue
-    if (k === 'main') l.y0 -= h
-    else { l.y0 -= h; l.y1 -= h }
+    if (k === 'main') l.y0 -= h; else { l.y0 -= h; l.y1 -= h }
   }
+  const d = n.leaves.domain
+  if (d.open && d.x0 < t.x1 - EPS && d.x1 > t.x0 + EPS && near(d.y0, t.y1)) d.y0 -= h
   t.open = false
   return feasible(n) ? n : s
 }
@@ -338,7 +346,13 @@ export function closeDomain(s: Space): Space {
   if (!s.leaves.domain.open) return s
   const n = clone(s)
   const d = n.leaves.domain
-  for (const k of ['threads', 'main'] as PanelId[]) if (n.leaves[k].open && near(n.leaves[k].x1, d.x0)) n.leaves[k].x1 = d.x1
+  // Whatever sits on its left edge and overlaps it vertically takes the
+  // width back -- otherwise the domain leaves a hole behind (fuzz-found).
+  for (const l of openLeaves(n)) {
+    if (l.id === 'domain') continue
+    const overlapsY = l.y0 < d.y1 - EPS && l.y1 > d.y0 + EPS
+    if (overlapsY && near(l.x1, d.x0)) l.x1 = d.x1
+  }
   d.open = false
   return feasible(n) ? n : s
 }

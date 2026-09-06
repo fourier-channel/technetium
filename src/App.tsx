@@ -14,6 +14,7 @@ import { MemberList } from './ui/MemberList'
 import { ResizeHandle } from './ui/ResizeHandle'
 import { DmDock } from './ui/DmDock'
 import { LayoutEditor } from './ui/LayoutEditor'
+import { PullTab } from './ui/PullTab'
 import { useSpace } from './ui/spaceContext'
 import { ThreadPanel } from './ui/ThreadPanel'
 import { ThreadList } from './ui/ThreadList'
@@ -35,7 +36,7 @@ import { BootScreen } from './onboarding/BootScreen'
 // mounts the three-pane layout (nav tree | timeline+composer | member list).
 function App() {
   const { client, status, error, userId, login, logout } = useClient()
-  const { space, pushEdge, editMode, setEditMode, showInDock, openThreadPane, closeThreadPane, openThreadList, closeThreadList, openDomain, closeDomain } = useSpace()
+  const { space, pushEdge, editMode, setEditMode, showInDock, openThreadPane, closeThreadPane, openThreadList, closeThreadList, openDomain, closeDomain, dockRoom, closeDock } = useSpace()
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   // DMs live in the dock, rooms in the main pane. Choosing a person opens
   // them across the top; the room being read stays where it is.
@@ -78,6 +79,7 @@ function App() {
   const colH = Math.max(1e-6, space.leaves.main.y1 - colTop)
   const threadsShare = space.leaves.threads.open ? (space.leaves.threads.y1 - space.leaves.threads.y0) / colH : 0
   const domainWidth = Math.round((space.leaves.domain.x1 - space.leaves.domain.x0) * vw)
+  const dockShareOfMain = space.leaves.dock.open ? (space.leaves.dock.y1 - space.leaves.dock.y0) / colH : 0
   const [domainExpanded, setDomainExpanded] = useState(false)
   // The canvas's time-to-die lives here rather than inside DomainView, so the
   // ONE composer can stamp it onto a post while the domain is open. The domain
@@ -99,6 +101,15 @@ function App() {
   // The reading pane arrives the same way the domain does. Same hook, same
   // duration family, so "like the domain" is a fact rather than a resemblance.
   const threadPanelReveal = useReveal(!!openThread, 420)
+  // The reading pane needs its thread for the whole choreography, including
+  // the way OUT: rendering on `openThread` alone unmounted it the instant the
+  // thread was cleared, so it vanished instead of sliding back into the
+  // user list. Hold the last one while the reveal is still mounted.
+  const [lastThread, setLastThread] = useState<{ roomId: string; rootId: string } | null>(null)
+  // Adjusted during render, not in an effect (G-tc01): React re-renders
+  // immediately with the new value and nothing paints the stale one.
+  if (openThread && openThread !== lastThread) setLastThread(openThread)
+  const shownThread = openThread ?? lastThread
   // The thread pane is a tile: carve it out of main when a thread opens, give
   // the space back when it closes.
   useEffect(() => {
@@ -161,7 +172,7 @@ function App() {
     )}
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'sans-serif' }}>
       <AlphaBanner />
-      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+      <div style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative' }}>
       <Sidebar
         selectedRoomId={selectedRoom?.roomId}
         onSelectRoom={selectRoom}
@@ -230,6 +241,15 @@ function App() {
         {/* The DM window, across the top, before anything the selected room
             renders: it is its own space and by default it wins. */}
         <DmDock />
+        {/* The dock's tab: on the region's top border when a DM is hidden
+            (pull it down), on the dock's bottom border when it is out (push
+            it up). The dock still opens on its own when a DM arrives. */}
+        {dockRoom && !space.leaves.dock.open && (
+          <PullTab pull="down" target="dock" label="Direct message" onClick={() => showInDock(dockRoom)} style={{ top: 0, left: 'calc(50% - 40px)' }} />
+        )}
+        {dockRoom && space.leaves.dock.open && (
+          <PullTab pull="up" target="dock" label="Hide the direct message" onClick={closeDock} style={{ top: `${Math.round(dockShareOfMain * 1000) / 10}%`, marginTop: -12, left: 'calc(50% - 40px)' }} />
+        )}
         {/* Below the dock: the chat column and, to its right, the domain --
             a tile that takes width from the column, so the thread list and
             the chat SHRINK for it rather than being covered. The dock keeps
@@ -239,6 +259,17 @@ function App() {
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative' }}>
             {/* The thread list: attached to the bottom of the DM window, taking
                 its height from the chat and never from the dock. */}
+            {/* The thread list's tab: on the chat's top border when the list
+                is up (pull it down), on the list's bottom border when it is
+                down (push it up). */}
+            {/* Right of centre: with the dock closed this border is also the
+                dock's, and its tab sits left of centre. Two tabs, side by side. */}
+            {selectedRoom && !threadListOpen && (
+              <PullTab pull="down" target="threads" label="Threads" onClick={() => setThreadListOpen(true)} style={{ top: 0, left: 'calc(50% + 40px)' }} />
+            )}
+            {selectedRoom && threadListOpen && (
+              <PullTab pull="up" target="threads" label="Hide threads" onClick={() => setThreadListOpen(false)} style={{ top: `${Math.round(threadsShare * 1000) / 10}%`, marginTop: -12, left: 'calc(50% + 40px)' }} />
+            )}
             {threadListReveal.mounted && selectedRoom && (
               <div
                 className="tc-threads-tile"
@@ -252,7 +283,6 @@ function App() {
                   onSelect={(roomId, rootId) => setOpenThread({ roomId, rootId })}
                   activeRootId={openThread?.rootId}
                   roomId={selectedRoom?.roomId}
-                  onClose={() => setThreadListOpen(false)}
                 />
               </div>
             )}
@@ -262,7 +292,7 @@ function App() {
               // its own so replying in a thread cannot hijack the room composer.
               <ComposerModeProvider>
                 <div style={{ flex: 1, minHeight: 0 }}>
-                  <Timeline room={selectedRoom} onOpenThread={(roomId, rootId) => setOpenThread({ roomId, rootId })} onOpenRoom={openRoomById} threadListOpen={threadListOpen} onToggleThreadList={() => setThreadListOpen((o) => !o)} />
+                  <Timeline room={selectedRoom} onOpenThread={(roomId, rootId) => setOpenThread({ roomId, rootId })} onOpenRoom={openRoomById} threadListOpen={threadListOpen} />
                 </div>
                 <TypingBar client={client} room={selectedRoom} />
                 {/* The dedicated strip above the chat box. Absent in DMs
@@ -310,21 +340,28 @@ function App() {
       {/* The thread reading pane: a full-height tile between the region and
           the user list -- it owns its entire vertical space, period. It comes
           out of the user list; the domain comes out of it. */}
-      {threadPanelReveal.mounted && openThread && (
+      {threadPanelReveal.mounted && shownThread && (
         <div
           className="tc-threadview-tile"
           style={{ width: threadPanelReveal.shown ? threadPanelWidth : 0, transitionDuration: `${threadPanelReveal.durationMs}ms` }}
         >
           <ResizeHandle onDrag={(dx) => pushEdge('thread', 'x', 'lo', dx / vw)} />
           <ThreadPanel
-            roomId={openThread.roomId}
-            rootId={openThread.rootId}
-            onClose={() => setOpenThread(null)}
+            roomId={shownThread.roomId}
+            rootId={shownThread.rootId}
             width={threadPanelWidth}
           />
         </div>
       )}
 
+      {/* The thread view's tab: on the user list's left border when a thread
+          can be pulled back out, on the view's left border when it is out. */}
+      {lastThread && !openThread && (
+        <PullTab pull="left" target="thread" label="Thread" onClick={() => setOpenThread(lastThread)} style={{ right: membersWidth + 5 }} />
+      )}
+      {openThread && (
+        <PullTab pull="right" target="thread" label="Close thread" onClick={() => setOpenThread(null)} style={{ right: membersWidth + 5 + threadPanelWidth, marginRight: -12 }} />
+      )}
       <ResizeHandle onDrag={(dx) => pushEdge('members', 'x', 'lo', dx / vw)} />
       <MemberList room={selectedRoom} onOpenRoom={openRoomById} width={membersWidth} />
       </div>
