@@ -29,8 +29,15 @@
 
 export type Axis = 'x' | 'y'
 export type Dir = -1 | 1
-export type PanelId = 'sidebar' | 'main' | 'dock' | 'thread' | 'members' | 'domain'
-export const PANEL_IDS: PanelId[] = ['sidebar', 'main', 'dock', 'thread', 'members', 'domain']
+export type PanelId = 'sidebar' | 'main' | 'dock' | 'threads' | 'thread' | 'members' | 'domain'
+export const PANEL_IDS: PanelId[] = ['sidebar', 'main', 'dock', 'threads', 'thread', 'members', 'domain']
+
+// The main COLUMN is an ordered stack (operator ruling 2026-09-06): the DM
+// dock on top, the thread list attached to its bottom edge, the chat below.
+// The thread list has privilege over the chat and not over the dock; opening
+// a tile inserts it at its rank and pushes lower-ranked tiles down; closing
+// one shifts them back up, and the chat -- the column's flex -- absorbs.
+export const COLUMN_STACK: PanelId[] = ['dock', 'threads', 'main']
 
 export interface Rect { x0: number; y0: number; x1: number; y1: number }
 
@@ -45,7 +52,7 @@ export interface Leaf extends Rect {
 }
 
 export interface Space {
-  v: 2
+  v: 3
   leaves: Record<PanelId, Leaf>
 }
 
@@ -63,10 +70,11 @@ export function defaultSpace(): Space {
   const leaf = (id: PanelId, r: Rect, extra: Partial<Leaf> = {}): Leaf =>
     ({ id, ...r, locked: false, pinned: false, open: true, min: DEFAULT_MIN, last: null, ...extra })
   return {
-    v: 2,
+    v: 3,
     leaves: {
       sidebar: leaf('sidebar', { x0: 0, y0: 0, x1: 0.18, y1: 1 }),
       dock:    leaf('dock',    { x0: 0.18, y0: 0, x1: 0.85, y1: 0.28 }, { locked: true, open: false }),
+      threads: leaf('threads', { x0: 0.18, y0: 0, x1: 0.85, y1: 0.22 }, { open: false }),
       main:    leaf('main',    { x0: 0.18, y0: 0, x1: 0.85, y1: 1 }),
       thread:  leaf('thread',  { x0: 0.85, y0: 0, x1: 0.85, y1: 1 }, { open: false }),
       members: leaf('members', { x0: 0.85, y0: 0, x1: 1, y1: 1 }),
@@ -82,7 +90,7 @@ export function openLeaves(s: Space): Leaf[] {
 function clone(s: Space): Space {
   const leaves = {} as Record<PanelId, Leaf>
   for (const id of PANEL_IDS) leaves[id] = { ...s.leaves[id], last: s.leaves[id].last ? { ...s.leaves[id].last! } : null }
-  return { v: 2, leaves }
+  return { v: 3, leaves }
 }
 
 const lo = (l: Rect, a: Axis) => (a === 'x' ? l.x0 : l.y0)
@@ -256,6 +264,53 @@ export function openPanel(s: Space, id: PanelId, from: PanelId, axis: Axis, frac
   return feasible(n) ? n : s
 }
 
+// Open a column tile (dock or thread list) at its rank in the stack. It takes
+// `fraction` of the column's height from the top of the region below its
+// rank: higher-ranked open tiles above it stay put, lower-ranked ones are
+// pushed down whole, and the chat gives up the height. Refused if the chat
+// would go under its minimum.
+export function openInColumn(s: Space, id: PanelId, fraction: number): Space {
+  if (!COLUMN_STACK.includes(id) || id === 'main' || s.leaves[id].open) return s
+  const n = clone(s)
+  const main = n.leaves.main
+  const col = { x0: main.x0, x1: main.x1 }
+  const top = Math.min(...COLUMN_STACK.filter((k) => n.leaves[k].open).map((k) => n.leaves[k].y0))
+  const bottom = main.y1
+  const h = (bottom - top) * Math.max(0.05, Math.min(0.6, fraction))
+  const rank = COLUMN_STACK.indexOf(id)
+  // Where this tile's top goes: just under the lowest higher-ranked open tile.
+  let y = top
+  for (const k of COLUMN_STACK.slice(0, rank)) if (n.leaves[k].open) y = Math.max(y, n.leaves[k].y1)
+  const t = n.leaves[id]
+  Object.assign(t, { x0: col.x0, x1: col.x1, y0: y, y1: y + h, open: true })
+  for (const k of COLUMN_STACK.slice(rank + 1)) {
+    const l = n.leaves[k]
+    if (!l.open) continue
+    if (k === 'main') l.y0 += h
+    else { l.y0 += h; l.y1 += h }
+  }
+  return feasible(n) ? n : s
+}
+
+// Close a column tile: everything ranked below it shifts up by its height
+// and the chat grows by it, so the thread list stays attached to whatever is
+// above it.
+export function closeInColumn(s: Space, id: PanelId): Space {
+  if (!COLUMN_STACK.includes(id) || id === 'main' || !s.leaves[id].open) return s
+  const n = clone(s)
+  const t = n.leaves[id]
+  const h = t.y1 - t.y0
+  const rank = COLUMN_STACK.indexOf(id)
+  for (const k of COLUMN_STACK.slice(rank + 1)) {
+    const l = n.leaves[k]
+    if (!l.open) continue
+    if (k === 'main') l.y0 -= h
+    else { l.y0 -= h; l.y1 -= h }
+  }
+  t.open = false
+  return feasible(n) ? n : s
+}
+
 // Close a panel: its space goes to the neighbour that shares its full edge
 // along the panel's last axis (or x), so the tiling stays whole.
 export function closePanel(s: Space, id: PanelId): Space {
@@ -280,7 +335,7 @@ export function closePanel(s: Space, id: PanelId): Space {
 // --- the number -----------------------------------------------------------
 // Per leaf: x0,y0,x1,y1 at 10 bits each (1/1023), flags open|pinned|locked
 // (3 bits), min at 6 bits (1/63), last axis+dir (3 bits: none/x-/x+/y-/y+).
-// Six leaves in PANEL_IDS order, version 2 first, checksum byte last.
+// Seven leaves in PANEL_IDS order, version 3 first, checksum byte last.
 const Q = 1023n
 const LEAF_BITS = 40n + 3n + 6n + 3n
 
@@ -288,7 +343,7 @@ function q(v: number): bigint { return BigInt(Math.max(0, Math.min(1023, Math.ro
 function checksum(x: bigint): bigint { let s = 0n, v = x; while (v > 0n) { s = (s + (v & 0xffn)) & 0xffn; v >>= 8n } return s }
 
 export function serialize(s: Space): string {
-  let acc = 2n
+  let acc = 3n
   for (const id of PANEL_IDS) {
     const l = s.leaves[id]
     const last = l.last ? BigInt((l.last.axis === 'x' ? 1 : 3) + (l.last.dir === 1 ? 1 : 0)) : 0n
@@ -326,7 +381,7 @@ export function deserialize(code: string): Space | null {
     Object.assign(l, { x0, y0, x1, y1, min, locked: !!(flags & 1), pinned: !!(flags & 2), open: !!(flags & 4) })
     l.last = last === 0 ? null : { axis: last <= 2 ? 'x' : 'y', dir: last % 2 === 0 ? 1 : -1 }
   }
-  if (acc !== 2n) return null
+  if (acc !== 3n) return null
   // Quantisation can leave a hair of overlap; snap coincident edges together.
   return validTiling(snap(s)) ? snap(s) : null
 }

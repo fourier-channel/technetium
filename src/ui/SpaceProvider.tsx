@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { RoomEvent, type MatrixEvent, type Room } from 'matrix-js-sdk'
 import { useClient } from '../client/clientContextValue'
 import { directRoomIds } from '../client/dm'
-import { closePanel, defaultSpace, deserialize, moveDivider, openPanel, pushEdge, serialize, setFlag, setMin } from './space'
+import { closeInColumn, closePanel, defaultSpace, deserialize, moveDivider, openInColumn, openPanel, pushEdge, serialize, setFlag, setMin } from './space'
 import { useStoredSpace } from './spaceState'
 import { SpaceCtx, type SpaceApi } from './spaceContext'
 
@@ -24,7 +24,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       if (!room || toStart || ev.getType() !== 'm.room.message' || ev.getSender() === me) return
       if (!directRoomIds(client).has(room.roomId)) return
       setDockRoom((cur) => cur ?? room)
-      setSpace((prev) => openPanel(prev, 'dock', 'main', 'y', 0.28))
+      setSpace((prev) => openInColumn(prev, 'dock', 0.28))
     }
     client.on(RoomEvent.Timeline, onTimeline)
     return () => {
@@ -53,9 +53,11 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     dockRoom,
     showInDock: (room) => {
       setDockRoom(room)
-      setSpace((prev) => openPanel(prev, 'dock', 'main', 'y', 0.28))
+      setSpace((prev) => openInColumn(prev, 'dock', 0.28))
     },
-    closeDock: () => setSpace((prev) => closePanel(prev, 'dock')),
+    closeDock: () => setSpace((prev) => closeInColumn(prev, 'dock')),
+    openThreadList: () => setSpace((prev) => openInColumn(prev, 'threads', 0.22)),
+    closeThreadList: () => setSpace((prev) => closeInColumn(prev, 'threads')),
     openThreadPane: () => setSpace((prev) => openPanel(prev, 'thread', 'main', 'x', 0.35, true)),
     closeThreadPane: () => setSpace((prev) => closePanel(prev, 'thread')),
   }), [space, editMode, dockRoom, setSpace])

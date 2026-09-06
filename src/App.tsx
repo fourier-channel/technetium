@@ -35,7 +35,7 @@ import { BootScreen } from './onboarding/BootScreen'
 // mounts the three-pane layout (nav tree | timeline+composer | member list).
 function App() {
   const { client, status, error, userId, login, logout } = useClient()
-  const { space, pushEdge, editMode, setEditMode, showInDock, openThreadPane, closeThreadPane } = useSpace()
+  const { space, pushEdge, editMode, setEditMode, showInDock, openThreadPane, closeThreadPane, openThreadList, closeThreadList } = useSpace()
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   // DMs live in the dock, rooms in the main pane. Choosing a person opens
   // them across the top; the room being read stays where it is.
@@ -61,11 +61,23 @@ function App() {
     }
     attempt(12)
   }
-  const [threadListOpen, setThreadListOpen] = useState(false)
+  // The thread list is a tile in the main column (under the dock, above the
+  // chat); its open state IS the space's.
+  const threadListOpen = space.leaves.threads.open
+  const setThreadListOpen = (v: boolean | ((o: boolean) => boolean)) => {
+    const next = typeof v === 'function' ? v(threadListOpen) : v
+    if (next) openThreadList(); else closeThreadList()
+  }
   // Thread and member widths are their shares of the space, in viewport px.
   const vw = window.innerWidth
   const threadPanelWidth = Math.round((space.leaves.thread.x1 - space.leaves.thread.x0) * vw) || 380
   const membersWidth = Math.round((space.leaves.members.x1 - space.leaves.members.x0) * vw) || 220
+  // Column shares, of the column's full height (from the top open tile to
+  // the chat's bottom): how the dock, thread list and domain divide it.
+  const colTop = Math.min(...(['dock', 'threads', 'main'] as const).filter((k) => space.leaves[k].open).map((k) => space.leaves[k].y0))
+  const colH = Math.max(1e-6, space.leaves.main.y1 - colTop)
+  const dockShare = space.leaves.dock.open ? (space.leaves.dock.y1 - space.leaves.dock.y0) / colH : 0
+  const threadsShare = space.leaves.threads.open ? (space.leaves.threads.y1 - space.leaves.threads.y0) / colH : 0
   const [domainExpanded, setDomainExpanded] = useState(false)
   // The canvas's time-to-die lives here rather than inside DomainView, so the
   // ONE composer can stamp it onto a post while the domain is open. The domain
@@ -75,7 +87,6 @@ function App() {
   // Both panels arrive and leave the same way, from one mechanism -- the only
   // way two things stay exactly the same is for there to be one of them.
   const domainReveal = useReveal(domainExpanded, 420)
-  const threadReveal = useReveal(threadListOpen, 380)
   // The reading pane arrives the same way the domain does. Same hook, same
   // duration family, so "like the domain" is a fact rather than a resemblance.
   const threadPanelReveal = useReveal(!!openThread, 420)
@@ -210,6 +221,19 @@ function App() {
         {/* The DM window, across the top, before anything the selected room
             renders: it is its own space and by default it wins. */}
         <DmDock />
+        {/* The thread list: attached to the bottom of the DM window, taking
+            its height from the chat and never from the dock. */}
+        {threadListOpen && selectedRoom && (
+          <div className="tc-threads-tile" style={{ height: `${Math.round(threadsShare * 1000) / 10}%` }}>
+            <ThreadList
+              layout="carousel"
+              onSelect={(roomId, rootId) => setOpenThread({ roomId, rootId })}
+              activeRootId={openThread?.rootId}
+              roomId={selectedRoom?.roomId}
+              onClose={() => setThreadListOpen(false)}
+            />
+          </div>
+        )}
         {selectedRoom ? (
             // One composer-mode scope per composer: the room timeline and its
             // composer share a reply/edit target, and the thread panel keeps
@@ -243,21 +267,7 @@ function App() {
               {/* Across the top, over the oldest messages on screen -- which is
                   the part the reader is least likely to be reading, since the
                   timeline follows the bottom. */}
-              {threadReveal.mounted && (
-                <div
-                  className="tc-panel tc-panel-top"
-                  data-shown={threadReveal.shown ? 'true' : 'false'}
-                  style={{ transitionDuration: `${threadReveal.durationMs}ms` }}
-                >
-                  <ThreadList
-                    layout="carousel"
-                    onSelect={(roomId, rootId) => setOpenThread({ roomId, rootId })}
-                    activeRootId={openThread?.rootId}
-                    roomId={selectedRoom?.roomId}
-                    onClose={() => setThreadListOpen(false)}
-                  />
-                </div>
-              )}
+
 
               {/* The thread reading pane, arriving from the right like the
                   domain. It keeps its drag handle, as its own left edge rather
@@ -288,7 +298,10 @@ function App() {
                 <div
                   className="tc-panel tc-panel-right"
                   data-shown={domainReveal.shown ? 'true' : 'false'}
-                  style={{ transitionDuration: `${domainReveal.durationMs}ms` }}
+                  // The domain owns its whole height EXCEPT the DM window,
+                  // which has priority in that space; the thread list and the
+                  // chat shrink under it.
+                  style={{ transitionDuration: `${domainReveal.durationMs}ms`, top: `${Math.round(dockShare * 1000) / 10}%` }}
                 >
                   <DomainView
                     room={selectedRoom}

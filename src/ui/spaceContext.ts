@@ -23,9 +23,11 @@ export interface SpaceApi {
   dockRoom: Room | null
   showInDock: (room: Room) => void
   closeDock: () => void
-  // Thread pane in the tiling.
+  // Thread pane (the reading view) in the row; thread LIST in the column.
   openThreadPane: () => void
   closeThreadPane: () => void
+  openThreadList: () => void
+  closeThreadList: () => void
 }
 
 export const SpaceCtx = createContext<SpaceApi | null>(null)

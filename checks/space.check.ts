@@ -1,13 +1,13 @@
 // Checks for the space: the tiling, divider pushes, lock (translate), pin
 // (warp about center), the wall, minimums, last-vector-wins, open/close, and
 // the number.
-import { defaultSpace, moveDivider, pushEdge, resizePanel, setFlag, setMin, openPanel, closePanel, validTiling, dividers, serialize, deserialize } from '../src/ui/space.ts'
+import { defaultSpace, moveDivider, pushEdge, resizePanel, setFlag, setMin, openPanel, closePanel, openInColumn, closeInColumn, validTiling, dividers, serialize, deserialize } from '../src/ui/space.ts'
 
 let failures = 0
 const check = (name: string, cond: boolean, extra?: unknown) => { if (cond) console.log('  ok   ' + name); else { failures++; console.log('  FAIL ' + name, extra ?? '') } }
 const near = (a: number, b: number, e = 1e-4) => Math.abs(a - b) < e
-const w = (s: ReturnType<typeof defaultSpace>, id: 'sidebar'|'main'|'dock'|'thread'|'members'|'domain') => s.leaves[id].x1 - s.leaves[id].x0
-const h = (s: ReturnType<typeof defaultSpace>, id: 'sidebar'|'main'|'dock'|'thread'|'members'|'domain') => s.leaves[id].y1 - s.leaves[id].y0
+const w = (s: ReturnType<typeof defaultSpace>, id: 'sidebar'|'main'|'dock'|'threads'|'thread'|'members'|'domain') => s.leaves[id].x1 - s.leaves[id].x0
+const h = (s: ReturnType<typeof defaultSpace>, id: 'sidebar'|'main'|'dock'|'threads'|'thread'|'members'|'domain') => s.leaves[id].y1 - s.leaves[id].y0
 
 const S = defaultSpace()
 check('preset tiles the space exactly', validTiling(S))
@@ -112,7 +112,7 @@ check('preset dock is locked, not pinned (its neighbours stay draggable)', S.lea
   s = setFlag(s, 'members', 'locked', true)
   const code = serialize(s)
   check('digits only', /^\d+$/.test(code))
-  check('pasteable (<= 100 digits)', code.length <= 100, code.length)
+  check('pasteable (<= 120 digits; seven tiles is ~113)', code.length <= 120, code.length)
   const back = deserialize(code)
   check('round-trip: tiling valid', !!back && validTiling(back))
   check('round-trip: sizes within quantisation', !!back && near(w(back, 'sidebar'), w(s, 'sidebar'), 2 / 1023))
@@ -120,7 +120,29 @@ check('preset dock is locked, not pinned (its neighbours stay draggable)', S.lea
   check('round-trip: identical number', !!back && serialize(back) === code)
   check('bad checksum rejected', deserialize(code.slice(0, -1) + ((Number(code.slice(-1)) + 1) % 10)) === null)
   check('junk rejected', deserialize('abc') === null && deserialize('') === null)
-  check('v1-shaped number rejected', deserialize(serialize(S).slice(2)) === null)
+  check('older-version number rejected', deserialize(serialize(S).slice(2)) === null)
+}
+
+// The column stack: dock over thread list over chat (operator ruling).
+{
+  const t = openInColumn(S, 'threads', 0.22)
+  check('thread list opens at the top of the column when no dock', near(t.leaves.threads.y0, 0) && near(h(t, 'threads'), 0.22))
+  check('chat gave up the height', near(t.leaves.main.y0, 0.22))
+  const d = openInColumn(t, 'dock', 0.28)
+  check('dock inserts ABOVE the thread list', near(d.leaves.dock.y0, 0) && near(d.leaves.dock.y1, 0.28))
+  check('thread list stays attached to the dock bottom', near(d.leaves.threads.y0, 0.28) && near(h(d, 'threads'), 0.22))
+  check('chat shrank, not the thread list', near(d.leaves.main.y0, 0.50))
+  check('column tiles the space', validTiling(d))
+  const c = closeInColumn(d, 'dock')
+  check('closing the dock lifts the thread list back to the top', near(c.leaves.threads.y0, 0) && near(c.leaves.main.y0, 0.22))
+  const c2 = closeInColumn(d, 'threads')
+  check('closing the thread list gives its height to the chat, dock untouched', near(c2.leaves.main.y0, 0.28) && near(c2.leaves.dock.y1, 0.28))
+  // Opening the dock first, then the list: the list goes under the dock.
+  const d2 = openInColumn(openInColumn(S, 'dock', 0.28), 'threads', 0.22)
+  check('list opened after the dock sits under it (fraction is of the whole column)', near(d2.leaves.threads.y0, 0.28) && near(d2.leaves.main.y0, 0.50))
+  // setMin caps at 0.5; a 0.3 list under a 0.28 dock leaves the chat 0.42.
+  const starved = setMin(openInColumn(S, 'dock', 0.28), 'main', 0.5)
+  check('a list that would starve the chat is refused', openInColumn(starved, 'threads', 0.3) === starved)
 }
 
 if (failures) { console.log(`\n${failures} FAILED`); process.exit(1) }
