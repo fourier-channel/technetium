@@ -18,7 +18,7 @@ import { PanelChrome } from './PanelChrome'
 // messages to a new user stay in view whatever that user clicks next.
 export function DmDock() {
   const { client } = useClient()
-  const { space, dockRoom, closeDock, pushEdge, editMode } = useSpace()
+  const { space, dockRoom, pushEdge, editMode } = useSpace()
   const panel = space.leaves.dock
   const shown = panel.open && !!dockRoom
   // Height as a share of the main column's height; the column measures itself.
@@ -45,9 +45,6 @@ export function DmDock() {
             <span className="tc-dmdock-title">{title}</span>
             <span className="tc-dmdock-hint">Direct message</span>
             {editMode && <PanelChrome id="dock" inline />}
-            <button type="button" className="tc-dmdock-close" onClick={closeDock} title="Hide the DM window">
-              Hide
-            </button>
           </div>
           <ComposerModeProvider>
             <div className="tc-dmdock-body">

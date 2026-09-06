@@ -17,12 +17,10 @@ import { TypingBar } from './TypingBar'
 export function ThreadPanel({
   roomId,
   rootId,
-  onClose,
   width = 380,
 }: {
   roomId: string
   rootId: string
-  onClose: () => void
   width?: number
 }) {
   const { client } = useClient()
@@ -110,9 +108,7 @@ export function ThreadPanel({
         <strong style={{ fontSize: 13 }}>
           Thread{room ? ` \u00b7 ${room.name || roomId}` : ''}
         </strong>
-        <button type="button" onClick={onClose} style={{ fontSize: 12 }}>
-          Close
-        </button>
+
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', minHeight: 0, color: 'var(--cpd-color-text-primary)' }}>

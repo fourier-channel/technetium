@@ -63,8 +63,22 @@ export function useMemberBackfill(client: MatrixClient | null): void {
         for (let i = 0; i < rooms.length; i += CONCURRENCY) {
           await Promise.all(
             rooms.slice(i, i + CONCURRENCY).map(async (r) => {
-              await r.clearLoadedMembersIfNeeded().catch(() => undefined)
-              await r.loadMembersIfNeeded().catch(() => undefined)
+              // Ask the server who is joined and compare with what the room
+              // knows. Only a room whose roster actually differs is cleared
+              // and reloaded: clearing first made every refresh drop the
+              // whole roster and pop it back in, so the list blinked every
+              // minute (operator, 2026-09-06).
+              try {
+                const { joined } = await client.getJoinedRoomMembers(r.roomId)
+                const server = new Set(Object.keys(joined ?? {}))
+                const known = new Set(r.getJoinedMembers().map((m) => m.userId))
+                const same = server.size === known.size && [...server].every((u) => known.has(u))
+                if (same) return
+                await r.clearLoadedMembersIfNeeded()
+                await r.loadMembersIfNeeded()
+              } catch {
+                /* transient; the next pass retries */
+              }
             }),
           )
         }

@@ -2722,3 +2722,45 @@ code {
 @media (prefers-reduced-motion: reduce) {
   .tc-domain-tile, .tc-threadview-tile, .tc-threads-tile { transition: none; }
 }
+
+/* --- Pull tabs: the border says what can be pulled from it ------------- */
+.tc-pulltab {
+  position: absolute;
+  z-index: 13;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  background: var(--cpd-color-bg-canvas-default, #16181d);
+  color: var(--cpd-color-text-secondary);
+  cursor: pointer;
+  transition: box-shadow 150ms ease, color 150ms ease;
+}
+.tc-pulltab-chevron { font-size: 11px; line-height: 1; }
+/* Horizontal tabs hang off a top or bottom border, centred. */
+.tc-pulltab[data-pull='down'], .tc-pulltab[data-pull='up'] {
+  left: 50%; transform: translateX(-50%);
+  width: 46px; height: 12px;
+}
+.tc-pulltab[data-pull='down'] { border-top: none; border-radius: 0 0 8px 8px; }
+.tc-pulltab[data-pull='up'] { border-bottom: none; border-radius: 8px 8px 0 0; }
+/* Vertical tabs sit on a left border, centred. */
+.tc-pulltab[data-pull='left'], .tc-pulltab[data-pull='right'] {
+  top: 50%; transform: translateY(-50%);
+  width: 12px; height: 46px;
+}
+.tc-pulltab[data-pull='left'] { border-right: none; border-radius: 8px 0 0 8px; }
+.tc-pulltab[data-pull='right'] { border-left: none; border-radius: 0 8px 8px 0; }
+.tc-pulltab:hover { color: var(--tc-unread, #ff9628); box-shadow: 0 0 10px 1px rgba(255, 150, 40, 0.55); }
+.tc-pulltab-tip {
+  position: absolute; white-space: nowrap; font-size: 11px; padding: 2px 8px;
+  border-radius: 6px; background: var(--cpd-color-bg-canvas-default, #16181d);
+  border: 1px solid rgba(255, 150, 40, 0.6); color: var(--tc-unread, #ff9628);
+  opacity: 0; pointer-events: none; transition: opacity 150ms ease;
+}
+.tc-pulltab[data-pull='down'] .tc-pulltab-tip { top: 100%; margin-top: 4px; left: 50%; transform: translateX(-50%); }
+.tc-pulltab[data-pull='up'] .tc-pulltab-tip { bottom: 100%; margin-bottom: 4px; left: 50%; transform: translateX(-50%); }
+.tc-pulltab[data-pull='left'] .tc-pulltab-tip, .tc-pulltab[data-pull='right'] .tc-pulltab-tip { right: 100%; margin-right: 6px; top: 50%; transform: translateY(-50%); }
+.tc-pulltab:hover .tc-pulltab-tip { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .tc-pulltab { transition: none; } }
