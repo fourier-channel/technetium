@@ -20,16 +20,20 @@ export function currentViewport(): Viewport {
   return { w: window.innerWidth || DEFAULT_VIEWPORT.w, h: window.innerHeight || DEFAULT_VIEWPORT.h }
 }
 
-export function readSpace(client: MatrixClient | null, vp: Viewport = currentViewport()): Space {
+// The layout as the user designed it, untouched by this screen.
+export function readStored(client: MatrixClient | null, vp: Viewport = currentViewport()): Space {
   const code = client?.getAccountData(TYPE)?.getContent()?.code
   // A number that does not parse is treated as absent, never as a partial
   // layout: the default is a known-good screen and a corrupt code is not.
   // A v1 number (the earlier one-axis model) is refused by deserialize and
   // reads as the default, which is the honest answer to a superseded shape.
-  const stored = (typeof code === 'string' && deserialize(code, vp)) || setViewport(defaultSpace(), vp)
-  // A layout designed on a desktop routinely arrives on a phone. Reflow is
-  // what THIS screen can show of it; the stored number is left alone.
-  return reflow(stored)
+  return (typeof code === 'string' && deserialize(code, vp)) || setViewport(defaultSpace(), vp)
+}
+
+// What THIS screen can show of it. A layout designed on a desktop routinely
+// arrives on a phone; the stored number is never rewritten to match.
+export function readSpace(client: MatrixClient | null, vp: Viewport = currentViewport()): Space {
+  return reflow(readStored(client, vp))
 }
 
 export type SpaceUpdate = Space | ((prev: Space) => Space)
@@ -59,7 +63,7 @@ export function useStoredSpace(client: MatrixClient | null): [Space, (u: SpaceUp
   // every device. (Per-form-factor presets are the next piece of work; until
   // they land, a user EDIT made on a small screen does still save, because
   // that is a choice rather than an adaptation.)
-  const chosen = useRef(layout)
+  const chosen = useRef<Space>(readStored(client))
 
   useEffect(() => {
     if (!client) return
@@ -67,10 +71,14 @@ export function useStoredSpace(client: MatrixClient | null): [Space, (u: SpaceUp
       if (ev.getType() !== TYPE) return
       const code = ev.getContent()?.code
       if (typeof code === 'string' && code === lastWritten.current) return // our own
-      setLayoutState(readSpace(client))
+      chosen.current = readStored(client)
+      setLayoutState(reflow(chosen.current))
     }
     client.on(ClientEvent.AccountData, onAccountData)
-    queueMicrotask(() => setLayoutState(readSpace(client)))
+    queueMicrotask(() => {
+      chosen.current = readStored(client)
+      setLayoutState(reflow(chosen.current))
+    })
     return () => {
       client.removeListener(ClientEvent.AccountData, onAccountData)
     }
@@ -102,6 +110,30 @@ export function useStoredSpace(client: MatrixClient | null): [Space, (u: SpaceUp
     latest.current = l
     setLayoutState(l)
   }
+
+  // The screen. Minimums are pixels (space.ts), so what fits changes with the
+  // window and the rendered layout is re-derived from what the user CHOSE --
+  // never from the last adapted one. Deriving from the adapted layout would
+  // make shedding one-way: narrow the window and widen it again, and the
+  // panels would be gone for the rest of the session even though the layout
+  // they came from is still sitting in account data, intact.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const apply = () => {
+      const l = reflow(setViewport(chosen.current, currentViewport()))
+      latest.current = l
+      setLayoutState(l)
+    }
+    const onResize = () => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(apply, 150)
+    }
+    window.addEventListener('resize', onResize)
+    return () => {
+      if (timer) clearTimeout(timer)
+      window.removeEventListener('resize', onResize)
+    }
+  }, [])
 
   return [layout, setLayout, adaptLayout]
 }

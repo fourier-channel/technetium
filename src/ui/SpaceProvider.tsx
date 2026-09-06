@@ -13,35 +13,9 @@ import { SpaceCtx, type SpaceApi } from './spaceContext'
 // whatever they are clicking on.
 export function SpaceProvider({ children }: { children: ReactNode }) {
   const { client } = useClient()
-  const [space, setSpace, adaptSpace] = useStoredSpace(client)
+  const [space, setSpace] = useStoredSpace(client)
   const [editMode, setEditMode] = useState(false)
   const [dockRoom, setDockRoom] = useState<Room | null>(null)
-
-  // The space has to know the screen it is on, because minimums are pixels
-  // (space.ts). A resize changes what FITS, so the layout is reflowed and
-  // panels that no longer have room are shed -- otherwise the layout stays
-  // infeasible and every subsequent drag is silently refused, which is the
-  // "everything is unresponsive" failure this model has produced before.
-  //
-  // adaptSpace, not setSpace: fitting a screen is not a layout the user chose
-  // and must never be written back over the one they did.
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | null = null
-    const apply = () => adaptSpace((prev) => reflow(setViewport(prev, currentViewport())))
-    const onResize = () => {
-      if (timer) clearTimeout(timer)
-      timer = setTimeout(apply, 150)
-    }
-    window.addEventListener('resize', onResize)
-    // G-tc01: never a synchronous setState in an effect body.
-    queueMicrotask(apply)
-    return () => {
-      if (timer) clearTimeout(timer)
-      window.removeEventListener('resize', onResize)
-    }
-    // adaptSpace is stable (updater-based).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   useEffect(() => {
     if (!client) return
