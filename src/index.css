@@ -2691,6 +2691,12 @@ code {
 .tc-layout-editor-row > span { flex-shrink: 0; min-width: 120px; opacity: 0.8; }
 .tc-layout-editor-row input { flex: 1; min-width: 0; font-family: monospace; font-size: 11px; padding: 3px 6px; }
 .tc-layout-editor-help { font-size: 11px; opacity: 0.7; }
+.tc-layout-editor-rule {
+  border: 0;
+  border-top: 1px solid var(--tc-line, rgba(255, 255, 255, 0.12));
+  margin: 10px 0 8px;
+}
+
 .tc-layout-editor-note { font-size: 11px; opacity: 0.8; }
 
 /* The thread list as a tile in the main column: under the dock, above the

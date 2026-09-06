@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ClientEvent, type MatrixClient, type MatrixEvent } from 'matrix-js-sdk'
 import { DEFAULT_VIEWPORT, defaultSpace, deserialize, reflow, serialize, setViewport, type Space, type Viewport } from './space'
+import { isMobileBrowser, readStore, startingCode, writeStore, type LayoutStore } from './presets'
 
 // The space, held in ACCOUNT DATA as its number, so it follows the user
 // across devices and sessions and can be pasted into another client. Same
@@ -9,8 +10,23 @@ const TYPE = 'net.41chan.tc.layout'
 
 declare module 'matrix-js-sdk' {
   interface AccountDataEvents {
-    'net.41chan.tc.layout': { code: string }
+    'net.41chan.tc.layout': Record<string, unknown>
   }
+}
+
+// Is this device phone-shaped? Asked of the browser, not of the window: a
+// desktop with a narrow window is not a phone and must not silently adopt the
+// Mobile preset (operator ruling 2026-09-06).
+export function deviceIsMobile(): boolean {
+  if (typeof window === 'undefined') return false
+  const coarse = (() => {
+    try { return window.matchMedia?.('(pointer: coarse)').matches ?? false } catch { return false }
+  })()
+  return isMobileBrowser({ ua: navigator?.userAgent, coarsePointer: coarse, width: window.innerWidth })
+}
+
+export function readLayoutStore(client: MatrixClient | null): LayoutStore {
+  return readStore(client?.getAccountData(TYPE)?.getContent())
 }
 
 // The screen this tab is actually on. Minimums are pixels (space.ts), so a
@@ -22,7 +38,9 @@ export function currentViewport(): Viewport {
 
 // The layout as the user designed it, untouched by this screen.
 export function readStored(client: MatrixClient | null, vp: Viewport = currentViewport()): Space {
-  const code = client?.getAccountData(TYPE)?.getContent()?.code
+  // Which layout this device opens on: its own preset if one is pointed at it,
+  // then the default preset, then the last live layout.
+  const code = startingCode(readLayoutStore(client), deviceIsMobile())
   // A number that does not parse is treated as absent, never as a partial
   // layout: the default is a known-good screen and a corrupt code is not.
   // A v1 number (the earlier one-axis model) is refused by deserialize and
@@ -38,7 +56,17 @@ export function readSpace(client: MatrixClient | null, vp: Viewport = currentVie
 
 export type SpaceUpdate = Space | ((prev: Space) => Space)
 
-export function useStoredSpace(client: MatrixClient | null): [Space, (u: SpaceUpdate) => void, (u: SpaceUpdate) => void] {
+export interface StoredSpace {
+  space: Space
+  setSpace: (u: SpaceUpdate) => void
+  adaptSpace: (u: SpaceUpdate) => void
+  store: LayoutStore
+  // Change the named layouts / device defaults / overflow mode. The live
+  // layout's own number is filled in on save, so callers never touch `code`.
+  setStore: (next: LayoutStore) => void
+}
+
+export function useStoredSpace(client: MatrixClient | null): StoredSpace {
   const [layout, setLayoutState] = useState<Space>(() => readSpace(client))
   // The latest layout, for updaters: a drag fires many deltas between renders,
   // and each must apply to the result of the last, not to a stale closure.
@@ -64,18 +92,27 @@ export function useStoredSpace(client: MatrixClient | null): [Space, (u: SpaceUp
   // they land, a user EDIT made on a small screen does still save, because
   // that is a choice rather than an adaptation.)
   const chosen = useRef<Space>(readStored(client))
+  const [store, setStoreState] = useState<LayoutStore>(() => readLayoutStore(client))
+  const storeRef = useRef(store)
+  useEffect(() => { storeRef.current = store }, [store])
 
   useEffect(() => {
     if (!client) return
     const onAccountData = (ev: MatrixEvent) => {
       if (ev.getType() !== TYPE) return
-      const code = ev.getContent()?.code
+      const code = (ev.getContent() as { code?: unknown })?.code
       if (typeof code === 'string' && code === lastWritten.current) return // our own
+      const next = readLayoutStore(client)
+      storeRef.current = next
+      setStoreState(next)
       chosen.current = readStored(client)
       setLayoutState(reflow(chosen.current))
     }
     client.on(ClientEvent.AccountData, onAccountData)
     queueMicrotask(() => {
+      const next = readLayoutStore(client)
+      storeRef.current = next
+      setStoreState(next)
       chosen.current = readStored(client)
       setLayoutState(reflow(chosen.current))
     })
@@ -98,7 +135,8 @@ export function useStoredSpace(client: MatrixClient | null): [Space, (u: SpaceUp
       saveTimer.current = null
       const code = serialize(chosen.current)
       lastWritten.current = code
-      client.setAccountData(TYPE, { code }).catch((err: unknown) => {
+      const content = writeStore({ ...storeRef.current, code })
+      client.setAccountData(TYPE, content).catch((err: unknown) => {
         console.warn('[layout] could not save', err)
       })
     }, 400)
@@ -135,5 +173,19 @@ export function useStoredSpace(client: MatrixClient | null): [Space, (u: SpaceUp
     }
   }, [])
 
-  return [layout, setLayout, adaptLayout]
+  // Presets and settings save immediately: they are deliberate acts, not the
+  // dozens-per-second stream a drag produces, and losing one to a debounce
+  // that never fired would be silent.
+  const setStore = (next: LayoutStore) => {
+    storeRef.current = next
+    setStoreState(next)
+    if (!client) return
+    const code = serialize(chosen.current)
+    lastWritten.current = code
+    client.setAccountData(TYPE, writeStore({ ...next, code })).catch((err: unknown) => {
+      console.warn('[layout] could not save presets', err)
+    })
+  }
+
+  return { space: layout, setSpace: setLayout, adaptSpace: adaptLayout, store, setStore }
 }

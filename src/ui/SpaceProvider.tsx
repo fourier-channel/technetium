@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { RoomEvent, type MatrixEvent, type Room } from 'matrix-js-sdk'
 import { useClient } from '../client/clientContextValue'
 import { directRoomIds } from '../client/dm'
-import { closeDomain, closeInColumn, closeThreadView, defaultSpace, deserialize, moveDivider, openDomain, openInColumn, openThreadView, pushEdge, reflow, serialize, setFlag, setMin, setViewport } from './space'
+import { closeDomain, closeInColumn, closeThreadView, defaultSpace, deserialize, dismiss, moveDivider, openDomain, openInColumn, openThreadView, present, pushEdge, reflow, serialize, setFlag, setMin, setViewport, singleSlot, type PanelId, type Space } from './space'
 import { currentViewport, useStoredSpace } from './spaceState'
+import { dropPreset, putPreset, setDefaultPreset, setMobilePreset, setOverflow as setStoreOverflow } from './presets'
 import { SpaceCtx, type SpaceApi } from './spaceContext'
 
 // The real-estate contract for the whole screen (see space.ts), and the DM
@@ -13,7 +14,14 @@ import { SpaceCtx, type SpaceApi } from './spaceContext'
 // whatever they are clicking on.
 export function SpaceProvider({ children }: { children: ReactNode }) {
   const { client } = useClient()
-  const [space, setSpace] = useStoredSpace(client)
+  const { space, setSpace, store, setStore } = useStoredSpace(client)
+  // One step of undo for applying a preset, importing a number, or resetting:
+  // the layout as it was immediately before. STATE rather than a ref, because
+  // the Revert button's enabled-ness is read during render and a ref would
+  // leave it stale. Deliberately one step -- this is "I did not mean that",
+  // not a history.
+  const [undoCode, setUndoCode] = useState<string | null>(null)
+  const oneSlot = singleSlot(space)
   const [editMode, setEditMode] = useState(false)
   const [dockRoom, setDockRoom] = useState<Room | null>(null)
 
@@ -34,7 +42,15 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client])
 
-  const api = useMemo<SpaceApi>(() => ({
+  const api = useMemo<SpaceApi>(() => {
+  // On a screen that holds one panel, opening a feature window either REPLACES
+  // what is up or LAYERS over it (operator ruling 2026-09-06). Off such a
+  // screen the ordinary tiling opens apply unchanged.
+  const show = (id: PanelId, wide: (s: Space) => Space) =>
+    setSpace((prev) => (singleSlot(prev) ? present(prev, id, store.overflow) : wide(prev)))
+  const hide = (id: PanelId, wide: (s: Space) => Space) =>
+    setSpace((prev) => (singleSlot(prev) ? dismiss(prev, id, store.overflow) : wide(prev)))
+  return ({
     space,
     editMode,
     setEditMode,
@@ -48,23 +64,56 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       // desktop must not arrive as a layout this screen cannot show.
       const s = deserialize(code, currentViewport())
       if (!s) return false
+      setUndoCode(serialize(space))
       setSpace(reflow(s))
       return true
     },
-    resetSpace: () => setSpace(reflow(setViewport(defaultSpace(), currentViewport()))),
+    resetSpace: () => {
+      setUndoCode(serialize(space))
+      setSpace(reflow(setViewport(defaultSpace(), currentViewport())))
+    },
     dockRoom,
     showInDock: (room) => {
       setDockRoom(room)
-      setSpace((prev) => openInColumn(prev, 'dock', 0.28))
+      show('dock', (prev) => openInColumn(prev, 'dock', 0.28))
     },
-    closeDock: () => setSpace((prev) => closeInColumn(prev, 'dock')),
-    openThreadList: () => setSpace((prev) => openInColumn(prev, 'threads', 0.22)),
-    closeThreadList: () => setSpace((prev) => closeInColumn(prev, 'threads')),
-    openThreadPane: () => setSpace((prev) => openThreadView(prev, 0.38)),
-    closeThreadPane: () => setSpace((prev) => closeThreadView(prev)),
-    openDomain: () => setSpace((prev) => openDomain(prev, 0.45)),
-    closeDomain: () => setSpace((prev) => closeDomain(prev)),
-  }), [space, editMode, dockRoom, setSpace])
+    closeDock: () => hide('dock', (prev) => closeInColumn(prev, 'dock')),
+    openThreadList: () => show('threads', (prev) => openInColumn(prev, 'threads', 0.22)),
+    closeThreadList: () => hide('threads', (prev) => closeInColumn(prev, 'threads')),
+    openThreadPane: () => show('thread', (prev) => openThreadView(prev, 0.38)),
+    closeThreadPane: () => hide('thread', (prev) => closeThreadView(prev)),
+    openDomain: () => show('domain', (prev) => openDomain(prev, 0.45)),
+    closeDomain: () => hide('domain', (prev) => closeDomain(prev)),
+    presets: {
+      list: store.presets,
+      defaultName: store.defaultPreset,
+      mobileName: store.mobilePreset,
+      apply: (name) => {
+        const p = store.presets.find((x) => x.name === name)
+        if (!p) return false
+        const s = deserialize(p.code, currentViewport())
+        if (!s) return false
+        setUndoCode(serialize(space))
+        setSpace(reflow(s))
+        return true
+      },
+      save: (name) => setStore(putPreset(store, name, serialize(space))),
+      remove: (name) => setStore(dropPreset(store, name)),
+      setDefault: (name) => setStore(setDefaultPreset(store, name)),
+      setMobile: (name) => setStore(setMobilePreset(store, name)),
+      canRevert: undoCode !== null,
+      revert: () => {
+        if (!undoCode) return
+        const s = deserialize(undoCode, currentViewport())
+        setUndoCode(null)
+        if (s) setSpace(reflow(s))
+      },
+    },
+    overflow: store.overflow,
+    setOverflow: (mode) => setStore(setStoreOverflow(store, mode)),
+    singleSlot: oneSlot,
+  })
+  }, [space, editMode, dockRoom, setSpace, store, setStore, oneSlot, undoCode])
 
   return <SpaceCtx.Provider value={api}>{children}</SpaceCtx.Provider>
 }

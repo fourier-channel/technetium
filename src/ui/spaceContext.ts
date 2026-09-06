@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react'
 import type { Room } from 'matrix-js-sdk'
-import type { Axis, PanelId, Side, Space } from './space'
+import type { Axis, OverflowMode, PanelId, Side, Space } from './space'
+import type { Preset } from './presets'
 
 // The space context and its hook, apart from the provider so that file
 // exports only its component.
@@ -30,6 +31,24 @@ export interface SpaceApi {
   closeThreadList: () => void
   openDomain: () => void
   closeDomain: () => void
+  // Named layouts. `apply` swaps the live layout to one of them and can be
+  // undone once with `revert`; `save` stores the CURRENT layout under a name.
+  presets: {
+    list: Preset[]
+    defaultName: string | null
+    mobileName: string | null
+    apply: (name: string) => boolean
+    save: (name: string) => void
+    remove: (name: string) => void
+    setDefault: (name: string | null) => void
+    setMobile: (name: string | null) => void
+    canRevert: boolean
+    revert: () => void
+  }
+  // What a tab does when the screen holds only one panel.
+  overflow: OverflowMode
+  setOverflow: (mode: OverflowMode) => void
+  singleSlot: boolean
 }
 
 export const SpaceCtx = createContext<SpaceApi | null>(null)

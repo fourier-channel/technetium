@@ -6,7 +6,7 @@
 // Companion to space.check.ts, which deliberately runs on a screen so large
 // that no pixel minimum binds; everything here is about the screen mattering.
 import {
-  defaultSpace, setViewport, effectiveMin, fits, reflow, moveDivider, pushEdge,
+  defaultSpace, setViewport, effectiveMin, fits, reflow, relax, moveDivider, pushEdge,
   openInColumn, openDomain, validTiling, serialize, deserialize, leafRect,
   MIN_PX, DEFAULT_MIN, SHED_ORDER, PANEL_IDS,
 } from '../src/ui/space.ts'
@@ -119,6 +119,31 @@ const HUGE = { w: 3600, h: 2200 }
   check('changing the screen moves nothing by itself', serialize(p) === serialize(d))
   check('it only changes what FITS', fits(d) && !fits(p))
   check('setting the same viewport twice is the same object', setViewport(p, PHONE) === p)
+}
+
+// --- redistribute before shedding (operator ruling 2026-09-06) -------------
+// 700px holds the three preset panels at their minimums (180 + 320 + 150 =
+// 650) but NOT at the preset's fractions (sidebar 126, members 105). The
+// layout should give ground rather than lose a panel; before relax existed
+// this shed the member list and then the sidebar.
+{
+  const snug = setViewport(defaultSpace(), { w: 700, h: 900 })
+  check('the preset does not fit 700px as designed', !fits(snug))
+  const r = reflow(snug)
+  check('but reflow keeps all three panels by redistributing', open(r).length === 3, open(r))
+  check('and every one of them is at or above its pixel minimum', fits(r))
+  check('the result is still a tiling', validTiling(r))
+  check('the sidebar was grown to its minimum, not shed', w(r, 'sidebar') * 700 >= MIN_PX.sidebar.x - 1, Math.round(w(r, 'sidebar') * 700))
+  check('the chat kept at least its own minimum', w(r, 'main') * 700 >= MIN_PX.main.x - 1, Math.round(w(r, 'main') * 700))
+}
+
+{
+  const ok = setViewport(defaultSpace(), DESKTOP)
+  check('relax leaves a space that already fits completely alone', relax(ok) === ok)
+  const impossible = setViewport(defaultSpace(), { w: 200, h: 200 })
+  const r = relax(impossible)
+  check('relax terminates on a screen nothing can fit, without breaking the tiling', validTiling(r))
+  check('and reflow then sheds, as before', open(reflow(impossible)).length === 1, open(reflow(impossible)))
 }
 
 if (failures) { console.log(`\n${failures} FAILED`); process.exit(1) }

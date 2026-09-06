@@ -59,10 +59,20 @@ export interface Leaf extends Rect {
 export interface Viewport { w: number; h: number }
 export const DEFAULT_VIEWPORT: Viewport = { w: 1440, h: 900 }
 
+// What a tab does on a screen that can only hold one panel (operator ruling
+// 2026-09-06): REPLACE swaps the occupant, LAYER covers it and remembers what
+// was underneath so closing returns there. Stage two's "crossing" restricted
+// to a one-slot screen.
+export type OverflowMode = 'replace' | 'layer'
+export const DEFAULT_OVERFLOW: OverflowMode = 'replace'
+
 export interface Space {
   v: 3
   leaves: Record<PanelId, Leaf>
   vp: Viewport
+  // Panels covered by the current occupant, oldest first. Runtime only: it is
+  // where you came from, not part of the layout, so it is never serialized.
+  stack: PanelId[]
 }
 
 // A fractional minimum is device-independent and therefore meaningless: 0.1
@@ -110,6 +120,7 @@ export function defaultSpace(): Space {
   return {
     v: 3,
     vp: { ...DEFAULT_VIEWPORT },
+    stack: [],
     leaves: {
       sidebar: leaf('sidebar', { x0: 0, y0: 0, x1: 0.18, y1: 1 }),
       dock:    leaf('dock',    { x0: 0.18, y0: 0, x1: 0.85, y1: 0.28 }, { locked: true, open: false }),
@@ -129,7 +140,7 @@ export function openLeaves(s: Space): Leaf[] {
 function clone(s: Space): Space {
   const leaves = {} as Record<PanelId, Leaf>
   for (const id of PANEL_IDS) leaves[id] = { ...s.leaves[id], last: s.leaves[id].last ? { ...s.leaves[id].last! } : null }
-  return { v: 3, vp: { ...s.vp }, leaves }
+  return { v: 3, vp: { ...s.vp }, stack: [...s.stack], leaves }
 }
 
 const lo = (l: Rect, a: Axis) => (a === 'x' ? l.x0 : l.y0)
@@ -498,6 +509,56 @@ function shed(s: Space, id: PanelId): Space | null {
   return n === s ? null : n
 }
 
+// How far every open leaf falls under its minimum, summed over both axes.
+// Zero means the space fits.
+function deficit(s: Space): number {
+  let d = 0
+  for (const l of openLeaves(s)) for (const axis of ['x', 'y'] as Axis[]) {
+    const need = effectiveMin(l, axis, s.vp) - extent(l, axis)
+    if (need > 0) d += need
+  }
+  return d
+}
+
+// A divider push WITHOUT the feasibility gate. relax is only ever called on a
+// space that is already too small, and the gated push refuses every move on
+// such a space -- including the moves that would fix it.
+function pushUngated(s: Space, axis: Axis, at: number, delta: number): Space | null {
+  const m = plan(s, axis, at, delta)
+  if (!m) return null
+  const n = apply(s, axis, m)
+  return validTiling(n) ? n : null
+}
+
+// Take the deficit out of neighbours that have slack, before anything is shed
+// (operator ruling 2026-09-06). A layout a little too big for its screen
+// should give ground, not lose a panel. Greedy: each round applies the single
+// push that reduces the total deficit most, so it terminates and is
+// deterministic. Panels that cannot be helped are left to reflow to shed.
+export function relax(s: Space): Space {
+  let cur = s
+  for (let round = 0; round < 8; round++) {
+    if (deficit(cur) <= EPS) return cur
+    let best = cur, bestD = deficit(cur)
+    for (const l of openLeaves(cur)) {
+      for (const axis of ['x', 'y'] as Axis[]) {
+        const need = effectiveMin(l, axis, cur.vp) - extent(l, axis)
+        if (need <= EPS) continue
+        // Grow it either way: push the high edge out, or the low edge back.
+        for (const [at, d] of [[hi(l, axis), need], [lo(l, axis), -need]] as [number, number][]) {
+          const n = pushUngated(cur, axis, at, d)
+          if (!n) continue
+          const nd = deficit(n)
+          if (nd < bestD - EPS) { best = n; bestD = nd }
+        }
+      }
+    }
+    if (best === cur) return cur
+    cur = best
+  }
+  return cur
+}
+
 // The terminal state: one panel owns the whole square and everything else is
 // closed. This is the operator's mobile model ("only one screen would ever be
 // up at a time") reached as a limit rather than as a separate mode, and it is
@@ -520,7 +581,9 @@ function soleOccupant(s: Space, id: PanelId): Space {
 // A screen can simply be too small for any minimum, and reporting that as a
 // refusal would freeze the UI rather than degrade it.
 export function reflow(s: Space): Space {
-  let cur = s
+  if (fits(s)) return s
+  // Give ground before losing a panel.
+  let cur = relax(s)
   if (fits(cur)) return cur
   for (const id of SHED_ORDER) {
     const next = shed(cur, id)
@@ -532,6 +595,45 @@ export function reflow(s: Space): Space {
   // question 9). Until that is ruled it is the chat, because that is what the
   // window is for.
   return soleOccupant(cur, 'main')
+}
+
+// --- one-slot screens: replace or layer ------------------------------------
+
+// True when this screen cannot hold the chat and anything else beside it.
+export function singleSlot(s: Space): boolean {
+  const mainMin = effectiveMin(s.leaves.main, 'x', s.vp)
+  let smallest = Infinity
+  for (const id of PANEL_IDS) {
+    if (id === 'main') continue
+    smallest = Math.min(smallest, effectiveMin(s.leaves[id], 'x', s.vp))
+  }
+  return mainMin + smallest > 1 + EPS
+}
+
+// Bring a panel up on a one-slot screen. REPLACE forgets what was there;
+// LAYER remembers it so dismiss() can come back to it.
+export function present(s: Space, id: PanelId, mode: OverflowMode = DEFAULT_OVERFLOW): Space {
+  const open = openLeaves(s)
+  const sole = open.length === 1 ? open[0].id : null
+  const n = soleOccupant(s, id)
+  n.stack = mode === 'layer' && sole !== null && sole !== id ? [...s.stack, sole] : []
+  return n
+}
+
+// Close the panel that is up. LAYER pops back to whatever it covered; REPLACE
+// has nothing to go back to and falls to the chat.
+export function dismiss(s: Space, id: PanelId, mode: OverflowMode = DEFAULT_OVERFLOW): Space {
+  if (!s.leaves[id].open) return s
+  if (mode === 'layer' && s.stack.length > 0) {
+    const stack = [...s.stack]
+    const back = stack.pop()!
+    const n = soleOccupant(s, back)
+    n.stack = stack
+    return n
+  }
+  const n = soleOccupant(s, 'main')
+  n.stack = []
+  return n
 }
 
 // --- the number -----------------------------------------------------------
