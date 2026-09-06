@@ -235,7 +235,8 @@ function App() {
             the chat SHRINK for it rather than being covered. The dock keeps
             its span, so the domain owns its space up past the thread list. */}
         <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          {/* position: relative so the domain tab rides THIS column's right edge. */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative' }}>
             {/* The thread list: attached to the bottom of the DM window, taking
                 its height from the chat and never from the dock. */}
             {threadListReveal.mounted && selectedRoom && (
