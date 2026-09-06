@@ -2632,3 +2632,60 @@ code {
 @media (prefers-reduced-motion: reduce) {
   .tc-domain-tab { transition: box-shadow 150ms ease, color 150ms ease; }
 }
+
+/* --- The DM dock: its own window across the top of the main column ------ */
+/* Slides out from the LEFT, where the DM list is. The height is the layout's
+   number; other panels in the column shrink to fit because the dock is
+   locked and pinned in the default preset -- the DM wins. */
+.tc-dmdock {
+  flex-shrink: 0;
+  overflow: hidden;
+  transition: height 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+  background: var(--cpd-color-bg-canvas-default);
+}
+.tc-dmdock-inner {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(-100%);
+  transition: transform 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.tc-dmdock[data-shown='true'] .tc-dmdock-inner { transform: translateX(0); }
+.tc-dmdock-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 4px 10px; font-size: 12.5px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+  flex-shrink: 0;
+}
+.tc-dmdock-title { font-weight: 700; }
+.tc-dmdock-hint { opacity: 0.6; font-size: 11px; }
+.tc-dmdock-close { margin-left: auto; font-size: 11px; padding: 2px 8px; }
+.tc-dmdock-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.tc-dmdock-grip { height: 5px; flex-shrink: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .tc-dmdock, .tc-dmdock-inner { transition: none; }
+}
+
+/* --- Edit Mode chrome and the layout editor ---------------------------- */
+.tc-chrome { display: inline-flex; gap: 4px; }
+.tc-chrome-inline { margin-left: 8px; }
+.tc-chrome-btn {
+  font-size: 10px; padding: 1px 7px; border-radius: 999px;
+  border: 1px solid rgba(128, 128, 128, 0.45); background: transparent; color: inherit; cursor: pointer;
+}
+.tc-chrome-btn[data-on='true'] { background: var(--tc-unread, #ff9628); color: #000; border-color: transparent; }
+.tc-layout-editor {
+  position: fixed; right: 16px; bottom: 16px; z-index: 1500;
+  width: 360px; max-width: calc(100vw - 32px);
+  padding: 12px 14px; border-radius: 12px;
+  background: var(--cpd-color-bg-canvas-default);
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+  font-size: 12.5px; display: flex; flex-direction: column; gap: 8px;
+}
+.tc-layout-editor-row { display: flex; align-items: center; gap: 8px; }
+.tc-layout-editor-row > span { flex-shrink: 0; min-width: 120px; opacity: 0.8; }
+.tc-layout-editor-row input { flex: 1; min-width: 0; font-family: monospace; font-size: 11px; padding: 3px 6px; }
+.tc-layout-editor-help { font-size: 11px; opacity: 0.7; }
+.tc-layout-editor-note { font-size: 11px; opacity: 0.8; }

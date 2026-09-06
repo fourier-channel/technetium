@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Reac
 import { createPortal } from 'react-dom'
 import type { Room } from 'matrix-js-sdk'
 import { NavTree } from './NavTree'
-import { useRoomListSettings } from './roomListSettings'
+import { useLayout } from './layoutContext'
+import { PanelChrome } from './PanelChrome'
 
 // ---------------------------------------------------------------------------
 // The room-list sidebar: header + NavTree in a resizable, persisted panel.
@@ -12,8 +13,7 @@ import { useRoomListSettings } from './roomListSettings'
 // (freeze the width) and Reset (back to the computed default).
 // ---------------------------------------------------------------------------
 
-const MIN_W = 190
-const MAX_W = 480
+// Bounds now live in the layout model (panel min sizes); see layout.ts.
 const FALLBACK_W = 260
 
 export function Sidebar({
@@ -25,20 +25,30 @@ export function Sidebar({
   selectedRoomId?: string
   onSelectRoom?: (room: Room) => void
 }) {
-  const { panelWidth, setPanelWidth, panelLocked, setPanelLocked } = useRoomListSettings()
+  // Width and lock come from the LAYOUT (account data, one number for the
+  // whole screen) rather than this panel's own localStorage entry, so the
+  // sidebar obeys the same real-estate rules as every other panel.
+  const { layout, resizePanel, setPanelFlag, editMode } = useLayout()
   const [defaultWidth, setDefaultWidth] = useState<number | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
-  const width = panelWidth ?? defaultWidth ?? FALLBACK_W
+  const width = layout.panels.sidebar.size || defaultWidth || FALLBACK_W
+  const panelLocked = layout.panels.sidebar.locked
+  const setPanelLocked = (v: boolean) => setPanelFlag('sidebar', 'locked', v)
+  // Reset = back to the computed default width.
+  const setPanelWidth = (w: number | null) => resizePanel('sidebar', (w ?? defaultWidth ?? FALLBACK_W) - width)
 
   const onDefaultWidth = useCallback((w: number) => setDefaultWidth(w), [])
 
   const startResize = (e: React.PointerEvent) => {
     if (panelLocked || e.button !== 0) return
     e.preventDefault()
-    const startX = e.clientX
-    const startW = width
+    let lastX = e.clientX
     const onMove = (me: PointerEvent) => {
-      setPanelWidth(Math.max(MIN_W, Math.min(MAX_W, startW + (me.clientX - startX))))
+      // Deltas, applied to the latest layout: a drag fires faster than React
+      // renders, so an absolute width from a stale closure would jump.
+      const dx = me.clientX - lastX
+      lastX = me.clientX
+      if (dx !== 0) resizePanel('sidebar', dx)
     }
     const onUp = () => {
       window.removeEventListener('pointermove', onMove)
@@ -62,6 +72,7 @@ export function Sidebar({
         }}
       >
         {header}
+      {editMode && <div style={{ padding: '0 8px 6px' }}><PanelChrome id="sidebar" /></div>}
         {/* No "New room or space" here (operator ruling 2026-09-05): users do
             not create rooms or spaces on this server. DMs are unaffected --
             they are created through the people pickers, never through this

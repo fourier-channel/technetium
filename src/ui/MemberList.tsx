@@ -26,10 +26,13 @@ const HONOR_COLOR: Record<string, string> = {
 export function MemberList({
   room,
   onOpenRoom,
+  width = 220,
 }: {
   room: Room | null
   // Navigates to a room by id -- how "start a DM" actually OPENS the DM.
   onOpenRoom?: (roomId: string) => void
+  // From the layout; 220 is the preset.
+  width?: number
 }) {
   const { client } = useClient()
   const members = useMembers(client)
@@ -110,7 +113,7 @@ export function MemberList({
   return (
     <div
       style={{
-        width: 220,
+        width,
         flexShrink: 0,
         borderLeft: '1px solid rgba(128,128,128,0.25)',
         display: 'flex',
