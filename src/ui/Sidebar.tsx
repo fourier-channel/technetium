@@ -20,10 +20,14 @@ export function Sidebar({
   header,
   selectedRoomId,
   onSelectRoom,
+  booruActive,
+  onSelectBooru,
 }: {
   header: ReactNode
   selectedRoomId?: string
   onSelectRoom?: (room: Room) => void
+  booruActive?: boolean
+  onSelectBooru?: () => void
 }) {
   // Width and lock come from the LAYOUT (account data, one number for the
   // whole screen) rather than this panel's own localStorage entry, so the
@@ -82,7 +86,7 @@ export function Sidebar({
             createRoom for any logged-in user (Synapse has no vanilla switch
             for "rooms no, DMs yes" -- that would take a small module -- so
             this is presentation, not enforcement, and is recorded as such). */}
-        <NavTree selectedRoomId={selectedRoomId} onSelectRoom={onSelectRoom} onDefaultWidth={onDefaultWidth} />
+        <NavTree selectedRoomId={selectedRoomId} onSelectRoom={onSelectRoom} onDefaultWidth={onDefaultWidth} booruActive={booruActive} onSelectBooru={onSelectBooru} />
       </aside>
 
       {/* Right-edge strip (by the scrollbar): drag to resize, right-click for Lock/Reset. */}

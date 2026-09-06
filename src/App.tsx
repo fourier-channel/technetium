@@ -177,6 +177,8 @@ function App() {
       <Sidebar
         selectedRoomId={selectedRoom?.roomId}
         onSelectRoom={selectRoom}
+        booruActive={!selectedRoom}
+        onSelectBooru={() => setSelectedRoom(null)}
         header={
           <div style={{ padding: '4px 8px 8px' }}>
             <div

@@ -114,10 +114,17 @@ export function NavTree({
   selectedRoomId,
   onSelectRoom,
   onDefaultWidth,
+  booruActive = false,
+  onSelectBooru,
 }: {
   selectedRoomId?: string
   onSelectRoom?: (room: Room) => void
   onDefaultWidth?: (w: number) => void
+  // The booru row: presented on the space's tier (operator, 2026-09-06) so
+  // the experience is toggling between the booru and the chat. Active when
+  // no room is selected, which is when the main pane shows the booru.
+  booruActive?: boolean
+  onSelectBooru?: () => void
 }) {
   const { client } = useClient()
   const { tree, loading, stale } = useNavTree(client)
@@ -545,6 +552,9 @@ export function NavTree({
             </div>
           </div>
         </div>
+      )}
+      {onSelectBooru && (
+        <BooruRow active={booruActive} onSelect={onSelectBooru} />
       )}
       {tree.spaces.map((node) => (
         <TreeRow
@@ -1260,6 +1270,71 @@ function SiblingGroup({
   return (
     <div ref={containerRef} style={{ overflow: 'hidden', minHeight: 0 }}>
       {children}
+    </div>
+  )
+}
+
+
+// The booru's row in the tree. It is not a space and never will be, but it is
+// drawn as one -- same row, same weight, same selected treatment -- because
+// what the user does with it is the same thing: pick where the main pane
+// looks. Selecting it clears the room; selecting any room leaves it.
+function BooruRow({ active, onSelect }: { active: boolean; onSelect: () => void }) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') onSelect()
+      }}
+      title="chanbooru -- the image board, in the main pane"
+      data-testid="booru-row"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        paddingLeft: 6,
+        paddingRight: 6,
+        height: ROW_HEIGHT,
+        cursor: 'pointer',
+        borderRadius: 6,
+        margin: `${ROW_MARGIN_Y}px 4px`,
+        fontWeight: 600,
+        fontFamily: 'var(--tc-ui-font, "Space Grotesk", system-ui, sans-serif)',
+        fontSize: 13,
+        color: 'var(--cpd-color-text-primary)',
+        background: active ? 'var(--cpd-color-bg-subtle-primary)' : 'transparent',
+        boxShadow: active ? 'inset 3px 0 0 0 var(--tc-link)' : undefined,
+      }}
+      onMouseEnter={(e) => {
+        if (!active) e.currentTarget.style.background = 'var(--cpd-color-bg-subtle-secondary)'
+      }}
+      onMouseLeave={(e) => {
+        if (!active) e.currentTarget.style.background = 'transparent'
+      }}
+    >
+      <span style={{ width: 10, flexShrink: 0 }} />
+      <span
+        aria-hidden="true"
+        style={{
+          width: 22,
+          height: 22,
+          flexShrink: 0,
+          borderRadius: '50%',
+          display: 'grid',
+          placeItems: 'center',
+          fontSize: 11,
+          fontWeight: 700,
+          color: '#fff',
+          background: 'var(--tc-unread, #ff9628)',
+        }}
+      >
+        b
+      </span>
+      <span style={{ flex: '1 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        chanbooru
+      </span>
     </div>
   )
 }
