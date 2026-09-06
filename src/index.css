@@ -2764,3 +2764,12 @@ code {
 .tc-pulltab[data-pull='left'] .tc-pulltab-tip, .tc-pulltab[data-pull='right'] .tc-pulltab-tip { right: 100%; margin-right: 6px; top: 50%; transform: translateY(-50%); }
 .tc-pulltab:hover .tc-pulltab-tip { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .tc-pulltab { transition: none; } }
+
+/* --- The booru in the dead space --------------------------------------- */
+.tc-booru-frame { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.tc-booru-frame-hint {
+  flex-shrink: 0; padding: 6px 12px; font-size: 12px;
+  color: var(--cpd-color-text-secondary);
+  border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+}
+.tc-booru-frame-iframe { flex: 1; min-height: 0; width: 100%; border: 0; background: var(--cpd-color-bg-canvas-default, #16181d); }
