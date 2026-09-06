@@ -81,6 +81,14 @@ function App() {
   const threadsShare = space.leaves.threads.open ? (space.leaves.threads.y1 - space.leaves.threads.y0) / colH : 0
   const domainWidth = Math.round((space.leaves.domain.x1 - space.leaves.domain.x0) * vw)
   const dockShareOfMain = space.leaves.dock.open ? (space.leaves.dock.y1 - space.leaves.dock.y0) / colH : 0
+  // The thread list tile and its tab live INSIDE the chat column, which starts
+  // below the dock, so a share of the whole column has to be restated as a
+  // share of that parent before it becomes a CSS percentage. Without this the
+  // discount is applied twice: with a 28% dock open, a list the model sizes at
+  // 22% of the column rendered at 15.9%, leaving a 55px gap between the list
+  // and the chat that the model does not have.
+  const chatColumnShare = Math.max(1e-6, 1 - dockShareOfMain)
+  const threadsShareOfChatColumn = threadsShare / chatColumnShare
   const [domainExpanded, setDomainExpanded] = useState(false)
   // The canvas's time-to-die lives here rather than inside DomainView, so the
   // ONE composer can stamp it onto a post while the domain is open. The domain
@@ -271,13 +279,13 @@ function App() {
               <PullTab pull="down" target="threads" label="Threads" onClick={() => setThreadListOpen(true)} style={{ top: 0, left: 'calc(50% + 40px)' }} />
             )}
             {selectedRoom && threadListOpen && (
-              <PullTab pull="up" target="threads" label="Hide threads" onClick={() => setThreadListOpen(false)} style={{ top: `${Math.round(threadsShare * 1000) / 10}%`, marginTop: -12, left: 'calc(50% + 40px)' }} />
+              <PullTab pull="up" target="threads" label="Hide threads" onClick={() => setThreadListOpen(false)} style={{ top: `${Math.round(threadsShareOfChatColumn * 1000) / 10}%`, marginTop: -12, left: 'calc(50% + 40px)' }} />
             )}
             {threadListReveal.mounted && selectedRoom && (
               <div
                 className="tc-threads-tile"
                 style={{
-                  height: threadListReveal.shown ? `${Math.round(threadsShare * 1000) / 10}%` : 0,
+                  height: threadListReveal.shown ? `${Math.round(threadsShareOfChatColumn * 1000) / 10}%` : 0,
                   transitionDuration: `${threadListReveal.durationMs}ms`,
                 }}
               >
