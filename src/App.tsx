@@ -365,8 +365,15 @@ function App() {
       {openThread && (
         <PullTab pull="right" target="thread" label="Close thread" onClick={() => setOpenThread(null)} style={{ right: membersWidth + 5 + threadPanelWidth, marginRight: -12 }} />
       )}
-      <ResizeHandle onDrag={(dx) => pushEdge('members', 'x', 'lo', dx / vw)} />
-      <MemberList room={selectedRoom} onOpenRoom={openRoomById} width={membersWidth} />
+      {/* Closed by reflow when the screen cannot hold it (space.ts). The
+          handle goes with it: a divider for a panel that is not there is a
+          drag that silently does nothing. */}
+      {space.leaves.members.open && (
+        <>
+          <ResizeHandle onDrag={(dx) => pushEdge('members', 'x', 'lo', dx / vw)} />
+          <MemberList room={selectedRoom} onOpenRoom={openRoomById} width={membersWidth} />
+        </>
+      )}
       </div>
     </div>
     <LayoutEditor />

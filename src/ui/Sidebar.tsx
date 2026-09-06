@@ -64,6 +64,12 @@ export function Sidebar({
     window.addEventListener('pointerup', onUp)
   }
 
+  // The model can CLOSE this panel when the screen cannot hold it (space.ts,
+  // reflow). Honouring that is the difference between a minimum that means
+  // something and a number nobody reads: without this the sidebar keeps
+  // drawing at its last width on a phone and the chat never gets its 320px.
+  if (!leaf.open) return null
+
   return (
     <div style={{ position: 'relative', width, flexShrink: 0, height: '100%' }}>
       <aside
