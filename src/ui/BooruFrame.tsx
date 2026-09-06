@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { useClient } from '../client/clientContextValue'
+import { ensureBooruSession } from '../client/booruSession'
 
 // The dead space, filled. Before a room is picked the main pane used to say
 // "Select a room from the left." and nothing else. It now shows the booru
@@ -19,10 +21,27 @@ import { useEffect, useRef, useState } from 'react'
 const BOORU_URL = (import.meta.env.VITE_BOORU_URL as string | undefined) ?? 'https://booru.41chan.net/'
 const BOORU_LOGIN_URL = (import.meta.env.VITE_BOORU_LOGIN_URL as string | undefined) ?? 'https://booru.41chan.net/fourier/login'
 
+type SessionState = 'pending' | 'ok' | 'failed'
+
 export function BooruFrame() {
   // Bumped to reload the frame after a top-level sign-in.
+  const { client } = useClient()
+  const [session, setSession] = useState<SessionState>('pending')
   const [generation, setGeneration] = useState(0)
   const awaitingReturn = useRef(false)
+
+  // Zero-click (operator ruling 2026-09-06): trade the Matrix token for the
+  // booru's cookie BEFORE the frame loads, so its first load is signed in.
+  // The exchange settles asynchronously, so no setState runs in the effect
+  // body itself (G-tc01); the frame waits for the answer either way, and
+  // the sign-in button is only offered when the exchange was refused.
+  useEffect(() => {
+    let cancelled = false
+    ensureBooruSession(client?.getAccessToken() ?? null).then((ok) => {
+      if (!cancelled) setSession(ok ? 'ok' : 'failed')
+    })
+    return () => { cancelled = true }
+  }, [client])
 
   useEffect(() => {
     const onFocus = () => {
@@ -43,18 +62,23 @@ export function BooruFrame() {
     <div className="tc-booru-frame">
       <div className="tc-booru-frame-hint">
         <span>chanbooru, while you look around -- pick a room on the left when you are ready.</span>
-        <button type="button" className="tc-booru-frame-signin" onClick={signIn} data-testid="booru-signin">
-          Sign in to see the pictures
-        </button>
+        {session === 'failed' && (
+          <button type="button" className="tc-booru-frame-signin" onClick={signIn} data-testid="booru-signin">
+            Sign in to see the pictures
+          </button>
+        )}
       </div>
-      <iframe
-        key={generation}
-        className="tc-booru-frame-iframe"
-        src={BOORU_URL}
-        title="chanbooru"
-        allow="fullscreen"
-        referrerPolicy="strict-origin-when-cross-origin"
-      />
+      {session !== 'pending' && (
+        <iframe
+          key={generation}
+          className="tc-booru-frame-iframe"
+          src={BOORU_URL}
+          title="chanbooru"
+          allow="fullscreen"
+          referrerPolicy="strict-origin-when-cross-origin"
+          data-session={session}
+        />
+      )}
     </div>
   )
 }
