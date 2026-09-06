@@ -6,7 +6,7 @@
 // Companion to space.check.ts, which deliberately runs on a screen so large
 // that no pixel minimum binds; everything here is about the screen mattering.
 import {
-  defaultSpace, setViewport, effectiveMin, fits, reflow, relax, moveDivider, pushEdge,
+  defaultSpace, setViewport, effectiveMin, fits, settled, reflow, relax, moveDivider, pushEdge,
   openInColumn, openDomain, validTiling, serialize, deserialize, leafRect,
   MIN_PX, DEFAULT_MIN, SHED_ORDER, PANEL_IDS,
 } from '../src/ui/space.ts'
@@ -144,6 +144,22 @@ const HUGE = { w: 3600, h: 2200 }
   const r = relax(impossible)
   check('relax terminates on a screen nothing can fit, without breaking the tiling', validTiling(r))
   check('and reflow then sheds, as before', open(reflow(impossible)).length === 1, open(reflow(impossible)))
+}
+
+// --- a layout parked on a minimum survives a save and load -----------------
+// The number stores coordinates at 10 bits, so a panel sitting exactly on its
+// minimum comes back a fraction under it. Enforcing the minimum tighter than
+// the number's own resolution made every such layout drift on reload.
+{
+  const S = openInColumn(setViewport(defaultSpace(), { w: 1500, h: 950 }), 'dock', 0.28)
+  const parked = moveDivider(S, 'x', 0.18, 0.08)
+  const mem = (x: ReturnType<typeof defaultSpace>) => w(x, 'members') * 1500
+  check('the drag parks the member list exactly on its 150px minimum', near(mem(parked), 150, 0.5), mem(parked))
+  check('and that layout fits', fits(parked))
+  const back = deserialize(serialize(parked), { w: 1500, h: 950 })!
+  check('a save and load leaves it a hair under, as the number cannot say 150 exactly', !fits(back) && settled(back), mem(back))
+  check('so reflow leaves it alone', reflow(back) === back)
+  check('and the number round-trips unchanged', serialize(reflow(back)) === serialize(parked))
 }
 
 if (failures) { console.log(`\n${failures} FAILED`); process.exit(1) }

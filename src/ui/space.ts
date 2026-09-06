@@ -219,12 +219,31 @@ function apply(s: Space, axis: Axis, moves: Map<number, number>): Space {
   return next
 }
 
-export function fits(s: Space): boolean {
+// A minimum is enforced no more precisely than the NUMBER can express it.
+// Coordinates are stored at 10 bits (1/1023) and `snap` may move an edge by up
+// to two of those steps, so a panel parked exactly on its minimum comes back
+// from a save a fraction under it. Without this tolerance that fraction reads
+// as "does not fit", reflow corrects it by several pixels, and the layout
+// drifts every time it is saved and loaded. Measured: a member list sitting at
+// exactly 150px reloaded at 149.56px and was pushed to 154.76px.
+const QUANT = 2 / 1023
+
+// Two different questions, and they need different answers.
+//
+// "May this drag go one step further?" is exact: a push must stop ON the
+// minimum, not a hair past it, or every drag overshoots by the tolerance.
+//
+// "Must this layout be reflowed?" is tolerant, by exactly one quantisation
+// step, for the reason above.
+export function fits(s: Space, tolerance = 0): boolean {
   if (!validTiling(s)) return false
   return openLeaves(s).every((l) =>
-    extent(l, 'x') >= effectiveMin(l, 'x', s.vp) - EPS &&
-    extent(l, 'y') >= effectiveMin(l, 'y', s.vp) - EPS)
+    extent(l, 'x') >= effectiveMin(l, 'x', s.vp) - tolerance - EPS &&
+    extent(l, 'y') >= effectiveMin(l, 'y', s.vp) - tolerance - EPS)
 }
+
+// Good enough to render and to leave alone: within what the number can say.
+export function settled(s: Space): boolean { return fits(s, QUANT) }
 
 function feasible(s: Space): boolean { return fits(s) }
 
@@ -581,15 +600,15 @@ function soleOccupant(s: Space, id: PanelId): Space {
 // A screen can simply be too small for any minimum, and reporting that as a
 // refusal would freeze the UI rather than degrade it.
 export function reflow(s: Space): Space {
-  if (fits(s)) return s
+  if (settled(s)) return s
   // Give ground before losing a panel.
   let cur = relax(s)
-  if (fits(cur)) return cur
+  if (settled(cur)) return cur
   for (const id of SHED_ORDER) {
     const next = shed(cur, id)
     if (!next) continue
     cur = next
-    if (fits(cur)) return cur
+    if (settled(cur)) return cur
   }
   // Which panel survives is the priority question (UI_REAL_ESTATE section 3,
   // question 9). Until that is ruled it is the chat, because that is what the
@@ -652,7 +671,13 @@ export function serialize(s: Space): string {
     const l = s.leaves[id]
     const last = l.last ? BigInt((l.last.axis === 'x' ? 1 : 3) + (l.last.dir === 1 ? 1 : 0)) : 0n
     const flags = (l.open ? 4n : 0n) | (l.pinned ? 2n : 0n) | (l.locked ? 1n : 0n)
-    const min = BigInt(Math.round(Math.max(0, Math.min(0.5, l.min)) * 126))
+    // FLOOR, not round: the stored fraction must never come back STRICTER
+    // than it went in. At 6 bits, 0.1 rounds to 13/126 = 0.1032, so a member
+    // list saved at exactly its 150px minimum reloaded needing 154.8px, was
+    // therefore too small the moment it loaded, and got pushed 5px wider every
+    // round trip. Rounding down can only ever relax it, and MIN_PX is the real
+    // floor now anyway.
+    const min = BigInt(Math.floor(Math.max(0, Math.min(0.5, l.min)) * 126))
     let chunk = (((q(l.x0) << 10n) | q(l.y0)) << 20n) | (q(l.x1) << 10n) | q(l.y1)
     chunk = (chunk << 3n) | flags
     chunk = (chunk << 6n) | min
