@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import type { Room } from 'matrix-js-sdk'
 import { useClient } from './client/clientContextValue'
 import { Sidebar } from './ui/Sidebar'
@@ -11,6 +11,10 @@ import { directRoomIds } from './client/dm'
 import { ComposerModeProvider } from './ui/ComposerModeProvider'
 import { TypingBar } from './ui/TypingBar'
 import { MemberList } from './ui/MemberList'
+import { ResizeHandle } from './ui/ResizeHandle'
+import { DmDock } from './ui/DmDock'
+import { LayoutEditor } from './ui/LayoutEditor'
+import { useLayout } from './ui/layoutContext'
 import { ThreadPanel } from './ui/ThreadPanel'
 import { ThreadList } from './ui/ThreadList'
 import { useReveal } from './ui/useReveal'
@@ -31,7 +35,14 @@ import { BootScreen } from './onboarding/BootScreen'
 // mounts the three-pane layout (nav tree | timeline+composer | member list).
 function App() {
   const { client, status, error, userId, login, logout } = useClient()
+  const { layout, resizePanel, editMode, setEditMode, showInDock } = useLayout()
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
+  // DMs live in the dock, rooms in the main pane. Choosing a person opens
+  // them across the top; the room being read stays where it is.
+  const selectRoom = (room: Room) => {
+    if (client && directRoomIds(client).has(room.roomId)) showInDock(room)
+    else setSelectedRoom(room)
+  }
   const [openThread, setOpenThread] = useState<{ roomId: string; rootId: string } | null>(null)
 
   // Open a room the caller knows only by id -- the just-created-DM case.
@@ -43,7 +54,7 @@ function App() {
     const attempt = (triesLeft: number) => {
       const room = client?.getRoom(roomId)
       if (room) {
-        setSelectedRoom(room)
+        selectRoom(room)
         return
       }
       if (triesLeft > 0) setTimeout(() => attempt(triesLeft - 1), 500)
@@ -51,7 +62,7 @@ function App() {
     attempt(12)
   }
   const [threadListOpen, setThreadListOpen] = useState(false)
-  const [threadPanelWidth, setThreadPanelWidth] = useState(380)
+  const threadPanelWidth = layout.panels.thread.size
   const [domainExpanded, setDomainExpanded] = useState(false)
   // The canvas's time-to-die lives here rather than inside DomainView, so the
   // ONE composer can stamp it onto a post while the domain is open. The domain
@@ -124,7 +135,7 @@ function App() {
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <Sidebar
         selectedRoomId={selectedRoom?.roomId}
-        onSelectRoom={setSelectedRoom}
+        onSelectRoom={selectRoom}
         header={
           <div style={{ padding: '4px 8px 8px' }}>
             <div
@@ -150,6 +161,14 @@ function App() {
               >
                 {userId}
               </strong>
+              <button
+                type="button"
+                onClick={() => setEditMode(!editMode)}
+                style={{ fontSize: 11, flexShrink: 0 }}
+                title="Resize, lock and pin the panels; export your layout as a number"
+              >
+                {editMode ? 'Done' : 'Edit layout'}
+              </button>
               <button type="button" onClick={logout} style={{ fontSize: 12, flexShrink: 0 }}>Log out</button>
             </div>
             {/* The user's own avatar, under the name at the panel's top left. */}
@@ -179,6 +198,9 @@ function App() {
           overflow: 'hidden',
         }}
       >
+        {/* The DM window, across the top, before anything the selected room
+            renders: it is its own space and by default it wins. */}
+        <DmDock />
         {selectedRoom ? (
             // One composer-mode scope per composer: the room timeline and its
             // composer share a reply/edit target, and the thread panel keeps
@@ -241,11 +263,9 @@ function App() {
                     transitionDuration: `${threadPanelReveal.durationMs}ms`,
                   }}
                 >
-                  <ResizeHandle
-                    onDrag={(dx) =>
-                      setThreadPanelWidth((w) => Math.max(280, Math.min(640, w - dx)))
-                    }
-                  />
+                  {!layout.panels.thread.locked && (
+                    <ResizeHandle onDrag={(dx) => resizePanel('thread', -dx)} />
+                  )}
                   <ThreadPanel
                     roomId={openThread.roomId}
                     rootId={openThread.rootId}
@@ -284,9 +304,13 @@ function App() {
         )}
       </main>
 
-      <MemberList room={selectedRoom} onOpenRoom={openRoomById} />
+      {!layout.panels.members.locked && (
+        <ResizeHandle onDrag={(dx) => resizePanel('members', -dx)} />
+      )}
+      <MemberList room={selectedRoom} onOpenRoom={openRoomById} width={layout.panels.members.size} />
       </div>
     </div>
+    <LayoutEditor />
     </RoomListSettingsProvider>
     </LightboxProvider>
   )
@@ -334,32 +358,6 @@ function DomainTab({
   )
 }
 
-function ResizeHandle({ onDrag }: { onDrag: (dx: number) => void }) {
-  const startX = useRef(0)
-  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    startX.current = e.clientX
-    e.currentTarget.setPointerCapture(e.pointerId)
-  }
-  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
-    const dx = e.clientX - startX.current
-    startX.current = e.clientX
-    if (dx !== 0) onDrag(dx)
-  }
-  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
-  }
-  return (
-    <div
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      style={{ width: 5, flexShrink: 0, cursor: 'col-resize', background: 'transparent', alignSelf: 'stretch' }}
-      title="Drag to resize"
-    />
-  )
-}
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
