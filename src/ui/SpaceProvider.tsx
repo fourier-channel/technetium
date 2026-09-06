@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { RoomEvent, type MatrixEvent, type Room } from 'matrix-js-sdk'
 import { useClient } from '../client/clientContextValue'
 import { directRoomIds } from '../client/dm'
-import { closeDomain, closeInColumn, closeThreadView, defaultSpace, deserialize, moveDivider, openDomain, openInColumn, openThreadView, pushEdge, serialize, setFlag, setMin } from './space'
-import { useStoredSpace } from './spaceState'
+import { closeDomain, closeInColumn, closeThreadView, defaultSpace, deserialize, moveDivider, openDomain, openInColumn, openThreadView, pushEdge, reflow, serialize, setFlag, setMin, setViewport } from './space'
+import { currentViewport, useStoredSpace } from './spaceState'
 import { SpaceCtx, type SpaceApi } from './spaceContext'
 
 // The real-estate contract for the whole screen (see space.ts), and the DM
@@ -13,9 +13,35 @@ import { SpaceCtx, type SpaceApi } from './spaceContext'
 // whatever they are clicking on.
 export function SpaceProvider({ children }: { children: ReactNode }) {
   const { client } = useClient()
-  const [space, setSpace] = useStoredSpace(client)
+  const [space, setSpace, adaptSpace] = useStoredSpace(client)
   const [editMode, setEditMode] = useState(false)
   const [dockRoom, setDockRoom] = useState<Room | null>(null)
+
+  // The space has to know the screen it is on, because minimums are pixels
+  // (space.ts). A resize changes what FITS, so the layout is reflowed and
+  // panels that no longer have room are shed -- otherwise the layout stays
+  // infeasible and every subsequent drag is silently refused, which is the
+  // "everything is unresponsive" failure this model has produced before.
+  //
+  // adaptSpace, not setSpace: fitting a screen is not a layout the user chose
+  // and must never be written back over the one they did.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const apply = () => adaptSpace((prev) => reflow(setViewport(prev, currentViewport())))
+    const onResize = () => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(apply, 150)
+    }
+    window.addEventListener('resize', onResize)
+    // G-tc01: never a synchronous setState in an effect body.
+    queueMicrotask(apply)
+    return () => {
+      if (timer) clearTimeout(timer)
+      window.removeEventListener('resize', onResize)
+    }
+    // adaptSpace is stable (updater-based).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (!client) return
@@ -44,12 +70,14 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     setPanelMin: (id, min) => setSpace((prev) => setMin(prev, id, min)),
     exportCode: () => serialize(space),
     importCode: (code) => {
-      const s = deserialize(code)
+      // Imported against THIS screen, then reflowed: a number pasted from a
+      // desktop must not arrive as a layout this screen cannot show.
+      const s = deserialize(code, currentViewport())
       if (!s) return false
-      setSpace(s)
+      setSpace(reflow(s))
       return true
     },
-    resetSpace: () => setSpace(defaultSpace()),
+    resetSpace: () => setSpace(reflow(setViewport(defaultSpace(), currentViewport()))),
     dockRoom,
     showInDock: (room) => {
       setDockRoom(room)

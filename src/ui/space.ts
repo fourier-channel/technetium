@@ -51,12 +51,50 @@ export interface Leaf extends Rect {
   last: { axis: Axis; dir: Dir } | null
 }
 
+// The screen the space is being laid out on. The unit square is
+// dimensionless; a MINIMUM is not, and that is the whole point of carrying
+// this (operator ruling 2026-09-06). It lives in the Space so that every
+// mutation stays a pure Space -> Space function rather than growing a
+// viewport parameter; it is deliberately NOT serialized.
+export interface Viewport { w: number; h: number }
+export const DEFAULT_VIEWPORT: Viewport = { w: 1440, h: 900 }
+
 export interface Space {
   v: 3
   leaves: Record<PanelId, Leaf>
+  vp: Viewport
+}
+
+// A fractional minimum is device-independent and therefore meaningless: 0.1
+// of a 1440px desktop is 144px, and 0.1 of a 390px phone is 39px, which the
+// tiler would happily call a valid panel. These are what each panel actually
+// needs to be usable, in PIXELS, per axis.
+//
+// NOT serialized, on purpose. What a panel needs to function is a property of
+// the panel, not of a saved layout, so a preset stays portable between a
+// desktop and a phone -- and the layout number keeps its v3 format, so hashes
+// saved before this change still load.
+export const MIN_PX: Record<PanelId, { x: number; y: number }> = {
+  sidebar: { x: 180, y: 120 }, // room names have to be readable
+  main:    { x: 320, y: 200 }, // a message column; the operator called 0.1 too small
+  dock:    { x: 320, y: 140 }, // a DM timeline plus its composer
+  threads: { x: 240, y: 90 },  // thread titles
+  thread:  { x: 300, y: 200 }, // the reading pane
+  members: { x: 150, y: 120 }, // avatar plus name
+  domain:  { x: 240, y: 160 }, // a canvas
 }
 
 export const DEFAULT_MIN = 0.1
+
+// What a panel may not go under along one axis, as a fraction of the space:
+// the larger of its own stored fraction and what its pixel minimum works out
+// to on this screen. Capped at 1 so an impossible minimum cannot make the
+// whole square infeasible on its own.
+export function effectiveMin(l: Leaf, axis: Axis, vp: Viewport): number {
+  const span = axis === 'x' ? vp.w : vp.h
+  const fromPx = span > 0 ? MIN_PX[l.id][axis] / span : 0
+  return Math.min(1, Math.max(l.min, fromPx))
+}
 const EPS = 1e-6
 const near = (a: number, b: number) => Math.abs(a - b) < EPS
 
@@ -71,6 +109,7 @@ export function defaultSpace(): Space {
     ({ id, ...r, locked: false, pinned: false, open: true, min: DEFAULT_MIN, last: null, ...extra })
   return {
     v: 3,
+    vp: { ...DEFAULT_VIEWPORT },
     leaves: {
       sidebar: leaf('sidebar', { x0: 0, y0: 0, x1: 0.18, y1: 1 }),
       dock:    leaf('dock',    { x0: 0.18, y0: 0, x1: 0.85, y1: 0.28 }, { locked: true, open: false }),
@@ -90,7 +129,7 @@ export function openLeaves(s: Space): Leaf[] {
 function clone(s: Space): Space {
   const leaves = {} as Record<PanelId, Leaf>
   for (const id of PANEL_IDS) leaves[id] = { ...s.leaves[id], last: s.leaves[id].last ? { ...s.leaves[id].last! } : null }
-  return { v: 3, leaves }
+  return { v: 3, vp: { ...s.vp }, leaves }
 }
 
 const lo = (l: Rect, a: Axis) => (a === 'x' ? l.x0 : l.y0)
@@ -169,9 +208,24 @@ function apply(s: Space, axis: Axis, moves: Map<number, number>): Space {
   return next
 }
 
-function feasible(s: Space): boolean {
+export function fits(s: Space): boolean {
   if (!validTiling(s)) return false
-  return openLeaves(s).every((l) => extent(l, 'x') >= l.min - EPS && extent(l, 'y') >= l.min - EPS)
+  return openLeaves(s).every((l) =>
+    extent(l, 'x') >= effectiveMin(l, 'x', s.vp) - EPS &&
+    extent(l, 'y') >= effectiveMin(l, 'y', s.vp) - EPS)
+}
+
+function feasible(s: Space): boolean { return fits(s) }
+
+// Tell the space what screen it is on. Does not move anything by itself: a
+// smaller screen can make the CURRENT layout infeasible, and what to do about
+// that is reflow()'s decision, not this one's.
+export function setViewport(s: Space, vp: Viewport): Space {
+  const w = Math.max(1, Math.round(vp.w)), h = Math.max(1, Math.round(vp.h))
+  if (near(s.vp.w, w) && near(s.vp.h, h)) return s
+  const n = clone(s)
+  n.vp = { w, h }
+  return n
 }
 
 // Move the divider on `axis` at `at` by `delta` (fractions of the space).
@@ -302,8 +356,8 @@ export function openInColumn(s: Space, id: PanelId, fraction: number): Space {
 // span comes up by its height -- lower-ranked column tiles move whole, the
 // chat and the domain grow into it -- so the thread list stays attached to
 // whatever is above it and nothing is left unclaimed.
-export function closeInColumn(s: Space, id: PanelId): Space {
-  if (!COLUMN_STACK.includes(id) || id === 'main' || !s.leaves[id].open) return s
+function closeInColumnGeom(s: Space, id: PanelId): Space | null {
+  if (!COLUMN_STACK.includes(id) || id === 'main' || !s.leaves[id].open) return null
   const n = clone(s)
   const t = n.leaves[id]
   const h = t.y1 - t.y0
@@ -316,7 +370,12 @@ export function closeInColumn(s: Space, id: PanelId): Space {
   const d = n.leaves.domain
   if (d.open && d.x0 < t.x1 - EPS && d.x1 > t.x0 + EPS && near(d.y0, t.y1)) d.y0 -= h
   t.open = false
-  return feasible(n) ? n : s
+  return n
+}
+
+export function closeInColumn(s: Space, id: PanelId): Space {
+  const n = closeInColumnGeom(s, id)
+  return n && feasible(n) ? n : s
 }
 
 // The region's x-extent: what the dock spans -- the column plus the domain.
@@ -342,8 +401,8 @@ export function openDomain(s: Space, fraction: number): Space {
   return feasible(n) ? n : s
 }
 
-export function closeDomain(s: Space): Space {
-  if (!s.leaves.domain.open) return s
+function closeDomainGeom(s: Space): Space | null {
+  if (!s.leaves.domain.open) return null
   const n = clone(s)
   const d = n.leaves.domain
   // Whatever sits on its left edge and overlaps it vertically takes the
@@ -354,7 +413,12 @@ export function closeDomain(s: Space): Space {
     if (overlapsY && near(l.x1, d.x0)) l.x1 = d.x1
   }
   d.open = false
-  return feasible(n) ? n : s
+  return n
+}
+
+export function closeDomain(s: Space): Space {
+  const n = closeDomainGeom(s)
+  return n && feasible(n) ? n : s
 }
 
 // Open the THREAD VIEW (the reading pane) as a full-height tile between the
@@ -375,8 +439,8 @@ export function openThreadView(s: Space, fraction: number): Space {
   return feasible(n) ? n : s
 }
 
-export function closeThreadView(s: Space): Space {
-  if (!s.leaves.thread.open) return s
+function closeThreadViewGeom(s: Space): Space | null {
+  if (!s.leaves.thread.open) return null
   const n = clone(s)
   const t = n.leaves.thread
   for (const k of ['dock', 'threads', 'main', 'domain'] as PanelId[]) {
@@ -384,7 +448,12 @@ export function closeThreadView(s: Space): Space {
     if (l.open && near(l.x1, t.x0)) l.x1 = t.x1
   }
   t.open = false
-  return feasible(n) ? n : s
+  return n
+}
+
+export function closeThreadView(s: Space): Space {
+  const n = closeThreadViewGeom(s)
+  return n && feasible(n) ? n : s
 }
 
 // Close a panel: its space goes to the neighbour that shares its full edge
@@ -406,6 +475,63 @@ export function closePanel(s: Space, id: PanelId): Space {
     }
   }
   return s // nothing can take the space; it stays open
+}
+
+// --- reflow ---------------------------------------------------------------
+// A shrinking screen does not refuse to be shrunk. When the viewport can no
+// longer hold what is open, panels are SHED in this order until the rest fit.
+//
+// `main` is never shed: something has to hold the content. The order below is
+// the first half of the priority question in UI_REAL_ESTATE section 3 (which
+// panel wins when only one fits); when that is ruled, this constant is the
+// place it lands. Shedding uses the ungated geometry on purpose -- the gated
+// close refuses to act on a space that is already too small, which is exactly
+// the space reflow is called on.
+export const SHED_ORDER: PanelId[] = ['members', 'domain', 'threads', 'thread', 'dock', 'sidebar']
+
+function shed(s: Space, id: PanelId): Space | null {
+  if (!s.leaves[id].open) return null
+  if (id === 'domain') return closeDomainGeom(s)
+  if (id === 'thread') return closeThreadViewGeom(s)
+  if (COLUMN_STACK.includes(id) && id !== 'main') return closeInColumnGeom(s, id)
+  const n = closePanel(s, id)
+  return n === s ? null : n
+}
+
+// The terminal state: one panel owns the whole square and everything else is
+// closed. This is the operator's mobile model ("only one screen would ever be
+// up at a time") reached as a limit rather than as a separate mode, and it is
+// also the only honest answer when a panel cannot be shed by the neighbour
+// rule -- a full-height sidebar beside a chat that a dock has shortened has no
+// neighbour sharing its cross extent, so closePanel legitimately refuses and
+// the shed loop would otherwise stall with two panels that cannot both fit.
+function soleOccupant(s: Space, id: PanelId): Space {
+  const n = clone(s)
+  for (const k of PANEL_IDS) {
+    const l = n.leaves[k]
+    if (k === id) { l.x0 = 0; l.y0 = 0; l.x1 = 1; l.y1 = 1; l.open = true }
+    else l.open = false
+  }
+  return n
+}
+
+// Shed until the space fits its viewport. Returns the space untouched when it
+// already fits; falls back to a single panel when shedding cannot get there.
+// A screen can simply be too small for any minimum, and reporting that as a
+// refusal would freeze the UI rather than degrade it.
+export function reflow(s: Space): Space {
+  let cur = s
+  if (fits(cur)) return cur
+  for (const id of SHED_ORDER) {
+    const next = shed(cur, id)
+    if (!next) continue
+    cur = next
+    if (fits(cur)) return cur
+  }
+  // Which panel survives is the priority question (UI_REAL_ESTATE section 3,
+  // question 9). Until that is ruled it is the chat, because that is what the
+  // window is for.
+  return soleOccupant(cur, 'main')
 }
 
 // --- the number -----------------------------------------------------------
@@ -435,7 +561,7 @@ export function serialize(s: Space): string {
   return acc.toString(10)
 }
 
-export function deserialize(code: string): Space | null {
+export function deserialize(code: string, vp?: Viewport): Space | null {
   const t = code.trim()
   if (!/^\d{1,120}$/.test(t)) return null
   let acc: bigint
@@ -444,6 +570,10 @@ export function deserialize(code: string): Space | null {
   acc >>= 8n
   if (checksum(acc) !== sum) return null
   const s = defaultSpace()
+  // A preset saved on a desktop is routinely loaded on a phone, so the code
+  // is decoded against the screen it is arriving on, not the one it was made
+  // on. The caller reflows; validity here is still pure geometry.
+  if (vp) s.vp = { w: Math.max(1, Math.round(vp.w)), h: Math.max(1, Math.round(vp.h)) }
   for (const id of [...PANEL_IDS].reverse()) {
     const chunk = acc & ((1n << LEAF_BITS) - 1n)
     acc >>= LEAF_BITS

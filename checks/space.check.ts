@@ -1,7 +1,7 @@
 // Checks for the space: the tiling, divider pushes, lock (translate), pin
 // (warp about center), the wall, minimums, last-vector-wins, open/close, and
 // the number.
-import { defaultSpace, moveDivider, pushEdge, resizePanel, setFlag, setMin, openPanel, closePanel, openInColumn, closeInColumn, openDomain, closeDomain, openThreadView, closeThreadView, validTiling, dividers, serialize, deserialize } from '../src/ui/space.ts'
+import { defaultSpace, moveDivider, pushEdge, resizePanel, setFlag, setMin, openPanel, closePanel, openInColumn, closeInColumn, openDomain, closeDomain, openThreadView, closeThreadView, validTiling, dividers, serialize, deserialize, setViewport } from '../src/ui/space.ts'
 
 let failures = 0
 const check = (name: string, cond: boolean, extra?: unknown) => { if (cond) console.log('  ok   ' + name); else { failures++; console.log('  FAIL ' + name, extra ?? '') } }
@@ -9,7 +9,16 @@ const near = (a: number, b: number, e = 1e-4) => Math.abs(a - b) < e
 const w = (s: ReturnType<typeof defaultSpace>, id: 'sidebar'|'main'|'dock'|'threads'|'thread'|'members'|'domain') => s.leaves[id].x1 - s.leaves[id].x0
 const h = (s: ReturnType<typeof defaultSpace>, id: 'sidebar'|'main'|'dock'|'threads'|'thread'|'members'|'domain') => s.leaves[id].y1 - s.leaves[id].y0
 
-const S = defaultSpace()
+// These cases are about DIVIDERS, LOCK, PIN and the number -- not about
+// minimums. Since minimums became pixel-derived (2026-09-06) the effective
+// minimum depends on the screen, which would silently entangle every
+// push-to-the-wall assertion below with the MIN_PX table. So they run on a
+// deliberately huge screen, on which every pixel minimum works out SMALLER
+// than the 0.1 fraction and the fractional minimum governs exactly as it did
+// when these cases were written. The pixel behaviour has its own file,
+// spaceMinPx.check.ts, and the fuzz runs at the real default viewport.
+const MINIMUM_NEUTRAL = { w: 3600, h: 2200 }
+const S = setViewport(defaultSpace(), MINIMUM_NEUTRAL)
 check('preset tiles the space exactly', validTiling(S))
 check('preset has two dividers (x=0.18, x=0.85)', dividers(S).length === 2 && dividers(S).every((d) => d.axis === 'x'))
 check('preset dock is locked, not pinned (its neighbours stay draggable)', S.leaves.dock.locked && !S.leaves.dock.pinned)
