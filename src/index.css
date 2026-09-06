@@ -2594,9 +2594,12 @@ code {
   cursor: pointer;
   transition: right 420ms cubic-bezier(0.22, 0.61, 0.36, 1), box-shadow 150ms ease, color 150ms ease;
 }
-.tc-domain-tab[data-open='true'] {
-  right: max(calc(100% - var(--tc-chat-w) - 88px), 40%);
-}
+/* The tab rides the CHAT COLUMN's right edge, which is the domain's left edge
+   when the domain is open and the region's edge when it is not. The column is
+   the tab's positioned ancestor, so right: 0 is always that edge, and the
+   column's animated width carries the tab with it. The old overlay-era
+   formula (100% - chat width - 88px) put it mid-domain once the domain became
+   a tile. */
 .tc-domain-tab:hover {
   color: var(--tc-unread);
   box-shadow: 0 0 0 1px var(--tc-unread), 0 0 14px rgba(255, 150, 40, 0.55);
