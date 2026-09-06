@@ -25,14 +25,14 @@ import './index.css'
 import App from './App.tsx'
 import { ClientProvider } from './client/ClientContext'
 import { CryptoArrivalHost } from './onboarding/CryptoArrivalHost'
-import { LayoutProvider } from './ui/LayoutProvider'
+import { SpaceProvider } from './ui/SpaceProvider'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ClientProvider>
-      <LayoutProvider>
+      <SpaceProvider>
         <App />
-      </LayoutProvider>
+      </SpaceProvider>
       <CryptoArrivalHost />
     </ClientProvider>
   </StrictMode>,

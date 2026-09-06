@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { useLayout } from './layoutContext'
+import { useSpace } from './spaceContext'
 
 // The Edit Mode surface: the layout's number, in and out, and reset. Lives
 // as a small floating card so it covers no panel it is editing.
 export function LayoutEditor() {
-  const { editMode, setEditMode, exportCode, importCode, resetLayout } = useLayout()
+  const { editMode, setEditMode, exportCode, importCode, resetSpace } = useSpace()
   const [pasted, setPasted] = useState('')
   const [note, setNote] = useState<string | null>(null)
   if (!editMode) return null
@@ -16,7 +16,7 @@ export function LayoutEditor() {
         <button type="button" onClick={() => setEditMode(false)}>Done</button>
       </div>
       <div className="tc-layout-editor-help">
-        Drag panel edges to resize. Lock fixes a panel's size; Pin fixes its position. Unlocked panels share space.
+        Drag a divider and every panel on it accommodates. Lock fixes a panel's size (it moves whole); Pin fixes its center (it warps around it). Together: a fixed object.
       </div>
       <label className="tc-layout-editor-row">
         <span>Your layout number</span>
@@ -37,7 +37,7 @@ export function LayoutEditor() {
         </button>
       </label>
       <div className="tc-layout-editor-row">
-        <button type="button" onClick={() => { resetLayout(); setNote('Reset to the default.') }}>Reset to default</button>
+        <button type="button" onClick={() => { resetSpace(); setNote('Reset to the default.') }}>Reset to default</button>
         {note && <span className="tc-layout-editor-note">{note}</span>}
       </div>
     </div>
