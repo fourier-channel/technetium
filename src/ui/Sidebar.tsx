@@ -48,6 +48,14 @@ export function Sidebar({
   const startResize = (e: React.PointerEvent) => {
     if (panelLocked || e.button !== 0) return
     e.preventDefault()
+    // Capture the pointer, as ResizeHandle already does. Without it, dragging
+    // RIGHTWARD takes the cursor over the chanbooru IFRAME that fills the dead
+    // space, and an iframe swallows the pointer stream: the window listeners
+    // below simply stop hearing from it and the drag dies mid-gesture, while
+    // dragging left over ordinary DOM worked fine. Capture routes every later
+    // event to this element whatever it passes over.
+    const grip = e.currentTarget as HTMLElement
+    try { grip.setPointerCapture(e.pointerId) } catch { /* not fatal; the drag just stays interruptible */ }
     let lastX = e.clientX
     const onMove = (me: PointerEvent) => {
       // Deltas, applied to the latest layout: a drag fires faster than React
@@ -57,6 +65,7 @@ export function Sidebar({
       if (dx !== 0) pushEdge('sidebar', 'x', 'hi', dx / window.innerWidth)
     }
     const onUp = () => {
+      try { grip.releasePointerCapture(e.pointerId) } catch { /* already gone */ }
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
     }
