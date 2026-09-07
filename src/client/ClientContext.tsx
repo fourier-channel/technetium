@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -10,6 +11,7 @@ import { buildClient, deleteSyncStore, startAndWaitForSync } from './buildClient
 import { watchRoomEncryptionConfig } from './roomEncryptionConfig'
 import { createTokenRefreshFunction } from './tokenRefresher'
 import { ClientContext, type ClientContextValue, type ClientStatus } from './clientContextValue'
+import { planSessionEnd, type SessionEndReason } from './sessionEnd'
 import { detail } from './report'
 import {
   e2eeEnabled,
@@ -63,6 +65,13 @@ export function ClientProvider({ children }: { children: ReactNode }) {
   const [identityFacts, setIdentityFacts] = useState<CryptoIdentityFacts | null>(null)
   const [keyBackup, setKeyBackup] = useState<KeyBackupFacts | null>(null)
 
+  // The live client, reachable from paths that cannot see the `client` STATE.
+  // resumeSession's catch is the one that matters: setClient(c) has been called
+  // by then, but a state setter is not visible to the closure that called it,
+  // so the catch could only ever see null -- which is exactly why a failed
+  // resume used to leave a started client syncing forever against a dead token.
+  const clientRef = useRef<MatrixClient | null>(null)
+
   // Shared: build the persistent-store client, sync, and publish it to context.
   const startSyncedClient = async (params: {
     homeserverUrl: string
@@ -74,6 +83,8 @@ export function ClientProvider({ children }: { children: ReactNode }) {
   }) => {
     setStatus('syncing')
     const c = await buildClient(params)
+    // Recorded BEFORE anything that can throw, so every failure path can stop it.
+    clientRef.current = c
     exposeForDevConsole(c)
 
     // Crypto comes up BETWEEN createClient and startClient -- the SDK requires
@@ -209,9 +220,8 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     } catch (err: unknown) {
       console.error('Resume failed:', err)
       // Refresh also failed (refresh token dead) -> session is truly gone.
-      clearSession()
-      setUserId(null)
-      setStatus('awaiting_login')
+      // Keeps this user's sync cache: see sessionEnd.ts.
+      endSession('resume_failed')
     }
   }
 
@@ -277,20 +287,48 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // Stop syncing, drop the session, return to the login screen.
-  const logout = () => {
-    client?.stopClient()
-    // Explicit logout also drops this user's sync cache, so a shared machine
-    // does not keep the room list readable after they walk away. Only here:
-    // a resume failure (dead refresh token) keeps the cache, because that
-    // user coming back is the likely next event. The crypto store is NEVER
-    // deleted -- losing device keys is the harm E8 exists to prevent.
-    if (userId) deleteSyncStore(userId)
-    clearSession()
+  // The single teardown. What differs between reasons is decided by
+  // planSessionEnd and nothing else, so the three callers cannot drift apart
+  // again. Dropping the sync cache keeps a shared machine from showing the room
+  // list after someone walks away; the crypto store is never touched.
+  function endSession(reason: SessionEndReason) {
+    const plan = planSessionEnd(reason)
+    const c = clientRef.current
+    if (plan.stopClient) c?.stopClient()
+    if (plan.deleteSyncStore) {
+      // Read from the client, not from `userId` state: a handler subscribed at
+      // mount closes over the value as it was then.
+      const uid = c?.getUserId() ?? userId
+      if (uid) deleteSyncStore(uid)
+    }
+    if (plan.clearStoredSession) clearSession()
+    clientRef.current = null
     setClient(null)
     setUserId(null)
     setStatus('awaiting_login')
   }
+
+  // Stop syncing, drop the session, return to the login screen.
+  const logout = () => { endSession('logout') }
+
+  // The server has rejected our token and no refresh can save it: signed out
+  // elsewhere, session killed server-side, or banned. Without this the SDK
+  // simply keeps retrying -- measured 2026-09-07 at ~2800 requests an hour from
+  // one tab, every one a 401. Operator ruling the same day: treat it exactly as
+  // an explicit logout, cache drop included.
+  useEffect(() => {
+    if (!client) return
+    const onLoggedOut = () => {
+      // G-tc01: never a synchronous setState from inside an event that can fire
+      // during render-adjacent SDK work.
+      queueMicrotask(() => { endSession('revoked') })
+    }
+    client.on(sdk.HttpApiEvent.SessionLoggedOut, onLoggedOut)
+    return () => { client.off(sdk.HttpApiEvent.SessionLoggedOut, onLoggedOut) }
+    // endSession is redefined every render and is not a dependency: the effect
+    // must re-subscribe when the CLIENT changes, not when the closure does.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client])
 
   const value: ClientContextValue = {
     client,
