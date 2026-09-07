@@ -16,7 +16,7 @@ import { RoomContextMenu } from './RoomContextMenu'
 import { reportAlways } from '../client/report'
 import { adoptDm, pendingDmInviter } from '../client/dm'
 import { configureRoomEncryptionNow } from '../client/roomEncryptionConfig'
-import { directRoomIds } from '../client/dm'
+import { isDirect } from '../client/roomClass'
 
 // Room-list row metrics. Vertical pitch = ROW_HEIGHT + 2 * ROW_MARGIN_Y.
 // Tightened 2026-08-13 (32px -> 28px) to fit more of the tree on screen.
@@ -135,7 +135,14 @@ export function NavTree({
   // when a DM is created, and a memo keyed on the client would never see it.
   // The map is a handful of entries, so this is cheaper than the subscription
   // that would be needed to do it "properly".
-  const dmIds = client ? directRoomIds(client) : EMPTY_ROOM_IDS
+  // Which rooms are DMs, asked of the server's own verdict first. The class is
+  // written into the immutable create event at creation (2026-09-07); m.direct
+  // remains the fallback for rooms that predate the stamp, which is every DM
+  // on this server today. Still recomputed each render for the same reason as
+  // before: a memo keyed on the client would never see a new DM.
+  const dmIds = client
+    ? new Set(client.getRooms().filter((r) => isDirect(client, r)).map((r) => r.roomId))
+    : EMPTY_ROOM_IDS
   const reduced = useReducedMotion()
   const animate = animationsEnabled && !reduced
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
