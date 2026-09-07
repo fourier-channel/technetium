@@ -1,9 +1,11 @@
 // What setting up recovery is allowed to DO, decided before anything is called.
 //
 // This exists because the obvious call is destructive in a way its name hides.
-// `bootstrapSecretStorage({ setupNewKeyBackup: true })` calls `resetKeyBackup`,
-// and G-e1 is emphatic: deleting a key backup version DESTROYS the keys in it,
-// whatever the docs imply. So "set up recovery" pressed by someone who already
+// `bootstrapSecretStorage({ setupNewKeyBackup: true })` resets the key backup
+// as a side effect, and G-e1 is emphatic: deleting a backup version DESTROYS
+// the keys in it, whatever the docs imply. (The call is deliberately not named
+// here -- a check requires that searching for it finds only the module that
+// performs it, and a mention in a comment is a false hit.) So "set up recovery" pressed by someone who already
 // has a backup is not a setup -- it is a deletion with a friendly label.
 //
 // The rule this encodes: never reset a backup that exists as a side effect of
