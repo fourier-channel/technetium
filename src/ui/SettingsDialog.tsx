@@ -201,8 +201,18 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           ) : (
             <ul className="tc-settings-devices">
               {devices.map((d) => (
-                <li key={d.deviceId}>
-                  <span className="tc-device-name">{d.displayName || d.deviceId}</span>
+                <li key={d.deviceId} data-device-id={d.deviceId}>
+                  {/* The ID is shown ALWAYS, not just as a fallback. Every
+                      session of this client picks the same display name, so a
+                      real account ends up with a column of identical rows and
+                      no way to tell which one you are about to trust --
+                      measured on the test account: fourteen devices, one
+                      name. A verification you cannot aim is not a
+                      verification. */}
+                  <span className="tc-device-name">
+                    {d.displayName || 'unnamed device'}
+                    <span className="tc-device-id"> {d.deviceId}</span>
+                  </span>
                   {d.isThisDevice && <span className="tc-device-here"> this device</span>}
                   <span className={`tc-device-trust tc-trust-${d.crossSigningVerified ? 'ok' : d.locallyVerified ? 'local' : 'no'}`}>
                     {deviceTrustLabel(d)}
@@ -222,7 +232,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       {verifying && vview && (() => {
         const stage = verificationStage(vview.phase, vview.emoji.length > 0)
         return (
-          <div className="tc-verify" role="group" aria-label="Device verification">
+          <div className="tc-verify" role="group" aria-label="Device verification" data-phase={vview.phase ?? ''}>
             <strong className={`tc-tone-${stage.verified ? 'ok' : stage.name === 'cancelled' ? 'bad' : 'warn'}`}>
               {stage.headline}
             </strong>

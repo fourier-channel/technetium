@@ -2765,6 +2765,12 @@ code {
 }
 
 .tc-device-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-device-id {
+  opacity: 0.55;
+  font-family: ui-monospace, monospace;
+  font-size: 10.5px;
+}
+
 .tc-device-here { opacity: 0.6; font-size: 11px; }
 .tc-device-trust { font-size: 11px; flex-shrink: 0; }
 /* Only cross-signed trust gets the reassuring colour. */

@@ -21,6 +21,7 @@ export function IncomingVerification() {
   const [request, setRequest] = useState<VerificationRequest | null>(null)
   const [emoji, setEmoji] = useState<{ symbol: string; name: string }[]>([])
   const [phase, setPhase] = useState<number | null>(null)
+  const [err, setErr] = useState<string | null>(null)
 
   useEffect(() => {
     if (!client || !e2eeEnabled()) return
@@ -66,7 +67,7 @@ export function IncomingVerification() {
   const close = () => { setRequest(null); setEmoji([]); setPhase(null) }
 
   return (
-    <div className="tc-verify tc-verify--incoming" role="alertdialog" aria-label="Verification request">
+    <div className="tc-verify tc-verify--incoming" role="alertdialog" aria-label="Verification request" data-phase={phase ?? ''}>
       <strong className={`tc-tone-${stage.verified ? 'ok' : stage.name === 'cancelled' ? 'bad' : 'warn'}`}>
         {stage.name === 'waiting' ? 'Another device wants to verify with this one.' : stage.headline}
       </strong>
@@ -80,9 +81,20 @@ export function IncomingVerification() {
           ))}
         </ul>
       )}
+      {err && <p className="tc-settings-note tc-tone-bad">This device could not accept: {err}</p>}
       <div className="tc-verify-actions">
         {stage.name === 'waiting' && (
-          <button type="button" onClick={() => { void request.accept() }}>Accept</button>
+          <button
+            type="button"
+            onClick={() => {
+              // The rejection is SHOWN, not swallowed: an accept that fails
+              // silently is indistinguishable from one that did nothing, and
+              // that cost an hour of chasing the wrong thing.
+              request.accept().catch((e: unknown) => setErr(String((e as Error)?.message ?? e)))
+            }}
+          >
+            Accept
+          </button>
         )}
         {stage.canConfirm && (
           <>

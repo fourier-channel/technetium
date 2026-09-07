@@ -5,6 +5,7 @@
 // and the one thing this must not do is invent a state the protocol did not
 // report.
 import type { MatrixClient } from 'matrix-js-sdk'
+import { VerificationMethod } from 'matrix-js-sdk/lib/types'
 import {
   VerificationRequestEvent, VerifierEvent,
   type VerificationRequest, type Verifier, type ShowSasCallbacks,
@@ -48,9 +49,21 @@ export async function startDeviceVerification(
 
   const onShowSas = (cb: ShowSasCallbacks) => { sas = cb; publish() }
 
+  let starting = false
+
   const onPhase = () => {
-    // The verifier appears once the other side starts. Attaching here rather
-    // than polling for it keeps this driven entirely by the SDK's own events.
+    // READY means both sides have agreed to verify, and NOTHING happens next
+    // unless somebody names a method. The side that asked does it. Without
+    // this, both devices sit waiting for a verifier that is never created --
+    // measured: the request arrived, the other device accepted, and then two
+    // spinners forever.
+    if (request.phase === 3 && !request.verifier && !starting) {
+      starting = true
+      void request.startVerification(VerificationMethod.Sas).catch((err) => {
+        console.error('[crypto] could not start the emoji comparison', err)
+        publish()
+      })
+    }
     const v = request.verifier
     if (v && v !== verifier) {
       verifier = v
