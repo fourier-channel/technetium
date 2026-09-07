@@ -38,3 +38,20 @@ cause, or was the ellipse being read as an offset. The current geometry makes
 every face identical by construction regardless of content or reveal state, so
 the symptom is closed either way -- but the mechanism behind that half of the
 report was never established, and this file is the honest record of that.
+
+## dm-preview.mjs
+
+Renders the DM section (expanded and collapsed) to a PNG, for eyeballing a
+layout change before deploying it:
+
+    node --import ./checks/_hooks.mjs tools/measure/dm-preview.mjs out.png
+
+Faces use the real `dmFaceStyle`. The pill and header are REPRODUCED from
+NavTree's inline styles, so that part is a mock-up and can drift; the faces
+cannot.
+
+Its own first version rendered no glow at all, silently. The waiting glow is
+written in terms of `--tc-unread` / `--tc-unread-base`, and a `box-shadow`
+naming an undefined custom property is an invalid declaration that the browser
+drops whole -- no warning, no partial effect, just nothing. Any harness that
+lifts a style out of the app has to bring the tokens it references with it.
