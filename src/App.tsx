@@ -131,6 +131,13 @@ function App() {
   // Mark the viewed room read so its unread glow/ping clears (base client sent
   // no read receipts). Called before any early return to keep hook order stable.
   useReadMarker(client, selectedRoom)
+  // A DM never becomes `selectedRoom`: selectRoom sends direct rooms to the
+  // dock instead. So until now a DM was never marked read, its server-side
+  // unread count never fell back to zero, and the nav strip's waiting glow
+  // stayed lit forever once it came on -- which is exactly how it was reported.
+  // Gated on the dock actually being OPEN, keeping useReadMarker's own rule
+  // that nothing is cleared while nobody can see it.
+  useReadMarker(client, space.leaves.dock.open ? dockRoom : null)
   // Ticker collapse follows the user via account data. Same hook-order rule.
   const [tickerCollapsed, setTickerCollapsed] = useTickerCollapsed(client)
   // Keep the media-tag store fed from room state for every room, so any image

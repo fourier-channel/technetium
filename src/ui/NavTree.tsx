@@ -15,6 +15,9 @@ import { AuthedImage } from './AuthedImage'
 import { RoomContextMenu } from './RoomContextMenu'
 import { reportAlways } from '../client/report'
 import { adoptDm, pendingDmInviter } from '../client/dm'
+// One source for the DM strip's geometry; see dmStrip.ts for why it is not
+// three literals sitting in this file.
+import { DM_AVATAR, DM_RING, DM_TILE } from './dmStrip'
 import { configureRoomEncryptionNow } from '../client/roomEncryptionConfig'
 import { isDirect } from '../client/roomClass'
 
@@ -415,7 +418,26 @@ export function NavTree({
       {/* Direct Messages: a top pill; expanded, DMs are icon-only, wrapping
           horizontally, and pushing the room list down (intended reflow). */}
       {tree.orphanRooms.length > 0 && (
-        <div style={{ margin: '2px 4px 6px' }}>
+        <div
+          style={{
+            margin: '2px 4px 6px',
+            // The whole section is ONE pill that grows downwards. Collapsed it
+            // is ~24px tall, so this radius clamps to a true stadium; expanded
+            // it stays a rounded container, which is the same shape grown
+            // rather than a new one. overflow:hidden keeps the header's
+            // corners from squaring off against the border.
+            border: '1px solid rgba(128,128,128,0.3)',
+            borderRadius: 14,
+            // Deliberately NOT overflow:hidden. The waiting glow reaches ~16px
+            // past a face, and a face near the pill's edge would have had its
+            // glow sliced off by the corner -- clipping the one thing the strip
+            // exists to show. Nothing inside paints its own background, so the
+            // rounded corners stay clean without it. The body's own collapse
+            // clip lives on the grid row below.
+            background: dmOpen ? 'var(--cpd-color-bg-subtle-secondary)' : 'transparent',
+            transition: animate ? 'background-color 240ms ease' : undefined,
+          }}
+        >
           <button
             type="button"
             onClick={() =>
@@ -430,10 +452,11 @@ export function NavTree({
               gap: 6,
               width: '100%',
               padding: '4px 10px',
-              borderRadius: 999,
+              // The pill is the CONTAINER now; this is its header face.
+              borderRadius: 0,
               cursor: 'pointer',
-              border: '1px solid rgba(128,128,128,0.3)',
-              background: dmOpen ? 'var(--cpd-color-bg-subtle-secondary)' : 'transparent',
+              border: 'none',
+              background: 'transparent',
               color: 'var(--cpd-color-text-secondary)',
               fontSize: 11,
               fontWeight: 700,
@@ -476,7 +499,9 @@ export function NavTree({
           >
             <div style={{ overflow: 'hidden', minHeight: 0 }}>
               {/* gap widened from 7 (operator: too tightly packed). */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 13, padding: '8px 10px 4px' }}>
+              {/* Padding is set by the GLOW, not the face: it reaches ~16px,
+                  so a tighter inset would let it touch the pill's border. */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 13, padding: '10px 12px 12px' }}>
                 {(dmOpen
                   ? dmStripRooms(tree.orphanRooms, dmFilter, isFavorite, notifs, isMutedNow)
                   : dmWaitingRooms(tree.orphanRooms, notifs, isMutedNow)
@@ -531,14 +556,29 @@ export function NavTree({
                       onContextMenu={(e) => onContext(node, e)}
                       title={dmTitle(node, isDm, counts)}
                       style={{
+                        // Fixed square, border-box: the button IS the face's
+                        // box, so the 50% radius is a circle and never an
+                        // ellipse, and no sibling can stretch it. Without the
+                        // explicit size a flex item takes its height from its
+                        // content, which differed per face.
+                        width: DM_TILE,
+                        height: DM_TILE,
+                        boxSizing: 'border-box',
+                        flex: '0 0 auto',
+                        alignSelf: 'center',
+                        display: 'grid',
+                        placeItems: 'center',
                         padding: 0,
-                        border: 'none',
+                        // Every face is ringed, avatar or initial alike, so the
+                        // row reads as one set rather than as pictures floating
+                        // beside letters.
+                        border: `${DM_RING}px solid rgba(128,128,128,0.45)`,
                         background: 'transparent',
                         cursor: 'pointer',
                         lineHeight: 0,
                         borderRadius: '50%',
-                        // Glow, not a badge: at 30px there is no room for a
-                        // counter, and the ring reads at a glance across a
+                        // Glow, not a badge: at this size there is no room for
+                        // a counter, and the ring reads at a glance across a
                         // wrapped grid of faces. The static ring stays as the
                         // reduced-motion base; the class pulses it.
                         boxShadow: ping
@@ -549,8 +589,8 @@ export function NavTree({
                       }}
                       className={ping ? 'tc-dm-waiting tc-dm-waiting--ping' : unread ? 'tc-dm-waiting' : undefined}
                     >
-                      <EpicycleReveal seed={node.roomId} play={animate}>
-                        <RoomIcon node={node} size={30} isDm={isDm} />
+                      <EpicycleReveal seed={node.roomId} size={DM_AVATAR} play={animate}>
+                        <RoomIcon node={node} size={DM_AVATAR} isDm={isDm} />
                       </EpicycleReveal>
                     </button>
                   )
