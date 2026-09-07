@@ -1,0 +1,143 @@
+/* fourier-formant: tokens -- CANON.
+ *
+ * The vocabulary of the Fourier interface: values, and the semantic names that
+ * map onto them. Nothing else -- no components, no selectors, no build step.
+ * Every stack can consume values; no two of these stacks can consume a
+ * component, because a server-rendered ViewComponent and a client-rendered
+ * React component are not one object and the attempt to unify them produces an
+ * abstraction that fits neither.
+ *
+ * THE RULE THIS FILE ENFORCES: names, not values, cross a boundary. Refer to
+ * --mod-creator-fg, never to the hex it happens to hold. A hex that crosses a
+ * repository boundary is a copy, and copies drift silently -- which is not a
+ * hypothetical; this file exists because a measured audit found two of them
+ * already drifted, in the one semantic that most needed to be stable.
+ *
+ * DO NOT EDIT A DELIVERED COPY. Canon lives in fourier-basis under
+ * docs/design/formant/, alongside a README explaining the scope and the audit.
+ * A consumer that edits its own copy is drift, the pointer sidecar in
+ * docs/.coherence/ makes that machine-checkable, and hydration deliberately
+ * refuses to overwrite an edited copy rather than destroying the only copy of
+ * somebody's work.
+ *
+ * CONSUMING IT: import ahead of your own stylesheet and delete any local
+ * definition of these names. A local copy that merely AGREES today is the
+ * problem in its dormant state.
+ *
+ * NOT IN HERE, and each omission is a decision:
+ *
+ *   Upstream Danbooru's ramp variables (--grey-9, --orange-3 and friends).
+ *   Those are upstream's, re-cut per theme, and copying them would make this
+ *   file a second opinion about somebody else's palette.
+ *
+ *   Tokens with exactly one consumer. A token designed for one caller is a
+ *   guess; a token extracted from two is a measurement. Extract on the second
+ *   use, never the first.
+ *
+ * What is here is what the surfaces actually share -- not what a
+ * complete-looking palette would contain. The count is deliberately not written
+ * down: `grep -c "^  --mod-" tokens.css` answers it, and a number in prose is a
+ * derived fact somebody has to remember to update (WORKING-RULES rule 6).
+ */
+
+:root {
+  /* --- surfaces, back to front ------------------------------------------ */
+  --mod-surface:        #1b1a17;
+  --mod-surface-2:      #242320;
+  --mod-surface-3:      #2e2c27;
+
+  /* --- lines ------------------------------------------------------------ */
+  --mod-line:           #34322c;
+  --mod-line-strong:    #4a473f;
+
+  /* --- text, loudest to quietest ---------------------------------------- */
+  --mod-ink:            #e8e6e0;
+  --mod-ink-dim:        #9a968c;
+  --mod-ink-faint:      #6e6a61;
+
+  /* --- tag provenance --------------------------------------------------- */
+  /* Who put a tag there: a person, the autotagger, or both. Named for what
+   * they MEAN, because the palette differs between deployments and
+   * a name is the only thing that survives that. */
+  --mod-creator-fg:     #38e08a;
+  --mod-creator-bg:     #0f2c1d;
+  --mod-auto-fg:        #ff9d3c;
+  --mod-auto-bg:        #2c1c0c;
+  --mod-both-fg:        #ff9d3c;
+  --mod-both-outline:   #38e08a;
+  --mod-pending-fg:     #b7b3a8;
+  --mod-meta-fg:        #8f8b80;
+
+  /* --- health, the lamp states ------------------------------------------ */
+  /* Deliberately NOT the provenance colours above. "The autotagger put this
+   * here" and "this service is degraded" are different meanings that happen to
+   * render in similar hues, and one token serving both makes one of them wrong
+   * the first time either moves. They were already two opinions in practice:
+   * sampling's lamp green is #35e08d against --mod-creator-fg #38e08a, and its
+   * warn is #f0b429 against --mod-auto-fg #ff9d3c. Near-identical, separately
+   * maintained, and drifting -- which is the condition this file exists for.
+   *
+   * Values measured from fourier-sampling's lamp row, where the vocabulary was
+   * established. Extracted on the SECOND use -- the fourier-coherence plane --
+   * per the rule at the top of this file, never on the first. */
+  --mod-ok-fg:          #35e08d;
+  --mod-ok-line:        #22402f;
+  --mod-warn-fg:        #f0b429;
+  --mod-warn-line:      #3a3424;
+  --mod-warn-bg:        #1c1a12;
+  /* Red is the one state a Fourier surface may use to demand attention, and it
+   * demands it once per page. Four names because an alarming pill needs a lamp,
+   * a readable ink, an edge and a ground, and picking three of them from
+   * elsewhere is how the fourth drifts. */
+  --mod-alarm-fg:       #ff5f56;
+  --mod-alarm-ink:      #ff8b84;
+  --mod-alarm-line:     #4d2320;
+  --mod-alarm-bg:       #1f1211;
+  --mod-lamp-bg:        #0f1319;
+  --mod-lamp-unlit:     #2b3441;
+
+  /* --- activity --------------------------------------------------------- */
+  /* ORANGE IS NOT ON THE WARN AXIS, and reading it as one inverts it. Operator
+   * ruling 2026-09-01, written down because it had already been guessed wrong:
+   *
+   *   green   current / healthy -- a steady state, nothing to do
+   *   orange  working properly, and calling attention to something being DONE
+   *   green + orange   current, with something else to say
+   *   amber   NEAR -- a different axis entirely, degraded but not failed
+   *
+   * So orange and green both mean working. Orange is the one that says work is
+   * happening here. A lamp lit green with an orange mark beside it is the
+   * grammar for "this is current AND something is going on".
+   *
+   * Extracted on the second use: fourier-sampling has drawn autotagger activity
+   * in it since the provenance tokens were written, and the fourier-coherence
+   * wave draws a beating composite in it. Same meaning, two surfaces. The wave
+   * had #ff9900 and provenance had #ff9d3c -- two oranges for one idea, which is
+   * this file's founding complaint. --mod-auto-fg stays as the provenance
+   * application of the same semantic. */
+  --mod-active-fg:      #ff9d3c;
+  --mod-active-line:    #4a3218;
+  --mod-active-bg:      #241a0e;
+
+  /* --- accent ----------------------------------------------------------- */
+  --mod-accent:         #38e08a;
+
+  /* --- shape ------------------------------------------------------------ */
+  /* 10px is the PRESET-level value. A component may narrow it -- the creator
+   * gallery uses 12px under .modcreator -- and that is what a token is for. The
+   * first draft of this file published 12px because it took the first
+   * definition it found rather than the widest-scoped one. */
+  --mod-radius:         10px;
+  --mod-radius-sm:      6px;
+  --mod-pill-radius:    999px;
+
+  /* --- measure ---------------------------------------------------------- */
+  --mod-gap:            1rem;
+  --mod-col:            1080px;
+  --mod-page:           1180px;
+
+  /* --- type ------------------------------------------------------------- */
+  /* A system stack on purpose: these render at 11-13px in dense grids, and a
+   * webfont buys nothing there while costing a flash. */
+  --mod-mono:           ui-monospace, "SFMono-Regular", "Menlo", monospace;
+}
