@@ -6,6 +6,7 @@ import type { KeyBackupFacts } from '../client/keyBackup'
 import { encryptionSummary, type EncryptionAction } from './encryptionSummary'
 import { recoveryPlan } from '../client/recoveryPlan'
 import { createRecovery, restoreFromRecoveryKey, type RestoreOutcome } from '../client/recovery'
+import { deviceTrustLabel, observeOwnDevices, type OwnDevice } from '../client/ownDevices'
 
 // What each action would do, in the user's terms. The panel names what is
 // missing even where the control does not exist yet: a list of things you
@@ -44,6 +45,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [typedKey, setTypedKey] = useState('')
   const [note, setNote] = useState<string | null>(null)
   const [reload, setReload] = useState(0)
+  const [devices, setDevices] = useState<OwnDevice[] | null>(null)
 
   // OBSERVE, never act. Both calls here are read-only on purpose -- see
   // observeKeyBackup, which exists because the connect path enables the backup
@@ -56,10 +58,13 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     // continuation as one.
     queueMicrotask(() => {
       void (async () => {
-        const [i, b] = await Promise.all([observeCryptoIdentity(client), observeKeyBackup(client)])
+        const [i, b, d] = await Promise.all([
+          observeCryptoIdentity(client), observeKeyBackup(client), observeOwnDevices(client),
+        ])
         if (cancelled) return
         setIdentity(i)
         setBackup(b)
+        setDevices(d)
         setRead(true)
       })()
     })
@@ -159,6 +164,29 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 </p>
               )}
             </>
+          )}
+        </>
+      )}
+
+      {read && e2eeEnabled() && (
+        <>
+          <h3 className="tc-settings-head">Your devices</h3>
+          {devices === null ? (
+            // null is "we could not find out", which must never be drawn as
+            // "you have no devices" -- that reads as nothing to verify against.
+            <p className="tc-settings-note">This account&apos;s devices could not be read just now.</p>
+          ) : (
+            <ul className="tc-settings-devices">
+              {devices.map((d) => (
+                <li key={d.deviceId}>
+                  <span className="tc-device-name">{d.displayName || d.deviceId}</span>
+                  {d.isThisDevice && <span className="tc-device-here"> this device</span>}
+                  <span className={`tc-device-trust tc-trust-${d.crossSigningVerified ? 'ok' : d.locallyVerified ? 'local' : 'no'}`}>
+                    {deviceTrustLabel(d)}
+                  </span>
+                </li>
+              ))}
+            </ul>
           )}
         </>
       )}

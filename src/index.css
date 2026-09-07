@@ -2750,6 +2750,28 @@ code {
   min-width: 0;
 }
 
+.tc-settings-devices {
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.tc-settings-devices li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--tc-line, rgba(255, 255, 255, 0.07));
+}
+
+.tc-device-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-device-here { opacity: 0.6; font-size: 11px; }
+.tc-device-trust { font-size: 11px; flex-shrink: 0; }
+/* Only cross-signed trust gets the reassuring colour. */
+.tc-trust-ok { color: #7ddc9a; }
+.tc-trust-local { color: #f0b429; }
+.tc-trust-no { color: #ff6b60; }
+
 .tc-settings-note { margin: 6px 0 0; opacity: 0.7; font-size: 12px; }
 
 .tc-layout-editor {
