@@ -17,7 +17,7 @@ import { reportAlways } from '../client/report'
 import { adoptDm, pendingDmInviter } from '../client/dm'
 // One source for the DM strip's geometry; see dmStrip.ts for why it is not
 // three literals sitting in this file.
-import { DM_AVATAR, DM_RING, DM_TILE } from './dmStrip'
+import { DM_AVATAR, dmFaceStyle } from './dmStrip'
 import { configureRoomEncryptionNow } from '../client/roomEncryptionConfig'
 import { isDirect } from '../client/roomClass'
 
@@ -555,38 +555,7 @@ export function NavTree({
                       }}
                       onContextMenu={(e) => onContext(node, e)}
                       title={dmTitle(node, isDm, counts)}
-                      style={{
-                        // Fixed square, border-box: the button IS the face's
-                        // box, so the 50% radius is a circle and never an
-                        // ellipse, and no sibling can stretch it. Without the
-                        // explicit size a flex item takes its height from its
-                        // content, which differed per face.
-                        width: DM_TILE,
-                        height: DM_TILE,
-                        boxSizing: 'border-box',
-                        flex: '0 0 auto',
-                        alignSelf: 'center',
-                        display: 'grid',
-                        placeItems: 'center',
-                        padding: 0,
-                        // Every face is ringed, avatar or initial alike, so the
-                        // row reads as one set rather than as pictures floating
-                        // beside letters.
-                        border: `${DM_RING}px solid rgba(128,128,128,0.45)`,
-                        background: 'transparent',
-                        cursor: 'pointer',
-                        lineHeight: 0,
-                        borderRadius: '50%',
-                        // Glow, not a badge: at this size there is no room for
-                        // a counter, and the ring reads at a glance across a
-                        // wrapped grid of faces. The static ring stays as the
-                        // reduced-motion base; the class pulses it.
-                        boxShadow: ping
-                          ? '0 0 0 2px var(--tc-unread), 0 0 12px 2px rgba(255,150,40,0.75)'
-                          : unread
-                            ? '0 0 0 2px var(--tc-unread-base), 0 0 9px rgba(255,150,40,0.45)'
-                            : undefined,
-                      }}
+                      style={dmFaceStyle({ ping, unread })}
                       className={ping ? 'tc-dm-waiting tc-dm-waiting--ping' : unread ? 'tc-dm-waiting' : undefined}
                     >
                       <EpicycleReveal seed={node.roomId} size={DM_AVATAR} play={animate}>

@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react'
+
 // Geometry for the DM strip's faces.
 //
 // It lives in its own module because the bug it fixes was invisible in place:
@@ -38,6 +40,47 @@ export function dmFaceBox(): DmFaceBox {
     boxSizing: 'border-box',
     borderRadius: '50%',
     contentSize: DM_AVATAR,
+  }
+}
+
+export interface DmFaceState {
+  ping: boolean
+  unread: boolean
+}
+
+// The face's COMPLETE box, exported as data so it can be measured in a real
+// layout engine instead of argued about. The whole class of bug here was a box
+// that came out a different shape than its author expected, which is not
+// something reading the source reliably tells you.
+export function dmFaceStyle(state: DmFaceState): CSSProperties {
+  return {
+    // Fixed square, border-box: the button IS the face's box, so a 50% radius
+    // is a circle and never an ellipse, and no flex sibling can stretch it.
+    // Without an explicit size a flex item takes its height from its content,
+    // and the content differed per face.
+    width: DM_TILE,
+    height: DM_TILE,
+    boxSizing: 'border-box',
+    flex: '0 0 auto',
+    alignSelf: 'center',
+    display: 'grid',
+    placeItems: 'center',
+    padding: 0,
+    // Every face is ringed, avatar or bare initial alike, so the row reads as
+    // one set rather than pictures floating beside letters.
+    border: `${DM_RING}px solid rgba(128,128,128,0.45)`,
+    background: 'transparent',
+    cursor: 'pointer',
+    lineHeight: 0,
+    borderRadius: '50%',
+    // Glow, not a badge: at this size there is no room for a counter, and the
+    // ring reads at a glance across a wrapped grid of faces. The static ring is
+    // the reduced-motion base; .tc-dm-waiting pulses it.
+    boxShadow: state.ping
+      ? '0 0 0 2px var(--tc-unread), 0 0 12px 2px rgba(255,150,40,0.75)'
+      : state.unread
+        ? '0 0 0 2px var(--tc-unread-base), 0 0 9px rgba(255,150,40,0.45)'
+        : undefined,
   }
 }
 
