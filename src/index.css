@@ -2713,6 +2713,43 @@ code {
   line-height: 1.45;
 }
 
+/* The recovery key, shown once. Loud on purpose: this is the whole point of
+   the flow, not a detail of it, and a person who scrolls past it has lost
+   something they cannot get back. */
+.tc-settings-key {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #f0b429;
+  border-radius: 8px;
+  background: rgba(240, 180, 41, 0.08);
+}
+
+.tc-settings-keytext {
+  display: block;
+  margin: 8px 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  font-family: ui-monospace, monospace;
+  font-size: 12.5px;
+  word-break: break-all;
+  user-select: all;
+}
+
+.tc-settings-confirm,
+.tc-settings-restore {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.tc-settings-restore input {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
 .tc-settings-note { margin: 6px 0 0; opacity: 0.7; font-size: 12px; }
 
 .tc-layout-editor {

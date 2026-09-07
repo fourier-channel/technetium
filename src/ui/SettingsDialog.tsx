@@ -4,6 +4,8 @@ import { e2eeEnabled, observeCryptoIdentity, observeKeyBackup } from '../client/
 import type { CryptoIdentityFacts } from '../client/cryptoIdentity'
 import type { KeyBackupFacts } from '../client/keyBackup'
 import { encryptionSummary, type EncryptionAction } from './encryptionSummary'
+import { recoveryPlan } from '../client/recoveryPlan'
+import { createRecovery, restoreFromRecoveryKey, type RestoreOutcome } from '../client/recovery'
 
 // What each action would do, in the user's terms. The panel names what is
 // missing even where the control does not exist yet: a list of things you
@@ -17,11 +19,31 @@ const ACTION_TEXT: Record<EncryptionAction, string> = {
   'create-backup': 'Create a key backup, using the recovery you already have.',
 }
 
+// What the restore told us, in the user's terms. A key that is not a key and a
+// key that is the wrong one are different problems with different fixes, and
+// collapsing them into "that didn't work" makes the second one unsolvable.
+const RESTORE_TEXT: Record<RestoreOutcome, string> = {
+  restored: 'Restored. Older messages should open now.',
+  'bad-key': 'That does not look like a recovery key. Check for missing characters.',
+  'wrong-key': 'That is a recovery key, but not the one this backup was made with.',
+  'no-backup': 'There is no key backup on the server to restore from.',
+  'no-crypto': 'Encryption is not running in this session.',
+  failed: 'That did not work, and the reason was not something this could name.',
+}
+
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const { client } = useClient()
   const [identity, setIdentity] = useState<CryptoIdentityFacts | null>(null)
   const [backup, setBackup] = useState<KeyBackupFacts | null>(null)
   const [read, setRead] = useState(false)
+  const [busy, setBusy] = useState(false)
+  // Shown ONCE, and never stored anywhere by us. It lives in component state
+  // for exactly as long as the user is looking at it.
+  const [newKey, setNewKey] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const [typedKey, setTypedKey] = useState('')
+  const [note, setNote] = useState<string | null>(null)
+  const [reload, setReload] = useState(0)
 
   // OBSERVE, never act. Both calls here are read-only on purpose -- see
   // observeKeyBackup, which exists because the connect path enables the backup
@@ -42,9 +64,38 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       })()
     })
     return () => { cancelled = true }
-  }, [client])
+  }, [client, reload])
 
   const summary = encryptionSummary(e2eeEnabled(), identity, backup)
+  const plan = recoveryPlan(identity, backup)
+
+  const doCreate = async () => {
+    if (!client) return
+    setBusy(true)
+    setNote(null)
+    const result = await createRecovery(client, plan)
+    setBusy(false)
+    setConfirming(false)
+    if (typeof result === 'string') {
+      setNote(result === 'refused-by-plan'
+        ? 'Refused: something already exists that this would have replaced.'
+        : 'Recovery could not be set up. Nothing was changed that this can see.')
+      return
+    }
+    setNewKey(result.recoveryKey)
+  }
+
+  const doRestore = async () => {
+    if (!client) return
+    setBusy(true)
+    const outcome = await restoreFromRecoveryKey(client, typedKey)
+    setBusy(false)
+    setNote(RESTORE_TEXT[outcome])
+    if (outcome === 'restored') {
+      setTypedKey('')
+      setReload((n) => n + 1)
+    }
+  }
 
   return (
     <div className="tc-settings" role="dialog" aria-label="Settings" aria-modal="true">
@@ -68,14 +119,68 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               <ul className="tc-settings-detail">
                 {summary.actions.map((a) => <li key={a}>{ACTION_TEXT[a]}</li>)}
               </ul>
-              {/* Named, not offered. These controls are the next work; a button
-                  that did nothing would be worse than an honest list. */}
-              <p className="tc-settings-note">
-                These are not built yet. They are the remaining work before encryption can be turned on for everyone.
-              </p>
+              {/* Only the built ones are offered. The rest stay named but
+                  unoffered: a button that does nothing when pressed is worse
+                  than an honest list. */}
+              {(summary.actions.includes('set-up-recovery') || summary.actions.includes('create-backup')) && (
+                confirming ? (
+                  <div className="tc-settings-confirm">
+                    <p>This creates an identity and a key backup on your account, and gives you a recovery key to write down. It will not replace anything you already have.</p>
+                    <button type="button" disabled={busy} onClick={() => { void doCreate() }}>
+                      {busy ? 'Working...' : 'Yes, set it up'}
+                    </button>
+                    <button type="button" disabled={busy} onClick={() => setConfirming(false)}>Cancel</button>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => setConfirming(true)}>Set up recovery</button>
+                )
+              )}
+
+              {summary.actions.includes('restore-from-key') && (
+                <div className="tc-settings-restore">
+                  <label htmlFor="tc-recovery-key">Recovery key</label>
+                  <input
+                    id="tc-recovery-key"
+                    value={typedKey}
+                    onChange={(e) => setTypedKey(e.target.value)}
+                    placeholder="paste it here"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <button type="button" disabled={busy || !typedKey.trim()} onClick={() => { void doRestore() }}>
+                    {busy ? 'Working...' : 'Unlock older messages'}
+                  </button>
+                </div>
+              )}
+
+              {(summary.actions.includes('verify-this-device') || summary.actions.includes('connect-backup')) && (
+                <p className="tc-settings-note">
+                  Verifying a device and connecting to an existing backup are not built yet.
+                </p>
+              )}
             </>
           )}
         </>
+      )}
+
+      {note && <p className="tc-settings-note">{note}</p>}
+
+      {newKey && (
+        <div className="tc-settings-key" role="alertdialog" aria-label="Your recovery key">
+          <strong>Write this down now.</strong>
+          <p>
+            This is the only time it is shown. If you lose it and lose your devices, those
+            conversations cannot be recovered by anyone, including the server.
+          </p>
+          <code className="tc-settings-keytext">{newKey}</code>
+          <button type="button" onClick={() => { void navigator.clipboard?.writeText(newKey).catch(() => {}) }}>Copy</button>
+          <button
+            type="button"
+            onClick={() => { setNewKey(null); setReload((n) => n + 1) }}
+          >
+            I have written it down
+          </button>
+        </div>
       )}
     </div>
   )
