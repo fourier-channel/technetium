@@ -7,6 +7,8 @@ import { encryptionSummary, type EncryptionAction } from './encryptionSummary'
 import { recoveryPlan } from '../client/recoveryPlan'
 import { createRecovery, restoreFromRecoveryKey, type RestoreOutcome } from '../client/recovery'
 import { deviceTrustLabel, observeOwnDevices, type OwnDevice } from '../client/ownDevices'
+import { startDeviceVerification, type VerificationHandle, type VerificationView } from '../client/verification'
+import { verificationStage } from '../client/verificationStage'
 
 // What each action would do, in the user's terms. The panel names what is
 // missing even where the control does not exist yet: a list of things you
@@ -46,6 +48,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [note, setNote] = useState<string | null>(null)
   const [reload, setReload] = useState(0)
   const [devices, setDevices] = useState<OwnDevice[] | null>(null)
+  const [verifying, setVerifying] = useState<string | null>(null)
+  const [vview, setVview] = useState<VerificationView | null>(null)
+  const [vhandle, setVhandle] = useState<VerificationHandle | null>(null)
 
   // OBSERVE, never act. Both calls here are read-only on purpose -- see
   // observeKeyBackup, which exists because the connect path enables the backup
@@ -88,6 +93,24 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       return
     }
     setNewKey(result.recoveryKey)
+  }
+
+  const beginVerify = async (deviceId: string) => {
+    if (!client) return
+    setNote(null)
+    setVerifying(deviceId)
+    setVview({ phase: null, emoji: [] })
+    const handle = await startDeviceVerification(client, deviceId, setVview)
+    if (!handle) { setVerifying(null); setNote('Verification could not be started.'); return }
+    setVhandle(handle)
+  }
+
+  const endVerify = (refresh: boolean) => {
+    vhandle?.stop()
+    setVhandle(null)
+    setVerifying(null)
+    setVview(null)
+    if (refresh) setReload((n) => n + 1)
   }
 
   const doRestore = async () => {
@@ -184,12 +207,53 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                   <span className={`tc-device-trust tc-trust-${d.crossSigningVerified ? 'ok' : d.locallyVerified ? 'local' : 'no'}`}>
                     {deviceTrustLabel(d)}
                   </span>
+                  {/* This device cannot verify itself, and one already
+                      cross-signed has nothing to gain. */}
+                  {!d.isThisDevice && !d.crossSigningVerified && !verifying && (
+                    <button type="button" onClick={() => { void beginVerify(d.deviceId) }}>Verify</button>
+                  )}
                 </li>
               ))}
             </ul>
           )}
         </>
       )}
+
+      {verifying && vview && (() => {
+        const stage = verificationStage(vview.phase, vview.emoji.length > 0)
+        return (
+          <div className="tc-verify" role="group" aria-label="Device verification">
+            <strong className={`tc-tone-${stage.verified ? 'ok' : stage.name === 'cancelled' ? 'bad' : 'warn'}`}>
+              {stage.headline}
+            </strong>
+            <p className="tc-settings-note">{stage.instruction}</p>
+            {vview.emoji.length > 0 && (
+              <ul className="tc-verify-emoji">
+                {vview.emoji.map((e, i) => (
+                  <li key={`${e.name}-${i}`}><span aria-hidden="true">{e.symbol}</span><span>{e.name}</span></li>
+                ))}
+              </ul>
+            )}
+            <div className="tc-verify-actions">
+              {stage.canConfirm && (
+                <>
+                  <button type="button" onClick={() => { void vhandle?.confirm() }}>They match</button>
+                  {/* A separate call from cancel: this tells the other side the
+                      codes differed, which is a security signal rather than
+                      "not now". */}
+                  <button type="button" onClick={() => { void vhandle?.mismatch() }}>They do NOT match</button>
+                </>
+              )}
+              {stage.canCancel && (
+                <button type="button" onClick={() => { void vhandle?.cancel(); endVerify(false) }}>Stop</button>
+              )}
+              {stage.terminal && (
+                <button type="button" onClick={() => endVerify(stage.verified)}>Close</button>
+              )}
+            </div>
+          </div>
+        )
+      })()}
 
       {note && <p className="tc-settings-note">{note}</p>}
 

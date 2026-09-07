@@ -2772,6 +2772,43 @@ code {
 .tc-trust-local { color: #f0b429; }
 .tc-trust-no { color: #ff6b60; }
 
+.tc-verify {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--tc-line, rgba(255, 255, 255, 0.16));
+  border-radius: 8px;
+}
+
+/* Seven pictures, large enough to actually compare against another screen --
+   the whole security value is in a person being able to tell two of them
+   apart at a glance. */
+.tc-verify-emoji {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tc-verify-emoji li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 54px;
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+.tc-verify-emoji li span:first-child { font-size: 26px; line-height: 1.2; }
+
+.tc-verify-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
 .tc-settings-note { margin: 6px 0 0; opacity: 0.7; font-size: 12px; }
 
 .tc-layout-editor {
