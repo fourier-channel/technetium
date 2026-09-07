@@ -17,10 +17,19 @@ import { usePopEnter } from './pop'
 type Mode = 'room' | 'all' | 'all-highlight'
 
 // Color per honorific tier. Dimmed variant signals "authority elsewhere".
+//
+// Set from formant directly rather than from Compound's state tokens. These are
+// PRIVILEGE TIERS, not states: an owner is not a "success", a moderator is not
+// an "info", and a voiced user is certainly not a "warning". Borrowing those
+// semantics is the inversion beatrender.py warns about -- "orange is not a
+// warning ... mapping this onto --mod-warn-fg would have inverted it, which is
+// very nearly what standardising this surface did" (operator ruling
+// 2026-09-01). A descending ramp that claims nothing false instead: the brand
+// accent, then the colour that means activity happens here, then plain meta.
 const HONOR_COLOR: Record<string, string> = {
-  '~': 'var(--cpd-color-text-success-primary, #2dbd7e)', // owner
-  '@': 'var(--cpd-color-text-info-primary, #4b8bf5)', // op/mod
-  '+': 'var(--cpd-color-text-warning-primary, #d4a72c)', // voice
+  '~': 'var(--mod-accent)', // owner
+  '@': 'var(--mod-active-fg)', // op/mod
+  '+': 'var(--mod-meta-fg)', // voice
 }
 
 export function MemberList({

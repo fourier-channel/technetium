@@ -203,7 +203,7 @@ function TagList({
               padding: 6,
               borderRadius: 8,
               background: 'var(--cpd-color-bg-canvas-default)',
-              border: '1px solid var(--cpd-color-gray-400, rgba(128,128,128,0.35))',
+              border: '1px solid var(--mod-line))',
               boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
               zIndex: 40,
             }
@@ -343,7 +343,7 @@ function TagChip({
           borderRadius: 999,
           border: '1px solid rgba(255,255,255,0.25)',
           background: expanded ? 'var(--cpd-color-bg-action-primary-rest)' : 'rgba(0,0,0,0.62)',
-          color: '#fff',
+          color: 'var(--cpd-color-text-on-solid-primary)',
           cursor: 'pointer',
           pointerEvents: 'auto',
           backdropFilter: 'blur(2px)',

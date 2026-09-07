@@ -1,0 +1,97 @@
+/* fourier-formant: the bridge from Element's Compound vocabulary onto ours.
+ *
+ * Technetium is a Matrix client and inherits Element's Compound design tokens
+ * (@vector-im/compound-design-tokens), which is why it looked like Element and
+ * not like the rest of the suite. This file translates, rather than replacing
+ * Compound -- its components keep working and simply wear Fourier's colours.
+ *
+ * HOW THE OVERRIDE IS LEGAL. Compound declares
+ *     @layer cpd-semantic, custom, cpd-base;
+ * and says in its own comment that the order "allows semantic tokens to be
+ * customized, but not base tokens". Later layers win, so `custom` beats
+ * `cpd-semantic`. Every semantic alias below is therefore overridable by
+ * design. Base tokens (--cpd-color-gray-*) sit in `cpd-base` and beat `custom`
+ * deliberately -- those four call sites were changed at source instead, because
+ * winning that fight with !important would be fighting the vendor's intent.
+ *
+ * WHY THESE PAIRINGS. Each was chosen from the RESOLVED Compound value and its
+ * measured role in this codebase, not from the token's name:
+ *
+ *   text-primary        #ebeef2 brightest text        -> --mod-ink
+ *   text-secondary      #808994 quieter text          -> --mod-ink-dim
+ *   bg-canvas-default   #101317 furthest-back surface -> --mod-surface
+ *   bg-subtle-secondary #1d1f24 next surface forward  -> --mod-surface-2
+ *   bg-subtle-primary   #26282d third surface         -> --mod-surface-3
+ *   bg-action-primary   #ebeef2 LIGHT solid fill      -> --mod-ink
+ *   text-on-solid       #101317 dark ink on that fill -> --mod-surface
+ *
+ * The last pair matters: Compound's primary button is a light fill with dark
+ * text, which is inverted from most of this interface. Keeping the RELATIONSHIP
+ * rather than the hue is what stops those buttons becoming unreadable.
+ *
+ * TWO MAPPINGS DECIDED BY A STANDING RULING, not by colour resemblance.
+ * beatrender.py records it: "orange is not a warning -- green and orange both
+ * mean working, and orange is the one that says work is happening here"
+ * (operator ruling 2026-09-01), noting that mapping it onto --mod-warn-fg
+ * "would have inverted it, which is very nearly what standardising this
+ * surface did". So:
+ *
+ *   - --tc-unread is ACTIVITY, not warning. It becomes --mod-active-fg, which
+ *     is also the 3-unit correction this whole pass was looking for: unread was
+ *     #ff9a3c and provenance orange is #ff9d3c -- one idea, typed twice.
+ *   - --mod-warn-fg is reserved for things that are actually wrong. Member role
+ *     sigils used to borrow warning-yellow and info-blue for "voice" and "op";
+ *     neither is a warning or a notice, so they are set at their call site from
+ *     --mod-accent and --mod-meta-fg instead of riding on a false semantic.
+ *
+ * NOTHING IN FORMANT CHANGES. This file only aliases INTO formant, so the
+ * other consumers -- chanbooru, fourier-sampling, and the coherence board,
+ * which reads these names from Python at render time -- are untouched.
+ */
+
+@layer custom {
+  :root {
+    /* --- text ----------------------------------------------------------- */
+    --cpd-color-text-primary:            var(--mod-ink);
+    --cpd-color-text-secondary:          var(--mod-ink-dim);
+    --cpd-color-text-on-solid-primary:   var(--mod-surface);
+
+    /* --- surfaces, back to front ---------------------------------------- */
+    --cpd-color-bg-canvas-default:       var(--mod-surface);
+    --cpd-color-bg-subtle-secondary:     var(--mod-surface-2);
+    --cpd-color-bg-subtle-primary:       var(--mod-surface-3);
+
+    /* --- lines ----------------------------------------------------------- */
+    --cpd-color-border-interactive-primary:   var(--mod-line-strong);
+    --cpd-color-border-interactive-secondary: var(--mod-line);
+
+    /* --- accent. Small fills: toggles, progress, accentColor, drag outline.
+       A new use of --mod-accent, which elsewhere is a border and a text
+       colour -- checked before adopting it, and legitimate: these are
+       control-sized fills, not page-sized surfaces. */
+    --cpd-color-bg-accent-rest:          var(--mod-accent);
+    --cpd-color-text-action-accent:      var(--mod-accent);
+    --cpd-color-bg-action-primary-rest:  var(--mod-ink);
+
+    /* --- states. Only real failure gets alarm; only real warning gets warn. */
+    --cpd-color-text-critical-primary:   var(--mod-alarm-fg);
+    --cpd-color-text-success-primary:    var(--mod-ok-fg);
+    --cpd-color-text-warning-primary:    var(--mod-warn-fg);
+    --cpd-color-text-info-primary:       var(--mod-accent);
+  }
+}
+
+/* Technetium's own palette roots. Unlayered, so they win over everything above
+   and below -- these are the names this repo wrote for itself, and they were
+   the other half of the divergence: a cool neutral ramp and a purple accent
+   against formant's warm ramp and green. */
+:root {
+  --text:      var(--mod-ink-dim);
+  --text-h:    var(--mod-ink);
+  --bg:        var(--mod-surface);
+  --border:    var(--mod-line);
+  --code-bg:   var(--mod-surface-2);
+  --accent:    var(--mod-accent);
+  --tc-unread: var(--mod-active-fg);
+  --tc-link:   var(--mod-accent);
+}

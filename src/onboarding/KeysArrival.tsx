@@ -106,7 +106,7 @@ const box: CSSProperties = {
   padding: '1.5rem',
   borderRadius: 12,
   background: 'var(--cpd-color-bg-canvas-default, #101317)',
-  border: '1px solid var(--cpd-color-gray-400, #33373d)',
+  border: '1px solid var(--mod-line)',
   boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
   color: 'var(--cpd-color-text-primary, #e9eaeb)',
 }
@@ -130,7 +130,7 @@ const track: CSSProperties = {
   height: 8,
   borderRadius: 4,
   overflow: 'hidden',
-  background: 'var(--cpd-color-gray-300, #26292d)',
+  background: 'var(--mod-surface-2)',
 }
 
 const fill: CSSProperties = {

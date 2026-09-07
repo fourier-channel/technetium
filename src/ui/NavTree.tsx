@@ -1326,7 +1326,7 @@ function BooruRow({ active, onSelect }: { active: boolean; onSelect: () => void 
           placeItems: 'center',
           fontSize: 11,
           fontWeight: 700,
-          color: '#fff',
+          color: 'var(--cpd-color-text-on-solid-primary)',
           background: 'var(--tc-unread, #ff9628)',
         }}
       >

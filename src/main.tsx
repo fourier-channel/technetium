@@ -22,6 +22,13 @@ import '@fontsource/space-grotesk/600.css'
 import '@fontsource/space-grotesk/700.css'
 
 import './index.css'
+// Formant last, and canon before the bridge. Two orderings matter here:
+// formant-tokens.css must define --mod-* before the bridge reads them, and
+// both must follow index.css, whose prefers-color-scheme block redefines the
+// same local names -- a media query adds no specificity, so the later file
+// wins and the local cool-grey palette would otherwise survive untranslated.
+import './formant-tokens.css'
+import './formant-bridge.css'
 import App from './App.tsx'
 import { ClientProvider } from './client/ClientContext'
 import { CryptoArrivalHost } from './onboarding/CryptoArrivalHost'

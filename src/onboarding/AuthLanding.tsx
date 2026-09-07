@@ -112,7 +112,7 @@ function Button({
           ...base,
           border: '1px solid transparent',
           background: 'var(--cpd-color-bg-accent-rest, #3390ff)',
-          color: '#fff',
+          color: 'var(--cpd-color-text-on-solid-primary)',
         }
       : {
           ...base,
