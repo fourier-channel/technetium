@@ -2782,6 +2782,19 @@ code {
 /* Seven pictures, large enough to actually compare against another screen --
    the whole security value is in a person being able to tell two of them
    apart at a glance. */
+/* An incoming request has to be findable wherever the reader is. */
+.tc-verify--incoming {
+  position: fixed;
+  right: 18px;
+  top: 18px;
+  z-index: 80;
+  width: 340px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--tc-panel, #14171c);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
 .tc-verify-emoji {
   display: flex;
   flex-wrap: wrap;

@@ -1,0 +1,98 @@
+import { useEffect, useState } from 'react'
+import { CryptoEvent } from 'matrix-js-sdk/lib/crypto-api/CryptoEvent'
+import type { VerificationRequest, Verifier, ShowSasCallbacks } from 'matrix-js-sdk/lib/crypto-api/verification'
+import { VerificationRequestEvent, VerifierEvent } from 'matrix-js-sdk/lib/crypto-api/verification'
+import { useClient } from '../client/clientContextValue'
+import { e2eeEnabled } from '../client/crypto'
+import { verificationStage } from './../client/verificationStage'
+
+// An incoming verification request, shown wherever the user happens to be.
+//
+// This exists because building only the side that STARTS a verification leaves
+// a flow that can never finish: the other device has to accept, and if nothing
+// in the app is listening, the request sits unanswered and the person who
+// started it watches a spinner forever. Found by trying to prove the feature
+// rather than by reading it.
+//
+// Global rather than inside Settings, because a request arrives when the other
+// device decides to send it, not when you happen to have a panel open.
+export function IncomingVerification() {
+  const { client } = useClient()
+  const [request, setRequest] = useState<VerificationRequest | null>(null)
+  const [emoji, setEmoji] = useState<{ symbol: string; name: string }[]>([])
+  const [phase, setPhase] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!client || !e2eeEnabled()) return
+    if (!client.getCrypto()) return
+
+    let verifier: Verifier | null = null
+    let current: VerificationRequest | null = null
+
+    const onSas = (cb: ShowSasCallbacks) => {
+      queueMicrotask(() => setEmoji((cb.sas?.emoji ?? []).map(([symbol, name]) => ({ symbol, name }))))
+    }
+
+    const onChange = () => {
+      const v = current?.verifier
+      if (v && v !== verifier) {
+        verifier = v
+        v.on(VerifierEvent.ShowSas, onSas)
+        void v.verify().catch(() => {})
+      }
+      queueMicrotask(() => setPhase(current?.phase ?? null))
+    }
+
+    const onRequest = (req: VerificationRequest) => {
+      // Only one at a time. A second request while one is open is rare and the
+      // honest thing is to leave the first alone rather than swap it out from
+      // under whoever is comparing pictures.
+      if (current) return
+      current = req
+      req.on(VerificationRequestEvent.Change, onChange)
+      queueMicrotask(() => { setRequest(req); setPhase(req.phase ?? null) })
+    }
+
+    client.on(CryptoEvent.VerificationRequestReceived, onRequest)
+    return () => {
+      client.off(CryptoEvent.VerificationRequestReceived, onRequest)
+      current?.off(VerificationRequestEvent.Change, onChange)
+      verifier?.off(VerifierEvent.ShowSas, onSas)
+    }
+  }, [client])
+
+  if (!request) return null
+  const stage = verificationStage(phase, emoji.length > 0)
+  const close = () => { setRequest(null); setEmoji([]); setPhase(null) }
+
+  return (
+    <div className="tc-verify tc-verify--incoming" role="alertdialog" aria-label="Verification request">
+      <strong className={`tc-tone-${stage.verified ? 'ok' : stage.name === 'cancelled' ? 'bad' : 'warn'}`}>
+        {stage.name === 'waiting' ? 'Another device wants to verify with this one.' : stage.headline}
+      </strong>
+      <p className="tc-settings-note">
+        {stage.name === 'waiting' ? 'Only accept this if you started it yourself, just now.' : stage.instruction}
+      </p>
+      {emoji.length > 0 && (
+        <ul className="tc-verify-emoji">
+          {emoji.map((e, i) => (
+            <li key={`${e.name}-${i}`}><span aria-hidden="true">{e.symbol}</span><span>{e.name}</span></li>
+          ))}
+        </ul>
+      )}
+      <div className="tc-verify-actions">
+        {stage.name === 'waiting' && (
+          <button type="button" onClick={() => { void request.accept() }}>Accept</button>
+        )}
+        {stage.canConfirm && (
+          <>
+            <button type="button" onClick={() => { void request.verifier?.getShowSasCallbacks()?.confirm() }}>They match</button>
+            <button type="button" onClick={() => { request.verifier?.getShowSasCallbacks()?.mismatch() }}>They do NOT match</button>
+          </>
+        )}
+        {stage.canCancel && <button type="button" onClick={() => { void request.cancel(); close() }}>Decline</button>}
+        {stage.terminal && <button type="button" onClick={close}>Close</button>}
+      </div>
+    </div>
+  )
+}

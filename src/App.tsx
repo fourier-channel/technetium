@@ -15,6 +15,7 @@ import { ResizeHandle } from './ui/ResizeHandle'
 import { DmDock } from './ui/DmDock'
 import { LayoutEditor } from './ui/LayoutEditor'
 import { SettingsDialog } from './ui/SettingsDialog'
+import { IncomingVerification } from './ui/IncomingVerification'
 import { PullTab } from './ui/PullTab'
 import { BooruFrame } from './ui/BooruFrame'
 import { useSpace } from './ui/spaceContext'
@@ -396,6 +397,9 @@ function App() {
     </div>
     <LayoutEditor />
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+      {/* Global: a verification request arrives when the OTHER device sends
+          it, not when a panel happens to be open. */}
+      <IncomingVerification />
     </RoomListSettingsProvider>
     </LightboxProvider>
   )
