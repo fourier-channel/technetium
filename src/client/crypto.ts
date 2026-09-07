@@ -281,6 +281,34 @@ export async function applySilentIdentityAction(
 //
 // Returns the facts rather than a boolean, so callers can tell "no backup
 // exists" from "we could not find out". Those need different sentences.
+// The same facts, WITHOUT touching anything. connectKeyBackup below calls
+// `checkKeyBackupAndEnable`, which -- as the name says -- enables: it connects
+// this session to the backup as a side effect of asking about it.
+//
+// A settings panel must not do that. Opening a page to LOOK at your encryption
+// and having it quietly connect you is both a surprise and a lie about what
+// the panel's own "connect" button is for: the button could never appear,
+// because opening the panel would already have pressed it.
+export async function observeKeyBackup(client: MatrixClient): Promise<KeyBackupFacts | null> {
+  const crypto = client.getCrypto()
+  if (!crypto) return null
+  try {
+    const info = await crypto.getKeyBackupInfo()
+    if (!info) return { backupExists: false, backupTrusted: false, activeVersion: null }
+    const trust = await crypto.isKeyBackupTrusted(info)
+    return {
+      backupExists: true,
+      backupTrusted: trust?.trusted ?? false,
+      activeVersion: await crypto.getActiveSessionBackupVersion(),
+    }
+  } catch (err) {
+    // Null is "unknown" and callers must not render it as "no backup" -- that
+    // tells a protected user they are at risk (G-tc05).
+    console.error('[crypto] could not read the key backup', err)
+    return null
+  }
+}
+
 export async function connectKeyBackup(client: MatrixClient): Promise<KeyBackupFacts | null> {
   const crypto = client.getCrypto()
   if (!crypto) return null

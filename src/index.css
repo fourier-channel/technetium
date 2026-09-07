@@ -2661,6 +2661,60 @@ code {
   border: 1px solid rgba(128, 128, 128, 0.45); background: transparent; color: inherit; cursor: pointer;
 }
 .tc-chrome-btn[data-on='true'] { background: var(--tc-unread, #ff9628); color: #000; border-color: transparent; }
+.tc-settings {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 70;
+  width: 380px;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--tc-line, rgba(255, 255, 255, 0.14));
+  border-radius: 10px;
+  background: var(--tc-panel, #14171c);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  font-size: 13px;
+}
+
+.tc-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tc-settings-head {
+  margin: 12px 0 6px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.7;
+}
+
+.tc-settings-subhead {
+  margin: 10px 0 4px;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.tc-settings-headline { margin: 0 0 6px; font-weight: 600; }
+
+/* The tone is the worst true thing, so it has to be legible at a glance and
+   must never be green while something is wrong. */
+.tc-tone-ok { color: #7ddc9a; }
+.tc-tone-warn { color: #f0b429; }
+.tc-tone-bad { color: #ff6b60; }
+.tc-tone-off { opacity: 0.75; }
+
+.tc-settings-detail {
+  margin: 0 0 6px;
+  padding-left: 18px;
+  line-height: 1.45;
+}
+
+.tc-settings-note { margin: 6px 0 0; opacity: 0.7; font-size: 12px; }
+
 .tc-layout-editor {
   position: fixed; right: 16px; bottom: 16px; z-index: 1500;
   width: 360px; max-width: calc(100vw - 32px);

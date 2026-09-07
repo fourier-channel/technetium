@@ -14,6 +14,7 @@ import { MemberList } from './ui/MemberList'
 import { ResizeHandle } from './ui/ResizeHandle'
 import { DmDock } from './ui/DmDock'
 import { LayoutEditor } from './ui/LayoutEditor'
+import { SettingsDialog } from './ui/SettingsDialog'
 import { PullTab } from './ui/PullTab'
 import { BooruFrame } from './ui/BooruFrame'
 import { useSpace } from './ui/spaceContext'
@@ -89,6 +90,7 @@ function App() {
   // and the chat that the model does not have.
   const chatColumnShare = Math.max(1e-6, 1 - dockShareOfMain)
   const threadsShareOfChatColumn = threadsShare / chatColumnShare
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [domainExpanded, setDomainExpanded] = useState(false)
   // The canvas's time-to-die lives here rather than inside DomainView, so the
   // ONE composer can stamp it onto a post while the domain is open. The domain
@@ -212,6 +214,14 @@ function App() {
               >
                 {userId}
               </strong>
+              <button
+                type="button"
+                onClick={() => setSettingsOpen(true)}
+                style={{ fontSize: 11, flexShrink: 0 }}
+                title="Settings"
+              >
+                Settings
+              </button>
               <button
                 type="button"
                 onClick={() => setEditMode(!editMode)}
@@ -385,6 +395,7 @@ function App() {
       </div>
     </div>
     <LayoutEditor />
+      {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
     </RoomListSettingsProvider>
     </LightboxProvider>
   )
