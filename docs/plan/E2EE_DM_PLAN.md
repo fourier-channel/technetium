@@ -123,6 +123,10 @@ Operator, 2026-08-23. These are canonical; do not relitigate.
   than the one it was configured for. Verified 2026-08-23: nothing we currently
   run enumerates buckets (both consumers name theirs explicitly from config),
   so this is a forward-looking guard taken while it is free. Operator-side.
+  **REOPENED 2026-09-09** -- it is no longer free, because Synapse's storage
+  provider takes one bucket and cannot route to another. Four options and a
+  recommendation: `fourier-basis/docs/design/ENCRYPTED_MEDIA_BUCKET.md`.
+  Awaiting a ruling; E6 shipped without it.
 - **D-e8 -- encrypted DM media has a lifecycle, and its terminal state is
   deletion.** DM media is revisited far less than room or thread media, and
   vastly less than thread media; dormant DMs go fully cold. Tier by last read
