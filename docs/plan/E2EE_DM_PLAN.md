@@ -22,7 +22,7 @@
 | campaign | e2ee-dms |
 | branch | MERGED to `main` 2026-08-26 (flag off) |
 | base | `main` at the interactions-v1 merge, deployed 2026-08-23 |
-| tsc / lint / check / build | CLEAN / 23 (HOLD) / 1131 / PASSING |
+| tsc / lint / check / build | CLEAN / CLEAN / 1402 / PASSING (measured 2026-09-09) |
 | deploys | operator's call, `./deploy.sh` only |
 
 ---
@@ -359,16 +359,23 @@ PENDING = needs operator eyes in a browser (this box is headless).
 **MVP line ("fully functional DMs"):** E1, E2, E3, E4, E5, E7, E8, E9, E10.
 E6 is deferred -- with an honest placeholder, per E5.
 
+**The MVP line is COMPLETE as of 2026-09-07.** All nine landed. E6 (attachments)
+is deferred by decision and E11 (the destructive reset) is the only other open
+step, so what remains is not construction: it is the flag, the operator
+verifications below, and one owed surface -- `dmEncryptionNotice` is exported by
+`client/dmEncryption.ts` and has NO caller, so a DM created quietly in the clear
+still says nothing. That is E9's debt and it is the last MVP-shaped hole.
+
 | id | step | status | commit | result / pendings |
 | --- | --- | --- | --- | --- |
 | D1 | Attachment decryption: decide the dependency | todo | | Recommendation: NO new dependency. Hand-roll `client/encryptedFile.ts` on WebCrypto and record the decision in DEPENDENCIES.md as a decision NOT to take one. Belongs with E6, so it moves with E6. |
 | E1 | `initRustCrypto` + IndexedDB crypto store, with the load surfaced | landed | `83df9c7` | Behind `VITE_E2EE=1`; DEFAULT OFF, so nothing changed for anyone. `client/cryptoProgress.ts` (pure, 30 checks) + `client/crypto.ts` (11 checks) + `onboarding/KeysArrival.tsx` + `CryptoArrivalHost`. Checks 981 -> 1022. **PENDING: E1-a..E1-f.** |
 | E2 | Adopt or create the cross-signing identity | landed | `6f7288a` | `client/cryptoIdentity.ts` (pure decision) + `observeCryptoIdentity`/`applySilentIdentityAction` in `client/crypto.ts`. Silent actions run at boot; anything needing the user is published as state and WAITED on, never acted upon. 26 checks, incl. all four safety properties proved over the full 96-state input space and a source-level guard that the SDK's reset option cannot be named outside the (not yet written) reset module. **PENDING: E2-a.** |
-| E3 | Secret storage + recovery key, incl. RESTORE | todo | | Restore-from-recovery-key is the MVP-critical half, not creation. Show a new key ONCE and make the user confirm they have it. A recovery key shown twice is a recovery key in a screenshot. |
+| E3 | Secret storage + recovery key, incl. RESTORE | landed | `fd0db6e` `0af3640` `9046d69` | `client/recovery.ts` + `client/recoveryPlan.ts` (pure), surfaced in `ui/SettingsDialog.tsx`: create a recovery key and restore from one, each refusing on its own rather than trusting the caller. `9046d69` stops setup RESETTING a backup that already exists -- G-e1 with the safety catch on. Closes the half E8 owed. |
 | E4 | New DMs are created encrypted, WITH the D-e4 guard | landed | `772f1ac` | `client/dmEncryption.ts` (pure) + `recipientCryptoCapability` in `dm.ts`. Encryption is `initial_state` at creation, never sent after. `startDm` returns the decision so E9 can state it. 18 checks; the D-e4 property proved over the full input space. **OWED BY E9: the decision is returned but not yet SHOWN** -- a DM that is quietly unencrypted is the E10 failure, and the notice text exists (`dmEncryptionNotice`) but has no surface. **PENDING: E4-a, E4-b.** |
 | E5 | Decrypt and render encrypted timeline events | landed (text) | `2f8788f` | Fixes G-e4 -- `classify()` would have padlocked every SUCCESSFULLY decrypted message. `client/decryptionState.ts` explains WHY a message is unreadable and whether the user can fix it; the placeholder string is gone from the tree. 22 checks, incl. the taxonomy verified complete against the installed SDK enum. **Attachments (H3) still owed** -- moves with E6. **PENDING: E5-a, E5-b.** |
 | E6 | Encrypted attachments | DEFERRED | | H3 + D1 + D-e3. Read `content.file`, decrypt, feed the existing blob cache; downscale once on receipt for the thumbnail the server will never provide. Upload side encrypts before upload. |
-| E7 | Device verification UI | todo | | Emoji SAS. See your own devices, verify a new one, see whether the person you are talking to is verified. NOT deferrable -- see the premise section. |
+| E7 | Device verification UI | landed | `e427eea` `c9a1152` `9ed309e` `f66f8f1` `4097b17` | `client/ownDevices.ts` (your sessions, and what each one's trust actually means), `client/verification.ts` + `client/verificationStage.ts` (the phases, and what each must never claim), `ui/IncomingVerification.tsx` (answering one, without which the flow can never finish). PROVEN end to end on production 2026-09-07: two sessions of one account, request -> accept -> the same seven emoji in the same order on both sides -> both Verified, 12 of 12. Found three defects a reading would not have caught: READY starts nothing until a method is named, identical display names made the device list unaimable, and a failed accept was swallowed. |
 | E8 | Key backup (connect) | landed | `05b2d65` | `client/keyBackup.ts` (pure, 14 checks) + `connectKeyBackup`. Strictly non-destructive -- it can connect to an existing backup, never create or replace one. Only ONE state claims the keys are safe: a backup that exists but this session is not connected to protects only what is already in it. The source guard now covers `resetKeyBackup`/`deleteKeyBackupVersion`/`disableKeyStorage` too, not just the cross-signing option. **OWED: creating a backup for an account that has none needs a recovery key, so it moves with E3.** **PENDING: E8-a.** |
 | E9 | Encryption is VISIBLE | landed | `e507b27` | `m.room.encryption` removed from the hidden list and PINNED visible by a check, with its neighbours asserted still hidden so the carve-out cannot become a hole. `ui/RoomShieldBadge.tsx` in the header, driven by E10's `roomShield`. Deliberately absent on content rooms -- a "not encrypted" badge on every one is noise that trains people to ignore it where it matters. **OWED: `dmEncryptionNotice` still has no surface.** **PENDING: E9-a.** |
 | E10 | Degrade honestly when crypto is unavailable | landed | `e507b27` | `client/roomShield.ts` (pure, 20 checks). The law proved over the full input space: **privacy is never claimed while crypto is unavailable.** Adds `unverifiable` -- a room marked encrypted that we cannot decrypt or check is neither private NOR plainly unencrypted, and reporting either is a false claim. The two warnings ("someone cannot read you" / "someone may not be who you think") stay distinct. |
@@ -385,6 +392,17 @@ All of O-e1..O-e5 are RESOLVED above. Nothing currently open.
 ## PENDING OPERATOR VERIFICATION
 
 This box is headless; nothing below has been seen in a browser.
+
+UPDATE 2026-09-09: that sentence is no longer true of all of it. Two live runs
+have since gone against production -- an encrypted DM between two real accounts
+(2026-09-05) and device verification between two sessions of one account
+(2026-09-07, 12 of 12, emoji matching in order). Items below are deliberately
+NOT struck off one by one, because each names a specific observation and only
+some of them were made; treat every item as unproven until it carries a date.
+The 09-05 run left one thing open that is not on this list: B's reply never
+reached A's device, suspected to be an artifact of a test account carrying 18
+devices with exhausted one-time keys. Re-check with persistent profiles before
+calling it a product defect.
 
 - **E1-a** With `VITE_E2EE=1`, the arrival box appears at login, the bar moves,
   and it leaves on its own once crypto is ready.
