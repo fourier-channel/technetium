@@ -9,6 +9,7 @@ import { renderMessageBody } from '../client/messageBody'
 import { bubbleTone } from '../client/bubbleTone'
 import { parseMxc } from '../client/media'
 import { AuthedImage } from './AuthedImage'
+import { encryptedFileOf } from '../client/encryptedFile'
 import { AvatarDisc } from './AvatarDisc'
 import { Drench } from './Drench'
 import { FaceFlash } from './FaceFlash'
@@ -511,11 +512,15 @@ export function Row({ item, onOpenThread, sequence }: { item: TimelineItem; onOp
   // Either way the slot is occupied at all times -- the row's height must be
   // identical hovered and not, because the timeline re-pins to the bottom while
   // following and any hover-driven growth slides the whole conversation.
+  // An ENCRYPTED image has no `url` -- it carries `file` instead -- so a gate
+  // that only looks at url dropped every encrypted picture through to being
+  // rendered as its own text body, silently (H3).
+  const encFile = kind === 'message' ? encryptedFileOf(item.content) : null
   const isMediaRow =
     kind === 'gallery' ||
     (kind === 'message' &&
       item.content.msgtype === 'm.image' &&
-      !!parseMxc(typeof item.content.url === 'string' ? item.content.url : ''))
+      (!!encFile || !!parseMxc(typeof item.content.url === 'string' ? item.content.url : '')))
 
   // A face typed into the message flashes over the sender's avatar. Text
   // messages only -- there is nothing to read a face out of a picture.
@@ -537,7 +542,28 @@ export function Row({ item, onOpenThread, sequence }: { item: TimelineItem; onOp
   } else if (kind === 'message') {
     const content = item.content
     const mxc = typeof content.url === 'string' ? content.url : ''
-    if (content.msgtype === 'm.image' && parseMxc(mxc)) {
+    if (content.msgtype === 'm.image' && encFile) {
+      // Encrypted picture. No thumbnail exists on this server for encrypted
+      // media and none can (H3), so this is the full-size download, decrypted
+      // here. No MediaTags either: the tag hub is keyed on a public mxc, and an
+      // encrypted DM's contents are not the booru's business.
+      const mimetype = typeof (content.info as { mimetype?: unknown } | undefined)?.mimetype === 'string'
+        ? (content.info as { mimetype: string }).mimetype
+        : undefined
+      body = (
+        <div>
+          <AuthedImage
+            file={encFile}
+            mimetype={mimetype}
+            mxc={encFile.url ?? ''}
+            roomId={roomId}
+            lazy
+            reserve={reserveBox(content)}
+            alt={typeof content.body === 'string' ? content.body : undefined}
+          />
+        </div>
+      )
+    } else if (content.msgtype === 'm.image' && parseMxc(mxc)) {
       // Image message: render the picture inline via the gateway as a thumbnail
       // (320 snaps to the gateway's allowed sizes). Click opens the full-res
       // image in the lightbox via an authed full fetch.

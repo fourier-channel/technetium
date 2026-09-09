@@ -1,4 +1,5 @@
 import type { MatrixClient } from 'matrix-js-sdk'
+import { decryptAttachment, type EncryptedFileInfo } from './encryptedFile'
 import { createLimiter } from './concurrency'
 
 // ---------------------------------------------------------------------------
@@ -224,4 +225,51 @@ export async function fetchMediaSrc(
   blobs.set(key, { url: objUrl, refs: 1 })
   evict()
   return { src: objUrl, revoke: () => release(key) }
+}
+
+// ---------------------------------------------------------------------------
+// Encrypted attachments (E6).
+//
+// Deliberately NOT sharing the blob cache or the thumbnail path above, for a
+// reason that is a property of the format rather than a shortcut:
+//
+//   - THERE ARE NO THUMBNAILS, EVER (H3, verified against this server). The
+//     upload is application/octet-stream, which fails the server's
+//     supported-format gate, and dynamic thumbnailing is off -- a thumbnail
+//     request errors. Every encrypted image is a full-size download to show a
+//     preview at all, so asking for a width here would be a lie.
+//   - THE CACHE KEY ABOVE IS THE REQUESTED URL, and two different encrypted
+//     images can share neither a URL nor bytes. A fresh key and IV per upload
+//     means the same picture uploaded twice has different ciphertext, a
+//     different address and a different hash, so the dedup the plaintext path
+//     relies on cannot apply and must not be claimed.
+//
+// The decrypted bytes are held as a blob URL with the same {src, revoke}
+// contract as fetchMediaSrc, so callers do not branch on which one they got.
+export async function fetchEncryptedMediaSrc(
+  client: MatrixClient,
+  file: EncryptedFileInfo,
+  mimetype?: string,
+  roomId?: string,
+): Promise<{ src: string; revoke: () => void }> {
+  if (!file.url) throw new Error('encrypted attachment has no url yet')
+  const url = mediaUrl(client, file.url, undefined, roomId)
+  if (!url) throw new Error(`invalid mxc URI: ${file.url}`)
+  const token = client.getAccessToken()
+  if (!token) throw new Error('no access token available for media fetch')
+
+  return mediaLimiter.run(async () => {
+    const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    if (!resp.ok) {
+      const detail = await resp.text().catch(() => '')
+      throw new Error(`encrypted media fetch failed (${resp.status}) :: ${detail.slice(0, 200)}`)
+    }
+    // decryptAttachment verifies the sha256 BEFORE decrypting and throws on a
+    // mismatch. Do not catch that into a placeholder image: bytes that fail the
+    // hash were altered or truncated, and rendering them anyway is the failure
+    // the hash exists to prevent.
+    const plain = await decryptAttachment(await resp.arrayBuffer(), file)
+    const blobUrl = URL.createObjectURL(new Blob([plain], { type: mimetype || 'application/octet-stream' }))
+    return { src: blobUrl, revoke: () => URL.revokeObjectURL(blobUrl) }
+  })
 }

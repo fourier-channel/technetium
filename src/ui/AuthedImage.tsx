@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useClient } from '../client/clientContextValue'
-import { fetchMediaSrc, type ThumbSize } from '../client/media'
+import { fetchEncryptedMediaSrc, fetchMediaSrc, type ThumbSize } from '../client/media'
+import type { EncryptedFileInfo } from '../client/encryptedFile'
 import { reportIgnored } from '../client/report'
 
 // Retry transient media failures (heavy sync starves fetches) before showing the
@@ -17,6 +18,8 @@ const PLACEHOLDER_W = 320
 // as the timeline scrolls. `width` requests a thumbnail; omit for full size.
 export function AuthedImage({
   mxc,
+  file,
+  mimetype,
   width,
   roomId,
   alt,
@@ -29,6 +32,13 @@ export function AuthedImage({
   lazy = false,
 }: {
   mxc: string
+  /** An ENCRYPTED attachment. When present it wins: the ciphertext is fetched
+   *  at full size and decrypted here, and `width` is ignored because encrypted
+   *  media has no thumbnails on this server, ever (H3). */
+  file?: EncryptedFileInfo | null
+  /** The event's info.mimetype. Only used for the encrypted path: the decrypted
+   *  bytes become a Blob and the browser needs to be told what they are. */
+  mimetype?: string
   width?: ThumbSize
   /** The room being rendered. Required for media in ENCRYPTED rooms. */
   roomId?: string
@@ -132,7 +142,13 @@ export function AuthedImage({
     // One fetcher. The server decides whether an mxc is chrome or content and
     // applies the matching rule, so the call site no longer has to know --
     // which is what the flag used to encode, in nine places.
-    fetchMediaSrc(client, mxc, width, roomId)
+    // The encrypted path when there is a file object, the plaintext one
+    // otherwise. Both return the same {src, revoke}, so everything below is
+    // shared -- including the retry, which an encrypted image needs just as
+    // much because it is a full-size download every time.
+    ;(file
+      ? fetchEncryptedMediaSrc(client, file, mimetype ?? undefined, roomId)
+      : fetchMediaSrc(client, mxc, width, roomId))
       .then(({ src: resolved, revoke }) => {
         if (cancelled) {
           // Component moved on before the fetch resolved — clean up immediately.
@@ -173,7 +189,9 @@ export function AuthedImage({
         revokeRef.current = null
       }
     }
-  }, [client, mxc, width, roomId, retryTick, near])
+    // file.url identifies the ciphertext; the key travels with it, so a changed
+    // file object means different bytes and must refetch.
+  }, [client, mxc, file, mimetype, width, roomId, retryTick, near])
 
   // The box this image occupies, and the single authority for it: the
   // placeholder and the loaded picture must agree exactly or the row resizes

@@ -10,6 +10,7 @@ import {
 import type { Room, RoomMember } from 'matrix-js-sdk'
 import { useClient } from '../client/clientContextValue'
 import { formatMessage } from '../client/messageFormat'
+import { encryptAttachment, type EncryptedFileInfo } from '../client/encryptedFile'
 import { EmojiPicker } from './EmojiPicker'
 import { useComposerMode, type ComposerMode } from './composerMode'
 import { eventPreview } from '../client/eventPreview'
@@ -224,11 +225,16 @@ export function Composer({
     filename: string,
     caption: { plain: string; html?: string } | null,
     gallery: { id: string; index: number; count: number; layout: GalleryLayout },
+    // When present the picture was encrypted before upload, and the event
+    // carries `file` INSTEAD OF `url` -- the spec's EncryptedFile, which is
+    // what every other Matrix client reads. Emitting both would publish a
+    // plaintext address for ciphertext nobody can use.
+    encrypted: Omit<EncryptedFileInfo, 'url'> | null = null,
   ) => {
     const captioned = !!caption && caption.plain.length > 0
     return {
       msgtype: 'm.image',
-      url,
+      ...(encrypted ? { file: { ...encrypted, url } } : { url }),
       info,
       // When captioned, body holds the caption and filename holds the real name;
       // otherwise body is the filename (plain m.image, unchanged for bmb/Element).
@@ -347,10 +353,24 @@ export function Composer({
       const att = atts[i]
       try {
         const dims = await readImageSize(att.file).catch(() => null)
-        const { content_uri } = await client.uploadContent(att.file, {
-          name: att.file.name,
-          type: att.file.type,
-        })
+        // Encrypt BEFORE upload when the room is encrypted. hasEncryptionStateEvent
+        // is only trustworthy because m.room.encryption is now in sliding sync's
+        // required_state -- while it was not, this would have answered false in
+        // every room and quietly uploaded every picture in the clear.
+        const encrypt = room.hasEncryptionStateEvent()
+        let encrypted: Omit<EncryptedFileInfo, 'url'> | null = null
+        let upload: Blob = att.file
+        let uploadOpts = { name: att.file.name, type: att.file.type }
+        if (encrypt) {
+          const out = await encryptAttachment(await att.file.arrayBuffer())
+          encrypted = out.info
+          upload = new Blob([out.ciphertext], { type: 'application/octet-stream' })
+          // The upload's NAME and TYPE reach the server in the clear even though
+          // the bytes do not. Sending the real filename there would publish
+          // "holiday-photo.png" beside ciphertext and undo part of the point.
+          uploadOpts = { name: 'encrypted', type: 'application/octet-stream' }
+        }
+        const { content_uri } = await client.uploadContent(upload, uploadOpts)
         const info = { mimetype: att.file.type, size: att.file.size, ...(dims ?? {}) }
         const cap =
           i === 0 && caption ? { plain: caption.plain, html: caption.html } : null
@@ -359,7 +379,7 @@ export function Composer({
           index: i,
           count: atts.length,
           layout,
-        })
+        }, encrypted)
         await client.sendMessage(
           room.roomId,
           threadId ?? null,
