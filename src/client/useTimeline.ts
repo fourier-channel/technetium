@@ -6,6 +6,7 @@ import {
   type MatrixClient,
   type Room,
   type MatrixEvent,
+  MatrixEventEvent,
 } from 'matrix-js-sdk'
 import { MEDIA_TAGS_EVENT } from './mediaTags'
 import { getIgnoredUsers } from './ignoredUsers'
@@ -397,9 +398,27 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
     const onReset = (evRoom: Room | undefined) => {
       if (evRoom?.roomId === roomRef.current?.roomId) scheduleRefresh()
     }
+    // DECRYPTION FINISHING IS A TIMELINE CHANGE, and it is the only one that
+    // arrives without a Timeline event.
+    //
+    // An encrypted message enters the timeline as ciphertext and is decrypted
+    // asynchronously afterwards. RoomEvent.Timeline fired for the ciphertext,
+    // if it fired at all; nothing fires again when the plaintext lands. Without
+    // this listener the view keeps whatever it built at ciphertext time --
+    // which is how a room could hold the other party's messages and show
+    // nothing at all, with no padlock either, measured on production
+    // 2026-09-09. It is also why a reload "fixed" it: a fresh load builds the
+    // list from events that are already decrypted.
+    //
+    // Nothing in this codebase listened for it, which for a client whose whole
+    // campaign is encrypted DMs is the gap that mattered most.
+    const onDecrypted = (ev: MatrixEvent) => {
+      if (ev.getRoomId() === roomRef.current?.roomId) scheduleRefresh()
+    }
     // The ignore list is account data; changing it must repaint immediately
     // rather than waiting for the next message.
     const onAccountData = () => scheduleRefresh()
+    client.on(MatrixEventEvent.Decrypted, onDecrypted)
     client.on(ClientEvent.AccountData, onAccountData)
     client.on(RoomEvent.Timeline, onTimeline)
     client.on(RoomEvent.Redaction, onRedaction)
@@ -408,6 +427,7 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
     return () => {
       cancelled = true
       if (pending !== null) clearTimeout(pending)
+      client.off(MatrixEventEvent.Decrypted, onDecrypted)
       client.off(ClientEvent.AccountData, onAccountData)
       client.off(RoomEvent.Timeline, onTimeline)
       client.off(RoomEvent.Redaction, onRedaction)
