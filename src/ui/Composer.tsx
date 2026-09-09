@@ -12,6 +12,7 @@ import { useClient } from '../client/clientContextValue'
 import { formatMessage } from '../client/messageFormat'
 import { encryptAttachment, type EncryptedFileInfo } from '../client/encryptedFile'
 import { makeThumbnail } from '../client/imageThumbnail'
+import { describeSendFailure } from '../client/sendFailure'
 import { EmojiPicker } from './EmojiPicker'
 import { useComposerMode, type ComposerMode } from './composerMode'
 import { eventPreview } from '../client/eventPreview'
@@ -220,6 +221,13 @@ export function Composer({
 
   // Build an m.image content object, optionally captioned (MSC2530) and always
   // tagged with the batch grouping hint.
+  // What went wrong with the last send, in the user's terms. Until 2026-09-09
+  // an image send that failed put the picture back in the composer and told the
+  // user NOTHING -- the reason went to console.error, where nobody is looking.
+  // The picture sitting there unsent is indistinguishable from one they forgot
+  // to send, so they press Send again and hit the same wall.
+  const [sendError, setSendError] = useState<string | null>(null)
+
   const buildImageContent = (
     url: string,
     info: Record<string, unknown>,
@@ -254,6 +262,7 @@ export function Composer({
 
   const send = async () => {
     if (!client || sending) return
+    setSendError(null)
     const input = text.trim()
     const atts = attachments
     if (input.length === 0 && atts.length === 0) return
@@ -332,6 +341,7 @@ export function Composer({
         setPickedMentions([])
       } catch (err) {
         console.error('Send failed:', err)
+        setSendError(describeSendFailure(err))
         setText(input)
       } finally {
         setSending(false)
@@ -414,6 +424,7 @@ export function Composer({
         remaining.shift()
       } catch (err) {
         console.error('Image send failed:', err)
+        setSendError(describeSendFailure(err))
         failed = true
         break
       }
@@ -500,6 +511,12 @@ export function Composer({
         outlineOffset: -2,
       }}
     >
+      {sendError && (
+        <div className="tc-send-error" role="alert">
+          <span>{sendError}</span>
+          <button type="button" onClick={() => setSendError(null)}>Dismiss</button>
+        </div>
+      )}
       {/* Overlays ABOVE the composer, anchored to the root (position:relative)
           so it never pushes the input or the timeline when it opens. */}
       <MentionPicker

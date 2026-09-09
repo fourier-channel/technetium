@@ -2861,6 +2861,23 @@ code {
    to be told. Red would say something went wrong. */
 .tc-dm-notice-warn { color: #f0b429; }
 .tc-dm-notice button { flex: none; font-size: 12px; }
+
+/* A send that failed, said above the composer. Amber rather than red: the
+   message was KEPT, so this is "not yet" and not "lost". */
+.tc-send-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #f0b429;
+  background: var(--cpd-color-bg-subtle-secondary, rgb(255 255 255 / 6%));
+  border-left: 3px solid #f0b429;
+}
+.tc-send-error button { flex: none; font-size: 12px; }
 .tc-settings-optin input[type="password"] {
   min-width: 12ch;
   font: inherit;
