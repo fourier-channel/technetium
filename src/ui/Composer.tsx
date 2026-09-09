@@ -11,6 +11,7 @@ import type { Room, RoomMember } from 'matrix-js-sdk'
 import { useClient } from '../client/clientContextValue'
 import { formatMessage } from '../client/messageFormat'
 import { encryptAttachment, type EncryptedFileInfo } from '../client/encryptedFile'
+import { makeThumbnail } from '../client/imageThumbnail'
 import { EmojiPicker } from './EmojiPicker'
 import { useComposerMode, type ComposerMode } from './composerMode'
 import { eventPreview } from '../client/eventPreview'
@@ -359,6 +360,7 @@ export function Composer({
         // every room and quietly uploaded every picture in the clear.
         const encrypt = room.hasEncryptionStateEvent()
         let encrypted: Omit<EncryptedFileInfo, 'url'> | null = null
+        let thumbInfo: Record<string, unknown> = {}
         let upload: Blob = att.file
         let uploadOpts = { name: att.file.name, type: att.file.type }
         if (encrypt) {
@@ -368,10 +370,33 @@ export function Composer({
           // The upload's NAME and TYPE reach the server in the clear even though
           // the bytes do not. Sending the real filename there would publish
           // "holiday-photo.png" beside ciphertext and undo part of the point.
+          // `encrypted` rather than nothing is deliberate and ruled on
+          // 2026-09-09: it labels these objects for a future prune, and the
+          // operator's call was that identifying encrypted media is fine
+          // precisely because it cannot be read.
           uploadOpts = { name: 'encrypted', type: 'application/octet-stream' }
+
+          // The THUMBNAIL, as a second and completely separate encrypted
+          // attachment -- its own key, its own IV, its own upload. This is the
+          // only kind of thumbnail an encrypted image can have: the server
+          // cannot make one, and downscaling on receipt would still pull the
+          // whole picture once per recipient. Failing to make one is not a
+          // failure to send; the image simply goes without.
+          const thumb = await makeThumbnail(att.file, att.file.type)
+          if (thumb) {
+            const tOut = await encryptAttachment(await thumb.blob.arrayBuffer())
+            const tUp = await client.uploadContent(
+              new Blob([tOut.ciphertext], { type: 'application/octet-stream' }),
+              { name: 'encrypted-thumbnail', type: 'application/octet-stream' },
+            )
+            thumbInfo = {
+              thumbnail_file: { ...tOut.info, url: tUp.content_uri },
+              thumbnail_info: { mimetype: thumb.mimetype, size: thumb.blob.size, w: thumb.w, h: thumb.h },
+            }
+          }
         }
         const { content_uri } = await client.uploadContent(upload, uploadOpts)
-        const info = { mimetype: att.file.type, size: att.file.size, ...(dims ?? {}) }
+        const info = { mimetype: att.file.type, size: att.file.size, ...(dims ?? {}), ...thumbInfo }
         const cap =
           i === 0 && caption ? { plain: caption.plain, html: caption.html } : null
         const content = buildImageContent(content_uri, info, att.file.name, cap, {

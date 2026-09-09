@@ -9,7 +9,7 @@ import { renderMessageBody } from '../client/messageBody'
 import { bubbleTone } from '../client/bubbleTone'
 import { parseMxc } from '../client/media'
 import { AuthedImage } from './AuthedImage'
-import { encryptedFileOf } from '../client/encryptedFile'
+import { encryptedFileOf, encryptedThumbnailOf } from '../client/encryptedFile'
 import { AvatarDisc } from './AvatarDisc'
 import { Drench } from './Drench'
 import { FaceFlash } from './FaceFlash'
@@ -550,12 +550,16 @@ export function Row({ item, onOpenThread, sequence }: { item: TimelineItem; onOp
       const mimetype = typeof (content.info as { mimetype?: unknown } | undefined)?.mimetype === 'string'
         ? (content.info as { mimetype: string }).mimetype
         : undefined
+      // The sender's thumbnail when there is one: kilobytes instead of the
+      // whole picture. Falls back to the full image, which is what an older
+      // message or another client without thumbnails will give us.
+      const thumb = encryptedThumbnailOf(content)
       body = (
         <div>
           <AuthedImage
-            file={encFile}
-            mimetype={mimetype}
-            mxc={encFile.url ?? ''}
+            file={thumb ? thumb.file : encFile}
+            mimetype={thumb ? thumb.mimetype : mimetype}
+            mxc={(thumb ? thumb.file.url : encFile.url) ?? ''}
             roomId={roomId}
             lazy
             reserve={reserveBox(content)}

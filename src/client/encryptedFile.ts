@@ -163,3 +163,19 @@ export function encryptedFileOf(content: unknown): EncryptedFileInfo | null {
   if (typeof f.url !== 'string' || !f.key || !f.iv || !f.hashes) return null
   return f as EncryptedFileInfo
 }
+
+// The encrypted THUMBNAIL, when the sender made one -- `info.thumbnail_file`,
+// a separate attachment with its own key. Preferring it is the whole point of
+// sending it: the full picture is megabytes and this is kilobytes.
+export function encryptedThumbnailOf(content: unknown): { file: EncryptedFileInfo; mimetype?: string } | null {
+  if (!content || typeof content !== 'object') return null
+  const info = (content as { info?: unknown }).info
+  if (!info || typeof info !== 'object') return null
+  const f = (info as { thumbnail_file?: unknown }).thumbnail_file
+  if (!f || typeof f !== 'object') return null
+  const file = f as Partial<EncryptedFileInfo>
+  if (typeof file.url !== 'string' || !file.key || !file.iv || !file.hashes) return null
+  const ti = (info as { thumbnail_info?: { mimetype?: unknown } }).thumbnail_info
+  const mimetype = typeof ti?.mimetype === 'string' ? ti.mimetype : undefined
+  return { file: file as EncryptedFileInfo, mimetype }
+}
