@@ -359,22 +359,38 @@ PENDING = needs operator eyes in a browser (this box is headless).
 **MVP line ("fully functional DMs"):** E1, E2, E3, E4, E5, E7, E8, E9, E10.
 E6 is deferred -- with an honest placeholder, per E5.
 
-**The MVP line is COMPLETE as of 2026-09-07.** All nine landed. E6 (attachments)
-is deferred by decision and E11 (the destructive reset) is the only other open
-step, so what remains is not construction: it is the flag, the operator
-verifications below, and one owed surface -- `dmEncryptionNotice` is exported by
-`client/dmEncryption.ts` and has NO caller, so a DM created quietly in the clear
-still says nothing. That is E9's debt and it is the last MVP-shaped hole.
+**MVP COMPLETE 2026-09-09, and PROVEN END TO END.** All nine MVP steps plus E6.
+E11 (the destructive reset) is the only open step and is deliberately last.
+
+What 2026-09-09 changed, beyond finishing E6 and paying E9's debt (the notice
+now has a surface, and a runtime switch means encryption can be tried without a
+rebuild): it found that the client had been sending CLEARTEXT into encrypted
+rooms. `m.room.encryption` was missing from sliding sync's `required_state`, so
+no outbound encryptor was ever built and the SDK, asking its own room model,
+sent plaintext. Decryption never broke, so it looked healthy from the inside.
+Second, nothing anywhere listened for `MatrixEventEvent.Decrypted`, so a
+decrypted message never repainted -- which is why a reload always seemed to fix
+it. Both fixed, both guarded by checks, both re-proven against production by
+reading the room's events back OFF THE SERVER rather than trusting the client.
+
+Still open, and infrastructure rather than client work: **D-e7**, the separate
+`matrix-encrypted-media` bucket. The bucket exists, but Synapse's
+`s3_storage_provider` takes ONE bucket and routes by media id with no
+content-type signal, so it cannot send encrypted media there. Reaching it means
+the client uploading straight to R2 on a presigned PUT from fourier-auth --
+which the read path already allows for, since Technetium fetches media through
+fourier-auth rather than Synapse, but it is a cross-repo change and a
+fourier-auth deploy.
 
 | id | step | status | commit | result / pendings |
 | --- | --- | --- | --- | --- |
-| D1 | Attachment decryption: decide the dependency | todo | | Recommendation: NO new dependency. Hand-roll `client/encryptedFile.ts` on WebCrypto and record the decision in DEPENDENCIES.md as a decision NOT to take one. Belongs with E6, so it moves with E6. |
+| D1 | Attachment decryption: decide the dependency | resolved | `8dfc6ce` | NO new dependency, as recommended. `client/encryptedFile.ts` is ~150 lines of WebCrypto and its checks run the real round trip in node, which a wrapper dependency would not have made easier. |
 | E1 | `initRustCrypto` + IndexedDB crypto store, with the load surfaced | landed | `83df9c7` | Behind `VITE_E2EE=1`; DEFAULT OFF, so nothing changed for anyone. `client/cryptoProgress.ts` (pure, 30 checks) + `client/crypto.ts` (11 checks) + `onboarding/KeysArrival.tsx` + `CryptoArrivalHost`. Checks 981 -> 1022. **PENDING: E1-a..E1-f.** |
 | E2 | Adopt or create the cross-signing identity | landed | `6f7288a` | `client/cryptoIdentity.ts` (pure decision) + `observeCryptoIdentity`/`applySilentIdentityAction` in `client/crypto.ts`. Silent actions run at boot; anything needing the user is published as state and WAITED on, never acted upon. 26 checks, incl. all four safety properties proved over the full 96-state input space and a source-level guard that the SDK's reset option cannot be named outside the (not yet written) reset module. **PENDING: E2-a.** |
 | E3 | Secret storage + recovery key, incl. RESTORE | landed | `fd0db6e` `0af3640` `9046d69` | `client/recovery.ts` + `client/recoveryPlan.ts` (pure), surfaced in `ui/SettingsDialog.tsx`: create a recovery key and restore from one, each refusing on its own rather than trusting the caller. `9046d69` stops setup RESETTING a backup that already exists -- G-e1 with the safety catch on. Closes the half E8 owed. |
 | E4 | New DMs are created encrypted, WITH the D-e4 guard | landed | `772f1ac` | `client/dmEncryption.ts` (pure) + `recipientCryptoCapability` in `dm.ts`. Encryption is `initial_state` at creation, never sent after. `startDm` returns the decision so E9 can state it. 18 checks; the D-e4 property proved over the full input space. **OWED BY E9: the decision is returned but not yet SHOWN** -- a DM that is quietly unencrypted is the E10 failure, and the notice text exists (`dmEncryptionNotice`) but has no surface. **PENDING: E4-a, E4-b.** |
 | E5 | Decrypt and render encrypted timeline events | landed (text) | `2f8788f` | Fixes G-e4 -- `classify()` would have padlocked every SUCCESSFULLY decrypted message. `client/decryptionState.ts` explains WHY a message is unreadable and whether the user can fix it; the placeholder string is gone from the tree. 22 checks, incl. the taxonomy verified complete against the installed SDK enum. **Attachments (H3) still owed** -- moves with E6. **PENDING: E5-a, E5-b.** |
-| E6 | Encrypted attachments | DEFERRED | | H3 + D1 + D-e3. Read `content.file`, decrypt, feed the existing blob cache; downscale once on receipt for the thumbnail the server will never provide. Upload side encrypts before upload. |
+| E6 | Encrypted attachments | landed | `8dfc6ce` | `client/encryptedFile.ts` -- the spec's EncryptedFile on WebCrypto, no new dependency (D1 taken as recommended). Composer encrypts before upload and the event carries `file` INSTEAD of `url`; the timeline recognises `file`, downloads the ciphertext and decrypts for display. Deliberately does NOT share the plaintext thumbnail sizes or URL-keyed blob cache -- H3 is a property of the format, not an omission. Upload name/type are `encrypted`/octet-stream so the filename does not travel in the clear beside its own ciphertext. VERIFIED on production: B rendered a 64x64 PNG from a blob URL in 3s while the bytes on the server begin `9031 f1f9`, not the PNG magic. 30 checks incl. the zero-counter IV, a single flipped bit, truncation and no-dedup. |
 | E7 | Device verification UI | landed | `e427eea` `c9a1152` `9ed309e` `f66f8f1` `4097b17` | `client/ownDevices.ts` (your sessions, and what each one's trust actually means), `client/verification.ts` + `client/verificationStage.ts` (the phases, and what each must never claim), `ui/IncomingVerification.tsx` (answering one, without which the flow can never finish). PROVEN end to end on production 2026-09-07: two sessions of one account, request -> accept -> the same seven emoji in the same order on both sides -> both Verified, 12 of 12. Found three defects a reading would not have caught: READY starts nothing until a method is named, identical display names made the device list unaimable, and a failed accept was swallowed. |
 | E8 | Key backup (connect) | landed | `05b2d65` | `client/keyBackup.ts` (pure, 14 checks) + `connectKeyBackup`. Strictly non-destructive -- it can connect to an existing backup, never create or replace one. Only ONE state claims the keys are safe: a backup that exists but this session is not connected to protects only what is already in it. The source guard now covers `resetKeyBackup`/`deleteKeyBackupVersion`/`disableKeyStorage` too, not just the cross-signing option. **OWED: creating a backup for an account that has none needs a recovery key, so it moves with E3.** **PENDING: E8-a.** |
 | E9 | Encryption is VISIBLE | landed | `e507b27` | `m.room.encryption` removed from the hidden list and PINNED visible by a check, with its neighbours asserted still hidden so the carve-out cannot become a hole. `ui/RoomShieldBadge.tsx` in the header, driven by E10's `roomShield`. Deliberately absent on content rooms -- a "not encrypted" badge on every one is noise that trains people to ignore it where it matters. **OWED: `dmEncryptionNotice` still has no surface.** **PENDING: E9-a.** |
