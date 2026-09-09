@@ -286,12 +286,21 @@ replace even though E6 is deferred.
 Verified against the deployed server, and both are worse than the ledger first
 assumed:
 
-- **No thumbnails exist for encrypted media, ever.** The upload is
+- **No SERVER thumbnail exists for encrypted media, ever.** The upload is
   `application/octet-stream`, which fails the server's supported-format gate,
-  and dynamic thumbnailing is off -- a thumbnail request errors. **Every
-  encrypted image is a full-size download to render any preview at all.** An
-  8 MB image costs 8 MB to show a 300px thumb. E6 must downscale once on
-  receipt and cache the derived thumbnail client-side; there is no server path.
+  and dynamic thumbnailing is off -- a thumbnail request errors. Re-confirmed
+  2026-09-09: the encrypted upload has zero thumbnail rows while the server
+  holds 4,325 overall.
+  **CORRECTED 2026-09-09 -- the conclusion drawn from that was wrong.** This
+  said every encrypted image is therefore a full-size download, and that E6
+  must downscale ON RECEIPT. Receipt-side downscaling still pulls the whole
+  picture, once per recipient per device. The spec's answer, and Element's, is
+  that the SENDER makes it: downscale before encrypting, encrypt the thumbnail
+  as a SEPARATE attachment with its own key and IV, upload it separately, and
+  reference it as `info.thumbnail_file` (matrix-js-sdk types it). The recipient
+  fetches kilobytes and pulls the full image only on click. Proven on
+  production: a 1600x1200 send produced a 14,907-byte thumbnail beside the
+  47,251-byte image, and the recipient rendered 512x384. Landed in `imageThumbnail.ts`.
 - **Dedup is impossible in principle.** A fresh key and IV per upload means the
   same image uploaded twice yields different ciphertext, a different content
   URI and a different hash. The planned client-side MD5 dedup does not apply in
