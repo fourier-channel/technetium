@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useClient } from '../client/clientContextValue'
-import { e2eeEnabled, observeCryptoIdentity, observeKeyBackup } from '../client/crypto'
+import { e2eeEnabled, e2eeFromBuild, observeCryptoIdentity, observeKeyBackup } from '../client/crypto'
+import { applyOptIn, browserOptInStore, needsReload, readOptIn } from '../client/e2eeOptIn'
 import type { CryptoIdentityFacts } from '../client/cryptoIdentity'
 import type { KeyBackupFacts } from '../client/keyBackup'
 import { encryptionSummary, type EncryptionAction } from './encryptionSummary'
@@ -51,6 +52,13 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [verifying, setVerifying] = useState<string | null>(null)
   const [vview, setVview] = useState<VerificationView | null>(null)
   const [vhandle, setVhandle] = useState<VerificationHandle | null>(null)
+  // The runtime switch. `optIn` is what is STORED; e2eeEnabled() is what this
+  // session actually started with. They disagree between flipping the switch
+  // and reloading, and saying so is the whole point of `pendingReload`.
+  const [optIn, setOptIn] = useState(() => readOptIn(browserOptInStore))
+  const [passphrase, setPassphrase] = useState('')
+  const [optInNote, setOptInNote] = useState<string | null>(null)
+  const [pendingReload, setPendingReload] = useState(false)
 
   // OBSERVE, never act. Both calls here are read-only on purpose -- see
   // observeKeyBackup, which exists because the connect path enables the backup
@@ -75,6 +83,20 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     })
     return () => { cancelled = true }
   }, [client, reload])
+
+  const flipOptIn = (on: boolean) => {
+    const before = readOptIn(browserOptInStore)
+    const result = applyOptIn(browserOptInStore, passphrase, on)
+    if (result === 'bad-passphrase') {
+      setOptInNote('That passphrase is not right, or this browser refused to store the setting.')
+      return
+    }
+    const after = readOptIn(browserOptInStore)
+    setOptIn(after)
+    setPassphrase('')
+    setOptInNote(null)
+    setPendingReload(needsReload(before, after))
+  }
 
   const summary = encryptionSummary(e2eeEnabled(), identity, backup)
   const plan = recoveryPlan(identity, backup)
@@ -133,6 +155,52 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       </div>
 
       <h3 className="tc-settings-head">Encryption</h3>
+
+      {/* The switch comes FIRST. Everything below is hidden while encryption is
+          off, so a switch placed further down would be a control you can only
+          reach once you no longer need it. */}
+      <div className="tc-settings-optin">
+        {e2eeFromBuild() ? (
+          <p className="tc-settings-note">Encryption is turned on in this build. There is nothing to switch here.</p>
+        ) : optIn ? (
+          <>
+            <p className="tc-settings-note">Encryption is turned on for this browser.</p>
+            <button type="button" onClick={() => flipOptIn(false)}>Turn encryption off</button>
+          </>
+        ) : (
+          <>
+            <p className="tc-settings-note">
+              Encryption is off. Turning it on is for testing, and needs the passphrase you were given.
+            </p>
+            <div className="tc-settings-confirm">
+              <input
+                type="password"
+                value={passphrase}
+                onChange={(e) => setPassphrase(e.target.value)}
+                placeholder="Passphrase"
+                aria-label="Encryption passphrase"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <button type="button" disabled={!passphrase.trim()} onClick={() => flipOptIn(true)}>
+                Turn encryption on
+              </button>
+            </div>
+          </>
+        )}
+        {optInNote && <p className="tc-settings-note tc-tone-warn">{optInNote}</p>}
+        {pendingReload && (
+          <p className="tc-settings-note tc-tone-warn">
+            {/* Not cosmetic: crypto is built once, with the client. Until this
+                page reloads, the setting is stored and inert -- and claiming
+                otherwise would put encryption UI over a client that has no
+                crypto at all. */}
+            Saved. It takes effect when the page reloads.{' '}
+            <button type="button" onClick={() => { window.location.reload() }}>Reload now</button>
+          </p>
+        )}
+      </div>
+
       {!read ? (
         <p className="tc-settings-note">Reading this account&apos;s encryption state...</p>
       ) : (
@@ -181,9 +249,10 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 </div>
               )}
 
-              {(summary.actions.includes('verify-this-device') || summary.actions.includes('connect-backup')) && (
+              {summary.actions.includes('connect-backup') && (
                 <p className="tc-settings-note">
-                  Verifying a device and connecting to an existing backup are not built yet.
+                  Connecting to an existing key backup is not built yet. Verifying a device is --
+                  use the Verify button beside it under Your devices.
                 </p>
               )}
             </>

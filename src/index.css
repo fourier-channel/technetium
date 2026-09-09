@@ -2830,6 +2830,42 @@ code {
 
 .tc-settings-note { margin: 6px 0 0; opacity: 0.7; font-size: 12px; }
 
+/* The runtime encryption switch. Set apart from the summary below it with a
+   rule and a little air, because it is the control and the rest is the
+   report -- reading as one block made the switch look like another status
+   line. */
+.tc-settings-optin {
+  margin: 4px 0 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--tc-line, rgb(255 255 255 / 10%));
+}
+.tc-settings-optin button { margin-top: 6px; }
+
+/* The one-time line a newly created DM shows about itself. Full width, under
+   the header, out of the timeline's flow -- it is about the conversation, not
+   about any message in it, and it must not be something you scroll past before
+   reading. */
+.tc-dm-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  border-bottom: 1px solid var(--tc-line, rgb(255 255 255 / 10%));
+}
+.tc-dm-notice-ok { color: #35e08d; }
+/* Amber, not red: an unencrypted DM is not a fault, it is a fact the user has
+   to be told. Red would say something went wrong. */
+.tc-dm-notice-warn { color: #f0b429; }
+.tc-dm-notice button { flex: none; font-size: 12px; }
+.tc-settings-optin input[type="password"] {
+  min-width: 12ch;
+  font: inherit;
+}
+
 .tc-layout-editor {
   position: fixed; right: 16px; bottom: 16px; z-index: 1500;
   width: 360px; max-width: calc(100vw - 32px);

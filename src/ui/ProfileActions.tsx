@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import type { MatrixClient, Room } from 'matrix-js-sdk'
 import { canIgnore, isIgnored, setIgnored } from '../client/ignoredUsers'
 import { startDm } from '../client/dm'
+import { recordDmNotice } from '../client/dmNotice'
 import { clearAvatar, setDisplayName, uploadAndSetAvatar } from '../client/profile'
 import { describeInviteError } from '../client/userDirectory'
 import { AVATAR_SHAPES, useAvatarShape } from './avatarShape'
@@ -163,6 +164,9 @@ function OtherProfileActions({
     setNotice(null)
     try {
       const result = await startDm(client, userId)
+      // The decision was being returned and dropped, which is exactly how a
+      // DM created in the clear ended up looking like one created encrypted.
+      recordDmNotice(result.roomId, result.encryption)
       onOpenRoom?.(result.roomId)
       onClose()
     } catch (err) {

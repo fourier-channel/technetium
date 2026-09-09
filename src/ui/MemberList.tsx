@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { Room } from 'matrix-js-sdk'
 import { useClient } from '../client/clientContextValue'
 import { startDm } from '../client/dm'
+import { recordDmNotice } from '../client/dmNotice'
 import { describeInviteError } from '../client/userDirectory'
 import { UserPicker } from './UserPicker'
 import { findExistingDm } from '../client/dm'
@@ -232,6 +233,9 @@ export function MemberList({
               try {
                 if (picker === 'dm') {
                   const result = await startDm(client, userId)
+                  // The decision was being returned and dropped, which is exactly how a
+                  // DM created in the clear ended up looking like one created encrypted.
+                  recordDmNotice(result.roomId, result.encryption)
                   setNotice(
                     result.existing
                       ? 'You already have a direct message with them -- opening it.'

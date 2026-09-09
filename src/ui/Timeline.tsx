@@ -38,6 +38,7 @@ import { isPollStart } from '../client/polls'
 import { PollBody } from './PollBody'
 import { useLinkPreviewPref } from './linkPreviewPref'
 import { RoomHeaderInfo } from './RoomHeaderInfo'
+import { DmEncryptionNotice } from './DmEncryptionNotice'
 import { ProfileOpenerContext, useProfileOpener } from './profileOpener'
 import { ProfileCard } from './ProfileCard'
 import { ProfileActions } from './ProfileActions'
@@ -357,6 +358,10 @@ export function Timeline({ room, onOpenThread, onOpenRoom, threadListOpen, onTog
           </div>
         </div>
       </header>
+      {/* Under the header and above the timeline, because it is about the whole
+          conversation rather than any message in it. Renders null unless this
+          room was just created by this session -- see client/dmNotice.ts. */}
+      <DmEncryptionNotice roomId={room.roomId} />
       <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         {bg && client && <ChatBackdrop bg={bg} roomId={room.roomId} />}
         <div
