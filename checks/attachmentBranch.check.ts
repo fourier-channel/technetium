@@ -6,12 +6,24 @@
 //
 // WHAT THIS CANNOT SEE: it reads source. It proves the branch exists, is keyed
 // on the room's own encryption state, and emits `file` XOR `url`. It does NOT
-// prove a plaintext upload still renders -- the encrypted one was proven with a
-// real 64x64 PNG through a real DM, and the plaintext equivalent was NOT
-// re-run, because the test account's non-DM rooms are unreachable from the nav
-// (space-based) and forcing one into the DM strip was not worth the account
-// surgery. The branch below is why that is a small risk rather than an
-// untested one. Say so rather than implying coverage that does not exist.
+// prove a plaintext upload still renders.
+//
+// The ENCRYPTED path was proven with a real 64x64 PNG through a real DM. The
+// plaintext equivalent was attempted three ways on 2026-09-09 and reached none
+// of them, which is worth writing down so nobody spends the hour again:
+//
+//   - the test account's non-DM rooms do not appear in the nav at all, because
+//     the tree is built from SPACES and those rooms are in none;
+//   - a room forced into m.direct as a DM WITH YOURSELF is filtered out of the
+//     DM list too -- it has no counterpart user to name or draw;
+//   - and the only reachable DMs are the encrypted one, a bridge bot (posting a
+//     test image at it would put the image on the booru), and chanbooru.
+//
+// So the gap is a property of the test accounts, not of the code. The branch
+// below is why it is a small risk rather than an untested one: when the room is
+// not encrypted, the file, the upload options and the emitted `{url}` are
+// identical to what shipped before. Say so rather than implying coverage that
+// does not exist.
 import { readFileSync } from 'node:fs'
 
 let failures = 0
