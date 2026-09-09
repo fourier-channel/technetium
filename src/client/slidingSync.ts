@@ -65,6 +65,21 @@ const LIST_REQUIRED_STATE: string[][] = [
   ['m.room.topic', ''], // room header (W3.2)
   ['m.room.pinned_events', ''], // pinned messages (W2.7)
   ['im.ponies.room_emotes', '*'], // MSC2545 emoji packs (W5.4)
+
+  // ENCRYPTION. Its absence here was a silent plaintext leak, found 2026-09-09
+  // by reading a DM's events back off the server: the room's state said
+  // m.megolm.v1.aes-sha2, the creator's messages were m.room.message with a
+  // readable body, and the other party's were m.room.encrypted.
+  //
+  // The chain is exactly the failure this comment block warns about. Sliding
+  // sync never delivered m.room.encryption, so room.hasEncryptionStateEvent()
+  // was false forever; roomEncryptionConfig's ensureConfigured returned early
+  // every time and no outbound encryptor was ever built; and the SDK, asking
+  // its own room model whether to encrypt, was told no and sent cleartext.
+  // Decryption kept working the whole time, because inbound keys arrive by
+  // to-device and never consult room state -- so the session looked healthy
+  // from the inside while it published everything it sent.
+  ['m.room.encryption', ''],
 ]
 const TIMELINE_LIMIT = 1
 
