@@ -10,6 +10,8 @@ import { createRecovery, restoreFromRecoveryKey, type RestoreOutcome } from '../
 import { deviceTrustLabel, observeOwnDevices, type OwnDevice } from '../client/ownDevices'
 import { startDeviceVerification, type VerificationHandle, type VerificationView } from '../client/verification'
 import { verificationStage } from '../client/verificationStage'
+import { gateBlockers, resetCopy, resetPlan } from '../client/resetPlan'
+import { exportRoomKeys, performReset } from '../client/cryptoReset'
 
 // What each action would do, in the user's terms. The panel names what is
 // missing even where the control does not exist yet: a list of things you
@@ -52,6 +54,14 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [verifying, setVerifying] = useState<string | null>(null)
   const [vview, setVview] = useState<VerificationView | null>(null)
   const [vhandle, setVhandle] = useState<VerificationHandle | null>(null)
+  // E11. Closed by default and not a button: opening it is itself a step, so
+  // nobody arrives at a destructive control by scrolling.
+  const [resetOpen, setResetOpen] = useState(false)
+  const [exported, setExported] = useState(false)
+  const [cannotExport, setCannotExport] = useState(false)
+  const [typedId, setTypedId] = useState('')
+  const [resetBusy, setResetBusy] = useState(false)
+  const [resetNote, setResetNote] = useState<string | null>(null)
   // The runtime switch. `optIn` is what is STORED; e2eeEnabled() is what this
   // session actually started with. They disagree between flipping the switch
   // and reloading, and saying so is the whole point of `pendingReload`.
@@ -353,6 +363,130 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           </button>
         </div>
       )}
+
+      {/* E11 -- the destructive reset.
+          LAST in the panel, closed by default, and behind two independent
+          gates: an export (or an admission you cannot make one) and your own
+          Matrix ID typed out. Everything above this exists to keep people from
+          needing it. */}
+      {read && e2eeEnabled() && identity?.accountHasIdentity && (() => {
+        const plan = resetPlan(identity)
+        const copy = resetCopy(plan)
+        const myId = client?.getUserId() ?? ''
+        const gate = { exportedOrAcknowledged: exported || cannotExport, typedMatrixId: typedId }
+        const blockers = gateBlockers(gate, myId, plan)
+        const doExport = async () => {
+          if (!client) return
+          const json = await exportRoomKeys(client)
+          if (!json) { setResetNote('The export could not be made. Nothing has been changed.'); return }
+          const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }))
+          const a = document.createElement('a')
+          a.href = url
+          a.download = `element-keys-${myId.replace(/[^a-z0-9]/gi, '-')}.json`
+          a.click()
+          URL.revokeObjectURL(url)
+          setExported(true)
+          setResetNote('Export saved. Keep it somewhere you will still have after this.')
+        }
+        const doReset = async () => {
+          if (!client) return
+          setResetBusy(true)
+          setResetNote(null)
+          const out = await performReset(client, gate, plan, myId)
+          setResetBusy(false)
+          if (out.ok) {
+            setResetNote('Done. Verify your other devices, and import your export to read old messages.')
+            setResetOpen(false)
+            setTypedId('')
+            setExported(false)
+            setCannotExport(false)
+            setReload((n) => n + 1)
+            return
+          }
+          // Naming the STEP matters: a failure after cross-signing leaves a
+          // different account than a failure before it.
+          setResetNote(
+            out.reason === 'refused-by-gate' ? out.blockers.join(' ')
+              : out.reason === 'no-crypto' ? 'Encryption is not running in this session.'
+              : `The reset failed at the ${out.step} step. ${out.detail.slice(0, 120)}`,
+          )
+        }
+        return (
+          <div className="tc-reset">
+            <h3 className="tc-settings-head">If you have lost everything</h3>
+            {!resetOpen ? (
+              <>
+                <p className="tc-settings-note">
+                  Locked out of every device with no recovery key? There is one way back, and it
+                  destroys things permanently. Read it before you decide.
+                </p>
+                <button type="button" onClick={() => setResetOpen(true)}>Show me the reset</button>
+              </>
+            ) : (
+              <>
+                <p className="tc-settings-note tc-tone-warn">
+                  This cannot be undone by you, by anyone else, or by the server.
+                </p>
+                <h4 className="tc-settings-subhead">What you lose</h4>
+                <ul className="tc-settings-detail">{copy.willLose.map((l) => <li key={l}>{l}</li>)}</ul>
+                <h4 className="tc-settings-subhead">What you keep</h4>
+                <ul className="tc-settings-detail">{copy.willKeep.map((l) => <li key={l}>{l}</li>)}</ul>
+
+                <h4 className="tc-settings-subhead">1. Save your keys</h4>
+                <div className="tc-settings-confirm">
+                  <button type="button" disabled={resetBusy} onClick={() => { void doExport() }}>
+                    {exported ? 'Save the export again' : 'Save a key export'}
+                  </button>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={cannotExport}
+                      onChange={(e) => setCannotExport(e.target.checked)}
+                    />{' '}
+                    I cannot make an export
+                  </label>
+                </div>
+
+                <h4 className="tc-settings-subhead">2. Confirm it is you</h4>
+                <p className="tc-settings-note">
+                  Type <code className="tc-settings-keytext">{myId}</code> to continue.
+                </p>
+                <div className="tc-settings-confirm">
+                  <input
+                    type="text"
+                    value={typedId}
+                    onChange={(e) => setTypedId(e.target.value)}
+                    placeholder="@you:41chan.net"
+                    aria-label="Type your Matrix ID to confirm the reset"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                </div>
+
+                {blockers.length > 0 && (
+                  <ul className="tc-settings-detail tc-tone-warn">
+                    {blockers.map((b) => <li key={b}>{b}</li>)}
+                  </ul>
+                )}
+                <div className="tc-settings-confirm">
+                  <button
+                    type="button"
+                    className="tc-reset-go"
+                    disabled={resetBusy || blockers.length > 0}
+                    onClick={() => { void doReset() }}
+                  >
+                    {resetBusy ? 'Working...' : 'Reset my encryption permanently'}
+                  </button>
+                  <button type="button" disabled={resetBusy} onClick={() => setResetOpen(false)}>
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+            {resetNote && <p className="tc-settings-note">{resetNote}</p>}
+          </div>
+        )
+      })()}
     </div>
   )
 }

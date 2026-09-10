@@ -2878,6 +2878,22 @@ code {
   border-left: 3px solid #f0b429;
 }
 .tc-send-error button { flex: none; font-size: 12px; }
+
+/* E11. Set apart from everything above it by a rule and real space: this is
+   not another settings row, and it should not read as one. */
+.tc-reset {
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid rgb(255 95 86 / 35%);
+}
+.tc-reset label { font-size: 12px; opacity: 0.85; }
+/* The only red control in the panel. Everything else that can be pressed here
+   is recoverable; this one is not. */
+.tc-reset-go:not(:disabled) {
+  border-color: #ff5f56;
+  color: #ff5f56;
+}
+.tc-reset-go:disabled { opacity: 0.45; }
 .tc-settings-optin input[type="password"] {
   min-width: 12ch;
   font: inherit;
