@@ -68,15 +68,26 @@ export function e2eeFromBuild(): boolean {
 }
 
 // Where the crypto store lives in IndexedDB. Named, not inlined, because
-// changing it orphans every key the user has -- see E8. Keyed BY USER for the
-// same reason the sync store is (buildClient.ts): a fixed name means the next
-// account to log in on this browser inherits the previous account's device
-// keys, which for the crypto store is not a stale room list but a security
-// hole. Changed 2026-09-05, while VITE_E2EE is still off in every deployed
-// build -- the one moment the rename orphans nothing.
+// changing it orphans every key the user has -- see E8. Keyed BY USER AND
+// DEVICE. By user for the same reason the sync store is (buildClient.ts): a
+// fixed name means the next account to log in on this browser inherits the
+// previous account's device keys, which for the crypto store is not a stale
+// room list but a security hole (changed 2026-09-05). By device because a
+// crypto store IS a device: it holds that device's identity keys, and the
+// rust engine refuses to open one for any other device id. Keyed by user
+// alone, a second login on the same browser -- which is what every forced
+// sign-out produces, since this client never deletes a crypto store -- found
+// the previous device's store under its name and came up without encryption.
+// The operator hit exactly that on 2026-09-10 after the foreign-tokens
+// sign-out (sessionIdentity.ts): "Encryption could not be set up."
+//
+// The rename orphans the per-user store of any device that logged in before
+// it. The only such device was the operator's, already unusable for the
+// reason above, with its room keys in the server backup and its identity in
+// secret storage; a restore from the recovery key brings both back.
 const CRYPTO_STORE_PREFIX = 'matrix-js-sdk::matrix-sdk-crypto'
 
-const cryptoStorePrefixFor = (userId: string) => `${CRYPTO_STORE_PREFIX}::${userId}`
+const cryptoStorePrefixFor = (userId: string, deviceId: string) => `${CRYPTO_STORE_PREFIX}::${userId}::${deviceId}`
 
 type Report = (state: CryptoLoadState) => void
 
@@ -177,12 +188,13 @@ export async function initCrypto(client: MatrixClient, report: Report): Promise<
   // Refusing here is the same shape as ownDevices below: the answer to a
   // failed precondition is "not up", never a shared default.
   const userId = client.getUserId()
-  if (!userId) {
+  const deviceId = client.getDeviceId()
+  if (!userId || !deviceId) {
     emit({
       phase: 'failed',
       error: 'Encryption could not be set up. Private chats will not be encrypted.',
     })
-    console.error('[crypto] initCrypto called on a client with no user id')
+    console.error('[crypto] initCrypto called on a client with no user id or device id')
     return false
   }
 
@@ -195,7 +207,7 @@ export async function initCrypto(client: MatrixClient, report: Report): Promise<
       async () => {
         // The wasm arrives during this call; the store opens after it, which is
         // why 'installing' is a separate phase rather than a spinner at 100%.
-        await client.initRustCrypto({ useIndexedDB: true, cryptoDatabasePrefix: cryptoStorePrefixFor(userId) })
+        await client.initRustCrypto({ useIndexedDB: true, cryptoDatabasePrefix: cryptoStorePrefixFor(userId, deviceId) })
       },
     )
     emit({ phase: 'ready', received: CRYPTO_WASM_BYTES })
