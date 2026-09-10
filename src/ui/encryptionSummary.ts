@@ -13,6 +13,7 @@
 //   - Never promise safety that does not exist. "Backup absent" means losing
 //     this device loses the conversations, and it says so.
 import type { CryptoIdentityFacts } from '../client/cryptoIdentity'
+import { maySetUpNewBackup, recoveryPlan } from '../client/recoveryPlan'
 import { keyBackupState, type KeyBackupFacts } from '../client/keyBackup'
 
 export type EncryptionTone = 'off' | 'ok' | 'warn' | 'bad'
@@ -32,6 +33,11 @@ export type EncryptionAction =
   // Named separately from 'set-up-recovery' because telling someone to "set up
   // recovery" when they already have is how a panel loses their trust.
   | 'create-backup'
+  // The last resort, offered ONLY when it is genuinely the only route left. It
+  // is not a normal action and stays gated in its own section; naming it here
+  // is what stops the panel telling someone their keys are at risk and then
+  // giving them nothing to press.
+  | 'reset-encryption'
 
 export interface EncryptionSummary {
   tone: EncryptionTone
@@ -91,14 +97,47 @@ export function encryptionSummary(
     actions.push('connect-backup')
   } else if (backupState === 'present-untrusted') {
     detail.push('A backup exists but cannot be verified as yours, so it is not being used.')
-    actions.push('set-up-recovery')
+    // DELIBERATELY NO ACTION. This offered 'set-up-recovery', and recoveryPlan
+    // REFUSES that while a backup exists -- creating one would reset the
+    // existing version and destroy the keys inside it (G-e1). So the panel
+    // offered a button that refused when pressed, which the comment further
+    // down calls worse than an honest list. Seen on the operator's own account
+    // 2026-09-10, with 37 keys in the backup it would have been offering to
+    // replace.
+    //
+    // The honest routes are named instead: verifying against another device
+    // (already offered above when there is one), or the reset.
+    detail.push(identity.otherDeviceCount > 0
+      ? 'Verify this device against one of your others to unlock it -- that is the route that loses nothing.'
+      : 'With no other device and no usable recovery key, the reset at the bottom of this panel is the only way forward.')
   } else {
     detail.push('There is no key backup. If you lose this device, those conversations are gone.')
-    // Whichever half is missing is the one offered. Absent backup ALWAYS
-    // offers something: the proof found that a person with recovery already
-    // set up was told their conversations could be lost and given nothing to
-    // press about it.
-    actions.push(identity.privateKeysInSecretStorage ? 'create-backup' : 'set-up-recovery')
+    // Offer only what the PLAN will actually perform.
+    //
+    // Derived from the same function that executes it, rather than kept in
+    // step by hand -- keeping two lists in agreement by hand is exactly what
+    // produced a "Set up recovery" button that refuses when pressed, twice: on
+    // an untrusted existing backup (above), and here, on an account whose
+    // identity this device cannot use.
+    const plan = backup ? recoveryPlan(identity, backup) : 'unknown'
+    if (maySetUpNewBackup(plan)) {
+      // Whichever half is missing is the one offered. Absent backup ALWAYS
+      // offers something: the proof found that a person with recovery already
+      // set up was told their conversations could be lost and given nothing to
+      // press about it.
+      actions.push(identity.privateKeysInSecretStorage ? 'create-backup' : 'set-up-recovery')
+    } else if (plan === 'refuse-would-replace-identity') {
+      detail.push('This account already has an encryption identity that this device cannot use.')
+      if (identity.otherDeviceCount > 0) {
+        detail.push('Verify against one of your other devices -- that route loses nothing.')
+      }
+      // The reset is offered whenever nothing else is pressable. Verifying is
+      // already offered above for an UNVERIFIED device with somewhere to verify
+      // against; a device that is verified and still cannot use the identity
+      // has no such route, and telling it "your keys are at risk" with no
+      // button is the silence this panel is not allowed to produce.
+      if (!actions.includes('verify-this-device')) actions.push('reset-encryption')
+    }
   }
 
   // The tone is the WORST true thing, not an average: a panel that says "ok"

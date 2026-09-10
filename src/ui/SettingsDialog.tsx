@@ -23,6 +23,7 @@ const ACTION_TEXT: Record<EncryptionAction, string> = {
   'restore-from-key': 'Enter your recovery key to unlock older messages on this device.',
   'connect-backup': 'Connect this session to your existing key backup.',
   'create-backup': 'Create a key backup, using the recovery you already have.',
+  'reset-encryption': 'Start over by resetting your encryption. Last resort, and it destroys things -- see the section at the bottom.',
 }
 
 // What the restore told us, in the user's terms. A key that is not a key and a

@@ -6,6 +6,8 @@ import { encryptionSummary, type EncryptionAction } from '../src/ui/encryptionSu
 import type { CryptoIdentityFacts } from '../src/client/cryptoIdentity'
 import type { KeyBackupFacts } from '../src/client/keyBackup'
 
+import { maySetUpNewBackup, recoveryPlan } from "../src/client/recoveryPlan.ts"
+
 let failures = 0
 const check = (name: string, cond: boolean, extra?: unknown) => {
   if (cond) console.log('  ok   ' + name)
@@ -99,6 +101,40 @@ const has = (a: EncryptionAction[], x: EncryptionAction) => a.includes(x)
   check('no combination ever calls unbacked keys safe', bad === 0, bad)
   check('no combination offers the same action twice', dupes === 0, dupes)
   check('no combination leaves the panel with nothing to say', silent === 0, silent)
+}
+
+console.log("\n-- every action offered must be one the plan will actually perform --")
+{
+  // The cross-module property that was missing. encryptionSummary decides what
+  // to OFFER; recoveryPlan decides what may be DONE. Nothing had ever asserted
+  // they agree, and on the operator's account they did not: the panel offered
+  // "Set up a recovery key" for a backup that exists-but-untrusted, and the
+  // plan refuses exactly that, because creating would destroy the 37 keys in
+  // the existing version (G-e1). A button that refuses when pressed is worse
+  // than an honest list.
+  let offered = 0
+  let broken = 0
+  const bad: unknown[] = []
+  for (const accountHasIdentity of [false, true])
+   for (const privateKeysOnThisDevice of [false, true])
+    for (const privateKeysInSecretStorage of [false, true])
+     for (const thisDeviceVerified of [false, true])
+      for (const otherDeviceCount of [0, 8])
+       for (const backupExists of [false, true])
+        for (const backupTrusted of [false, true])
+         for (const activeVersion of [null, "2"]) {
+           const identity = { accountHasIdentity, privateKeysOnThisDevice, privateKeysInSecretStorage,
+             keyBackupVersion: activeVersion, thisDeviceVerified, otherDeviceCount } as CryptoIdentityFacts
+           const backup = { backupExists, backupTrusted, activeVersion } as KeyBackupFacts
+           const acts = encryptionSummary(true, identity, backup).actions
+           if (!acts.includes("set-up-recovery") && !acts.includes("create-backup")) continue
+           offered++
+           if (!maySetUpNewBackup(recoveryPlan(identity, backup))) {
+             broken++
+             if (bad.length < 3) bad.push({ identity, backup, acts })
+           }
+         }
+  check(`every creating action offered (${offered}) is one the plan permits`, broken === 0, bad)
 }
 
 if (failures) { console.log(`\n${failures} FAILED`); process.exit(1) }
