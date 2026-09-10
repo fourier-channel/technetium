@@ -2,6 +2,7 @@ import * as sdk from 'matrix-js-sdk'
 import type { MatrixClient, TokenRefreshFunction } from 'matrix-js-sdk'
 import { Thread, FeatureSupport } from 'matrix-js-sdk'
 import { buildSlidingSync, slidingSyncEnabled } from './slidingSync'
+import { cryptoCallbacks } from './secretStorageKey'
 
 export interface BuildClientParams {
   homeserverUrl: string
@@ -67,6 +68,10 @@ export async function buildClient(params: BuildClientParams): Promise<MatrixClie
     refreshToken: params.refreshToken,
     tokenRefreshFunction: params.tokenRefreshFunction,
     store,
+    // How the SDK asks for a recovery key when it needs to read secret
+    // storage. Without this, every read of a secret fails, and a restore from
+    // a correct key reports it as wrong. See client/secretStorageKey.ts.
+    cryptoCallbacks,
   })
 
   // Must be called after createClient and before startClient: loads any

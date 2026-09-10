@@ -2830,6 +2830,17 @@ code {
 
 .tc-settings-note { margin: 6px 0 0; opacity: 0.7; font-size: 12px; }
 
+/* The reply to a control the user just pressed. Full opacity and a rule, so it
+   reads as an answer rather than as one more line of status. */
+.tc-settings-feedback {
+  opacity: 1;
+  margin: 8px 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border-left: 3px solid #f0b429;
+  background: var(--cpd-color-bg-subtle-secondary, rgb(255 255 255 / 6%));
+}
+
 /* The runtime encryption switch. Set apart from the summary below it with a
    rule and a little air, because it is the control and the rest is the
    report -- reading as one block made the switch look like another status

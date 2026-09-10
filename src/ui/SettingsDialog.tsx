@@ -35,6 +35,7 @@ const RESTORE_TEXT: Record<RestoreOutcome, string> = {
   'wrong-key': 'That is a recovery key, but not the one this backup was made with.',
   'no-backup': 'There is no key backup on the server to restore from.',
   'no-crypto': 'Encryption is not running in this session.',
+  'storage-broken': 'Your recovery is set up on the server but its key description is missing, so no key can be checked against it. Fix it from another client -- in Element: Settings, Security & Privacy, Secure Backup -- then try again here.',
   failed: 'That did not work, and the reason was not something this could name.',
 }
 
@@ -230,6 +231,15 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           <ul className="tc-settings-detail">
             {summary.detail.map((line) => <li key={line}>{line}</li>)}
           </ul>
+          {/* Feedback from the controls below, rendered HERE and not at the
+              bottom of the panel. It used to sit under the device list, so
+              pressing "Unlock older messages" flickered the button and put the
+              answer below the fold. Reported 2026-09-10 as the button
+              "disappearing for a second and returning" -- which is precisely
+              what a reply rendered off-screen looks like from the top.
+              Always rendered when the panel has been read, so a success note
+              survives the action list emptying on the re-observe it triggers. */}
+          {note && <p className="tc-settings-note tc-settings-feedback" role="status">{note}</p>}
           {summary.actions.length > 0 && (
             <>
               <h4 className="tc-settings-subhead">What is left to do</h4>
@@ -354,8 +364,6 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           </div>
         )
       })()}
-
-      {note && <p className="tc-settings-note">{note}</p>}
 
       {newKey && (
         <div className="tc-settings-key" role="alertdialog" aria-label="Your recovery key">
