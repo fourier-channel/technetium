@@ -61,6 +61,16 @@ export async function createRecovery(
     return 'failed'
   }
 
+  // The device that made the identity signs itself, as a restore does. Seen
+  // on the server 2026-09-10: the creating device carried no signature while
+  // a later device that restored did, because the boot-time self-sign runs
+  // before any identity exists. Failure here is not failure of the set-up.
+  try {
+    await signOwnDeviceIfAble(client)
+  } catch (err) {
+    console.error('[crypto] set up, but this device could not sign itself yet', err)
+  }
+
   // A setup that completed without producing a key to show is a silent
   // half-success: the account changed and the user has nothing to write down.
   // Reported as a failure so the UI cannot present it as done.
