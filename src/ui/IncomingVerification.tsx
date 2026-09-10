@@ -18,7 +18,9 @@ import { verificationStage } from './../client/verificationStage'
 // Global rather than inside Settings, because a request arrives when the other
 // device decides to send it, not when you happen to have a panel open.
 export function IncomingVerification() {
-  const { client } = useClient()
+  // cryptoLoad is read ONLY to re-run the effect below when the engine
+  // arrives. See the dependency list.
+  const { client, cryptoLoad } = useClient()
   const [request, setRequest] = useState<VerificationRequest | null>(null)
   const [emoji, setEmoji] = useState<{ symbol: string; name: string }[]>([])
   const [phase, setPhase] = useState<number | null>(null)
@@ -26,6 +28,13 @@ export function IncomingVerification() {
 
   useEffect(() => {
     if (!client || !e2eeEnabled()) return
+    // Crypto attaches AFTER the client exists. This effect used to depend on
+    // [client] alone, so a mount that happened in that window returned here and
+    // never ran again -- the listener was never registered for the whole
+    // session, and an incoming verification request produced no window at all.
+    // Reported live on 2026-09-10: "if I attempt it from Element, no window
+    // even pops up". Keying on cryptoLoad re-runs this the moment the engine is
+    // up.
     if (!client.getCrypto()) return
 
     let verifier: Verifier | null = null
@@ -78,7 +87,7 @@ export function IncomingVerification() {
       current?.off(VerificationRequestEvent.Change, onChange)
       verifier?.off(VerifierEvent.ShowSas, onSas)
     }
-  }, [client])
+  }, [client, cryptoLoad])
 
   if (!request) return null
   const stage = verificationStage(phase, emoji.length > 0)
