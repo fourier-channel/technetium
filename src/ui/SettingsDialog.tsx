@@ -9,7 +9,7 @@ import { recoveryPlan } from '../client/recoveryPlan'
 import { createRecovery, restoreFromRecoveryKey, type RestoreOutcome } from '../client/recovery'
 import { observeRecoveryKeyFacts, changeRecoveryKey } from '../client/recovery'
 import { recoveryKeyChangePlan, RECOVERY_KEY_CHANGE_TEXT, type RecoveryKeyChangeFacts } from '../client/recoveryKeyPlan'
-import { listSessions, endSessions, type ListOutcome } from '../client/masSessions'
+import { listSessions, endSessions, clientTokenSource, type ListOutcome } from '../client/masSessions'
 import { purgePlan, describeSessions } from '../client/sessionPurgePlan'
 import { loadSession } from '../client/session'
 import { deviceTrustLabel, observeOwnDevices, type OwnDevice } from '../client/ownDevices'
@@ -115,11 +115,10 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     queueMicrotask(() => {
       void (async () => {
         const issuer = loadSession()?.oidc.issuer
-        const token = client.getAccessToken()
         const [i, b, d, k, sess] = await Promise.all([
           observeCryptoIdentity(client), observeKeyBackup(client), observeOwnDevices(client),
           observeRecoveryKeyFacts(client),
-          issuer && token ? listSessions(issuer, token) : Promise.resolve<ListOutcome>('failed'),
+          issuer ? listSessions(issuer, clientTokenSource(client)) : Promise.resolve<ListOutcome>('failed'),
         ])
         if (cancelled) return
         setIdentity(i)
@@ -207,10 +206,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const purgeList = purgeable && purge ? purgeable[purge] : []
 
   const doPurge = async () => {
-    const token = client?.getAccessToken()
-    if (!masIssuer || !token || purgeList.length === 0) return
+    if (!client || !masIssuer || purgeList.length === 0) return
     setPurgeBusy(true)
-    const r = await endSessions(masIssuer, token, purgeList)
+    const r = await endSessions(masIssuer, clientTokenSource(client), purgeList)
     setPurgeBusy(false)
     setPurge(null)
     setPurgeNote(r.failed === 0
