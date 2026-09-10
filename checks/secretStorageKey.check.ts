@@ -3,7 +3,7 @@
 // Two properties matter and both are about what the key does NOT do: it is
 // never left behind after the operation, and it is never offered for a key id
 // other than the one the user typed.
-import { cryptoCallbacks, withRecoveryKey } from '../src/client/secretStorageKey.ts'
+import { cryptoCallbacks, withRecoveryKey, withCreatedKey } from '../src/client/secretStorageKey.ts'
 
 let failures = 0
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -30,6 +30,28 @@ console.log('\n== during an operation')
   check('and NOT for some other key id -- a null lets the operation fail honestly', other === null)
   check('the id must be among the keys the SDK is asking about',
     (await withRecoveryKey('abc', KEY, () => ask(['other1', 'other2']))) === null)
+}
+
+console.log('\n== a key the SDK creates during a set-up')
+{
+  const MADE = new Uint8Array(32).fill(9) as Uint8Array<ArrayBuffer>
+  const cache = (id: string) => cryptoCallbacks.cacheSecretStorageKey!(id, {} as never, MADE)
+  cache('stray')
+  check('cached outside a creating operation: refused, never answered', (await ask(['stray'])) === null)
+  let inside: unknown = 'not-run'
+  let other: unknown = 'not-run'
+  await withCreatedKey(async () => {
+    cache('made1')
+    inside = await ask(['made1'])
+    other = await ask(['zzz'])
+  })
+  const got = inside as [string, Uint8Array] | null
+  check('inside one, the created key is answered for its own id', !!got && got[0] === 'made1' && got[1] === MADE)
+  check('and not for another id', other === null)
+  check('forgotten when the operation ends', (await ask(['made1'])) === null)
+  let threw = false
+  try { await withCreatedKey(async () => { cache('made2'); throw new Error('boom') }) } catch { threw = true }
+  check('forgotten when the operation throws', threw && (await ask(['made2'])) === null)
 }
 
 console.log('\n== it is always cleared')

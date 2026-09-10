@@ -4,7 +4,7 @@
 // and swept by a proof. This module is only the hands: it refuses to act when
 // the plan says so, and it never decides for itself.
 import type { MatrixClient } from 'matrix-js-sdk'
-import { withRecoveryKey } from './secretStorageKey'
+import { withRecoveryKey, withCreatedKey } from './secretStorageKey'
 import { signOwnDeviceIfAble } from './crypto'
 import { decodeRecoveryKey } from 'matrix-js-sdk/lib/crypto-api/recovery-key'
 import { maySetUpNewBackup, recoveryKeyIsWellFormed, type RecoveryPlan } from './recoveryPlan'
@@ -44,7 +44,9 @@ export async function createRecovery(
   let generated: string | undefined
   try {
     await crypto.bootstrapCrossSigning({})
-    await crypto.bootstrapSecretStorage({
+    // withCreatedKey: the SDK asks for the key it has just made in order to
+    // write the secrets into it (secretStorageKey.ts).
+    await withCreatedKey(() => crypto.bootstrapSecretStorage({
       setupNewKeyBackup: true,
       // NOT setupNewSecretStorage: that is the "reset even if keys already
       // exist" flag, and existing keys are exactly the case the plan refuses.
@@ -53,7 +55,7 @@ export async function createRecovery(
         generated = key.encodedPrivateKey
         return key
       },
-    })
+    }))
   } catch (err) {
     console.error('[crypto] recovery setup failed', err)
     return 'failed'
@@ -201,14 +203,14 @@ export async function changeRecoveryKey(
   if (!crypto) return 'no-crypto'
   let generated: string | undefined
   try {
-    await crypto.bootstrapSecretStorage({
+    await withCreatedKey(() => crypto.bootstrapSecretStorage({
       setupNewSecretStorage: true,
       createSecretStorageKey: async () => {
         const key = await crypto.createRecoveryKeyFromPassphrase()
         generated = key.encodedPrivateKey
         return key
       },
-    })
+    }))
   } catch (err) {
     console.error('[crypto] replacing the recovery key failed', err)
     return 'failed'
