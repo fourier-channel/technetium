@@ -414,7 +414,11 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           approvalResolve.current = null
           setResetBusy(false)
           if (out.ok) {
-            setResetNote('Done. Verify your other devices, and import your export to read old messages.')
+            // A reset that ends here leaves the user with a fresh identity and NO
+            // recovery -- one lost device from the hole they just climbed out
+            // of. The panel reloads into "set up a recovery key"; this says why
+            // that is the next thing and not an optional extra.
+            setResetNote('Done. Now set up a recovery key below -- until you do, losing this device puts you straight back here. Then re-verify your other devices, and import your export if you saved one.')
             setResetOpen(false)
             setTypedId('')
             setExported(false)
