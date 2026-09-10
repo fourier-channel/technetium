@@ -39,6 +39,18 @@ const RESTORE_TEXT: Record<RestoreOutcome, string> = {
   failed: 'That did not work, and the reason was not something this could name.',
 }
 
+// Which colour each outcome earns. Green only for the one that worked; amber
+// for "your input, try again"; red for "something is broken".
+const RESTORE_TONE: Record<RestoreOutcome, 'ok' | 'warn' | 'bad'> = {
+  restored: 'ok',
+  'bad-key': 'warn',
+  'wrong-key': 'warn',
+  'no-backup': 'bad',
+  'no-crypto': 'bad',
+  'storage-broken': 'bad',
+  failed: 'bad',
+}
+
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const { client } = useClient()
   const [identity, setIdentity] = useState<CryptoIdentityFacts | null>(null)
@@ -50,7 +62,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [newKey, setNewKey] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [typedKey, setTypedKey] = useState('')
-  const [note, setNote] = useState<string | null>(null)
+  // The reply to whatever was just pressed. TONED: a success in an amber box
+  // reads as a warning, which is how "Restored" looked the first time.
+  const [note, setNote] = useState<{ text: string; tone: 'ok' | 'warn' | 'bad' } | null>(null)
   const [reload, setReload] = useState(0)
   const [devices, setDevices] = useState<OwnDevice[] | null>(null)
   const [verifying, setVerifying] = useState<string | null>(null)
@@ -114,7 +128,18 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     setPendingReload(needsReload(before, after))
   }
 
-  const summary = encryptionSummary(e2eeEnabled(), identity, backup)
+  // ONE definition of "this device is verified". The headline and the device
+  // row both read crossSigningVerified from the SDK, but at different moments
+  // during the same reload, and right after a restore that moment matters --
+  // the device's own signature lands asynchronously. Seen live: "This device
+  // is verified" printed above a row saying "verified on this device only".
+  // The row also drives the Verify button, so it is the reading the user can
+  // act on; the headline takes it from there rather than from its own read.
+  const thisRow = devices?.find((d) => d.isThisDevice)
+  const identityForSummary = identity && thisRow
+    ? { ...identity, thisDeviceVerified: thisRow.crossSigningVerified }
+    : identity
+  const summary = encryptionSummary(e2eeEnabled(), identityForSummary, backup)
   const plan = recoveryPlan(identity, backup)
 
   const doCreate = async () => {
@@ -127,13 +152,13 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     if (typeof result === 'string') {
       // A refusal has to say what to do INSTEAD, or the user reads it as the app
       // being broken and goes looking for a worse way round.
-      setNote(
+      setNote({ tone: result !== 'refused-by-plan' ? 'bad' : 'warn', text:
         result !== 'refused-by-plan'
           ? 'Recovery could not be set up. Nothing was changed that this can see.'
           : plan === 'refuse-would-replace-identity'
             ? 'Refused: this account already has an encryption identity that this device cannot use. Verify this device against one you already trust, or enter your recovery key. If you have neither, use the reset at the bottom of this panel.'
             : 'Refused: something already exists that this would have replaced.',
-      )
+      })
       return
     }
     setNewKey(result.recoveryKey)
@@ -145,7 +170,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     setVerifying(deviceId)
     setVview({ phase: null, emoji: [] })
     const handle = await startDeviceVerification(client, deviceId, setVview)
-    if (!handle) { setVerifying(null); setNote('Verification could not be started.'); return }
+    if (!handle) { setVerifying(null); setNote({ text: 'Verification could not be started.', tone: 'bad' }); return }
     setVhandle(handle)
   }
 
@@ -162,7 +187,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     setBusy(true)
     const outcome = await restoreFromRecoveryKey(client, typedKey)
     setBusy(false)
-    setNote(RESTORE_TEXT[outcome])
+    setNote({ text: RESTORE_TEXT[outcome], tone: RESTORE_TONE[outcome] })
     if (outcome === 'restored') {
       setTypedKey('')
       setReload((n) => n + 1)
@@ -239,7 +264,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               what a reply rendered off-screen looks like from the top.
               Always rendered when the panel has been read, so a success note
               survives the action list emptying on the re-observe it triggers. */}
-          {note && <p className="tc-settings-note tc-settings-feedback" role="status">{note}</p>}
+          {note && (
+            <p className={`tc-settings-note tc-settings-feedback tc-tone-${note.tone}`} role="status">{note.text}</p>
+          )}
           {summary.actions.length > 0 && (
             <>
               <h4 className="tc-settings-subhead">What is left to do</h4>

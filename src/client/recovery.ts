@@ -122,6 +122,18 @@ export async function restoreFromRecoveryKey(
         // the same non-destructive call the boot path makes, and it can now
         // succeed because the key is here.
         await crypto.bootstrapCrossSigning({})
+        // Sign THIS device with the identity just adopted, so the account --
+        // and every other client -- sees it as verified rather than merely
+        // holding the keys. Without this the server held no signature for the
+        // very device that had just restored 46 keys, and the panel's headline
+        // and its own device row disagreed about it. Element signs as part of
+        // the same step.
+        const userId = client.getUserId()
+        const deviceId = client.getDeviceId()
+        if (userId && deviceId) {
+          const st = await crypto.getDeviceVerificationStatus(userId, deviceId)
+          if (!st?.crossSigningVerified) await crypto.crossSignDevice(deviceId)
+        }
       })
       return 'restored'
     }

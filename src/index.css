@@ -2840,6 +2840,9 @@ code {
   border-left: 3px solid #f0b429;
   background: var(--cpd-color-bg-subtle-secondary, rgb(255 255 255 / 6%));
 }
+.tc-settings-feedback.tc-tone-ok { border-left-color: #35e08d; color: #35e08d; }
+.tc-settings-feedback.tc-tone-warn { border-left-color: #f0b429; color: #f0b429; }
+.tc-settings-feedback.tc-tone-bad { border-left-color: #ff5f56; color: #ff5f56; }
 
 /* The runtime encryption switch. Set apart from the summary below it with a
    rule and a little air, because it is the control and the rest is the
