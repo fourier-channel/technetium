@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { CryptoEvent } from 'matrix-js-sdk/lib/crypto-api/CryptoEvent'
 import type { VerificationRequest, Verifier, ShowSasCallbacks } from 'matrix-js-sdk/lib/crypto-api/verification'
 import { VerificationRequestEvent, VerifierEvent } from 'matrix-js-sdk/lib/crypto-api/verification'
+import { VerificationMethod } from 'matrix-js-sdk/lib/types'
 import { useClient } from '../client/clientContextValue'
 import { e2eeEnabled } from '../client/crypto'
 import { verificationStage } from './../client/verificationStage'
@@ -34,7 +35,24 @@ export function IncomingVerification() {
       queueMicrotask(() => setEmoji((cb.sas?.emoji ?? []).map(([symbol, name]) => ({ symbol, name }))))
     }
 
+    let starting = false
     const onChange = () => {
+      // NAME THE METHOD. Accepting only moves the request to READY (phase 3);
+      // it does not begin anything. If neither side then starts a method, both
+      // sit on "Compare emojis" forever -- which is exactly what the asking
+      // side was fixed for on 2026-09-07, and this side still had the same
+      // hole. Found live on 2026-09-10 with Element asking and this client
+      // accepting: two spinners, no error anywhere.
+      //
+      // Either side may start after READY, and starting twice is harmless
+      // (the second is ignored), so it is safer to start than to wait for a
+      // peer that may be waiting for us.
+      if (current?.phase === 3 && !current.verifier && !starting) {
+        starting = true
+        void current.startVerification(VerificationMethod.Sas).catch((e: unknown) => {
+          queueMicrotask(() => setErr(String((e as Error)?.message ?? e)))
+        })
+      }
       const v = current?.verifier
       if (v && v !== verifier) {
         verifier = v

@@ -1,6 +1,8 @@
 // A verification that did not succeed must never read as one that did.
 import { verificationStage } from '../src/client/verificationStage'
 
+import { readFileSync } from "node:fs"
+
 let failures = 0
 const check = (name: string, cond: boolean, extra?: unknown) => {
   if (cond) console.log('  ok   ' + name)
@@ -34,6 +36,29 @@ check('cancelled names the mismatch danger rather than shrugging',
   check('never asks "do these match" with nothing to compare', confirmWithoutEmoji === 0, confirmWithoutEmoji)
   check('every phase says something', silent === 0, silent)
   check('nothing offers to cancel something already over', cancelAfterEnd === 0, cancelAfterEnd)
+}
+
+console.log("\n-- both sides must NAME a method, not just agree --")
+{
+  // Accepting a request only moves it to READY. If neither side then starts a
+  // method, both sit on "Compare emojis" forever with no error anywhere. The
+  // asking side was fixed for this on 2026-09-07; the ACCEPTING side still had
+  // the same hole and it was found live on 2026-09-10, with Element asking.
+  //
+  // Source-level, because the alternative is two real clients and a person to
+  // look at them. It proves the call exists on both paths and is guarded
+  // against firing twice -- not that the protocol completes, which only the
+  // live run shows.
+  const asking = readFileSync("src/client/verification.ts", "utf8")
+  const accepting = readFileSync("src/ui/IncomingVerification.tsx", "utf8")
+  for (const [name, src] of [["the asking side", asking], ["the accepting side", accepting]]) {
+    check(`${name} starts the SAS method itself`,
+      /startVerification\(\s*VerificationMethod\.Sas\s*\)/.test(src))
+    check(`${name} only starts once`, /!starting/.test(src) && /starting = true/.test(src))
+    check(`${name} waits for READY (phase 3) before starting`, /phase === 3/.test(src))
+    check(`${name} does not start when a verifier already exists`,
+      /!(current|request)\.verifier/.test(src) || /!current\.verifier/.test(src) || /!request\.verifier/.test(src))
+  }
 }
 
 if (failures) { console.log(`\n${failures} FAILED`); process.exit(1) }
