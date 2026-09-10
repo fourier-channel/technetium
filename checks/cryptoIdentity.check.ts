@@ -222,5 +222,26 @@ console.log('\n-- the destructive flag exists in exactly one place --')
     offenders.length === 0, offenders)
 }
 
+console.log("\n-- the silent path signs its own device, ready included --")
+{
+  // 2026-09-10: a device holding the private keys was itself unsigned on every
+  // boot, because the silent path returned early for 'ready' without doing
+  // anything. Source-level: it proves the sign step is reached on every silent
+  // action and cannot be skipped by an early return for 'ready'.
+  const src = readFileSync("src/client/crypto.ts", "utf8")
+  const fn = src.slice(src.indexOf("export async function applySilentIdentityAction"), src.indexOf("export type OwnDeviceSigning"))
+  check("applySilentIdentityAction calls signOwnDeviceIfAble", /signOwnDeviceIfAble\(client\)/.test(fn))
+  check("and no longer returns early for ready before doing so",
+    !/action === 'ready'\) return/.test(fn))
+  const helper = src.slice(src.indexOf("export async function signOwnDeviceIfAble"))
+  check("it refuses to sign without the private self-signing key",
+    /privateKeysCachedLocally\.selfSigningKey/.test(helper))
+  check("it is idempotent -- an already-signed device is left alone",
+    /crossSigningVerified\) return 'already-signed'/.test(helper))
+  const restore = readFileSync("src/client/recovery.ts", "utf8")
+  check("the restore uses the same helper rather than its own copy",
+    /signOwnDeviceIfAble\(client\)/.test(restore) && !/crossSignDevice/.test(restore))
+}
+
 if (failures) { console.log(`\n${failures} FAILED`); process.exit(1) }
 console.log('\nALL CHECKS PASSED')

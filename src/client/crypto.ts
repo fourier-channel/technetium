@@ -284,16 +284,48 @@ export async function applySilentIdentityAction(
   client: MatrixClient,
   action: IdentityAction,
 ): Promise<boolean> {
-  if (!isSilentAction(action) || action === 'ready') return action === 'ready'
+  if (!isSilentAction(action)) return false
   const crypto = client.getCrypto()
   if (!crypto) return false
   try {
-    await crypto.bootstrapCrossSigning({})
+    if (action !== 'ready') await crypto.bootstrapCrossSigning({})
+    // For EVERY silent action, 'ready' included. 'ready' used to return before
+    // doing anything, so a device that held the private keys and was itself
+    // unsigned stayed that way on every boot -- able to vouch for every other
+    // device while nothing vouched for it.
+    await signOwnDeviceIfAble(client)
     return true
   } catch (err) {
     console.error('[crypto] non-destructive cross-signing setup failed', err)
     return false
   }
+}
+
+// Sign THIS device with the account's own identity, if this device holds the
+// private self-signing key and is not signed yet.
+//
+// Non-destructive, needs nothing from the user, uploads one signature. Found
+// 2026-09-10 on the operator's account: a restore had adopted the identity
+// onto this device, the device then verified everything around it, and the
+// server held no signature for the device itself -- Element called it
+// unverified, and Element was right. The restore signs now; this covers a
+// session that restored before that fix, and any future path that loads the
+// keys without signing.
+export type OwnDeviceSigning = 'signed' | 'already-signed' | 'cannot'
+
+export async function signOwnDeviceIfAble(client: MatrixClient): Promise<OwnDeviceSigning> {
+  const crypto = client.getCrypto()
+  const userId = client.getUserId()
+  const deviceId = client.getDeviceId()
+  if (!crypto || !userId || !deviceId) return 'cannot'
+  const status = await crypto.getCrossSigningStatus()
+  // No private self-signing key here means nothing to sign WITH. That is not
+  // an error; it is the state before a restore or a verification.
+  if (!status.privateKeysCachedLocally.selfSigningKey) return 'cannot'
+  const mine = await crypto.getDeviceVerificationStatus(userId, deviceId)
+  if (mine?.crossSigningVerified) return 'already-signed'
+  await crypto.crossSignDevice(deviceId)
+  return 'signed'
 }
 
 // Connect this session to an EXISTING key backup, if there is one.

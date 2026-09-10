@@ -5,6 +5,7 @@
 // the plan says so, and it never decides for itself.
 import type { MatrixClient } from 'matrix-js-sdk'
 import { withRecoveryKey } from './secretStorageKey'
+import { signOwnDeviceIfAble } from './crypto'
 import { decodeRecoveryKey } from 'matrix-js-sdk/lib/crypto-api/recovery-key'
 import { maySetUpNewBackup, recoveryKeyIsWellFormed, type RecoveryPlan } from './recoveryPlan'
 
@@ -128,12 +129,7 @@ export async function restoreFromRecoveryKey(
         // very device that had just restored 46 keys, and the panel's headline
         // and its own device row disagreed about it. Element signs as part of
         // the same step.
-        const userId = client.getUserId()
-        const deviceId = client.getDeviceId()
-        if (userId && deviceId) {
-          const st = await crypto.getDeviceVerificationStatus(userId, deviceId)
-          if (!st?.crossSigningVerified) await crypto.crossSignDevice(deviceId)
-        }
+        await signOwnDeviceIfAble(client)
       })
       return 'restored'
     }
