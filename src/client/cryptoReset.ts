@@ -18,12 +18,16 @@
 
 import type { MatrixClient } from 'matrix-js-sdk'
 import { gateBlockers, type ResetGate, type ResetPlan } from './resetPlan'
+import { crossSigningResetUrl, needsApproval } from './uiaReset'
 
 export type ResetOutcome =
   | { ok: true; exportedBytes: number }
   | { ok: false; reason: 'refused-by-gate'; blockers: string[] }
   | { ok: false; reason: 'no-crypto' }
   | { ok: false; reason: 'failed'; step: 'cross-signing' | 'key-backup'; detail: string }
+  // The user did not approve the reset in their account settings. Not a
+  // failure -- a step they declined or did not finish.
+  | { ok: false; reason: 'not-approved' }
 
 // Room keys as JSON, for the user to save before anything is destroyed. Kept
 // separate from the reset so the export can be taken -- and re-taken -- without
@@ -53,11 +57,17 @@ export async function importRoomKeys(client: MatrixClient, json: string): Promis
   }
 }
 
+// How the caller asks the user to approve the reset in MAS. Given the URL, it
+// must return true only once the user says they have approved it. Returning
+// false is a decline and stops everything, having destroyed nothing.
+export type ApproveFn = (url: string) => Promise<boolean>
+
 export async function performReset(
   client: MatrixClient,
   gate: ResetGate,
   plan: ResetPlan,
   userId: string,
+  approve: ApproveFn,
 ): Promise<ResetOutcome> {
   const blockers = gateBlockers(gate, userId, plan)
   if (blockers.length > 0) return { ok: false, reason: 'refused-by-gate', blockers }
@@ -69,9 +79,32 @@ export async function performReset(
 
   // Step 2. Replace the cross-signing identity. This is the call the source
   // guard exists for. It costs device trust and no messages (G-e2).
+  //
+  // The upload that replaces an identity needs the user's approval in MAS
+  // (MSC3861: the homeserver has no password to re-ask for). The SDK hands us
+  // the request to drive: first attempt unauthenticated, and if the server
+  // answers with an OAuth stage, send the user there and retry once they say
+  // they are done.
+  let declined = false
   try {
-    await crypto.bootstrapCrossSigning({ setupNewCrossSigning: true })
+    await crypto.bootstrapCrossSigning({
+      setupNewCrossSigning: true,
+      authUploadDeviceSigningKeys: async (makeRequest) => {
+        try {
+          return await makeRequest(null)
+        } catch (err) {
+          if (!needsApproval(err)) throw err
+          const url = crossSigningResetUrl((err as { data?: unknown }).data)
+          if (!url) throw err
+          if (!(await approve(url))) { declined = true; throw err }
+          // Retry with the session the server offered. Nothing is destroyed
+          // until this succeeds.
+          return await makeRequest({ type: 'org.matrix.cross_signing_reset' } as never)
+        }
+      },
+    })
   } catch (err) {
+    if (declined) return { ok: false, reason: 'not-approved' }
     return { ok: false, reason: 'failed', step: 'cross-signing', detail: String(err) }
   }
 

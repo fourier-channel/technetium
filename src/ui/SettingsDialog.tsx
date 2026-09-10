@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useClient } from '../client/clientContextValue'
 import { e2eeEnabled, e2eeFromBuild, observeCryptoIdentity, observeKeyBackup } from '../client/crypto'
 import { applyOptIn, browserOptInStore, needsReload, readOptIn } from '../client/e2eeOptIn'
@@ -62,6 +62,10 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [typedId, setTypedId] = useState('')
   const [resetBusy, setResetBusy] = useState(false)
   const [resetNote, setResetNote] = useState<string | null>(null)
+  // MAS owns the approval for replacing an identity (MSC3861), so the reset
+  // pauses here while the user goes and does it.
+  const [approvalUrl, setApprovalUrl] = useState<string | null>(null)
+  const approvalResolve = useRef<((ok: boolean) => void) | null>(null)
   // The runtime switch. `optIn` is what is STORED; e2eeEnabled() is what this
   // session actually started with. They disagree between flipping the switch
   // and reloading, and saying so is the whole point of `pendingReload`.
@@ -398,7 +402,16 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           if (!client) return
           setResetBusy(true)
           setResetNote(null)
-          const out = await performReset(client, gate, plan, myId)
+          const approve = (url: string) => new Promise<boolean>((resolve) => {
+            approvalResolve.current = resolve
+            setApprovalUrl(url)
+            // noopener: this is a URL from a server response, and the new tab
+            // must not get a handle on this one.
+            window.open(url, '_blank', 'noopener')
+          })
+          const out = await performReset(client, gate, plan, myId, approve)
+          setApprovalUrl(null)
+          approvalResolve.current = null
           setResetBusy(false)
           if (out.ok) {
             setResetNote('Done. Verify your other devices, and import your export to read old messages.')
@@ -414,6 +427,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           setResetNote(
             out.reason === 'refused-by-gate' ? out.blockers.join(' ')
               : out.reason === 'no-crypto' ? 'Encryption is not running in this session.'
+              // Declined is not failed. Nothing was destroyed and nothing needs
+              // apologising for.
+              : out.reason === 'not-approved' ? 'Not approved, so nothing was changed. You can start again whenever you want to.'
               : `The reset failed at the ${out.step} step. ${out.detail.slice(0, 120)}`,
           )
         }
@@ -469,6 +485,20 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                   />
                 </div>
 
+                {approvalUrl && (
+                  <div className="tc-settings-confirm tc-tone-warn">
+                    <p>
+                      Your account settings opened in another tab. Approve the reset there,
+                      then come back and press Continue. Nothing has been changed yet.
+                    </p>
+                    <button type="button" onClick={() => { approvalResolve.current?.(true) }}>
+                      I approved it -- continue
+                    </button>
+                    <button type="button" onClick={() => { approvalResolve.current?.(false) }}>
+                      Cancel
+                    </button>
+                  </div>
+                )}
                 {blockers.length > 0 && (
                   <ul className="tc-settings-detail tc-tone-warn">
                     {blockers.map((b) => <li key={b}>{b}</li>)}
