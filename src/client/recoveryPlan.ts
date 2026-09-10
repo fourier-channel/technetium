@@ -24,6 +24,13 @@ export type RecoveryPlan =
   // A backup already exists. Creating would reset it, so this refuses and the
   // caller must offer connect or restore instead.
   | 'refuse-would-destroy'
+  // The ACCOUNT already has a cross-signing identity that THIS DEVICE cannot
+  // use -- no private keys here, none reachable in secret storage. Creating
+  // would mint a replacement identity over a working one and orphan every key
+  // signed by it. The honest answers are to verify this device against another,
+  // or to restore from the recovery key. If the user has neither, that is E11's
+  // territory and not this one's.
+  | 'refuse-would-replace-identity'
   // There is nothing left to set up.
   | 'already-complete'
   // The facts are unknown. Never guess toward a destructive branch.
@@ -47,6 +54,22 @@ export function recoveryPlan(
     return 'refuse-would-destroy'
   }
 
+  // THE SAME RULE AS ABOVE, APPLIED TO THE IDENTITY, which the first version
+  // missed: it guarded the backup and not the thing that signs it.
+  //
+  // Found 2026-09-10 by driving a real account. claudetwo had a cross-signing
+  // identity on the server, no private keys on the device and no backup, and
+  // this function answered `create-all` -- so the panel offered "Set up a
+  // recovery key" and pressing it tried to upload a NEW identity over the
+  // existing one. Only Synapse demanding interactive auth on
+  // /keys/device_signing/upload stopped it, with a 401 the SDK could not even
+  // name. That is the precise failure cryptoIdentity.check.ts calls "the
+  // failure it guards", reached through a different door.
+  if (identity.accountHasIdentity
+      && !identity.privateKeysOnThisDevice
+      && !identity.privateKeysInSecretStorage) {
+    return 'refuse-would-replace-identity'
+  }
   return identity.privateKeysInSecretStorage ? 'create-backup-only' : 'create-all'
 }
 

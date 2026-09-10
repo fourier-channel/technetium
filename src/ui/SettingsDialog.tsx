@@ -119,9 +119,15 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     setBusy(false)
     setConfirming(false)
     if (typeof result === 'string') {
-      setNote(result === 'refused-by-plan'
-        ? 'Refused: something already exists that this would have replaced.'
-        : 'Recovery could not be set up. Nothing was changed that this can see.')
+      // A refusal has to say what to do INSTEAD, or the user reads it as the app
+      // being broken and goes looking for a worse way round.
+      setNote(
+        result !== 'refused-by-plan'
+          ? 'Recovery could not be set up. Nothing was changed that this can see.'
+          : plan === 'refuse-would-replace-identity'
+            ? 'Refused: this account already has an encryption identity that this device cannot use. Verify this device against one you already trust, or enter your recovery key. If you have neither, use the reset at the bottom of this panel.'
+            : 'Refused: something already exists that this would have replaced.',
+      )
       return
     }
     setNewKey(result.recoveryKey)

@@ -68,5 +68,44 @@ const backup = (o: Partial<KeyBackupFacts> = {}): KeyBackupFacts => ({
   check('an empty box is refused without calling the decoder', !recoveryKeyIsWellFormed('   ', () => { throw new Error('should not be called') }))
 }
 
+console.log("\n-- an identity this device cannot use is not a blank slate --")
+{
+  // Found 2026-09-10 on a real account. claudetwo had a cross-signing identity
+  // on the SERVER, no private keys on the device, and no backup. recoveryPlan
+  // answered `create-all`, so the panel offered "Set up a recovery key" and
+  // pressing it tried to upload a NEW identity over the working one. Only
+  // Synapse demanding interactive auth stopped it.
+  //
+  // The old checks passed throughout, because they exhaustively covered the
+  // BACKUP rule and this is the same rule applied to the thing that signs it.
+  const every: { i: CryptoIdentityFacts; b: KeyBackupFacts }[] = []
+  for (const accountHasIdentity of [false, true])
+    for (const privateKeysOnThisDevice of [false, true])
+      for (const privateKeysInSecretStorage of [false, true])
+        for (const thisDeviceVerified of [false, true])
+          for (const backupExists of [false, true])
+            for (const backupTrusted of [false, true])
+              for (const activeVersion of [null, "1"])
+                every.push({
+                  i: { accountHasIdentity, privateKeysOnThisDevice, privateKeysInSecretStorage,
+                       keyBackupVersion: activeVersion, thisDeviceVerified,
+                       otherDeviceCount: 0 } as CryptoIdentityFacts,
+                  b: { backupExists, backupTrusted, activeVersion } as KeyBackupFacts,
+                })
+
+  const unusable = every.filter(({ i }) =>
+    i.accountHasIdentity && !i.privateKeysOnThisDevice && !i.privateKeysInSecretStorage)
+  check(`over all ${every.length} states, an unusable identity NEVER authorises creating one`,
+    unusable.every(({ i, b }) => !maySetUpNewBackup(recoveryPlan(i, b))),
+    unusable.filter(({ i, b }) => maySetUpNewBackup(recoveryPlan(i, b))).slice(0, 3))
+  check("with no backup, that state is named rather than lumped into a generic refusal",
+    unusable.filter(({ b }) => !b.backupExists)
+      .every(({ i, b }) => recoveryPlan(i, b) === "refuse-would-replace-identity"))
+  // The fresh-account path must still work, or the fix has broken setup.
+  const fresh = every.filter(({ i, b }) => !i.accountHasIdentity && !b.backupExists)
+  check("a genuinely fresh account can still create everything",
+    fresh.every(({ i, b }) => maySetUpNewBackup(recoveryPlan(i, b))))
+}
+
 if (failures) { console.log(`\n${failures} FAILED`); process.exit(1) }
 console.log('\nALL CHECKS PASSED')
