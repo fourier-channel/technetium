@@ -8,6 +8,7 @@ import { withRecoveryKey } from './secretStorageKey'
 import { signOwnDeviceIfAble } from './crypto'
 import { decodeRecoveryKey } from 'matrix-js-sdk/lib/crypto-api/recovery-key'
 import { maySetUpNewBackup, recoveryKeyIsWellFormed, type RecoveryPlan } from './recoveryPlan'
+import { mayChangeRecoveryKey, type RecoveryKeyChangeFacts, type RecoveryKeyChangePlan } from './recoveryKeyPlan'
 
 export interface RecoveryCreated {
   // Shown to the user ONCE and never stored by us. If they lose it and lose
@@ -153,4 +154,64 @@ export async function restoreFromRecoveryKey(
     console.error('[crypto] restore from recovery key failed', err)
     return 'failed'
   }
+}
+
+// -- Replacing the recovery key ---------------------------------------------
+
+export async function observeRecoveryKeyFacts(client: MatrixClient): Promise<RecoveryKeyChangeFacts | null> {
+  const crypto = client.getCrypto()
+  if (!crypto) return null
+  try {
+    const [ready, status, backupKey, backupInfo] = await Promise.all([
+      crypto.isSecretStorageReady(),
+      crypto.getCrossSigningStatus(),
+      crypto.getSessionBackupPrivateKey(),
+      crypto.getKeyBackupInfo(),
+    ])
+    const local = status.privateKeysCachedLocally
+    return {
+      secretStorageReady: ready,
+      identityKeysLocal: local.masterKey && local.selfSigningKey && local.userSigningKey,
+      backupExists: !!backupInfo,
+      backupKeyLocal: !!backupKey,
+    }
+  } catch (err) {
+    console.error('[crypto] could not read what a new recovery key would need', err)
+    return null
+  }
+}
+
+export type RecoveryKeyChanged = { recoveryKey: string }
+export type RecoveryKeyChangeFailure = 'refused-by-plan' | 'no-crypto' | 'failed' | 'key-not-generated'
+
+// A new recovery key, with the old one retired. Guarded by the plan first:
+// setupNewSecretStorage replaces the storage whether or not this device can
+// refill it, and the plan is the only thing that knows whether it can.
+//
+// NOT setupNewKeyBackup. That resets the backup, and a reset destroys the
+// keys in it (G-e1). Rotating the recovery key must leave every room key
+// where it is; the SDK re-stores the existing backup key into the new
+// storage when it is cached, which the plan has just required.
+export async function changeRecoveryKey(
+  client: MatrixClient,
+  plan: RecoveryKeyChangePlan,
+): Promise<RecoveryKeyChanged | RecoveryKeyChangeFailure> {
+  if (!mayChangeRecoveryKey(plan)) return 'refused-by-plan'
+  const crypto = client.getCrypto()
+  if (!crypto) return 'no-crypto'
+  let generated: string | undefined
+  try {
+    await crypto.bootstrapSecretStorage({
+      setupNewSecretStorage: true,
+      createSecretStorageKey: async () => {
+        const key = await crypto.createRecoveryKeyFromPassphrase()
+        generated = key.encodedPrivateKey
+        return key
+      },
+    })
+  } catch (err) {
+    console.error('[crypto] replacing the recovery key failed', err)
+    return 'failed'
+  }
+  return generated ? { recoveryKey: generated } : 'key-not-generated'
 }

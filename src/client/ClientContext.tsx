@@ -13,6 +13,7 @@ import { createTokenRefreshFunction } from './tokenRefresher'
 import { ClientContext, type ClientContextValue, type ClientStatus } from './clientContextValue'
 import { planSessionEnd, type SessionEndReason } from './sessionEnd'
 import { compareDevice, ForeignTokensError } from './sessionIdentity'
+import { generateLoginUrl } from './oidcAuthorize'
 import { detail } from './report'
 import {
   e2eeEnabled,
@@ -298,7 +299,9 @@ export function ClientProvider({ children }: { children: ReactNode }) {
       const authMetadata = await tmpClient.getAuthMetadata()
 
       const nonce = crypto.randomUUID().replace(/-/g, '')
-      const authUrl = await sdk.generateOidcAuthorizationUrl({
+      // Not the SDK's generator: it cannot be asked for the MAS GraphQL
+      // scope that session management needs. See oidcAuthorize.ts.
+      const authUrl = await generateLoginUrl({
         metadata: authMetadata,
         redirectUri: REDIRECT_URI,
         clientId: CLIENT_ID,

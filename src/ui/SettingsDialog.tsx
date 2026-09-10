@@ -7,6 +7,11 @@ import type { KeyBackupFacts } from '../client/keyBackup'
 import { encryptionSummary, type EncryptionAction } from './encryptionSummary'
 import { recoveryPlan } from '../client/recoveryPlan'
 import { createRecovery, restoreFromRecoveryKey, type RestoreOutcome } from '../client/recovery'
+import { observeRecoveryKeyFacts, changeRecoveryKey } from '../client/recovery'
+import { recoveryKeyChangePlan, RECOVERY_KEY_CHANGE_TEXT, type RecoveryKeyChangeFacts } from '../client/recoveryKeyPlan'
+import { listSessions, endSessions, type ListOutcome } from '../client/masSessions'
+import { purgePlan, describeSessions } from '../client/sessionPurgePlan'
+import { loadSession } from '../client/session'
 import { deviceTrustLabel, observeOwnDevices, type OwnDevice } from '../client/ownDevices'
 import { startDeviceVerification, type VerificationHandle, type VerificationView } from '../client/verification'
 import { verificationStage } from '../client/verificationStage'
@@ -67,6 +72,14 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [note, setNote] = useState<{ text: string; tone: 'ok' | 'warn' | 'bad' } | null>(null)
   const [reload, setReload] = useState(0)
   const [devices, setDevices] = useState<OwnDevice[] | null>(null)
+  // What a new recovery key would need from this device (recoveryKeyPlan.ts).
+  const [keyFacts, setKeyFacts] = useState<RecoveryKeyChangeFacts | null>(null)
+  const [rotating, setRotating] = useState(false)
+  // This account's sessions as MAS sees them; null until read.
+  const [sessions, setSessions] = useState<ListOutcome | null>(null)
+  const [purge, setPurge] = useState<'unverified' | 'others' | null>(null)
+  const [purgeBusy, setPurgeBusy] = useState(false)
+  const [purgeNote, setPurgeNote] = useState<string | null>(null)
   const [verifying, setVerifying] = useState<string | null>(null)
   const [vview, setVview] = useState<VerificationView | null>(null)
   const [vhandle, setVhandle] = useState<VerificationHandle | null>(null)
@@ -101,13 +114,19 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     // continuation as one.
     queueMicrotask(() => {
       void (async () => {
-        const [i, b, d] = await Promise.all([
+        const issuer = loadSession()?.oidc.issuer
+        const token = client.getAccessToken()
+        const [i, b, d, k, sess] = await Promise.all([
           observeCryptoIdentity(client), observeKeyBackup(client), observeOwnDevices(client),
+          observeRecoveryKeyFacts(client),
+          issuer && token ? listSessions(issuer, token) : Promise.resolve<ListOutcome>('failed'),
         ])
         if (cancelled) return
         setIdentity(i)
         setBackup(b)
         setDevices(d)
+        setKeyFacts(k)
+        setSessions(sess)
         setRead(true)
       })()
     })
@@ -162,6 +181,42 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       return
     }
     setNewKey(result.recoveryKey)
+  }
+
+  const keyPlan = keyFacts ? recoveryKeyChangePlan(keyFacts) : null
+
+  const doRotate = async () => {
+    if (!client || !keyPlan) return
+    setBusy(true)
+    setNote(null)
+    const result = await changeRecoveryKey(client, keyPlan)
+    setBusy(false)
+    setRotating(false)
+    if (typeof result === 'string') {
+      setNote({ tone: 'bad', text: result === 'refused-by-plan'
+        ? 'Refused: this device cannot carry everything a new key would need.'
+        : 'A new recovery key could not be made. Your current one still works.' })
+      return
+    }
+    setNewKey(result.recoveryKey)
+  }
+
+  const masIssuer = loadSession()?.oidc.issuer ?? null
+  const verifiedIds = new Set((devices ?? []).filter((d) => d.crossSigningVerified).map((d) => d.deviceId))
+  const purgeable = Array.isArray(sessions) ? purgePlan(sessions, client?.getDeviceId() ?? null, verifiedIds) : null
+  const purgeList = purgeable && purge ? purgeable[purge] : []
+
+  const doPurge = async () => {
+    const token = client?.getAccessToken()
+    if (!masIssuer || !token || purgeList.length === 0) return
+    setPurgeBusy(true)
+    const r = await endSessions(masIssuer, token, purgeList)
+    setPurgeBusy(false)
+    setPurge(null)
+    setPurgeNote(r.failed === 0
+      ? `Signed out ${r.ended} session${r.ended === 1 ? '' : 's'}.`
+      : `Signed out ${r.ended}; ${r.failed} could not be ended.`)
+    setReload((n) => n + 1)
   }
 
   const beginVerify = async (deviceId: string) => {
@@ -315,6 +370,28 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               )}
             </>
           )}
+
+          {/* Replacing the recovery key. Offered only when this device holds
+              everything the new storage must carry (recoveryKeyPlan.ts); a
+              refusal says what to do first rather than hiding the control. */}
+          {e2eeEnabled() && keyPlan && keyFacts?.secretStorageReady && (
+            <div className="tc-settings-rotate">
+              <h4 className="tc-settings-subhead">Recovery key</h4>
+              {keyPlan !== 'ok' ? (
+                <p className="tc-settings-note">{RECOVERY_KEY_CHANGE_TEXT[keyPlan]}</p>
+              ) : rotating ? (
+                <div className="tc-settings-confirm">
+                  <p>Your current recovery key stops working. Your identity and your key backup stay exactly as they are and move under the new key.</p>
+                  <button type="button" disabled={busy} onClick={() => { void doRotate() }}>
+                    {busy ? 'Working...' : 'Yes, make a new key'}
+                  </button>
+                  <button type="button" disabled={busy} onClick={() => setRotating(false)}>Cancel</button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => setRotating(true)}>Make a new recovery key</button>
+              )}
+            </div>
+          )}
         </>
       )}
 
@@ -352,6 +429,56 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 </li>
               ))}
             </ul>
+          )}
+        </>
+      )}
+
+      {/* Sessions, as MAS sees them. The device list above is only the
+          sessions holding keys; an account collects many more, and ending
+          them one at a time on the account page is the thing this replaces. */}
+      {read && e2eeEnabled() && sessions !== null && (
+        <>
+          <h3 className="tc-settings-head">Sessions</h3>
+          {sessions === 'no-scope' ? (
+            <p className="tc-settings-note">
+              This sign-in is from before session management was added here. Sign out and back in, and this panel can end sessions in bulk.
+              {masIssuer && (
+                <>
+                  {' '}Until then, <a href={`${masIssuer}account/?action=org.matrix.sessions_list`} target="_blank" rel="noopener noreferrer">manage them on the account page</a>.
+                </>
+              )}
+            </p>
+          ) : sessions === 'failed' || !purgeable ? (
+            <p className="tc-settings-note">This account&apos;s sessions could not be read just now.</p>
+          ) : (
+            <>
+              <p className="tc-settings-note">
+                {sessions.length} session{sessions.length === 1 ? ' is' : 's are'} signed in to this account, this one included.
+                {' '}{purgeable.unverified.length} {purgeable.unverified.length === 1 ? 'is' : 'are'} not a verified device.
+              </p>
+              {purgeNote && <p className="tc-settings-note tc-tone-ok" role="status">{purgeNote}</p>}
+              {purge ? (
+                <div className="tc-settings-confirm">
+                  <p>These {purgeList.length} sessions will be signed out. Any of them that held keys not backed up loses them.</p>
+                  <ul className="tc-settings-detail">
+                    {describeSessions(purgeList).map((line) => <li key={line}>{line}</li>)}
+                  </ul>
+                  <button type="button" disabled={purgeBusy} onClick={() => { void doPurge() }}>
+                    {purgeBusy ? 'Signing out...' : 'Sign them out'}
+                  </button>
+                  <button type="button" disabled={purgeBusy} onClick={() => setPurge(null)}>Cancel</button>
+                </div>
+              ) : (
+                <div className="tc-settings-actions">
+                  <button type="button" disabled={purgeable.unverified.length === 0} onClick={() => { setPurgeNote(null); setPurge('unverified') }}>
+                    Sign out the {purgeable.unverified.length} unverified
+                  </button>
+                  <button type="button" disabled={purgeable.others.length === 0} onClick={() => { setPurgeNote(null); setPurge('others') }}>
+                    Sign out all {purgeable.others.length} others
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </>
       )}

@@ -3017,3 +3017,8 @@ code {
 .tc-booru-frame-hint { display: flex; align-items: center; gap: 12px; }
 .tc-booru-frame-signin { margin-left: auto; font-size: 11px; padding: 2px 9px; border-radius: 999px; border: 1px solid rgba(128, 128, 128, 0.4); background: transparent; color: inherit; cursor: pointer; }
 .tc-booru-frame-signin:hover { color: var(--tc-unread, #ff9628); border-color: var(--tc-unread, #ff9628); }
+
+/* Settings: batch session controls sit side by side; the rotate block keeps
+   the subhead spacing of the action list above it. */
+.tc-settings-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.tc-settings-rotate { margin-top: 12px; }
