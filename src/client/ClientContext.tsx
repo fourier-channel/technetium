@@ -12,6 +12,7 @@ import { watchRoomEncryptionConfig } from './roomEncryptionConfig'
 import { createTokenRefreshFunction } from './tokenRefresher'
 import { ClientContext, type ClientContextValue, type ClientStatus } from './clientContextValue'
 import { planSessionEnd, type SessionEndReason } from './sessionEnd'
+import { compareDevice, ForeignTokensError } from './sessionIdentity'
 import { detail } from './report'
 import {
   e2eeEnabled,
@@ -80,12 +81,27 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     deviceId?: string
     refreshToken?: string
     tokenRefreshFunction?: sdk.TokenRefreshFunction
+    // Resume only: ask the server whose token this is before trusting the
+    // stored device id. A fresh login just did whoami and needs no second ask.
+    confirmDevice?: boolean
   }) => {
     setStatus('syncing')
     const c = await buildClient(params)
     // Recorded BEFORE anything that can throw, so every failure path can stop it.
     clientRef.current = c
     exposeForDevConsole(c)
+
+    // The stored record is shared across tabs and was, until 2026-09-10,
+    // writable by a tab on an older login. Crypto below is keyed to the device
+    // id we believe we are; bringing it up on another device's token means
+    // room keys sent to us land in a queue nothing polls. One request settles
+    // it. An expired token is refreshed by the SDK on the way, as for any call.
+    if (params.confirmDevice && params.deviceId) {
+      const who = await c.whoami()
+      if (compareDevice(params.deviceId, who.device_id) === 'mismatch') {
+        throw new ForeignTokensError(params.deviceId, who.device_id ?? '')
+      }
+    }
 
     // Crypto comes up BETWEEN createClient and startClient -- the SDK requires
     // that order, and it is also the only window with no sync traffic for the
@@ -216,9 +232,19 @@ export function ClientProvider({ children }: { children: ReactNode }) {
           deviceId: s.deviceId,
           idTokenClaims: s.oidc.idTokenClaims,
         }),
+        confirmDevice: true,
       })
     } catch (err: unknown) {
       console.error('Resume failed:', err)
+      if (err instanceof ForeignTokensError) {
+        // Not a dead token: a live one belonging to another tab's login. Say
+        // so, because "sign in again" with no reason looks like the bug it is
+        // the cure for, and the other tab must be closed or it recurs.
+        endSession('foreign_tokens')
+        setError(err.message)
+        setStatus('error')
+        return
+      }
       // Refresh also failed (refresh token dead) -> session is truly gone.
       // Keeps this user's sync cache: see sessionEnd.ts.
       endSession('resume_failed')

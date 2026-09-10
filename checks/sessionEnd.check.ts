@@ -73,7 +73,7 @@ const covered = new Set<SessionEndReason>(SESSION_END_REASONS)
 check(
   'every reason the planner handles is listed in SESSION_END_REASONS',
   covered.has('logout') && covered.has('revoked') && covered.has('resume_failed')
-    && covered.size === 3,
+    && covered.has('foreign_tokens') && covered.size === 4,
   [...covered],
 )
 

@@ -28,6 +28,11 @@ export type SessionEndReason =
   | 'revoked'
   // A stored session could not be brought up (dead refresh token, network).
   | 'resume_failed'
+  // The stored session named one device but its tokens were another's: a tab
+  // on an older login had written over the record (sessionIdentity.ts). The
+  // user is the same, so the cache is as good as on any failed resume; the
+  // record is cleared so the other tab stops writing into it.
+  | 'foreign_tokens'
 
 export interface SessionEndPlan {
   // Halt the sync loop. Always true: see the header.
@@ -58,4 +63,5 @@ export const SESSION_END_REASONS: readonly SessionEndReason[] = [
   'logout',
   'revoked',
   'resume_failed',
+  'foreign_tokens',
 ]
