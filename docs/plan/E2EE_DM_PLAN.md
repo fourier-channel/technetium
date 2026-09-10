@@ -517,6 +517,49 @@ to put on `main` it is not finished, and a flag defaulted OFF is how an
 unfinished feature ships without shipping -- which is exactly how this
 campaign's seven landed steps sit on `main` today.
 
+## 2026-09-10, late -- the operator's own account, and the encryption menu
+
+What the operator's screenshots surfaced, in order, and what each became:
+
+- **Foreign tokens.** Element showed the verified device idle and an
+  unverified one carrying every request. Cause: the token refresher wrote
+  refreshed tokens over the shared session record regardless of whose device
+  it named, so a tab left open on a 2026-09-06 login (Za3UFulvTE) stamped its
+  tokens onto the record of a 2026-09-09 login (7pISD02Vsw). Fix: tokens are
+  persisted only into a record naming the refresher's own device, and resume
+  asks whoami once before starting crypto (`sessionIdentity.ts`, checked,
+  proven live with a wrong stored device id).
+- **Crypto store keyed by user only.** The forced re-login then found the
+  previous device's store under its name and "could not set up encryption".
+  Store is now keyed by user AND device; the orphaned per-user store of 7p
+  is harmless (its keys are in the backup). Proven live: a second device on
+  a profile holding the first device's store came up encrypted.
+- **Set-up recovery was broken** ("getSecretStorageKey callback returned
+  falsey"): the callback answered only for a typed key, never for the key
+  the SDK had just created. Now held for the duration of the creating
+  operation only (`withCreatedKey`). Proven live on a throwaway.
+- **Encryption menu v2** (operator request): "Make a new recovery key"
+  (`recoveryKeyPlan.ts`, refuses unless identity keys and backup key are on
+  this device; never `setupNewKeyBackup`) -- proven: old key refused on a
+  fresh device, new key restores and signs. "Sign out the N unverified" /
+  "all N others" via MAS GraphQL (`masSessions.ts`, `sessionPurgePlan.ts`),
+  with login now requesting `urn:mas:graphql:*` through our own authorize
+  URL (`oidcAuthorize.ts`; MAS 1.22 keeps a session's scope across refresh).
+  Every MAS call refreshes an expired token once (MAS tokens live 5 min; the
+  SDK refreshes only on a homeserver 401).
+
+**Open, needs the operator's hand:** MAS's GraphQL rejects EVERY bearer token
+unless the listener resource says `undocumented_oauth2_access: true`
+(crates/handlers/src/graphql/mod.rs, `get_requester`). Until that line is
+added under `- name: graphql` in the web listener of
+`/opt/synapse/mas/config.yaml` (gitignored, edit in place) and MAS is
+restarted, the Sessions section reports "sign in again" for everyone. The
+edit and restart were blocked by the session's permission classifier.
+
+Test accounts made tonight: `claudekey`, `claudekey2` (MAS passwords in the
+session scratchpad, never printed); `claudeone` got a password for the OIDC
+login probe and a second device id token.
+
 ## Operator-side items -- the human-fingers batch
 
 Not client work, and deliberately grouped: the operator handles these in one
