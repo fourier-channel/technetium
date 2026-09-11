@@ -1,7 +1,7 @@
 {
   "build_stamp": null,
-  "hydrated_at": "2026-09-11T04:33:52Z",
-  "hydrated_hash": "sha256c:c4c1d512f5a902a83433b44b0f47666a640b755eaa081ae49aad8e17cec4179d",
+  "hydrated_at": "2026-09-11T05:12:33Z",
+  "hydrated_hash": "sha256c:78216329f4aa98793e83cc75324e884b2c5d9a31454052677f37fca4f58904f2",
   "pinned": null,
   "source": "coherence://brain/README.md"
 }

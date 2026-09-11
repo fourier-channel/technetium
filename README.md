@@ -56,10 +56,13 @@ use [Element](https://element.io).
 
 ```
 npm install
-npm run dev        # Vite dev server
-npm run build      # tsc -b && vite build
-npm run check      # the whole check suite (see below)
-npm run gate       # lint + check + build: the pre-merge gate
+npm run dev            # Vite dev server
+npm run build          # tsc -b && vite build
+npm run preview        # serve the built dist locally
+npm run lint           # eslint
+npm run check          # the whole check suite (see below)
+npm run check:derived  # the derived-facts check alone
+npm run gate           # lint + check + build: the pre-merge gate
 ```
 
 Configuration is by `VITE_*` variables at build time. Without them the
