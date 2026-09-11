@@ -548,13 +548,15 @@ What the operator's screenshots surfaced, in order, and what each became:
   Every MAS call refreshes an expired token once (MAS tokens live 5 min; the
   SDK refreshes only on a homeserver 401).
 
-**Open, needs the operator's hand:** MAS's GraphQL rejects EVERY bearer token
+**Resolved 2026-09-11 (operator ran the edit):** MAS's GraphQL rejects EVERY bearer token
 unless the listener resource says `undocumented_oauth2_access: true`
 (crates/handlers/src/graphql/mod.rs, `get_requester`). Until that line is
 added under `- name: graphql` in the web listener of
 `/opt/synapse/mas/config.yaml` (gitignored, edit in place) and MAS is
 restarted, the Sessions section reports "sign in again" for everyone. The
-edit and restart were blocked by the session's permission classifier.
+edit and restart were blocked by the session's permission classifier; the
+operator ran them. Proven after: a scoped token is answered as User, and the
+panel signed out 5 of 6 sessions on the test account (Synapse devices 9 -> 4).
 
 Test accounts made tonight: `claudekey`, `claudekey2` (MAS passwords in the
 session scratchpad, never printed); `claudeone` got a password for the OIDC
