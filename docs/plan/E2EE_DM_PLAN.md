@@ -547,6 +547,12 @@ What the operator's screenshots surfaced, in order, and what each became:
   URL (`oidcAuthorize.ts`; MAS 1.22 keeps a session's scope across refresh).
   Every MAS call refreshes an expired token once (MAS tokens live 5 min; the
   SDK refreshes only on a homeserver 401).
+<!-- phase:G-2c91f3 -->
+> **[2026-09-11 / G-2c91f3]** A shared session record written by every tab; the fix and the check are in sessionIdentity.ts.
+<!-- phase:G-9e40b7 -->
+> **[2026-09-11 / G-9e40b7]** A crypto store IS a device; keyed per user+device since b77813c.
+<!-- phase:G-5b8ac2 -->
+> **[2026-09-11 / G-5b8ac2]** The SDK asks back for the key it has just created; withCreatedKey holds it for the operation only.
 
 **Resolved 2026-09-11 (operator ran the edit):** MAS's GraphQL rejects EVERY bearer token
 unless the listener resource says `undocumented_oauth2_access: true`
@@ -557,6 +563,8 @@ restarted, the Sessions section reports "sign in again" for everyone. The
 edit and restart were blocked by the session's permission classifier; the
 operator ran them. Proven after: a scoped token is answered as User, and the
 panel signed out 5 of 6 sessions on the test account (Synapse devices 9 -> 4).
+<!-- phase:S-d31e08 -->
+> **[2026-09-11 / S-d31e08]** MAS web listener, graphql resource: undocumented_oauth2_access: true. Recorded as a setting-state.
 
 Test accounts made tonight: `claudekey`, `claudekey2` (MAS passwords in the
 session scratchpad, never printed); `claudeone` got a password for the OIDC
