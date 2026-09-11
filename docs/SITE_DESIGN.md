@@ -13,21 +13,28 @@ This file is the only copy anyone edits.
 
 41chan is not one application. It is a Matrix homeserver, a Danbooru fork, and a
 custom web client, plus a pipeline that feeds them and a gate that guards them.
-Six of those pieces are separate repositories, and the separations are load
-bearing rather than organisational.
+Each piece is its own repository, and the separations are load bearing rather
+than organisational.
 
-    Matrix (Synapse + MAS) ... identity, rooms, and site assets only
-      |
+    Matrix (Synapse + MAS) ... identity, rooms, and site assets only.
+      |                        Federation is closed: nothing leaves.
       +-- fourier-auth ...... the gate. every image request is authorised here
-      +-- fourier-tunnel .... bridges images posted in Matrix into the booru
+      +-- fourier-tunnel .... bridges images posted in Matrix into the booru,
+      |                        and hosts Fourier-chan's onboarding
       +-- technetium ........ the web client people actually use
       |
     chanbooru ............... the Danbooru fork: metadata, search, tags
       |
       +-- fourier-sampling .. acquisition, tagging, posting, and the troll jail
-      +-- fourier-spectrum .. the primary autotagger
+      +-- fourier-spectrum .. the taggers (two models, one contract)
       +-- fourier-formant ... the shared design vocabulary
       +-- fourier-coherence . keeps every copy of everything honest
+      +-- fourier-domain .... the public web pages, including this one
+    fourier-basis ........... the private canon every other repo is delivered from
+
+Identity is MAS (matrix-authentication-service): Synapse holds no passwords
+and every login, on every surface, is an OIDC flow against MAS. Registration
+on both the Matrix side and the booru side is by admin-issued token.
 
 ---
 
@@ -57,10 +64,10 @@ Three consequences, and they are the point:
 - **A leaked URL grants nothing.** Access is decided per request, before the
   redirect is issued, and the signed URL that results is short-lived.
 
-Permission is enforced once, in one place, by the system that already knows who
-may see what -- rather than being re-implemented in every surface that displays
-an image. Synapse remains the single authority for AUTHORISATION. It is not the
-store.
+Permission is enforced once, in one place -- fourier-auth, reading the facts
+Synapse holds about rooms and membership -- rather than being re-implemented
+in every surface that displays an image. Synapse is the source of the facts;
+fourier-auth decides; R2 stores. None of the three does another's job.
 
 Two things that follow, and both explain a whole class of confusion:
 
@@ -78,15 +85,23 @@ Two things that follow, and both explain a whole class of confusion:
 **Purpose:** let a metadata store reference media without storing or exposing
 the bytes.
 
-**How it works.** A user proves a Matrix identity. A server-side session in
-Redis maps an opaque cookie to that user's Matrix access token. When the browser
-requests an image it sends only the cookie; fourier-auth resolves it
-server-side and asks Synapse. The token never reaches the browser.
+**How it works.** A user proves a Matrix identity, by an OIDC login against
+MAS or, for a first-party client, by presenting its MAS token. A server-side
+session in Redis maps an opaque cookie to that token; the token never reaches
+the browser. When the browser requests an image it sends the cookie;
+fourier-auth resolves it and answers the permission question by reading
+Synapse's own database -- which room the media was posted in, whether the
+viewer is joined. Synapse's HTTP API is used only to validate the token, and
+its authenticated-media endpoint is not used at all, because it authenticates
+the token without enforcing room membership.
 
-If the answer is yes, the caller is redirected to a short-lived signed R2 URL.
+If the answer is yes, the caller gets a short-lived presigned R2 URL.
 **No media byte passes through this service.** It decides and steps out of the
-way, which is why the images are fast: the bytes come from Cloudflare's edge,
-not from one host in one datacentre.
+way. Since 2026-09-06 a Cloudflare Worker in front of both public hosts asks
+this service for the decision, caches an allow at the edge for four minutes
+(never a denial), and streams the object from R2 itself -- so the bytes come
+from Cloudflare's edge, not from one host in one datacentre, and a viewer
+who leaves a room can read for at most four more minutes.
 
 An earlier version proxied from Synapse whenever R2 could not answer. That was
 deleted rather than switched off, for two reasons: it put media bytes through
@@ -129,13 +144,23 @@ expires -- so a leaked link is not a leak.
 uploading them twice.
 
 A Matrix application service. When someone posts an image in a bridged room, the
-bridge downloads it through the authenticated media API, feeds a copy to the
-booru for tagging, and writes the resulting tags back into the room as a state
-event keyed by the image's MXC URI -- ready for a client to render and edit.
+bridge downloads it through the authenticated media API, checks the booru by
+md5 so a repost is never a second post, sends the bytes to fourier-spectrum for
+tags, creates the booru post with those tags and an artist tag minted from the
+poster's Matrix name, and writes the tags back into the room as a state event
+keyed by the image's MXC URI -- ready for a client to render and edit. Prompt
+tags scraped from AI-image metadata stay private: they reach neither the
+booru's tag string nor the room. When the bot is invited into a room it walks
+the room's history once and catches up.
 
 **The reasoning.** The MXC URI is the link between the two systems. Tags live in
 both places on purpose: the booru can search them, and the Matrix room can show
 them without asking the booru anything.
+
+The same appservice carries **Fourier-chan**, the mascot, as her own user: she
+greets each new account, offers the on-ramp room, and can run an onboarding
+progression. That engine is off unless configured, and the only step that
+would grant privileges automatically is disabled by default.
 
 What is NOT copied is the image. The homeserver pushes what it receives straight
 to R2, and the booru is given a reference to that same object -- so a picture
@@ -201,13 +226,16 @@ Two models run, and they are not redundant.
 
 **`wd-vit-tagger-v3`** -- the primary. A 94.6M-parameter vision transformer over
 a Danbooru vocabulary of 10,861 tags (4 rating, 8,106 general, 2,751 character).
-Fast enough to run on the upload in flight, about 0.7s on a four-core box. It
-also handles video, by extracting keyframes.
+Fast enough to run on the upload in flight: about a second and a half for a
+still on the deployed four-core cap. It also handles video, by extracting
+keyframes, and the service runs one inference at a time behind a queue that
+puts a user's upload ahead of the scraper's backlog.
 
 **`hydra-3.5`** -- the secondary, added 2026-08-22. A different vocabulary
 entirely -- an e621-derived taxonomy with six categories including species,
-copyright, lore and meta, where the primary reports two. It is an image
-classifier and cannot take video.
+copyright, lore and meta, where the primary reports two. Like the primary it
+is a still-image classifier; video reaches either only because the service
+decodes keyframes first.
 
 **Why two.** The whole point of a second opinion is that it is a different one.
 Hydra sees things the primary has no words for, which is exactly why the content
@@ -216,13 +244,15 @@ the required route: a post is never made on a secondary's tags alone, because
 the poster has no update path and an image posted on partial tags would carry
 them forever.
 
-**A measured decision worth recording.** Hydra runs at 13.3 seconds an image on
-this hardware. It was 149 seconds before a wrapper fixed two CPU pathologies:
-the model hardcodes bfloat16, correct on the GPU it was built for and 75x slower
-than float32 on a CPU with no bf16 hardware path; and PyTorch reads the host's
-core count rather than the container's quota, starting twelve threads inside a
-four-core budget. Neither is a patch to the model's own code -- the loader is
-wrapped, not edited, so upstream fixes keep working.
+**A measured decision worth recording.** Hydra costs about seventeen
+core-seconds an image on this hardware and does not scale past three cores in
+one process, so capacity is more instances rather than more threads. It was
+149 seconds an image before a wrapper fixed a CPU pathology: the model
+hardcodes bfloat16, correct on the GPU it was built for and 75x slower than
+float32 on a CPU with no bf16 hardware path. The loader is wrapped, not
+edited, so upstream fixes keep working. No box in the suite has a GPU; a
+proposal to run hydra as a post-hoc batch worker on a rented one is in canon,
+unruled.
 
 **Routes serve both ends of the backlog.** A tagger pointed only at new images
 never reaches old ones while new work keeps arriving; pointed only at old ones
@@ -234,10 +264,30 @@ new end does not need flows to the archive.
 
 ## technetium -- the client
 
-A custom Matrix client for the community. It is the surface most people will
-spend their time in, and it is a real client rather than a skin: encryption,
-spaces, threads and media all go through the same authorisation path described
-above.
+A custom Matrix client for the community, built from scratch on the Matrix
+client-server API. It is the surface most people will spend their time in, and
+it is a real client rather than a skin: spaces, threads, polls, search and
+media all go through the same authorisation path described above, and the
+booru is mounted inside it with a sign-in that costs no clicks.
+
+Three things about it that a normal Matrix client does not do:
+
+**Encryption is for direct messages, and it is opt-in.** Content rooms are
+unencrypted by design -- the pipeline tags what is posted in them. DMs can be
+end-to-end encrypted, switched on per browser from Settings, with recovery
+keys, device verification, key backup, encrypted attachments and a panel that
+says plainly what state your keys are in. The settings panel also lists every
+session on the account and signs out the unverified ones in one action, which
+Element makes you do one at a time.
+
+**It asks before your browser reaches anything it does not control.** Before
+the client hands your information to any third-party surface, it says so and
+you can decline; every ambiguous state resolves to blocked.
+
+**It has its own geography.** A pinned dock of direct messages, a spatial
+"domain" view of a room with movable objects and per-domain backgrounds, and
+chat interactions between users rendered in the timeline. A desktop shell
+hosts the same deployed origin.
 
 ---
 
@@ -248,10 +298,18 @@ A Danbooru fork. What differs from stock Danbooru, and why:
 **It serves no media.** Covered above. This is the largest single difference and
 most of the others follow from it.
 
-**Signup is closed and new accounts start restricted.** Accounts are made
-deliberately. A viewer below the threshold sees at most 20 posts per search, and
-that ceiling clamps the `limit` parameter too -- otherwise the restriction would
-be one query parameter wide.
+**Signup is by token and new accounts start restricted.** An admin issues a
+signup token good for one registration, several, or unlimited; without one
+the signup POST is refused. A viewer below the threshold sees at most 20 posts
+per search, and that ceiling clamps the `limit` parameter too -- otherwise the
+restriction would be one query parameter wide. Comments, notes and the forum
+do not exist on this fork; they 404 rather than merely leaving the nav.
+
+**It looks like a different site.** "Modulation" is a replacement skin and
+post page -- gallery, navbar, landing panel at the root route, a session strip
+-- and it is the default everywhere but the test environment. Upstream's
+interface is still there underneath and holds to the same design tokens by
+assertion (see fourier-formant).
 
 **Some content does not exist for signed-out visitors.** A configured tag list
 marks material the site will not serve casually. For a signed-out visitor those
@@ -267,15 +325,22 @@ page can report more results than it shows. Here they are removed from the query
 **Private tags are never published to the page.** Creator-supplied tags marked
 private do not reach the DOM. The deliberate consequence: a viewer's blacklist
 cannot match a tag that viewer is not allowed to see -- you cannot filter on what
-you cannot be shown, and the alternative is disclosing it.
+you cannot be shown, and the alternative is disclosing it. A creator can open
+that door per person with a tag grant, which is a whitelist on their own tag.
+
+**Some words do not exist here.** A banished-tag list removes terms from the
+vocabulary for everyone, admins included unless they switch a reveal on; an
+enforced blacklist hides the same material from every viewer's view without
+touching any account's own list. Both are distinct from the content gating
+that decides who may see a post at all.
 
 **Tags carry provenance.** Every tag records whether it came from a creator, a
 model, a human editor, or is metadata -- and a tag can be several at once. The
 UI does not colour tags by which model produced them; provenance is recorded
 because it is true, not because it should be decorated.
 
-For the operational detail of all six gates, see `docs/CONTENT_GATING.md` in
-chanbooru.
+For the operational detail of all seven gates, see `docs/CONTENT_GATING.md`
+in chanbooru, published beside this page.
 
 ---
 
@@ -333,8 +398,16 @@ canon is never overwritten: that edit exists in one place and nowhere else.
 
 **The gate.** One Go/No-Go before a commit. Universal checks run identically
 everywhere -- invisible characters in code, a canonical file's hash, committed
-secrets, documentation that hand-maintains a number a command computes. The
-repository's own tests stay the repository's business.
+secrets, documentation that hand-maintains a number a command computes, a
+`CLAUDE.md` that has fallen behind canon. The repository's own tests stay the
+repository's business, and since 2026-09-11 each repository's tests include a
+check that its README names what the code actually has.
+
+It also watches what is not in git at all: files that live both on the serving
+box and in canon (the edge proxy's config, the booru's runtime config) are
+compared by hash in both directions, and a security audit of the box's sshd,
+secret file modes and service users runs on a timer. Every Claude Code session
+on every machine reads and writes one memory store, kept in canon.
 
 Three verdicts, not two: PASS, FAIL, and PARTIAL. A skipped check is named and
 the run is marked PARTIAL rather than passed, because a gate that quietly covers
@@ -368,3 +441,13 @@ computed is a number that will eventually be wrong.
 **A gate is unlocked, not bypassed.** An unlocked gate still runs and still has
 an opinion -- it just says "okay". A bypassed gate has its opinion discarded, and
 cannot afterwards be asked why.
+
+**Current state is not a rule.** A convention with no author is a previous
+session's assumption that got old. What the operator ruled, with a date, is a
+rule; everything else is current state, changed when the work needs it and
+left alone when it does not.
+
+**A thousand no-gos is useless without a go.** Checks guard a process against
+regression; the evidence that it works is the process run from beginning to
+end, on the real thing, once. A turn that ends with checks green and the run
+never attempted has verified nothing.
