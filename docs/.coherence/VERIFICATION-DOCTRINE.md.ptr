@@ -1,7 +1,7 @@
 {
   "build_stamp": null,
-  "hydrated_at": null,
-  "hydrated_hash": "sha256c:f0eddb8808c56c19c634ea552df63acf4414917b16760ed339b499134e8d7b84",
+  "hydrated_at": "2026-09-11T02:12:30Z",
+  "hydrated_hash": "sha256c:ce73a194d668da932113c6d019b4ad5ff2567fc46b3328a790b597b91afc2e55",
   "pinned": null,
   "source": "coherence://brain/VERIFICATION-DOCTRINE.md"
 }
