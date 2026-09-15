@@ -3788,3 +3788,131 @@ real means building those surfaces, not just flipping the flag.
 **PENDING OPERATOR:** two test accounts (offered 2026-09-05) would let
 this session verify E2EE live end-to-end -- DM both ways, decryption
 states, the arrival flow -- plus the visual pass on everything above.
+
+---
+
+## 2026-09-15 -- ui-depth-v1: chrome, bubbles, permissions [auto]
+
+A nine-row braindump from the operator, taken as a campaign
+(`docs/plan/UI_DEPTH_PLAN.md`). All nine landed, plus two findings that
+came out of building them.
+
+**What changed.** Title bars sink below their panels with a shade and a
+lip, from one class; the room list's header left the scrolling list, so
+who you are signed in as no longer scrolls away under a long room list.
+Dividers became grooves with raised rails that squash when grabbed, and
+they are outlined green or orange by a rule that lives in
+`ui/dividerTone.ts`: a divider belongs to the panel on its RIGHT, and it
+is orange while that panel is one that gets pulled out and is currently
+out. The domain got a drag grip it never had.
+
+The post time stopped owning a 14px line above every message and now
+floats at the end of the bubble; the bubble is 22% shorter, measured
+42.1px to 32.9px, and the avatar came down 40px to 34px in the same
+breath because the line's height is max(bubble, avatar) and the avatar
+was the taller of the two. The three bubble animators were rebuilt: all
+open as the ordinary pill and then become the burst, the cloud, or a
+pill with question marks rising off it.
+
+Enter with a picture waiting posts it. The user card sets room power
+levels, from one implementation, in the member list, the chat panel and
+the domain canvas. Settings grew a Server Permissions tab. The user list
+grew a Full/Compact switch whose compact half IS the low-animation
+display.
+
+**The measuring instrument mattered more than any of it.** vesper is
+headless and the standing rule has been that browser behaviour is never
+claimed. A Playwright Chromium build is already installed here and
+renders, so `tools/visual/` now builds a harness page against the repo's
+own stylesheets and screenshots it. Four things were caught by LOOKING
+that no check would have found: the burst rendering with no outline at
+all (clip-path is applied after filter on the same element, so the
+shadows were cut away), a shape layer at `z-index: -1` rendering as
+nothing (any opaque element background above it paints later), a cloud
+that came out as scales (a tiled silhouette in a translucent colour
+doubles its alpha where its layers overlap) and then as a cog (circles
+butted edge to edge leave a notch at every tangent, and the outline
+traces every notch), and a settings grid laying its labels and values
+out in independent columns.
+
+**draft-01 (gotcha) -- `clip-path` is applied AFTER `filter` on the same
+element.** An outline built from drop-shadows is therefore clipped away
+by a clip-path beside it, and the element renders with no outline and no
+error. The filter has to live one level up, on the parent of the clipped
+element.
+
+**draft-02 (gotcha) -- a `z-index: -1` layer is not behind its parent,
+it is behind its nearest stacking context.** Negative-z-index
+descendants paint at step 3; ordinary element backgrounds paint at step
+4. Any opaque background between the layer and that stacking context
+paints over it, and the layer renders as nothing at all.
+
+**draft-03 (gotcha) -- a tiled silhouette cannot be drawn in a
+translucent colour.** Its background layers overlap, the alpha doubles
+where they do, and a cloud comes out as scales. Mix the tone into an
+opaque colour instead. Circles must also overlap their tile: butted edge
+to edge they leave a notch at every tangent and any outline traces all
+of them.
+
+**draft-04 (gotcha) -- the org's infinite-animation rule had three
+violations here, and one was the incident itself.** `infinite-animations
+-cost-a-core` says an infinite animation may touch transform and opacity
+and nothing else. The DM waiting glow animated `box-shadow` forever on a
+face that is lit for as long as a DM is unread; the image placeholder
+animated `background-position` for as long as anything was still
+loading; every letter of a pinging room name animated `color` and
+`text-shadow`. All three hid the same way the original did -- they run
+only while something is unread or loading, so the page is at its most
+expensive exactly when somebody is looking at it, and a census on a
+quiet day finds nothing. `checks/cssAnimations.check.ts` now reads every
+stylesheet and CSS-in-JS block and fails the gate.
+
+**draft-05 (gotcha) -- the operator's own example of a feature was
+unreachable by clicking.** With the domain out, `openThreadView` refused
+at every fraction and on every screen size: it took the whole of the
+reading pane's width from the panels touching the region's right edge,
+which by then is only the domain, and the domain cannot spare that much
+above its 240px minimum. The width was available the whole time and was
+never asked of the panel to the LEFT. Fixed by squeezing the region with
+an affine map of its x axis rather than a per-column cascade -- the DM
+dock spans the whole region, so a cascade leaves it overlapping the new
+pane.
+
+**draft-06 (decision) -- an audit that does not invent a policy.** The
+Server Permissions panel answers "is everything holding the right
+settings" in two registers that are never mixed: FAULTS, true of any
+Matrix room regardless of taste, and DIFFERENCES from the rest of this
+server, computed from the server's own rooms and never called faults. A
+consensus needs a strict majority; with too few rooms the panel says so
+rather than showing an empty list.
+
+**draft-07 (decision) -- the admin tab hides a VIEW, and says so.** The
+tab appears when Synapse's admin API says this account administers the
+server. Every setting in it is room state any member can read with any
+client, and the panel says that out loud, because the honest answer to
+"any way to make this show up for me only" would be a lie if it implied
+the data were protected.
+
+**Three mutations survived the first draft of the U8 checks**, and by
+the doctrine that means the tests were wrong rather than the score being
+good: a consensus floor tested with identical rooms proves nothing, a
+tie test that the majority rule already catches proves nothing (and
+showed an explicit tie-break to be unreachable, so it is deleted), and a
+cycle test using two spaces that each claim the other never recurses at
+all because neither is a root. All three fixed and now killing.
+
+**CLAUDE.md's gate numbers were three campaigns stale** -- it said the
+lint baseline was 23 problems against a tree that lints clean, and 981
+checks against a suite of 1869. A session obeying it would have believed
+it had 23 problems of headroom. Canon now carries the commands instead
+of the counts (WORKING-RULES rule 6).
+
+Gate at the end of the session: tsc clean, lint 0 problems, 1869 checks
+passing, build passing.
+
+**PENDING OPERATOR VERIFICATION.** Everything visual was rendered from
+this tree's stylesheets and looked at; nothing was exercised against a
+live homeserver. Specifically unverified: the feel of the divider
+squash, the pacing of the three animators, Enter-posts-the-picture in a
+real browser, a power level actually round-tripping through a room, and
+the Server Permissions panel against real server state.

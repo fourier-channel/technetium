@@ -21,6 +21,7 @@
 | branch | `main` (no branches -- operator correction 2026-09-14) |
 | base | `main` at `eed0567`, "docs: site design delivered from canon" |
 | measured gate at base | lint 0 problems / check 1633 ok / build passing (2026-09-15) |
+| measured gate at `9e502d9` | lint 0 problems / check 1869 ok / build passing (2026-09-15) |
 | deploys | operator's call, `./deploy.sh` only |
 
 **The baseline numbers in CLAUDE.md were stale at the start of this campaign.**
@@ -40,13 +41,13 @@ narrowed; where a reading had to be chosen it is stated in the row.
 | id | ask | state |
 | --- | --- | --- |
 | U1 | Title/header bars must read as distinct from the panel they head -- a fade toward a darker grey, either direction | DONE `1204465` |
-| U2 | Dividers get depth (3d/squishy), outlined subtle 41chan GREEN when their panel is neutral and subtle 41chan ORANGE when it is active | DONE `1204465` -- see U2b |
+| U2 | Dividers get depth (3d/squishy), outlined subtle 41chan GREEN when their panel is neutral and subtle 41chan ORANGE when it is active | DONE `1204465` + `9a89393` |
 | U3 | The post time pushes the bubbles down; append it to the END of the bubble instead | DONE `83bac08` |
 | U4 | Bubbles are too tall -- shrink about 20-25% | DONE `83bac08` -- measured 42.1px -> 32.9px, 22% |
 | U5 | The question/exclamation/thinking bubble animators are low quality: pill first, then pop to the jagged burst keeping both colours; pill then morph to cloudy bubbles; pill with question marks floating up over it, fading in on spawn and out on despawn | DONE `4432b35` |
 | U6 | Enter with an image attached must POST it, not open something | DONE `9889adc` |
 | U7 | The Edit User interface must work in both the room list and the chat panel, and must set room power level | DONE `d3f1fab` |
-| U8 | A Server Permissions tab in Settings: the whole server structure, every space/room's settings at a glance, everyone above a power-level floor, alphabetised and ranked by power; set moderators and voices; confirm every room holds the right settings and change them; visible to the operator only | PENDING |
+| U8 | A Server Permissions tab in Settings: the whole server structure, every space/room's settings at a glance, everyone above a power-level floor, alphabetised and ranked by power; set moderators and voices; confirm every room holds the right settings and change them; visible to the operator only | DONE `c60c816`, `9e502d9` |
 | U9 | User list: an on-panel display toggle that obeys low-animation mode, with the CURRENT display as the low-animation version; the animated version adds avatars, bigger type, more spacing, and pulses an honorific while active | DONE `fda1b83` |
 
 ---
@@ -138,6 +139,8 @@ One line per landed step, appended as it lands.
 | U6 `9889adc` | Enter with a picture waiting posts it. It was a focus bug: attaching leaves focus on the attach button, so Enter re-opened the file chooser. The caret now moves to the composer when a picture lands, and a panel-level Enter rule (pure, 20 checks) covers wherever focus actually ends up. | The browser's focus behaviour was not observed. PENDING OPERATOR VERIFICATION. |
 | U7 `d3f1fab` | A room power-level editor on the shared `ProfileActions`, so the member list, the chat panel AND the domain canvas get it from one implementation. The homeserver's three rules and the one exception (you may always lower your own level) are a pure module with 29 checks, mutation-tested three ways. Every refusal names its remedy; both one-way doors are flagged before the click. | No live room was edited. PENDING OPERATOR VERIFICATION for the round trip. |
 | U9 `fda1b83` | The user list gets an on-panel Full/Compact switch. Compact is exactly the old display and is what low animation forces; the preference survives the override and the panel says when it is in force. The honorific pulse is opacity-only on a pseudo-element copy, gated on rich + a rank + the server actually saying online. | None. |
+| U8 `c60c816`, `9e502d9` | A Server Permissions tab: the whole structure nested and alphabetised, every setting at a glance, everyone in a power window (10-100 by default, both ends inclusive), the ranks settable from the row, and a search to give a rank to somebody who holds none. The audit reports FAULTS and DIFFERENCES separately and never calls a difference a fault; a consensus needs a strict majority, and with too few rooms the panel says so instead of showing an empty list. Visible when Synapse's admin API says so, and it says out loud that this hides a view and not the information. | No live server was audited and no level was set from the panel. PENDING OPERATOR VERIFICATION. |
+| U2b `9a89393` | The reading pane opens over an open domain. Closed the finding above. | Needs a screen of at least ~1440px wide for all three at once; below that the conversation's 320px minimum refuses, visibly. |
 | U1 + U2 `1204465` | `.tc-panel-head` sinks every title bar below its panel with a shade and a lip; `.tc-divider` gives every wall a groove, a raised rail, a squash, and a tone outline. `ui/dividerTone.ts` holds the tone rule, 26 new checks. The room list's header left the scroller; the settings dialog's title row is sticky. The domain got a drag grip it never had. | **U2b below.** Hover and grab behaviour is CSS-only and was not driven by a pointer -- PENDING OPERATOR VERIFICATION for the feel of the squash. |
 
 ---
@@ -173,4 +176,19 @@ the geometry cannot quietly hide the tone rule, or the reverse.
 | id | U2b |
 | found | 2026-09-15, writing U2's check |
 | touches | `src/ui/space.ts` `openThreadView`, which is fuzz-checked |
-| state | OPEN |
+| state | **CLOSED** `9a89393` |
+
+**How it was fixed, and the thing that nearly went wrong.** The region is now
+squeezed into what is left by an affine map of its x axis -- every open panel
+shrinks in proportion -- rather than by a cascade down the columns. The cascade
+was the obvious answer and it is wrong here: the DM dock spans the whole region
+while the conversation and the domain split the part below it, so a per-column
+walk shrinks the dock by the first column's share only and leaves it
+overlapping the new pane. One transform preserves the tiling in every
+horizontal band by construction.
+
+Where only the chat is in the region, proportional and subtractive are the same
+arithmetic, so the ordinary case is untouched. A screen that genuinely cannot
+hold all three still refuses: 1280x800 does, because the conversation would
+land at 292px against its 320px minimum. That is a minimum doing its job and it
+is a different thing from the silent refusal it replaces.

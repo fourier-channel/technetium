@@ -1,7 +1,7 @@
 {
   "build_stamp": null,
-  "hydrated_at": "2026-09-15T04:30:42Z",
-  "hydrated_hash": "sha256c:7949c2372c5bff38d939fd1691debe7a1f46521ed33be47759363984cc34bcca",
+  "hydrated_at": "2026-09-15T04:39:09Z",
+  "hydrated_hash": "sha256c:5e632b6ab4bcaa58cfe57ea2d509639522a4cc1be0f3b9a478bee7c16704a28a",
   "pinned": null,
   "source": "coherence://brain/UI_DEPTH_PLAN.md"
 }
