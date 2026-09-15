@@ -6,6 +6,8 @@ import { recordDmNotice } from '../client/dmNotice'
 import { clearAvatar, setDisplayName, uploadAndSetAvatar } from '../client/profile'
 import { describeInviteError } from '../client/userDirectory'
 import { AVATAR_SHAPES, useAvatarShape } from './avatarShape'
+import { powerEdit, requiredToSetPower, type Tier } from '../client/powerLevels'
+import { standingLabel } from '../client/members'
 
 // W4.2/W4.3/W4.4 -- what fills the shared ProfileCard's `actions` slot.
 //
@@ -27,16 +29,139 @@ export function ProfileActions({
   onClose: () => void
 }) {
   const isSelf = client.getUserId() === userId
-  return isSelf ? (
-    <OwnProfileActions client={client} />
-  ) : (
-    <OtherProfileActions
-      client={client}
-      userId={userId}
-      room={room}
-      onOpenRoom={onOpenRoom}
-      onClose={onClose}
-    />
+  return (
+    <>
+      {isSelf ? (
+        <OwnProfileActions client={client} />
+      ) : (
+        <OtherProfileActions
+          client={client}
+          userId={userId}
+          room={room}
+          onOpenRoom={onOpenRoom}
+          onClose={onClose}
+        />
+      )}
+      {/* U7. ONE editor, on the one component both surfaces fill their card's
+          action slot with -- the member list and the chat panel open the same
+          ProfileCard, so writing it here is what makes it work in both rather
+          than making two that agree today (D-tc01). */}
+      <RoomPowerEditor client={client} userId={userId} room={room} isSelf={isSelf} />
+    </>
+  )
+}
+
+// The room-level control. Everything it is allowed to do is decided by
+// client/powerLevels.ts; this renders that answer and nothing else, so a
+// control is never live when the server would refuse it.
+function RoomPowerEditor({
+  client,
+  userId,
+  room,
+  isSelf,
+}: {
+  client: MatrixClient
+  userId: string
+  room: Room | null
+  isSelf: boolean
+}) {
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [confirm, setConfirm] = useState<number | null>(null)
+
+  const myId = client.getUserId() ?? ''
+  const me = room?.getMember(myId) ?? null
+  const target = room?.getMember(userId) ?? null
+  const plEvent = room?.currentState.getStateEvents('m.room.power_levels', '')
+  const facts = powerEdit({
+    isSelf,
+    haveRoom: !!room,
+    // A membership that is not `join` is not a member for this purpose: a
+    // level written for somebody who has left is real state that nobody sees.
+    inRoom: target?.membership === 'join',
+    myLevel: me?.powerLevel ?? 0,
+    targetLevel: target?.powerLevel ?? 0,
+    requiredToSet: requiredToSetPower(plEvent?.getContent()),
+    isSpace: !!room?.isSpaceRoom(),
+  })
+
+  const apply = async (level: number) => {
+    if (!room) return
+    setBusy(true)
+    setNotice(null)
+    try {
+      await client.setPowerLevel(room.roomId, userId, level)
+      setNotice(`Set to ${standingLabel(level)} (${level}).`)
+      setConfirm(null)
+    } catch (err) {
+      // The server's own words. A 403 here means the room disagreed with what
+      // we computed, and that disagreement is the interesting part.
+      setNotice(describeInviteError(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 6 }}>
+      <div style={{ fontSize: 11, color: 'var(--cpd-color-text-secondary)' }}>
+        {room ? `Level in ${room.name || 'this room'}` : 'Room level'}
+      </div>
+      {facts.blocked ? (
+        // Not a greyed-out button with no explanation: the reason IS the
+        // content, and it names what would make it possible.
+        <div style={{ fontSize: 11, color: 'var(--cpd-color-text-secondary)', opacity: 0.85 }}>
+          {facts.blocked}
+        </div>
+      ) : (
+        <>
+          <div role="radiogroup" aria-label="Power level" style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {facts.options.map((tier: Tier) => {
+              const isCurrent = tier.level === facts.current
+              const armed = confirm === tier.level
+              return (
+                <button
+                  key={tier.level}
+                  type="button"
+                  role="radio"
+                  aria-checked={isCurrent}
+                  disabled={busy || isCurrent}
+                  title={`Power level ${tier.level}`}
+                  onClick={() => (armed ? void apply(tier.level) : setConfirm(tier.level))}
+                  style={{
+                    flex: '1 1 auto',
+                    fontSize: 11,
+                    padding: '4px 8px',
+                    borderRadius: 6,
+                    cursor: busy || isCurrent ? 'default' : 'pointer',
+                    border: armed
+                      ? '1px solid var(--mod-active-fg, #ff9d3c)'
+                      : '1px solid rgba(128,128,128,0.28)',
+                    background: isCurrent
+                      ? 'var(--cpd-color-bg-subtle-secondary)'
+                      : 'transparent',
+                    color: isCurrent
+                      ? 'var(--cpd-color-text-primary)'
+                      : 'var(--cpd-color-text-secondary)',
+                    opacity: busy ? 0.6 : 1,
+                  }}
+                >
+                  {armed ? 'Confirm' : tier.label}
+                </button>
+              )
+            })}
+          </div>
+          {/* Shown BEFORE the click, not after: nothing in Matrix undoes a
+              level you can no longer reach. */}
+          {facts.warning && (
+            <div style={{ fontSize: 10.5, color: 'var(--mod-warn-fg, #f0b429)', opacity: 0.9 }}>
+              {facts.warning}
+            </div>
+          )}
+        </>
+      )}
+      {notice && <Notice>{notice}</Notice>}
+    </div>
   )
 }
 

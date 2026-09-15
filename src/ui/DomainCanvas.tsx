@@ -14,6 +14,7 @@ import { DomainBackgroundEditor } from './DomainBackgroundEditor'
 import { DomainTtdControl } from './DomainTtdControl'
 import { DomainUserMenu } from './DomainUserMenu'
 import { ProfileCard } from './ProfileCard'
+import { ProfileActions } from './ProfileActions'
 import { isDomainAdmin } from './domainRoles'
 import { useLightbox } from './lightboxContext'
 import { transformToStyle, type Transform } from './uitransform/transform'
@@ -397,12 +398,24 @@ export function DomainCanvas({
           onClose={() => setUserMenu(null)}
         />
       )}
-      {profile && (
+      {profile && client && (
         <ProfileCard
           x={profile.x}
           y={profile.y}
           userId={profile.userId}
           room={room}
+          // The same actions the member list and the chat panel show, which
+          // is the point: Inspect on the canvas opened a card that could look
+          // at somebody and do nothing about them, and the canvas is where
+          // moderating actually happens (U7).
+          actions={
+            <ProfileActions
+              client={client}
+              userId={profile.userId}
+              room={room}
+              onClose={() => setProfile(null)}
+            />
+          }
           onClose={() => setProfile(null)}
         />
       )}
