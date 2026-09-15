@@ -3492,3 +3492,70 @@ code {
     transition: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   The user list's two displays (ui-depth-v1 U9).
+
+   The row geometry is inline in MemberList.tsx, where the two displays sit
+   side by side in one expression and cannot drift apart. What is here is the
+   part CSS has to own: the honorific's pulse, and the panel's display switch.
+
+   THE PULSE IS OPACITY ONLY, on a second copy of the glyph drawn by a
+   pseudo-element. Animating the glyph's own colour would be an infinite paint
+   animation on every online moderator in the list -- the exact shape of
+   infinite-animations-cost-a-core, and checks/cssAnimations.check.ts now fails
+   a build that tries it. Dimming the glyph itself was the other obvious
+   version and it reads as fading rather than as a pulse; a bright copy fading
+   IN over a steady one reads as the glyph brightening.
+   --------------------------------------------------------------------------- */
+.tc-honor {
+  position: relative;
+  text-align: center;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.tc-honor-pulse::after {
+  content: attr(data-glyph);
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  color: inherit;
+  /* A static halo. Only the opacity below moves. */
+  text-shadow: 0 0 7px currentColor, 0 0 2px currentColor;
+  opacity: 0;
+  animation: tcHonorPulse 2600ms ease-in-out infinite;
+}
+@keyframes tcHonorPulse {
+  0%, 100% { opacity: 0; }
+  50%      { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Belt and braces: reduced motion already forces the compact display, which
+     has no pulse at all, but a stylesheet that only works because of a React
+     decision somewhere else is one refactor from being wrong. */
+  .tc-honor-pulse::after { animation: none; opacity: 0; }
+}
+
+.tc-density-btn {
+  flex: 0 0 auto;
+  margin-left: 2px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 7px;
+  border-radius: 6px;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  background: transparent;
+  color: var(--cpd-color-text-secondary);
+  cursor: pointer;
+}
+.tc-density-btn[aria-pressed='true'] {
+  color: var(--mod-accent, #38e08a);
+  border-color: rgba(56, 224, 138, 0.45);
+}
+@supports (color: rgb(from white r g b / 1)) {
+  .tc-density-btn[aria-pressed='true'] {
+    border-color: rgb(from var(--mod-accent) r g b / 0.45);
+  }
+}

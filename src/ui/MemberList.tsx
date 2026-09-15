@@ -14,6 +14,16 @@ import { useMemberBackfill } from '../client/useMemberBackfill'
 import { compareByStanding, honorificFor, maxPower, type MergedMember } from '../client/members'
 import { useFlipList } from './flip'
 import { usePopEnter } from './pop'
+import { AvatarDisc } from './AvatarDisc'
+import { useReducedMotion } from './reducedMotion'
+import { useRoomListSettings } from './roomListSettings'
+import {
+  densityOverridden,
+  effectiveDensity,
+  honorificPulses,
+  useMemberDensity,
+  type MemberDensity,
+} from './memberListDisplay'
 
 type Mode = 'room' | 'all' | 'all-highlight'
 
@@ -46,6 +56,15 @@ export function MemberList({
 }) {
   const { client } = useClient()
   const members = useMembers(client)
+  // U9. The panel's own display switch, and the low-animation state that
+  // overrides it. Both are read here and handed down, so a row never has to
+  // ask twice and the two cannot disagree between rows.
+  const { pref: densityPref, toggle: toggleDensity } = useMemberDensity()
+  const reduced = useReducedMotion()
+  const { animationsEnabled } = useRoomListSettings()
+  const lowAnimation = reduced || !animationsEnabled
+  const density = effectiveDensity(densityPref, lowAnimation)
+  const overridden = densityOverridden(densityPref, lowAnimation)
   const [mode, setMode] = useState<Mode>('all-highlight')
   const [picker, setPicker] = useState<'dm' | 'invite' | null>(null)
   // One-line result of the last invite/DM. Errors here are the server's own
@@ -131,11 +150,42 @@ export function MemberList({
         color: 'var(--cpd-color-text-primary)',
       }}
     >
-      <div className="tc-panel-head" style={{ display: 'flex', gap: 2, padding: 6 }}>
+      <div className="tc-panel-head" style={{ display: 'flex', gap: 2, padding: 6, alignItems: 'center' }}>
         <ModeBtn active={mode === 'room'} onClick={() => setMode('room')}>Room</ModeBtn>
         <ModeBtn active={mode === 'all'} onClick={() => setMode('all')}>All</ModeBtn>
         <ModeBtn active={mode === 'all-highlight'} onClick={() => setMode('all-highlight')}>Nearby</ModeBtn>
+        {/* The display switch, ON the panel rather than buried in settings --
+            it changes what this panel looks like and nothing else. */}
+        <button
+          type="button"
+          className="tc-density-btn"
+          aria-pressed={density === 'rich'}
+          title={
+            overridden
+              ? 'Low-animation mode is on, so the compact list is in force. Turn animations back on to use the full one.'
+              : density === 'rich'
+                ? 'Full list: avatars and spacing. Click for the compact one.'
+                : 'Compact list. Click for avatars and spacing.'
+          }
+          onClick={toggleDensity}
+        >
+          {density === 'rich' ? 'Full' : 'Compact'}
+        </button>
       </div>
+      {/* A switch that silently does nothing is worse than no switch: with
+          motion turned down, flipping to Full would otherwise look broken. */}
+      {overridden && (
+        <div
+          style={{
+            fontSize: 10,
+            padding: '0 8px 4px',
+            color: 'var(--cpd-color-text-secondary)',
+            opacity: 0.8,
+          }}
+        >
+          Compact, because animations are off.
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 4, padding: '0 6px 6px' }}>
         <button
@@ -295,6 +345,7 @@ export function MemberList({
             member={m}
             room={room}
             mode={mode}
+            density={density}
             presence={presence.get(m.id)}
             onOpenProfile={(x, y) => setProfile({ x, y, userId: m.id })}
           />
@@ -310,13 +361,16 @@ function MemberRow({
   onOpenProfile,
   room,
   mode,
+  density,
 }: {
   member: MergedMember
   presence: PresenceState | undefined
   onOpenProfile: (x: number, y: number) => void
   room: Room | null
   mode: Mode
+  density: MemberDensity
 }) {
+  const rich = density === 'rich'
   // Honorific IDENTITY = highest power the member holds anywhere in the space.
   const identityHonor = honorificFor(maxPower(member))
 
@@ -350,6 +404,11 @@ function MemberRow({
     ? HONOR_COLOR[identityHonor]
     : 'var(--cpd-color-text-secondary)'
 
+  // Whether this row's glyph pulses. The rule is in memberListDisplay.ts:
+  // rich display, a rank to show, and the server saying they are online --
+  // absent presence is NOT offline and must not be drawn as either (W4.5).
+  const pulses = honorificPulses({ density, presence, honorific: identityHonor })
+
   return (
     <div
       data-flip-id={member.id}
@@ -366,9 +425,10 @@ function MemberRow({
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 6,
-        height: 26,
-        padding: '0 8px',
+        gap: rich ? 8 : 6,
+        height: rich ? 34 : 26,
+        margin: rich ? '1px 0' : 0,
+        padding: rich ? '0 8px 0 6px' : '0 8px',
         borderRadius: 6,
         cursor: 'pointer',
         color: nameDimmed
@@ -378,6 +438,18 @@ function MemberRow({
       }}
       title={member.id}
     >
+      {/* The avatar is the rich display's whole reason to be taller. Compact
+          keeps the presence dot, which is the same information in one pixel. */}
+      {rich && (
+        <span style={{ flexShrink: 0, lineHeight: 0 }}>
+          <AvatarDisc
+            userId={member.id}
+            name={member.displayName}
+            avatarMxc={member.avatarMxc ?? null}
+            size={24}
+          />
+        </span>
+      )}
       {presence && (
         <span
           className="tc-presence-dot"
@@ -387,10 +459,14 @@ function MemberRow({
         />
       )}
       <span
+        className={pulses ? 'tc-honor tc-honor-pulse' : 'tc-honor'}
+        // The pulsing copy is drawn by a pseudo-element reading this, so the
+        // pulse is an OPACITY animation and not an infinite repaint of colour
+        // (infinite-animations-cost-a-core, checks/cssAnimations.check.ts).
+        data-glyph={identityHonor ?? ''}
         style={{
-          width: 12,
-          textAlign: 'center',
-          fontWeight: 700,
+          width: rich ? 14 : 12,
+          fontSize: rich ? 15 : 13,
           color: honorColor,
         }}
       >
@@ -401,7 +477,8 @@ function MemberRow({
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
-          fontSize: 13,
+          fontSize: rich ? 14.5 : 13,
+          letterSpacing: rich ? 0.1 : 0,
         }}
       >
         {member.displayName}

@@ -1,0 +1,66 @@
+<!doctype html><html><head>
+<!--#head-->
+<title>User list</title>
+<style>
+  .h-pair { display:flex; gap:22px; padding: 6px 16px 20px; }
+  .h-panel { width: 210px; border-left: 1px solid rgba(128,128,128,0.25);
+             display:flex; flex-direction:column; }
+  .h-head { display:flex; gap:2px; padding:6px; align-items:center; }
+  .h-mode { flex:1; font-size:11px; padding:4px 0; border-radius:6px; border:none;
+            background: var(--cpd-color-bg-subtle-secondary); color: var(--cpd-color-text-secondary); }
+  .h-mode.on { background: var(--cpd-color-bg-action-primary-rest); color:#111; }
+  .h-rows { padding: 2px 4px; }
+  .h-row { display:flex; align-items:center; border-radius:6px; cursor:pointer;
+           color: var(--cpd-color-text-primary); }
+  .compact .h-row { gap:6px; height:26px; padding:0 8px; }
+  .rich .h-row { gap:8px; height:34px; margin:1px 0; padding:0 8px 0 6px; }
+  .h-av { width:24px; height:24px; border-radius:50%; flex-shrink:0;
+          background: linear-gradient(145deg,#3a6f56,#244434); display:grid;
+          place-items:center; font:700 9px var(--tc-ui-font); color:#dff3e6; }
+  .h-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .compact .h-name { font-size:13px; }
+  .rich .h-name { font-size:14.5px; letter-spacing:.1px; }
+  .compact .tc-honor { width:12px; font-size:13px; }
+  .rich .tc-honor { width:14px; font-size:15px; }
+  .h-count { font-size:11px; color: var(--cpd-color-text-secondary); padding:2px 8px; }
+  /* frozen mid-pulse so the screenshot can see it */
+  .tc-honor-pulse::after { animation-delay: -1300ms; animation-play-state: paused; }
+</style>
+</head><body>
+<div class="h-label">Compact (the low-animation display) and Full</div>
+<div class="h-pair">
+
+  <div class="h-panel compact">
+    <div class="h-head tc-panel-head">
+      <button class="h-mode">Room</button><button class="h-mode">All</button>
+      <button class="h-mode on">Nearby</button>
+      <button class="tc-density-btn">Compact</button>
+    </div>
+    <div class="h-rows">
+      <div class="h-count">5 members</div>
+      <div class="h-row"><span class="tc-presence-dot" data-presence="online"></span><span class="tc-honor" style="color:var(--mod-accent)">~</span><span class="h-name">saber</span></div>
+      <div class="h-row"><span class="tc-presence-dot" data-presence="online"></span><span class="tc-honor" style="color:var(--mod-active-fg)">@</span><span class="h-name">kestrel</span></div>
+      <div class="h-row"><span class="tc-presence-dot" data-presence="unavailable"></span><span class="tc-honor" style="color:var(--mod-active-fg)">@</span><span class="h-name">nobu</span></div>
+      <div class="h-row"><span class="tc-presence-dot" data-presence="offline"></span><span class="tc-honor" style="color:var(--mod-meta-fg)">+</span><span class="h-name">tunnel</span></div>
+      <div class="h-row"><span class="tc-presence-dot" data-presence="online"></span><span class="tc-honor"></span><span class="h-name">a longer display name</span></div>
+    </div>
+  </div>
+
+  <div class="h-panel rich">
+    <div class="h-head tc-panel-head">
+      <button class="h-mode">Room</button><button class="h-mode">All</button>
+      <button class="h-mode on">Nearby</button>
+      <button class="tc-density-btn" aria-pressed="true">Full</button>
+    </div>
+    <div class="h-rows">
+      <div class="h-count">5 members</div>
+      <div class="h-row"><span class="h-av">SA</span><span class="tc-presence-dot" data-presence="online"></span><span class="tc-honor tc-honor-pulse" data-glyph="~" style="color:var(--mod-accent)">~</span><span class="h-name">saber</span></div>
+      <div class="h-row"><span class="h-av">KE</span><span class="tc-presence-dot" data-presence="online"></span><span class="tc-honor tc-honor-pulse" data-glyph="@" style="color:var(--mod-active-fg)">@</span><span class="h-name">kestrel</span></div>
+      <div class="h-row"><span class="h-av">NO</span><span class="tc-presence-dot" data-presence="unavailable"></span><span class="tc-honor" data-glyph="@" style="color:var(--mod-active-fg)">@</span><span class="h-name">nobu</span></div>
+      <div class="h-row"><span class="h-av">TU</span><span class="tc-presence-dot" data-presence="offline"></span><span class="tc-honor" data-glyph="+" style="color:var(--mod-meta-fg)">+</span><span class="h-name">tunnel</span></div>
+      <div class="h-row"><span class="h-av">AL</span><span class="tc-presence-dot" data-presence="online"></span><span class="tc-honor"></span><span class="h-name">a longer display name</span></div>
+    </div>
+  </div>
+
+</div>
+</body></html>
