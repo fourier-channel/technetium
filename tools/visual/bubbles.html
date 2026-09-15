@@ -1,0 +1,61 @@
+<!doctype html><html><head>
+<!--#head-->
+<title>Bubble animators</title>
+<style>
+  .h-grid { padding: 4px 16px 20px; }
+  .h-row { display:flex; align-items:center; gap:14px; margin: 14px 0; }
+  .h-tag { width: 120px; flex-shrink:0; font: 600 10px var(--tc-ui-font);
+           letter-spacing:.06em; text-transform:uppercase; opacity:.45; }
+  /* a flex column, as the real row column is, so a bubble shrinks to fit */
+  .h-hold { width: 420px; display:flex; flex-direction:column; min-width:0; }
+  /* The harness freezes each animation at a chosen moment so a screenshot can
+     see it -- the page is static, so nothing would be mid-flight otherwise. */
+  .h-frozen * , .h-frozen { animation-play-state: paused !important; }
+</style>
+</head><body>
+<div class="h-label">Each tone: the pill it opens as, then what it settles into</div>
+<div class="h-grid">
+
+  <div class="h-row"><span class="h-tag">standard</span><span class="h-hold">
+    <div class="tc-bubble" data-bubble="standard" data-phase="settled" style="font-size:14px">
+      <span class="tc-bubble-fx" aria-hidden="true"></span><span class="tc-bubble-ink">the gate is green<span class="tc-row-time">04:12</span></span></div>
+  </span></div>
+
+  <div class="h-row"><span class="h-tag">yelling / pill</span><span class="h-hold">
+    <div class="tc-bubble" data-bubble="yelling" data-phase="pill" style="font-size:14px">
+      <span class="tc-bubble-fx" aria-hidden="true"></span><span class="tc-bubble-ink">IT WORKS!<span class="tc-row-time">04:14</span></span></div>
+  </span></div>
+
+  <div class="h-row"><span class="h-tag">yelling / settled</span><span class="h-hold">
+    <div class="tc-bubble" data-bubble="yelling" data-phase="settled" style="font-size:14px">
+      <span class="tc-bubble-fx" aria-hidden="true"></span><span class="tc-bubble-ink">IT WORKS!<span class="tc-row-time">04:14</span></span></div>
+  </span></div>
+
+  <div class="h-row"><span class="h-tag">thinking / pill</span><span class="h-hold">
+    <div class="tc-bubble" data-bubble="thinking" data-phase="pill" style="font-size:14px">
+      <span class="tc-bubble-fx" aria-hidden="true"></span><span class="tc-bubble-ink">i suppose so...<span class="tc-row-time">04:13</span></span></div>
+  </span></div>
+
+  <div class="h-row"><span class="h-tag">thinking / settled</span><span class="h-hold">
+    <div class="tc-bubble" data-bubble="thinking" data-phase="settled" style="font-size:14px">
+      <span class="tc-bubble-fx" aria-hidden="true"></span><span class="tc-bubble-ink">i suppose so...<span class="tc-row-time">04:13</span></span></div>
+  </span></div>
+
+  <div class="h-row"><span class="h-tag">questioning</span><span class="h-hold">
+    <div class="tc-bubble" data-bubble="questioning" data-phase="playing" style="font-size:14px">
+      <span class="tc-bubble-fx" aria-hidden="true"></span><span class="tc-bubble-ink">are we deploying today?<span class="tc-row-time">04:13</span></span>
+      <span class="tc-qmarks" aria-hidden="true">
+        <span class="tc-qmark h-frozen" style="left:18%;font-size:13px;--tc-q-drift:-8px;--tc-q-rise:40px;--tc-q-spin:-14deg;animation-delay:-260ms"></span>
+        <span class="tc-qmark h-frozen" style="left:40%;font-size:16px;--tc-q-drift:6px;--tc-q-rise:46px;--tc-q-spin:18deg;animation-delay:-520ms"></span>
+        <span class="tc-qmark h-frozen" style="left:62%;font-size:12px;--tc-q-drift:11px;--tc-q-rise:34px;--tc-q-spin:9deg;animation-delay:-120ms"></span>
+        <span class="tc-qmark h-frozen" style="left:78%;font-size:15px;--tc-q-drift:-4px;--tc-q-rise:50px;--tc-q-spin:-20deg;animation-delay:-700ms"></span>
+      </span>
+    </div>
+  </span></div>
+
+</div>
+<script>
+  // The marks carry their glyph from script so the markup above stays readable.
+  for (const q of document.querySelectorAll('.tc-qmark')) q.textContent = '?'
+</script>
+</body></html>

@@ -1826,6 +1826,9 @@ code {
 .tc-bubble[data-bubble='thinking'] {
   --tc-bub-bg: rgba(128, 128, 128, 0.10);
   --tc-bub-line: rgba(150, 150, 150, 0.34);
+  /* How much of the line's hue is mixed into the canvas to fill the cloud. See
+     the cloud rule in the animators block for why it cannot just be an alpha. */
+  --tc-fx-mix: 13%;
   border-radius: 20px;
   border-style: dashed;
   font-style: italic;
@@ -1852,29 +1855,12 @@ code {
   height: 5px;
 }
 
-/* Yelling: a burst. The jagged edge AND the spike toward the speaker are one
-   clip-path, because a pseudo-element tail would be clipped away by it -- so
-   the spike lives inside the box, and the extra left padding is the room it
-   needs. No border: clip-path cuts through one, leaving a half-drawn outline.
-   The fill carries the shape instead. */
-.tc-bubble[data-bubble='yelling'] {
-  --tc-bub-bg: rgba(232, 128, 92, 0.20);
-  --tc-bub-line: transparent;
-
-  border: 0;
-  border-radius: 0;
-  padding: 9px 16px 9px 22px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  background: var(--tc-bub-bg);
-  box-shadow: inset 0 0 0 9999px rgba(232, 128, 92, 0.06);
-  clip-path: polygon(
-    8% 14%, 12% 4%, 20% 12%, 29% 2%, 38% 11%, 48% 3%, 57% 12%, 66% 3%, 75% 12%, 84% 4%,
-    92% 13%, 100% 6%, 96% 22%, 100% 38%, 95% 52%, 100% 66%, 96% 82%, 100% 96%,
-    91% 88%, 82% 97%, 73% 88%, 63% 97%, 53% 88%, 43% 97%, 34% 88%, 24% 97%, 15% 88%,
-    9% 96%, 10% 74%, 0% 52%, 10% 40%, 6% 26%
-  );
-}
+/* Yelling opens as an ordinary pill and POPS into the burst; the shape, the
+   colours and the sequencing all live in the animators block at the end of
+   this file. It keeps no tail in either phase: the burst's spike toward the
+   speaker lives INSIDE the box (a tail drawn outside would be clipped away by
+   the silhouette), and a pill that grows a tail for 230ms and then loses it
+   again is worse than one that never had one. */
 .tc-bubble[data-bubble='yelling']::before,
 .tc-bubble[data-bubble='yelling']::after {
   content: none;
@@ -3222,4 +3208,255 @@ code {
 @media (prefers-reduced-motion: reduce) {
   .tc-divider-rail { transition: none; }
   .tc-divider .tc-divider-rail { transform: none !important; }
+}
+
+/* ---------------------------------------------------------------------------
+   The bubble animators (ui-depth-v1 U5).
+
+   All three open the SAME way -- as the ordinary pill, in that tone's own
+   colours -- and then become something. The phase is on the bubble
+   (data-phase), driven by ui/useBubbleFx.ts; `pill` is the opening, `playing`
+   carries the animation, `settled` is the final shape held with no animation
+   attached. The static `settled` rules and the animation's last keyframe agree
+   exactly, or the bubble would jump at the handover.
+
+   THE SHAPE LAYER. A jagged edge and a cloud both have to keep the pill's
+   border colour, and a border cannot survive a clip-path or a scalloped
+   background -- the old yelling bubble threw its border away for exactly this
+   reason, which is most of why it read as cheap. So the shape is drawn by
+   .tc-bubble-fx as two stacked silhouettes: `::before` in the CANVAS colour,
+   opaque, carrying a 1px outline made of four drop-shadows (a filter follows
+   whatever silhouette the layer has, where a border cannot); and `::after` the
+   same silhouette in the tone's translucent fill, over the top. One shape
+   definition per tone, applied to both pseudo-elements through --tc-fx-c.
+
+   The text sits above the layer because .tc-bubble-ink is positioned with a
+   z-index of 1 and the layer sits at 0. The obvious alternative -- leave the
+   words alone and put the layer at z-index: -1 -- was tried and MEASURED not to
+   work: a negative-z-index descendant paints at step 3 of its nearest stacking
+   context, and any opaque element background between here and there paints at
+   step 4, over the top of it. It rendered as nothing at all. A positioned
+   descendant painting after in-flow inline content is the one bit of the
+   painting order that surprises everybody, and this is the cost of it.
+
+   Every animation here is FINITE and one-shot, which is the whole of why it is
+   allowed to touch clip-path and background at all. The org rule from
+   infinite-animations-cost-a-core is that an INFINITE animation may touch
+   transform and opacity and nothing else, its cost otherwise being a style
+   recalc and a repaint on the main thread every frame for as long as the page
+   is open; a finite one's cost is bounded by its duration.
+   --------------------------------------------------------------------------- */
+.tc-bubble-ink {
+  position: relative;
+  z-index: 1;
+  /* A block, not an inline: it wraps whatever the row's body is, which can be
+     a link-preview card, and it has to contain the floated timestamp. */
+  display: flow-root;
+}
+.tc-bubble-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+/* The outline, as four 1px drop-shadows of whatever silhouette the layer has.
+   ON THE PARENT, and that is not a style choice: clip-path is applied AFTER
+   filter on the SAME element, so a filter next to the clip has its shadows cut
+   away by it. Measured -- the burst rendered with no outline at all until this
+   moved up one level. Scoped to the two tones that draw a silhouette, so a
+   plain pill is not carrying a filter for nothing. */
+.tc-bubble[data-bubble='yelling'] .tc-bubble-fx,
+.tc-bubble[data-bubble='thinking'] .tc-bubble-fx {
+  filter:
+    drop-shadow(1px 0 0 var(--tc-bub-line))
+    drop-shadow(-1px 0 0 var(--tc-bub-line))
+    drop-shadow(0 1px 0 var(--tc-bub-line))
+    drop-shadow(0 -1px 0 var(--tc-bub-line));
+}
+.tc-bubble-fx::before,
+.tc-bubble-fx::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+}
+/* The opaque under-layer. Its colour is the canvas, so the outline behind it
+   cannot tint the fill through a translucent hole -- which is what made the
+   obvious one-layer version of this look like a colour wash. */
+.tc-bubble-fx::before {
+  --tc-fx-c: var(--cpd-color-bg-canvas-default, #1b1a17);
+}
+.tc-bubble-fx::after {
+  --tc-fx-c: var(--tc-bub-bg);
+}
+/* While the layer is up, the bubble's own pill (its background, border and
+   radius) is gone -- the layer IS the bubble now. */
+.tc-bubble[data-bubble='yelling'][data-phase='playing'],
+.tc-bubble[data-bubble='yelling'][data-phase='settled'],
+.tc-bubble[data-bubble='thinking'][data-phase='playing'],
+.tc-bubble[data-bubble='thinking'][data-phase='settled'] {
+  background: transparent;
+  border-color: transparent;
+}
+.tc-bubble[data-bubble='yelling'][data-phase='playing'] .tc-bubble-fx::before,
+.tc-bubble[data-bubble='yelling'][data-phase='playing'] .tc-bubble-fx::after,
+.tc-bubble[data-bubble='yelling'][data-phase='settled'] .tc-bubble-fx::before,
+.tc-bubble[data-bubble='yelling'][data-phase='settled'] .tc-bubble-fx::after,
+.tc-bubble[data-bubble='thinking'][data-phase='playing'] .tc-bubble-fx::before,
+.tc-bubble[data-bubble='thinking'][data-phase='playing'] .tc-bubble-fx::after,
+.tc-bubble[data-bubble='thinking'][data-phase='settled'] .tc-bubble-fx::before,
+.tc-bubble[data-bubble='thinking'][data-phase='settled'] .tc-bubble-fx::after {
+  opacity: 1;
+}
+
+/* --- yelling: the pill pops into the burst ------------------------------- */
+/* The pill phase keeps the standard shape entirely; only the colours are the
+   shout's. The old rule had no pill phase at all and no border ever. */
+.tc-bubble[data-bubble='yelling'] {
+  --tc-bub-bg: rgba(232, 128, 92, 0.26);
+  --tc-bub-line: rgba(238, 146, 108, 0.75);
+
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+/* Room for the spike, which lives INSIDE the box: a tail drawn outside it
+   would be clipped away by the silhouette. */
+.tc-bubble[data-bubble='yelling'][data-phase='playing'],
+.tc-bubble[data-bubble='yelling'][data-phase='settled'] {
+  padding-left: 20px;
+}
+.tc-bubble[data-bubble='yelling'] .tc-bubble-fx::before,
+.tc-bubble[data-bubble='yelling'] .tc-bubble-fx::after {
+  background: var(--tc-fx-c);
+  clip-path: polygon(
+    8% 14%, 12% 4%, 20% 12%, 29% 2%, 38% 11%, 48% 3%, 57% 12%, 66% 3%, 75% 12%, 84% 4%,
+    92% 13%, 100% 6%, 96% 22%, 100% 38%, 95% 52%, 100% 66%, 96% 82%, 100% 96%,
+    91% 88%, 82% 97%, 73% 88%, 63% 97%, 53% 88%, 43% 97%, 34% 88%, 24% 97%, 15% 88%,
+    9% 96%, 10% 74%, 0% 52%, 10% 40%, 6% 26%
+  );
+}
+.tc-bubble[data-bubble='yelling'][data-phase='playing'] {
+  animation: tcYellPop 520ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes tcYellPop {
+  0%   { transform: scale(0.97); }
+  24%  { transform: scale(0.9); }
+  58%  { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+/* The layers arrive on the same frame the squash releases, so the jagged edge
+   appears to be what burst out of the pill rather than a second thing fading
+   in over it. */
+.tc-bubble[data-bubble='yelling'][data-phase='playing'] .tc-bubble-fx::before,
+.tc-bubble[data-bubble='yelling'][data-phase='playing'] .tc-bubble-fx::after {
+  animation: tcFxFlip 520ms steps(1, end) both;
+}
+@keyframes tcFxFlip {
+  0%   { opacity: 0; }
+  24%  { opacity: 1; }
+  100% { opacity: 1; }
+}
+
+/* --- thinking: the pill morphs into cloudy bubbles ----------------------- */
+/* A cloud from three backgrounds: a scalloped row of circles along the top,
+   a smaller one along the bottom, and a band filling between them. Tiled, so it
+   fits a bubble of any width without anything having to measure one. The
+   circles OVERLAP their tile (diameter 18 in a 15px tile): butted up edge to
+   edge they leave a notch at every tangent, and the outline traces every notch,
+   which renders as a cog.
+
+   ONE layer, and opaque. A tiled silhouette cannot be drawn in a TRANSLUCENT
+   colour: the three background layers overlap, the alpha doubles where they do,
+   and it renders as scales. Measured, not guessed. So the tone is mixed INTO
+   the canvas colour instead. --tc-fx-mix is how much; where the engine cannot
+   do that arithmetic the cloud comes out canvas-coloured with a tone outline,
+   which is a hollow thought bubble and perfectly readable. */
+.tc-bubble[data-bubble='thinking'] .tc-bubble-fx::before {
+  --tc-fx-c: var(--cpd-color-bg-canvas-default, #1b1a17);
+  background:
+    radial-gradient(circle 9px at 9px 9px, var(--tc-fx-c) 0 9px, transparent 9.5px) repeat-x left top / 15px 18px,
+    radial-gradient(circle 5px at 5px 5px, var(--tc-fx-c) 0 5px, transparent 5.5px) repeat-x left bottom / 9px 10px,
+    linear-gradient(var(--tc-fx-c), var(--tc-fx-c)) no-repeat left 8px / 100% calc(100% - 13px);
+}
+@supports (color: color-mix(in srgb, red 10%, blue)) and (color: rgb(from white r g b / 1)) {
+  .tc-bubble[data-bubble='thinking'] .tc-bubble-fx::before {
+    --tc-fx-c: color-mix(
+      in srgb,
+      rgb(from var(--tc-bub-line) r g b) var(--tc-fx-mix),
+      var(--cpd-color-bg-canvas-default, #1b1a17)
+    );
+  }
+}
+/* The morph: the cloud swells out of the pill's footprint. Scaling the LAYER
+   and not the bubble, so the words never move. */
+.tc-bubble[data-bubble='thinking'][data-phase='playing'] .tc-bubble-fx::before {
+  animation: tcCloudMorph 520ms cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+@keyframes tcCloudMorph {
+  0%   { opacity: 0; transform: scale(0.88, 0.7); }
+  30%  { opacity: 1; }
+  70%  { transform: scale(1.03, 1.08); }
+  100% { opacity: 1; transform: scale(1, 1); }
+}
+/* The two drifting circles are the thought's tail and belong to the cloud, so
+   they arrive with it rather than sitting under the pill from the start. */
+.tc-bubble[data-bubble='thinking'][data-phase='pill']::before,
+.tc-bubble[data-bubble='thinking'][data-phase='pill']::after {
+  opacity: 0;
+}
+.tc-bubble[data-bubble='thinking']::before,
+.tc-bubble[data-bubble='thinking']::after {
+  transition: opacity 260ms ease 160ms;
+}
+
+/* --- questioning: marks float up and over the pill ----------------------- */
+/* The pill itself does not change. It never did in the ask: "question should
+   render as normal, but then several question marks float up and over it". */
+.tc-qmarks {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+  /* Above the words, because they float OVER the pill. */
+  z-index: 2;
+}
+.tc-qmark {
+  position: absolute;
+  bottom: 30%;
+  font-family: var(--tc-ui-font, inherit);
+  font-weight: 700;
+  line-height: 1;
+  /* The bubble's own line colour, at full strength: --tc-bub-line is set for a
+     1px border against a fill, and a mark drawn at that alpha over the canvas
+     is nearly invisible. Same hue, readable weight. */
+  color: var(--tc-bub-line);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  animation: tcQFloat 1500ms cubic-bezier(0.32, 0.5, 0.36, 1) both;
+}
+@supports (color: rgb(from white r g b / 1)) {
+  .tc-qmark { color: rgb(from var(--tc-bub-line) r g b / 0.92); }
+}
+@keyframes tcQFloat {
+  0%   { opacity: 0; transform: translate(0, 6px) scale(0.6) rotate(0deg); }
+  16%  { opacity: 0.95; transform: translate(calc(var(--tc-q-drift) * 0.2), calc(var(--tc-q-rise) * -0.18)) scale(1) rotate(calc(var(--tc-q-spin) * 0.2)); }
+  62%  { opacity: 0.8; }
+  100% { opacity: 0; transform: translate(var(--tc-q-drift), calc(var(--tc-q-rise) * -1)) scale(1.15) rotate(var(--tc-q-spin)); }
+}
+
+/* Reduced motion: the shapes still arrive -- the setting is about MOTION, and
+   a shout that never becomes a shout is a different message, not a calmer one.
+   The question marks are motion and nothing else, so they do not run at all;
+   the hook does not mount them. */
+@media (prefers-reduced-motion: reduce) {
+  .tc-bubble[data-phase='playing'],
+  .tc-bubble[data-phase='playing'] .tc-bubble-fx::before,
+  .tc-bubble[data-phase='playing'] .tc-bubble-fx::after,
+  .tc-bubble[data-bubble='thinking']::before,
+  .tc-bubble[data-bubble='thinking']::after {
+    animation: none;
+    transition: none;
+  }
 }

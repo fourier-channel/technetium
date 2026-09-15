@@ -50,6 +50,10 @@ import { useChatInteractions } from '../client/useChatInteractions'
 import { InteractionLayer } from './InteractionLayer'
 import { InteractionMenu } from './InteractionMenu'
 import { InteractionTargetContext, useInteractionTarget } from './interactionTarget'
+import { useBubbleFx } from './useBubbleFx'
+import { BubbleFx } from './BubbleFx'
+import { useReducedMotion } from './reducedMotion'
+import { useRoomListSettings } from './roomListSettings'
 
 // How many pages of history a click-to-jump will paginate before giving up.
 const MAX_JUMP_PAGES = 8
@@ -536,6 +540,14 @@ export function Row({ item, onOpenThread, sequence }: { item: TimelineItem; onOp
       ? bubbleTone(typeof item.content.body === 'string' ? item.content.body : '')
       : null
 
+  // U5. Every toned bubble opens as the ordinary pill and then becomes
+  // something -- the burst, the cloud, or a pill with question marks rising off
+  // it. Gated on BOTH the OS preference and the app's own animation switch, so
+  // "turn the animations off" means all of them and not most of them.
+  const reducedMotion = useReducedMotion()
+  const { animationsEnabled } = useRoomListSettings()
+  const fx = useBubbleFx(bubble, animationsEnabled && !reducedMotion)
+
   let body: React.ReactNode
   if (kind === 'gallery' && cells) {
     body = <GalleryBody cells={cells} layout={layout ?? 'grid'} thread={thread} />
@@ -720,10 +732,18 @@ export function Row({ item, onOpenThread, sequence }: { item: TimelineItem; onOp
         >
         {item.replyTo && <ReplyPill replyTo={item.replyTo} />}
         <div
+          ref={bubble ? fx.ref : undefined}
           className={bubble ? 'tc-bubble' : 'tc-row-body'}
           data-bubble={bubble ?? undefined}
+          data-phase={bubble ? fx.phase : undefined}
           style={{ fontSize: 14, wordBreak: 'break-word', minWidth: 0 }}
         >
+          {/* The shape layer and the question marks. Nothing at all for a
+              plain pill, and nothing for a row with no bubble. */}
+          {bubble && <BubbleFx tone={bubble} phase={fx.phase} seed={item.id} />}
+          {/* Everything the reader actually reads, one positioned block above
+              the shape layer. Without it the layer paints over the words. */}
+          <span className={bubble ? 'tc-bubble-ink' : undefined}>
           {isMediaRow && roomId ? (
             // The picture and its rail sit side by side. The picture is FIRST,
             // so the rail appearing on hover cannot shift it.
@@ -768,6 +788,7 @@ export function Row({ item, onOpenThread, sequence }: { item: TimelineItem; onOp
               (edited)
             </span>
           )}
+          </span>
         </div>
           <RowFooter item={item} onOpenThread={onOpenThread} pillsInRail={isMediaRow} />
         </div>
