@@ -39,10 +39,10 @@ narrowed; where a reading had to be chosen it is stated in the row.
 
 | id | ask | state |
 | --- | --- | --- |
-| U1 | Title/header bars must read as distinct from the panel they head -- a fade toward a darker grey, either direction | PENDING |
-| U2 | Dividers get depth (3d/squishy), outlined subtle 41chan GREEN when their panel is neutral and subtle 41chan ORANGE when it is active | PENDING |
-| U3 | The post time pushes the bubbles down; append it to the END of the bubble instead | PENDING |
-| U4 | Bubbles are too tall -- shrink about 20-25% | PENDING |
+| U1 | Title/header bars must read as distinct from the panel they head -- a fade toward a darker grey, either direction | DONE `1204465` |
+| U2 | Dividers get depth (3d/squishy), outlined subtle 41chan GREEN when their panel is neutral and subtle 41chan ORANGE when it is active | DONE `1204465` -- see U2b |
+| U3 | The post time pushes the bubbles down; append it to the END of the bubble instead | DONE `83bac08` |
+| U4 | Bubbles are too tall -- shrink about 20-25% | DONE `83bac08` -- measured 42.1px -> 32.9px, 22% |
 | U5 | The question/exclamation/thinking bubble animators are low quality: pill first, then pop to the jagged burst keeping both colours; pill then morph to cloudy bubbles; pill with question marks floating up over it, fading in on spawn and out on despawn | PENDING |
 | U6 | Enter with an image attached must POST it, not open something | PENDING |
 | U7 | The Edit User interface must work in both the room list and the chat panel, and must set room power level | PENDING |
@@ -132,4 +132,40 @@ One line per landed step, appended as it lands.
 
 | step | result | pendings |
 | --- | --- | --- |
-| (none yet) | | |
+| U3 + U4 `83bac08` | The timestamp floats right at the end of the bubble instead of owning a 14px line above it; the bubble is 22% shorter (6px lead, 1.35 leading) and the avatar 40px -> 34px, because the line's height is max(bubble, avatar) and the avatar was the taller of the two. `display: flow-root` contains the float on the bubble and on the bodies that get no bubble. | None. Measured with tools/visual against this tree's own stylesheet: 42.1px -> 32.9px. |
+| U1 + U2 `1204465` | `.tc-panel-head` sinks every title bar below its panel with a shade and a lip; `.tc-divider` gives every wall a groove, a raised rail, a squash, and a tone outline. `ui/dividerTone.ts` holds the tone rule, 26 new checks. The room list's header left the scroller; the settings dialog's title row is sticky. The domain got a drag grip it never had. | **U2b below.** Hover and grab behaviour is CSS-only and was not driven by a pointer -- PENDING OPERATOR VERIFICATION for the feel of the squash. |
+
+---
+
+## U2b -- the state the operator's own example describes is unreachable
+
+Found while writing U2's check, measured, and NOT fixed in that commit.
+
+With the domain open, `openThreadView` refuses at **every fraction and every
+screen size**. It takes the whole of the thread view's width from the panels
+whose right edge touches the region -- once the domain is out, that is only the
+domain -- and the domain cannot spare that much above its 240px minimum. The
+width IS available: on a 1440px screen the domain can spare 0.135 of the screen
+and the conversation another 0.146, against the 0.208 the thread view needs. It
+is never asked for, because the squeeze does not cascade left.
+
+So "domain out AND thread view open" -- the case the operator describes in the
+U2 brief, the one with three walls in it -- cannot currently be reached by
+clicking. Opening a thread with the domain out silently does nothing.
+
+The fix is a cascading squeeze in `openThreadView`: the rightmost column gives
+what it can spare above its minimum, the remainder comes from the column to its
+left, and everything already squeezed travels left with it. The complication
+worth writing down before starting is that the DM dock spans the whole region
+width, so it is not a member of any column and has to take the total reduction
+in one go while the columns below it cascade.
+
+`checks/dividerTone.check.ts` builds that state by hand and says so, so fixing
+the geometry cannot quietly hide the tone rule, or the reverse.
+
+| state | value |
+| --- | --- |
+| id | U2b |
+| found | 2026-09-15, writing U2's check |
+| touches | `src/ui/space.ts` `openThreadView`, which is fuzz-checked |
+| state | OPEN |
