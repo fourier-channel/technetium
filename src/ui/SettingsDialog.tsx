@@ -17,6 +17,8 @@ import { startDeviceVerification, type VerificationHandle, type VerificationView
 import { verificationStage } from '../client/verificationStage'
 import { gateBlockers, resetCopy, resetPlan } from '../client/resetPlan'
 import { exportRoomKeys, performReset } from '../client/cryptoReset'
+import { observeServerAdmin, type AdminFacts } from '../client/serverAdmin'
+import { ServerPermissions } from './ServerPermissions'
 
 // What each action would do, in the user's terms. The panel names what is
 // missing even where the control does not exist yet: a list of things you
@@ -102,6 +104,11 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [passphrase, setPassphrase] = useState('')
   const [optInNote, setOptInNote] = useState<string | null>(null)
   const [pendingReload, setPendingReload] = useState(false)
+  // U8. Which tab is up, and whether the server says this account administers
+  // it. `null` until asked -- absent is not "no" (VERIFICATION-DOCTRINE rule 8),
+  // and the panel says which of the three answers it got.
+  const [tab, setTab] = useState<'encryption' | 'server'>('encryption')
+  const [admin, setAdmin] = useState<AdminFacts | null>(null)
 
   // OBSERVE, never act. Both calls here are read-only on purpose -- see
   // observeKeyBackup, which exists because the connect path enables the backup
@@ -131,6 +138,19 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     })
     return () => { cancelled = true }
   }, [client, reload])
+
+  // Asked once per open. Read-only: it is a GET that answers yes or 403.
+  useEffect(() => {
+    if (!client) return
+    let cancelled = false
+    queueMicrotask(() => {
+      void (async () => {
+        const facts = await observeServerAdmin(client, clientTokenSource(client))
+        if (!cancelled) setAdmin(facts)
+      })()
+    })
+    return () => { cancelled = true }
+  }, [client])
 
   const flipOptIn = (on: boolean) => {
     const before = readOptIn(browserOptInStore)
@@ -248,12 +268,48 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="tc-settings" role="dialog" aria-label="Settings" aria-modal="true">
+    <div
+      className="tc-settings"
+      // The server panel is a table of the whole account; at the dialog's usual
+      // 380px it would be a column of ellipses.
+      data-wide={tab === 'server' ? 'true' : 'false'}
+      role="dialog"
+      aria-label="Settings"
+      aria-modal="true"
+    >
       <div className="tc-settings-row tc-panel-head" data-inset="true">
         <strong>Settings</strong>
         <button type="button" onClick={onClose}>Done</button>
       </div>
 
+      {/* The tab strip appears only once there is more than one tab to pick
+          from, which on most accounts is never. */}
+      {admin?.verdict === 'admin' && (
+        <div className="tc-settings-tabs" role="tablist" aria-label="Settings sections">
+          <button type="button" role="tab" aria-selected={tab === 'encryption'} onClick={() => setTab('encryption')}>
+            Encryption
+          </button>
+          <button type="button" role="tab" aria-selected={tab === 'server'} onClick={() => setTab('server')}>
+            Server permissions
+          </button>
+        </div>
+      )}
+
+      {tab === 'server' && admin?.verdict === 'admin' && client && (
+        <>
+          {/* Said out loud on the panel, because the honest answer to "make
+              this show up for me only" is that it hides a VIEW. Every setting
+              below is room state any member can read with any client. */}
+          <p className="tc-settings-note">
+            {admin.because} This hides the panel, not the information: everything in it is room
+            state that any member of these rooms can read with any client.
+          </p>
+          <ServerPermissions client={client} />
+        </>
+      )}
+
+      {tab === 'encryption' && (
+      <>
       <h3 className="tc-settings-head">Encryption</h3>
 
       {/* The switch comes FIRST. Everything below is hidden while encryption is
@@ -688,6 +744,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           </div>
         )
       })()}
+      </>
+      )}
     </div>
   )
 }

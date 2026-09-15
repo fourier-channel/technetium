@@ -1,0 +1,94 @@
+<!doctype html><html><head>
+<!--#head-->
+<title>Server permissions</title>
+<style>
+  /* The dialog is fixed to the corner in the app; pinned here so the whole
+     panel is in the shot. */
+  .tc-settings { position: static !important; margin: 10px auto; max-height: none !important; }
+</style>
+</head><body>
+<div class="h-label">Settings, server permissions tab</div>
+<div class="tc-settings" data-wide="true">
+  <div class="tc-settings-row tc-panel-head" data-inset="true">
+    <strong>Settings</strong><button>Done</button>
+  </div>
+  <div class="tc-settings-tabs" role="tablist">
+    <button role="tab" aria-selected="false">Encryption</button>
+    <button role="tab" aria-selected="true">Server permissions</button>
+  </div>
+  <p class="tc-settings-note">The homeserver says this account is a server administrator. This hides the panel, not the information: everything in it is room state that any member of these rooms can read with any client.</p>
+  <div class="tc-perm">
+    <div class="tc-perm-bar">
+      <label class="tc-perm-range">Power from <input type="number" value="10"> to <input type="number" value="100"></label>
+      <button class="tc-perm-chip" aria-pressed="false">Show only flagged</button>
+      <button class="tc-perm-chip">Re-read</button>
+    </div>
+    <div class="tc-perm-summary">
+      <span class="tc-tone-bad">2 faults</span>
+      <span class="tc-perm-dim">3 differences from the rest of the server</span>
+      <span class="tc-perm-dim">across 11 rooms, 4 direct messages not audited</span>
+    </div>
+    <div class="tc-perm-list">
+
+      <div class="tc-perm-room">
+        <button class="tc-perm-head" style="padding-left:8px">
+          <span class="tc-perm-kind">SPACE</span><span class="tc-perm-name">Community</span>
+          <span class="tc-perm-dim">42</span><span class="tc-perm-dim">3 with power</span>
+          <span class="tc-perm-caret">+</span>
+        </button>
+      </div>
+
+      <div class="tc-perm-room" data-open="true">
+        <button class="tc-perm-head" style="padding-left:22px" aria-expanded="true">
+          <span class="tc-perm-kind">ROOM</span><span class="tc-perm-name">general</span>
+          <span class="tc-perm-dim">38</span><span class="tc-perm-dim">4 with power</span>
+          <span class="tc-perm-flag tc-tone-bad">1</span>
+          <span class="tc-perm-flag tc-tone-warn">2</span>
+          <span class="tc-perm-caret">-</span>
+        </button>
+        <div class="tc-perm-body">
+          <dl class="tc-perm-settings">
+            <div class="tc-perm-setting"><dt>join</dt><dd>invite</dd></div>
+            <div class="tc-perm-setting"><dt>history</dt><dd>shared</dd></div>
+            <div class="tc-perm-setting"><dt>guests</dt><dd>forbidden</dd></div>
+            <div class="tc-perm-setting"><dt>encrypted</dt><dd>no</dd></div>
+            <div class="tc-perm-setting"><dt>default level</dt><dd>0</dd></div>
+            <div class="tc-perm-setting"><dt>post</dt><dd>0</dd></div>
+            <div class="tc-perm-setting"><dt>settings</dt><dd>50</dd></div>
+            <div class="tc-perm-setting"><dt>invite</dt><dd>0</dd></div>
+            <div class="tc-perm-setting"><dt>remove</dt><dd>50</dd></div>
+            <div class="tc-perm-setting"><dt>ban</dt><dd>50</dd></div>
+            <div class="tc-perm-setting"><dt>delete</dt><dd>50</dd></div>
+            <div class="tc-perm-setting"><dt>power levels</dt><dd>25</dd></div>
+          </dl>
+          <ul class="tc-perm-findings">
+            <li class="tc-tone-bad"><strong>Fault:</strong> Power levels can be changed by anyone at 25. <span class="tc-perm-dim">That is the one event that governs all the others; below 50 it means the room can be taken over by anyone who reaches 25.</span></li>
+            <li class="tc-tone-warn"><strong>Differs:</strong> level to invite is 0. <span class="tc-perm-dim">7 of the other rooms use 50.</span></li>
+            <li class="tc-tone-warn"><strong>Differs:</strong> join rule is invite. <span class="tc-perm-dim">7 of the other rooms use public.</span></li>
+          </ul>
+          <div class="tc-perm-holders">
+            <div class="tc-perm-holder"><span class="tc-perm-holder-name">saber</span><span class="tc-perm-holder-rank">Owner 100</span>
+              <span class="tc-perm-holder-set"><button disabled>Member</button><button>Voice</button><button>Moderator</button><button disabled>Owner</button></span></div>
+            <div class="tc-perm-holder"><span class="tc-perm-holder-name">kestrel</span><span class="tc-perm-holder-rank">Moderator 50</span>
+              <span class="tc-perm-holder-set"><button>Member</button><button>Voice</button><button disabled>Moderator</button><button data-armed="true">Confirm</button></span></div>
+            <div class="tc-perm-holder"><span class="tc-perm-holder-name">nobu</span><span class="tc-perm-holder-rank">Voice 25</span>
+              <span class="tc-perm-holder-set"><button>Member</button><button disabled>Voice</button><button>Moderator</button><button>Owner</button></span></div>
+            <div class="tc-perm-holder"><span class="tc-perm-holder-name">fourier</span><span class="tc-perm-holder-rank">Voice 25</span>
+              <span class="tc-perm-dim tc-perm-holder-why">They are at level 25 and you are at 25. You can only change someone below you.</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tc-perm-room">
+        <button class="tc-perm-head" style="padding-left:22px">
+          <span class="tc-perm-kind">ROOM</span><span class="tc-perm-name">tagging</span>
+          <span class="tc-perm-dim">21</span><span class="tc-perm-dim">2 with power</span>
+          <span class="tc-perm-flag tc-tone-bad">1</span>
+          <span class="tc-perm-caret">+</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+</body></html>
