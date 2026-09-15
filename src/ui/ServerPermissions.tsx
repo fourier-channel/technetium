@@ -240,6 +240,14 @@ function RoomRow({
               ))
             )}
           </div>
+
+          {/* Promoting somebody who holds NO power yet. Without this the panel
+              could only re-rank people who were already ranked: an ordinary
+              member has no entry in the room's power-levels event at all, so
+              they are not in the list above at any window, including one that
+              starts at 0. "Easily setting moderators and voices in any given
+              room" is mostly this half. */}
+          <Promote client={client} room={room} holders={room.users} onChanged={onChanged} />
         </div>
       )}
     </div>
@@ -255,6 +263,82 @@ function Setting({ label, value }: { label: string; value: string | null }) {
     <div className="tc-perm-setting">
       <dt>{label}</dt>
       <dd>{value ?? 'not set'}</dd>
+    </div>
+  )
+}
+
+// Somebody in this room who is at the default and therefore appears in no
+// power-levels list. Searchable, because a busy room's roster is long, and
+// capped, because a list longer than the panel is not a picker.
+const PROMOTE_SHOWN = 8
+
+function Promote({
+  client,
+  room,
+  holders,
+  onChanged,
+}: {
+  client: MatrixClient
+  room: RoomFacts
+  holders: { userId: string; level: number }[]
+  onChanged: (msg: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+
+  const live = client.getRoom(room.roomId)
+  const ranked = new Set(holders.map((h) => h.userId))
+  const query = q.trim().toLowerCase()
+  const candidates = (live?.getJoinedMembers() ?? [])
+    .filter((m) => !ranked.has(m.userId))
+    .filter((m) => query.length === 0
+      || m.userId.toLowerCase().includes(query)
+      || (m.name ?? '').toLowerCase().includes(query))
+    .sort((a, b) => (a.name || a.userId).localeCompare(b.name || b.userId))
+
+  if (!live) return null
+
+  return (
+    <div className="tc-perm-promote">
+      <button type="button" className="tc-perm-chip" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        {open ? 'Done promoting' : 'Give someone a rank'}
+      </button>
+      {open && (
+        <>
+          <input
+            type="text"
+            value={q}
+            placeholder={`Search the ${room.isSpace ? 'space' : 'room'}`}
+            aria-label="Search members"
+            onChange={(e) => setQ(e.target.value)}
+          />
+          {candidates.length === 0 ? (
+            <div className="tc-perm-dim">
+              {query ? 'Nobody here matches that.' : 'Everybody here already holds a rank.'}
+            </div>
+          ) : (
+            <>
+              {candidates.slice(0, PROMOTE_SHOWN).map((m) => (
+                <HolderRow
+                  key={m.userId}
+                  client={client}
+                  room={room}
+                  userId={m.userId}
+                  level={m.powerLevel}
+                  onChanged={onChanged}
+                />
+              ))}
+              {/* The count is shown rather than the list being silently cut:
+                  a picker that hides its own truncation looks like a roster. */}
+              {candidates.length > PROMOTE_SHOWN && (
+                <div className="tc-perm-dim">
+                  {candidates.length - PROMOTE_SHOWN} more -- narrow the search.
+                </div>
+              )}
+            </>
+          )}
+        </>
+      )}
     </div>
   )
 }
