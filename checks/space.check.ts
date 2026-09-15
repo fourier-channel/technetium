@@ -181,5 +181,51 @@ check('preset dock is locked, not pinned (its neighbours stay draggable)', S.lea
   check('closing the thread view hands its width back to dock and chat', near(backAll.leaves.dock.x1, 0.85) && near(backAll.leaves.main.x1, 0.85) && validTiling(backAll))
 }
 
+console.log('\n-- U2b: the reading pane opens over an open domain --')
+{
+  // It did not, on any screen and at any fraction, because the whole of its
+  // width was taken from the panels touching the region's right edge -- with
+  // the domain out, only the domain, which cannot spare a reading pane above
+  // its own 240px minimum. The region is squeezed proportionally now, so the
+  // conversation gives up its share too. Found writing the divider-tone check
+  // on 2026-09-15: the case in the operator's own description of that feature
+  // could not be reached by clicking.
+  const big = setViewport(defaultSpace(), MINIMUM_NEUTRAL)
+  const withDomain = openDomain(big, 0.45)
+  const both = openThreadView(withDomain, 0.38)
+  check('the thread view opens with the domain already out', both.leaves.thread.open)
+  check('the domain is still open', both.leaves.domain.open)
+  check('and the result still tiles', validTiling(both))
+
+  // The conversation gave up width as well: that IS the change.
+  check('the conversation narrowed too, not only the domain',
+    w(both, 'main') < w(withDomain, 'main'))
+  check('the domain narrowed as well', w(both, 'domain') < w(withDomain, 'domain'))
+
+  // Order must not matter, or the feature has a hidden sequence.
+  const other = openDomain(openThreadView(big, 0.38), 0.45)
+  check('the other order works too', other.leaves.thread.open && other.leaves.domain.open)
+
+  // The plain case is unchanged: with only the chat in the region,
+  // proportional and subtractive are the same arithmetic.
+  const alone = openThreadView(big, 0.38)
+  check('the thread view alone is unchanged',
+    near(w(alone, 'thread'), w(big, 'main') * 0.38))
+
+  // The dock spans the whole region, so it has to end where the reading pane
+  // begins. This is the case a per-column squeeze got wrong.
+  const withDock = openThreadView(openDomain(openInColumn(big, 'dock', 0.28), 0.45), 0.38)
+  check('with the dock open as well, everything still tiles',
+    withDock.leaves.thread.open && validTiling(withDock))
+  check('and the dock ends exactly where the reading pane starts',
+    near(withDock.leaves.dock.x1, withDock.leaves.thread.x0))
+
+  // A screen that genuinely cannot hold all three still refuses, and that is
+  // a minimum doing its job rather than the old silent failure.
+  const small = openDomain(setViewport(defaultSpace(), { w: 1280, h: 800 }), 0.45)
+  check('a screen too small for all three still refuses',
+    !openThreadView(small, 0.38).leaves.thread.open)
+}
+
 if (failures) { console.log(`\n${failures} FAILED`); process.exit(1) }
 console.log('\nALL CHECKS PASSED')

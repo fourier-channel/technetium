@@ -459,11 +459,27 @@ export function openThreadView(s: Space, fraction: number): Space {
   if (s.leaves.thread.open) return s
   const n = clone(s)
   const r = regionX(n)
-  const w = (r.x1 - r.x0) * Math.max(0.2, Math.min(0.6, fraction))
-  for (const k of ['dock', 'threads', 'main', 'domain'] as PanelId[]) {
-    const l = n.leaves[k]
+  const span = r.x1 - r.x0
+  const w = span * Math.max(0.2, Math.min(0.6, fraction))
+  // Squeeze the WHOLE region into what is left, by an affine map of the x
+  // axis. Every open panel in the region shrinks in proportion and the tiling
+  // is preserved exactly, in every horizontal band, by construction.
+  //
+  // It used to take the whole of w from the panels whose right edge touched
+  // the region. That works while the chat is the only thing there, and it
+  // silently refuses the moment the DOMAIN is out: the domain is then the only
+  // panel on that edge and it cannot spare a whole reading pane above its own
+  // 240px minimum -- so a thread opened with the domain out did nothing at all,
+  // on every screen size and at every fraction. The width was available the
+  // whole time; it was never asked of the panel to the LEFT. Found writing
+  // U2's check, 2026-09-15, and it made the case in the operator's own
+  // description of the feature unreachable by clicking.
+  const k = span > EPS ? (span - w) / span : 1
+  for (const id of ['dock', 'threads', 'main', 'domain'] as PanelId[]) {
+    const l = n.leaves[id]
     if (!l.open) continue
-    if (near(l.x1, r.x1)) l.x1 = r.x1 - w
+    l.x0 = r.x0 + (l.x0 - r.x0) * k
+    l.x1 = r.x0 + (l.x1 - r.x0) * k
   }
   Object.assign(n.leaves.thread, { x0: r.x1 - w, x1: r.x1, y0: 0, y1: 1, open: true })
   return feasible(n) ? n : s

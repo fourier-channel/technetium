@@ -55,16 +55,18 @@ console.log('\n-- the operator example, transcribed --')
   // "unless thread view is also open. in that case, left domain wall is
   //  orange, the shared wall is orange, and thread view's right wall is green"
   //
-  // BUILT BY HAND, and that is a finding rather than a convenience: with the
-  // domain open, openThreadView REFUSES at every fraction and on every screen
-  // size, because it takes the whole of the thread view's width from the
-  // panels whose right edge touches the region -- which, once the domain is
-  // out, is only the domain, and the domain cannot spare that much above its
-  // own minimum. So the state the operator describes is currently unreachable
-  // in the app. That is a layout-model bug, logged as U2b in the campaign
-  // ledger, and NOT a fact about tone; the tone rule is asserted here against
-  // the state directly so that fixing one cannot quietly hide the other.
-  const both = { ...s, leaves: { ...s.leaves, thread: { ...s.leaves.thread, open: true } } }
+  // Opened for real, through the helper the app uses. It was built by hand
+  // here until U2b: with the domain out, openThreadView refused at every
+  // fraction and on every screen size, because it took the whole of the
+  // reading pane's width from the panels touching the region's right edge --
+  // by then only the domain, which cannot spare that much above its own
+  // minimum. The width was there; it was never asked of the panel to the left.
+  // So the case in the operator's own description of this feature could not be
+  // reached by clicking, and the tone rule was asserted against a state nobody
+  // could produce. This line is the closing of that loop.
+  const both = openThreadView(s, 0.38)
+  check('the operator\'s two-panel case is REACHABLE, not just describable',
+    both.leaves.thread.open && both.leaves.domain.open)
   check('with the thread view out too, the domain wall is still active',
     dividerTone(both, 'domain') === 'active')
   check('the wall they SHARE is active -- it is the thread view\'s own',
