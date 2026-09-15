@@ -706,7 +706,7 @@ export function Row({ item, onOpenThread, sequence }: { item: TimelineItem; onOp
               : undefined
           }
         >
-          <AvatarDisc userId={senderId} name={senderName} avatarMxc={senderAvatar} size={40} />
+          <AvatarDisc userId={senderId} name={senderName} avatarMxc={senderAvatar} size={34} />
           {face && <FaceFlash face={face} seed={item.id} />}
         </span>
         <div
@@ -718,16 +718,9 @@ export function Row({ item, onOpenThread, sequence }: { item: TimelineItem; onOp
             flex: 1,
           }}
         >
-        {/* Stacked ON TOP of the output it labels, inside the body column
-            rather than in a gutter of its own. Its height and the first line's
-            are set independently of the avatar: together they come to the same
-            height, but they are NOT derived from it, because the avatar's size
-            is not a constant and tying them would make a change to one silently
-            retune the other. */}
-        <span className="tc-row-time">{time}</span>
         {item.replyTo && <ReplyPill replyTo={item.replyTo} />}
         <div
-          className={bubble ? 'tc-bubble' : undefined}
+          className={bubble ? 'tc-bubble' : 'tc-row-body'}
           data-bubble={bubble ?? undefined}
           style={{ fontSize: 14, wordBreak: 'break-word', minWidth: 0 }}
         >
@@ -737,6 +730,10 @@ export function Row({ item, onOpenThread, sequence }: { item: TimelineItem; onOp
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, minWidth: 0 }}>
               <div style={{ minWidth: 0 }}>{body}</div>
               <ReactionRail item={item} client={client} roomId={roomId} />
+              {/* Bottom-aligned beside the picture rather than under it: a
+                  trailing line of its own would give every image row 12px of
+                  height that the text rows just got back. */}
+              <span className="tc-row-time tc-row-time-rail">{time}</span>
             </div>
           ) : (
             <>
@@ -752,6 +749,12 @@ export function Row({ item, onOpenThread, sequence }: { item: TimelineItem; onOp
               {canReact && roomId && (
                 <ReactionAdd item={item} client={client} roomId={roomId} inline />
               )}
+              {/* TRAILING the words, not stacked above them. It used to be its
+                  own 14px line at the top of the body column, which pushed
+                  every bubble down by a full line to say something nobody
+                  reads first. Inline-block, so a line with room keeps it and a
+                  full line wraps it -- the shape every chat client has. */}
+              <span className="tc-row-time">{time}</span>
             </>
           )}
           {previewUrl && (

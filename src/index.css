@@ -259,14 +259,19 @@ code {
      margin retunes from one place. On the ROW rather than on the line, because
      the identity block is a sibling of the line and has to centre itself on the
      same avatar the line positions. */
-  --tc-av-w: 40px;
-  --tc-body-x: 52px;
-  /* The two stacked lines beside the avatar. Chosen so their sum matches the
-     avatar today, but deliberately NOT derived from --tc-av-w: the avatar's
-     size is not a constant, and a calc() off it would make resizing the avatar
-     silently restyle the timestamp and the message text along with it. */
-  --tc-row-time-h: 14px;
-  --tc-row-text-h: 26px;
+  /* Retuned 2026-09-15 (ui-depth-v1 U4). The ask was a bubble 20-25% shorter,
+     and the bubble alone would not have moved anything: the line's height is
+     max(bubble, avatar), and a 40px avatar was the taller of the two. Shrinking
+     the bubble without shrinking the avatar is a change nobody can see. */
+  --tc-av-w: 34px;
+  --tc-body-x: 46px;
+  /* The body column's first line. Deliberately NOT derived from --tc-av-w: the
+     avatar's size is not a constant, and a calc() off it would make resizing
+     the avatar silently restyle the message text along with it.
+     The timestamp used to own a second stacked line above this one; it now
+     trails the words instead, so that line is gone and the row is shorter by
+     exactly its height. */
+  --tc-row-text-h: 24px;
 
   position: relative;
 }
@@ -1020,24 +1025,42 @@ code {
   display: block;
   cursor: pointer;
 }
-/* Stacked directly above the output it labels, in the body column. Fixed
-   height, so a row is the same height whether or not the clock reading is
-   wider this minute than last. */
+/* TRAILING the message, inside the bubble, at its end.
+   It was a block stacked above the body, which cost every row a whole 14px
+   line to show a number nobody reads before the words. Inline-block so it
+   rides the last line of text when there is room and wraps with it when there
+   is not; tabular figures so the width does not twitch minute to minute. */
 .tc-row-time {
-  display: block;
-  height: var(--tc-row-time-h);
-  line-height: var(--tc-row-time-h);
+  display: inline-block;
+  float: right;
+  margin: 3px 0 0 10px;
   font-size: 10px;
+  line-height: 1;
+  /* Sits on the text baseline rather than below it: an inline-block aligns by
+     its own bottom margin edge, which would drop it a couple of pixels and
+     make a one-line bubble taller than its text. */
+  vertical-align: baseline;
   font-variant-numeric: tabular-nums;
   color: var(--cpd-color-text-secondary, #a8b0bd);
-  opacity: 0.55;
+  opacity: 0.5;
   pointer-events: none;
   user-select: none;
   white-space: nowrap;
 }
-/* The first line of output sits on the second of the two stacked rows. */
+/* Beside a picture, pinned to the bottom of the rail column. */
+.tc-row-time-rail {
+  align-self: flex-end;
+  margin-left: 2px;
+  margin-bottom: 2px;
+}
 .tc-row-col {
   min-height: var(--tc-row-text-h);
+}
+/* The body of a row that gets no bubble -- a picture, an undecryptable event,
+   a redaction, a poll. It holds the same floated timestamp and so needs the
+   same containment the bubble has. */
+.tc-row-body {
+  display: flow-root;
 }
 .tc-row:hover .tc-row-time,
 .tc-row:focus-within .tc-row-time {
@@ -1740,10 +1763,22 @@ code {
   --tc-bub-line: rgba(128, 128, 128, 0.28);
 
   position: relative;
+  /* Contains the floated timestamp. A plain block does NOT grow to hold a
+     float, so without this the time can hang out through the bubble's bottom
+     border -- and `overflow: hidden` is not the fix here, because it would
+     clip the tail, which lives at left: -10px. */
+  display: flow-root;
   align-self: flex-start;
   max-width: min(100%, var(--tc-chat-w));
-  padding: 7px 12px;
-  border-radius: 12px;
+  /* 6px of lead, not 7, and the text set at 1.35 rather than inheriting the
+     page's 145%-of-18px (26.1px, which is a very loose leading for 14px type).
+     Measured against this tree's own stylesheet with tools/visual: a one-line
+     bubble goes 42.1px -> 32.9px, i.e. 22% off, which is the 20-25% asked for.
+     The horizontal padding barely moved -- the complaint was height, and
+     narrowing a bubble sideways only makes it wrap sooner. */
+  padding: 6px 11px;
+  line-height: 1.35;
+  border-radius: 11px;
   background: var(--tc-bub-bg);
   border: 1px solid var(--tc-bub-line);
 }
@@ -1756,7 +1791,8 @@ code {
 .tc-bubble[data-bubble='questioning']::after {
   content: '';
   position: absolute;
-  top: 11px;
+  /* Level with the first line of text, which moved up with the padding. */
+  top: 9px;
   width: 0;
   height: 0;
   border-top: 6px solid transparent;
@@ -1801,13 +1837,13 @@ code {
 }
 .tc-bubble[data-bubble='thinking']::before {
   left: -12px;
-  top: 12px;
+  top: 10px;
   width: 9px;
   height: 9px;
 }
 .tc-bubble[data-bubble='thinking']::after {
   left: -21px;
-  top: 21px;
+  top: 19px;
   width: 5px;
   height: 5px;
 }
@@ -1823,7 +1859,7 @@ code {
 
   border: 0;
   border-radius: 0;
-  padding: 10px 16px 10px 22px;
+  padding: 9px 16px 9px 22px;
   font-weight: 600;
   letter-spacing: 0.01em;
   background: var(--tc-bub-bg);

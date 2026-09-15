@@ -1,0 +1,33 @@
+<!doctype html><html><head>
+<!--#head-->
+<title>Row metrics</title>
+<style>
+  .h-av { width:100%; height:100%; border-radius:50%; background:#2f5a46; }
+  #out { font: 13px/1.6 var(--mono); color: var(--mod-ink); padding: 12px 16px; white-space: pre; }
+</style>
+</head><body>
+<div class="h-label">Measured, from this tree's own stylesheet</div>
+<div style="padding:0 16px">
+  <div class="tc-row" id="r">
+    <div class="tc-ident-row"><span class="tc-ident"><span class="tc-ident-name">saber</span></span></div>
+    <div class="tc-row-line">
+      <span class="tc-row-av"><span class="h-av"></span></span>
+      <div class="tc-row-col" style="display:flex;flex-direction:column;min-width:0;flex:1">
+        <div class="tc-bubble" id="b" data-bubble="standard" style="font-size:14px;word-break:break-word;min-width:0">
+          <span class="tc-bubble-ink">one short line</span><span class="tc-row-time">04:12</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="out"></div>
+<script>
+  const px = (el) => Math.round(el.getBoundingClientRect().height * 10) / 10
+  const cs = getComputedStyle(document.documentElement)
+  document.getElementById('out').textContent = [
+    'bubble height   ' + px(document.getElementById('b')) + ' px',
+    'row height      ' + px(document.getElementById('r')) + ' px',
+    'line height     ' + px(document.querySelector('.tc-row-line')) + ' px',
+  ].join('\n')
+</script>
+</body></html>
