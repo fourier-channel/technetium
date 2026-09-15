@@ -341,17 +341,28 @@ export function NavTree({
           background: radial-gradient(circle, rgba(212,196,160,0.55) 0%, rgba(212,196,160,0.16) 45%, transparent 70%);
           animation: epiPoof 520ms ease-out calc(2020ms + var(--stage, 0ms)) forwards;
         }
-        @keyframes roomLetterPulse {
-          0%, 40%, 60%, 100% {
-            color: var(--tc-unread-base);
-            text-shadow: 0 0 2px rgba(255,150,40,0.30);
-          }
-          50% {
-            color: var(--tc-unread-bright);
-            text-shadow: 0 0 11px rgba(255,175,80,0.98);
-          }
+        /* The travelling bright band. Only OPACITY moves: the bright glyph is a
+           second copy stacked on the dim one, and it fades in and out. It used
+           to animate color and text-shadow, which are paint properties running
+           forever on every letter of every pinging room name -- the shape of
+           the incident in infinite-animations-cost-a-core, and enforced now by
+           checks/cssAnimations.check.ts. */
+        @keyframes roomLetterPulse { 0%, 40%, 60%, 100% { opacity: 0; } 50% { opacity: 1; } }
+        .room-pulse-letter {
+          position: relative;
+          color: var(--tc-unread-base);
+          text-shadow: 0 0 2px rgba(255,150,40,0.30);
         }
-        .room-pulse-letter { animation: roomLetterPulse 1600ms linear infinite; }
+        .room-pulse-letter::after {
+          content: attr(data-ch);
+          position: absolute;
+          left: 0;
+          top: 0;
+          color: var(--tc-unread-bright);
+          text-shadow: 0 0 8px rgba(255,190,120,0.85), 0 0 2px rgba(255,150,40,0.6);
+          opacity: 0;
+          animation: roomLetterPulse 1600ms linear infinite;
+        }
       `}</style>
       {/* Master animations toggle (seed for the future settings UI). */}
       <div style={{ padding: '2px 10px 8px' }}>
@@ -1111,6 +1122,10 @@ function RoomName({
           <span
             key={i}
             className="room-pulse-letter"
+            // The bright copy is drawn by a pseudo-element reading this
+            // attribute, so the travelling band can be an opacity animation
+            // rather than an infinite repaint of colour and text-shadow.
+            data-ch={ch === ' ' ? '\u00a0' : ch}
             style={{ animationDelay: `${i * 90}ms` }}
           >
             {/* confusable-ok: a literal space collapses in JSX; NBSP is the rendered glyph */}

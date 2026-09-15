@@ -1707,17 +1707,30 @@ code {
   overflow: hidden;
   border-radius: 8px;
   background: var(--cpd-color-bg-subtle-secondary, rgba(128, 128, 128, 0.14));
-  /* A slow diagonal sheen, so a slot that is waiting reads differently from one
-     that has finished and happens to be blank. */
+}
+/* A slow diagonal sheen, so a slot that is waiting reads differently from one
+   that has finished and happens to be blank.
+   It used to be a background-position animation on the box itself. That is a
+   paint property and it ran INFINITELY -- a style recalc and a repaint every
+   frame, for every waiting image on screen, for as long as any of them was
+   still waiting. Same look, as a transform on an overlay: the compositor runs
+   it and the main thread never hears about it
+   (infinite-animations-cost-a-core; checks/cssAnimations.check.ts). */
+.tc-media-ph::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 60%;
   background-image: linear-gradient(
     100deg,
-    transparent 30%,
-    rgba(255, 255, 255, 0.07) 45%,
+    transparent 0%,
+    rgba(255, 255, 255, 0.07) 35%,
     rgba(255, 255, 255, 0.12) 50%,
-    rgba(255, 255, 255, 0.07) 55%,
-    transparent 70%
+    rgba(255, 255, 255, 0.07) 65%,
+    transparent 100%
   );
-  background-size: 220% 100%;
   animation: tcMediaWait 1.9s ease-in-out infinite;
 }
 /* A quiet mark in the middle, so an empty rectangle still says "picture". */
@@ -1734,11 +1747,11 @@ code {
   opacity: 0.25;
 }
 @keyframes tcMediaWait {
-  0%   { background-position: 140% 0; }
-  100% { background-position: -40% 0; }
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(270%); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .tc-media-ph {
+  .tc-media-ph::before {
     animation: none;
     background-image: none;
   }
@@ -2570,15 +2583,34 @@ code {
 .tc-ticker--collapsed .tc-ticker-toggle { position: static; transform: none; }
 
 /* DM strip: the waiting pulse. The inline static ring is the reduced-motion
-   base; this animates it. Ping pulses faster and hotter. */
+   base; this animates it. Ping pulses faster and hotter.
+   The glow is a STATIC box-shadow on a pseudo-element and only its OPACITY
+   moves. It used to animate the box-shadow itself, on an element that is lit
+   for as long as a DM sits unread -- which is the exact shape of the incident
+   in infinite-animations-cost-a-core: a paint property, animated forever,
+   costing a style recalc and a repaint on the main thread every frame, and
+   invisible on a quiet day because nothing was unread. The same halo measured
+   at a ninth of the cost drawn this way. */
 @keyframes tcDmPulse {
-  0%, 100% { box-shadow: 0 0 0 2px var(--tc-unread-base), 0 0 7px 1px rgba(255, 150, 40, 0.3); }
-  50% { box-shadow: 0 0 0 2px var(--tc-unread), 0 0 16px 4px rgba(255, 150, 40, 0.8); }
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 1; }
 }
-.tc-dm-waiting { animation: tcDmPulse 1.7s ease-in-out infinite; }
-.tc-dm-waiting--ping { animation-duration: 1s; }
+.tc-dm-waiting { position: relative; }
+.tc-dm-waiting::after {
+  content: '';
+  position: absolute;
+  /* Out to the BORDER box, not the padding box, so this ring sits exactly
+     where the static one does. An absolutely positioned child's `inset: 0` is
+     the padding box, which on a ringed face is one pixel in. */
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 0 2px var(--tc-unread), 0 0 16px 4px rgba(255, 150, 40, 0.8);
+  animation: tcDmPulse 1.7s ease-in-out infinite;
+}
+.tc-dm-waiting--ping::after { animation-duration: 1s; }
 @media (prefers-reduced-motion: reduce) {
-  .tc-dm-waiting { animation: none; }
+  .tc-dm-waiting::after { animation: none; opacity: 1; }
 }
 
 /* The domain tab: rides the chatbox's right edge; when the domain is open it
