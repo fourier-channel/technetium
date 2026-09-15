@@ -272,6 +272,7 @@ export function EmojiPicker({
   return (
     <div
       ref={ref}
+      className="tc-emoji-picker"
       onClick={(e) => e.stopPropagation()}
       style={{
         position: 'absolute',

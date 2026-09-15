@@ -21,6 +21,7 @@ import { buildEditContent, editableBody } from '../client/editContent'
 import { useTypingSender } from '../client/useTyping'
 import { mentionQueryAt, type MentionTarget } from '../client/mentions'
 import { MentionPicker } from './MentionPicker'
+import { panelEnterSends } from './composerEnter'
 
 type GalleryLayout = 'grid' | 'stack' | 'strip'
 
@@ -197,6 +198,50 @@ export function Composer({
       for (const a of attachmentsRef.current) URL.revokeObjectURL(a.previewUrl)
     }
   }, [])
+
+  // Hitting Enter with a picture waiting must POST it (U6).
+  //
+  // It did not, and the reason was focus. Attaching happens from a button, and
+  // the browser leaves the focus on that button when the file chooser closes,
+  // so Enter re-fired the button and opened the chooser again -- reported as
+  // "hitting enter with an image uploaded opens it instead of posting". The
+  // textarea's own Enter handler was never reached, because the textarea never
+  // had the focus.
+  //
+  // Two halves, because the first depends on a guess about where the browser
+  // left the focus and the second does not.
+  //
+  // Half one: when a picture arrives in the tray, put the caret in the
+  // composer. That is also where someone about to type a caption wants it.
+  const attachCount = attachments.length
+  const lastAttachCount = useRef(0)
+  useEffect(() => {
+    const grew = attachCount > lastAttachCount.current
+    lastAttachCount.current = attachCount
+    if (grew) taRef.current?.focus()
+  }, [attachCount])
+
+  // Half two: Enter anywhere in the composer, while a picture is waiting and
+  // the caret is not in a field, sends. This is the one that holds whatever
+  // the browser decides to do with focus. The RULE is in ui/composerEnter.ts,
+  // where a check can reach it; this only reads the event.
+  const onPanelKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const el = e.target as HTMLElement | null
+    if (!el) return
+    const sends = panelEnterSends({
+      key: e.key,
+      shiftKey: e.shiftKey,
+      modified: e.ctrlKey || e.metaKey || e.altKey,
+      pendingAttachments: attachments.length,
+      sending,
+      targetTag: el.tagName,
+      inSendButton: !!el.closest('[data-tc-send="true"]'),
+      inEmojiPicker: !!el.closest('.tc-emoji-picker'),
+    })
+    if (!sends) return
+    e.preventDefault()
+    void send()
+  }
 
   const addFiles = (files: File[]) => {
     const imgs = files.filter((f) => f.type.startsWith('image/'))
@@ -501,6 +546,7 @@ export function Composer({
       onDrop={onDrop}
       onDragOver={onDragOver}
       onDragLeave={() => setDragging(false)}
+      onKeyDown={onPanelKeyDown}
       style={{
         position: 'relative',
         borderTop: '1px solid rgba(128,128,128,0.25)',
@@ -689,6 +735,7 @@ export function Composer({
         />
         <button
           type="button"
+          data-tc-send="true"
           onClick={() => void send()}
           disabled={!canSend}
           style={{
