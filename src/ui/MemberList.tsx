@@ -131,7 +131,7 @@ export function MemberList({
         color: 'var(--cpd-color-text-primary)',
       }}
     >
-      <div style={{ display: 'flex', gap: 2, padding: 6 }}>
+      <div className="tc-panel-head" style={{ display: 'flex', gap: 2, padding: 6 }}>
         <ModeBtn active={mode === 'room'} onClick={() => setMode('room')}>Room</ModeBtn>
         <ModeBtn active={mode === 'all'} onClick={() => setMode('all')}>All</ModeBtn>
         <ModeBtn active={mode === 'all-highlight'} onClick={() => setMode('all-highlight')}>Nearby</ModeBtn>

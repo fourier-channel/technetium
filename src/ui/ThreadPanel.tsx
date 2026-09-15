@@ -96,13 +96,12 @@ export function ThreadPanel({
       }}
     >
       <div
+        className="tc-panel-head"
         style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           padding: '10px 12px',
-          borderBottom: '1px solid rgba(128,128,128,0.25)',
-          flexShrink: 0,
         }}
       >
         <strong style={{ fontSize: 13 }}>

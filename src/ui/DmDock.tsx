@@ -5,6 +5,7 @@ import { Timeline } from './Timeline'
 import { Composer } from './Composer'
 import { ComposerModeProvider } from './ComposerModeProvider'
 import { ResizeHandle } from './ResizeHandle'
+import { dividerTone } from './dividerTone'
 import { useSpace } from './spaceContext'
 import { PanelChrome } from './PanelChrome'
 
@@ -41,7 +42,7 @@ export function DmDock() {
     >
       {dockRoom && (
         <div className="tc-dmdock-inner">
-          <div className="tc-dmdock-head">
+          <div className="tc-dmdock-head tc-panel-head">
             <span className="tc-dmdock-title">{title}</span>
             <span className="tc-dmdock-hint">Direct message</span>
             {editMode && <PanelChrome id="dock" inline />}
@@ -56,7 +57,12 @@ export function DmDock() {
           {/* The divider under the dock. Dragging it pushes dock and main
               alike -- a locked dock refuses, a pinned one warps. */}
           <div className="tc-dmdock-grip">
-            <ResizeHandle vertical onDrag={(d) => pushEdge('dock', 'y', 'hi', d / Math.max(1, window.innerHeight))} />
+            <ResizeHandle
+              vertical
+              onDrag={(d) => pushEdge('dock', 'y', 'hi', d / Math.max(1, window.innerHeight))}
+              tone={dividerTone(space, 'dock')}
+              label="Direct message height"
+            />
           </div>
         </div>
       )}

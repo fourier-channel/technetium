@@ -11,7 +11,8 @@ import { directRoomIds } from './client/dm'
 import { ComposerModeProvider } from './ui/ComposerModeProvider'
 import { TypingBar } from './ui/TypingBar'
 import { MemberList } from './ui/MemberList'
-import { ResizeHandle } from './ui/ResizeHandle'
+import { DIVIDER_PX, ResizeHandle } from './ui/ResizeHandle'
+import { dividerTone } from './ui/dividerTone'
 import { DmDock } from './ui/DmDock'
 import { LayoutEditor } from './ui/LayoutEditor'
 import { SettingsDialog } from './ui/SettingsDialog'
@@ -355,6 +356,15 @@ function App() {
               className="tc-domain-tile"
               style={{ width: domainReveal.shown ? domainWidth : 0, transitionDuration: `${domainReveal.durationMs}ms` }}
             >
+              {/* The domain's left wall. It had no grip before this campaign --
+                  the panel's width came from the space and nothing let anyone
+                  push it -- and it is the wall the tone rule is written around:
+                  pull the domain out and this is what turns orange. */}
+              <ResizeHandle
+                onDrag={(dx) => pushEdge('domain', 'x', 'lo', dx / vw)}
+                tone={dividerTone(space, 'domain')}
+                label="Domain width"
+              />
               <DomainView
                 room={selectedRoom}
                 onExit={() => setDomainExpanded(false)}
@@ -374,11 +384,18 @@ function App() {
           className="tc-threadview-tile"
           style={{ width: threadPanelReveal.shown ? threadPanelWidth : 0, transitionDuration: `${threadPanelReveal.durationMs}ms` }}
         >
-          <ResizeHandle onDrag={(dx) => pushEdge('thread', 'x', 'lo', dx / vw)} />
+          <ResizeHandle
+            onDrag={(dx) => pushEdge('thread', 'x', 'lo', dx / vw)}
+            tone={dividerTone(space, 'thread')}
+            label="Thread view width"
+          />
+          {/* The tile holds the divider AND the panel, so the panel gets what
+              is left of the tile's width. It used to be handed the whole of it,
+              which the tile then clipped by the divider's thickness. */}
           <ThreadPanel
             roomId={shownThread.roomId}
             rootId={shownThread.rootId}
-            width={threadPanelWidth}
+            width={Math.max(120, threadPanelWidth - DIVIDER_PX)}
           />
         </div>
       )}
@@ -386,17 +403,21 @@ function App() {
       {/* The thread view's tab: on the user list's left border when a thread
           can be pulled back out, on the view's left border when it is out. */}
       {lastThread && !openThread && (
-        <PullTab pull="left" target="thread" label="Thread" onClick={() => setOpenThread(lastThread)} style={{ right: membersWidth + 5 }} />
+        <PullTab pull="left" target="thread" label="Thread" onClick={() => setOpenThread(lastThread)} style={{ right: membersWidth + DIVIDER_PX }} />
       )}
       {openThread && (
-        <PullTab pull="right" target="thread" label="Close thread" onClick={() => setOpenThread(null)} style={{ right: membersWidth + 5 + threadPanelWidth, marginRight: -12 }} />
+        <PullTab pull="right" target="thread" label="Close thread" onClick={() => setOpenThread(null)} style={{ right: membersWidth + DIVIDER_PX + threadPanelWidth, marginRight: -12 }} />
       )}
       {/* Closed by reflow when the screen cannot hold it (space.ts). The
           handle goes with it: a divider for a panel that is not there is a
           drag that silently does nothing. */}
       {space.leaves.members.open && (
         <>
-          <ResizeHandle onDrag={(dx) => pushEdge('members', 'x', 'lo', dx / vw)} />
+          <ResizeHandle
+            onDrag={(dx) => pushEdge('members', 'x', 'lo', dx / vw)}
+            tone={dividerTone(space, 'members')}
+            label="Member list width"
+          />
           <MemberList room={selectedRoom} onOpenRoom={openRoomById} width={membersWidth} />
         </>
       )}

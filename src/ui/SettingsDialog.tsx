@@ -249,7 +249,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="tc-settings" role="dialog" aria-label="Settings" aria-modal="true">
-      <div className="tc-settings-row">
+      <div className="tc-settings-row tc-panel-head" data-inset="true">
         <strong>Settings</strong>
         <button type="button" onClick={onClose}>Done</button>
       </div>

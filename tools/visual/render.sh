@@ -11,13 +11,18 @@
 # substitution happens into a temp copy, so the page in the repo stays a
 # template and re-rendering is idempotent.
 #
-#   tools/visual/render.sh rows.html 900 700 [out.png]
+#   tools/visual/render.sh rows.html 900 700 [out.png] [scale]
+#
+# `scale` is the device scale factor: 2 renders the same layout at twice the
+# pixel density, which is how a 1px outline or a 3px rail gets looked at
+# honestly rather than through a screenshot that lost it to rounding.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 page="${1:?usage: render.sh <page.html> [w] [h] [out.png]}"
 w="${2:-900}"
 h="${3:-700}"
 out="${4:-$here/out/$(basename "${page%.html}").png}"
+scale="${5:-1}"
 shell="$HOME/.cache/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell"
 [ -x "$shell" ] || { echo "no headless chromium at $shell -- see memory vesper-chromium-install-stalls" >&2; exit 1; }
 [ -f "$here/$page" ] || { echo "no such harness page: $here/$page" >&2; exit 1; }
@@ -33,7 +38,7 @@ if '<!--#head-->' not in body:
 out.write_text(body.replace('<!--#head-->', head.read_text()))
 PY
 "$shell" --no-sandbox --disable-gpu --hide-scrollbars \
-  --virtual-time-budget=2500 \
+  --virtual-time-budget=2500 --force-device-scale-factor="$scale" \
   --screenshot="$out" --window-size="$w,$h" \
   "file://$tmp" >/dev/null 2>&1
 echo "$out"

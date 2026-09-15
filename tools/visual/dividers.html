@@ -1,0 +1,29 @@
+<!doctype html><html><head>
+<!--#head-->
+<title>Dividers, magnified</title>
+<style>
+  body { zoom: 4; }
+  .h-strip { display:flex; height: 70px; }
+  .h-p { flex:1; background: var(--cpd-color-bg-canvas-default); }
+  .h-cap { font: 600 4px var(--tc-ui-font); opacity:.5; padding: 2px 3px; }
+</style>
+</head><body>
+<div class="h-cap">neutral</div>
+<div class="h-strip">
+  <div class="h-p"></div>
+  <div class="tc-divider" data-axis="x" data-tone="neutral"><span class="tc-divider-rail"></span></div>
+  <div class="h-p"></div>
+</div>
+<div class="h-cap">active</div>
+<div class="h-strip">
+  <div class="h-p"></div>
+  <div class="tc-divider" data-axis="x" data-tone="active"><span class="tc-divider-rail"></span></div>
+  <div class="h-p"></div>
+</div>
+<div class="h-cap">horizontal, active</div>
+<div style="display:flex;flex-direction:column;height:70px">
+  <div class="h-p"></div>
+  <div class="tc-divider" data-axis="y" data-tone="active"><span class="tc-divider-rail"></span></div>
+  <div class="h-p"></div>
+</div>
+</body></html>

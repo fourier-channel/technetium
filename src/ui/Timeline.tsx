@@ -254,9 +254,9 @@ export function Timeline({ room, onOpenThread, onOpenRoom, threadListOpen, onTog
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <header
+        className="tc-panel-head"
         style={{
           padding: '10px 16px',
-          borderBottom: '1px solid rgba(128,128,128,0.25)',
           fontWeight: 600,
           display: 'flex',
           justifyContent: 'space-between',

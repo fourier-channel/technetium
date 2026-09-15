@@ -80,19 +80,35 @@ export function Sidebar({
   if (!leaf.open) return null
 
   return (
-    <div style={{ position: 'relative', width, flexShrink: 0, height: '100%' }}>
+    <div
+      style={{
+        position: 'relative',
+        width,
+        flexShrink: 0,
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: 0,
+        boxSizing: 'border-box',
+        borderRight: '1px solid rgba(128,128,128,0.25)',
+      }}
+    >
+      {/* OUT of the scroller, which is both halves of U1: a title bar has to
+          look like chrome, and it has to stay put. It used to be the first
+          thing in the scrolling list, so who you are signed in as and the way
+          to Settings both scrolled away under a long room list. */}
+      <div className="tc-panel-head">{header}</div>
       <aside
         className="tc-scroll"
         style={{
-          height: '100%',
+          flex: 1,
+          minHeight: 0,
           overflowY: 'auto',
           overflowX: 'hidden',
           boxSizing: 'border-box',
-          borderRight: '1px solid rgba(128,128,128,0.25)',
           padding: '8px 4px',
         }}
       >
-        {header}
       {editMode && <div style={{ padding: '0 8px 6px' }}><PanelChrome id="sidebar" /></div>}
         {/* No "New room or space" here (operator ruling 2026-09-05): users do
             not create rooms or spaces on this server. DMs are unaffected --
@@ -104,8 +120,20 @@ export function Sidebar({
         <NavTree selectedRoomId={selectedRoomId} onSelectRoom={onSelectRoom} onDefaultWidth={onDefaultWidth} booruActive={booruActive} onSelectBooru={onSelectBooru} />
       </aside>
 
-      {/* Right-edge strip (by the scrollbar): drag to resize, right-click for Lock/Reset. */}
+      {/* Right-edge strip (by the scrollbar): drag to resize, right-click for
+          Lock/Reset. It wears the same divider chrome as every other wall --
+          NEUTRAL, because the panel it leads is the conversation, which is
+          standing furniture and not something anybody pulled out. It is
+          absolutely positioned rather than a flex sibling because it overlays
+          the sidebar's own scrollbar gutter; the class only has to be told
+          which axis it is on. */}
       <div
+        className="tc-divider"
+        data-axis="x"
+        data-tone="neutral"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Room list width"
         onPointerDown={startResize}
         onContextMenu={(e) => {
           e.preventDefault()
@@ -116,12 +144,13 @@ export function Sidebar({
           position: 'absolute',
           top: 0,
           right: 0,
-          width: 7,
           height: '100%',
           zIndex: 5,
           cursor: panelLocked ? 'default' : 'col-resize',
         }}
-      />
+      >
+        <span className="tc-divider-rail" aria-hidden="true" />
+      </div>
 
       {menu && (
         <ResizeMenu

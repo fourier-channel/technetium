@@ -69,16 +69,15 @@ export function DomainView({
   if (!client) return null
 
   return (
-    <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+    <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, flex: 1, minWidth: 0 }}>
       <div
+        className="tc-panel-head"
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: 8,
           padding: '6px 12px',
-          borderBottom: '1px solid rgba(128,128,128,0.25)',
-          flexShrink: 0,
         }}
       >
         <span

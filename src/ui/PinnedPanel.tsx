@@ -60,7 +60,7 @@ export function PinnedPanel({
 
   return (
     <div className="tc-pinned-panel" role="dialog" aria-label="Pinned messages">
-      <div className="tc-pinned-header">
+      <div className="tc-pinned-header tc-panel-head" data-inset="true">
         <strong>Pinned messages</strong>
         <button type="button" onClick={onClose} aria-label="Close pinned messages">
           Close

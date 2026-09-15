@@ -712,7 +712,11 @@ code {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 6px;
+  /* Bled out to the panel's own padding so the title bar spans the panel. A
+     shaded band floating inside a margin reads as a highlighted row, not as
+     chrome. */
+  margin: -8px -12px 6px;
+  padding: 6px 12px;
 }
 .tc-pinned-empty {
   color: var(--cpd-color-text-secondary, #a8b0bd);
@@ -2676,15 +2680,13 @@ code {
 .tc-dmdock[data-shown='true'] .tc-dmdock-inner { transform: translateX(0); }
 .tc-dmdock-head {
   display: flex; align-items: center; gap: 10px;
-  padding: 4px 10px; font-size: 12.5px;
-  border-bottom: 1px solid rgba(128, 128, 128, 0.2);
-  flex-shrink: 0;
+  padding: 5px 10px; font-size: 12.5px;
 }
 .tc-dmdock-title { font-weight: 700; }
 .tc-dmdock-hint { opacity: 0.6; font-size: 11px; }
 .tc-dmdock-close { margin-left: auto; font-size: 11px; padding: 2px 8px; }
 .tc-dmdock-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.tc-dmdock-grip { height: 5px; flex-shrink: 0; }
+.tc-dmdock-grip { height: 7px; flex-shrink: 0; display: flex; }
 @media (prefers-reduced-motion: reduce) {
   .tc-dmdock, .tc-dmdock-inner { transition: none; }
 }
@@ -2718,6 +2720,14 @@ code {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  /* Bled to the dialog's own padding, and sticky: the dialog scrolls and Done
+     was scrolling off the top of it. */
+  position: sticky;
+  top: -12px;
+  z-index: 2;
+  margin: -12px -14px 0;
+  padding: 10px 14px;
+  background-color: var(--tc-panel, #14171c);
 }
 
 .tc-settings-head {
@@ -2993,8 +3003,8 @@ code {
   transition: width 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
   background: var(--cpd-color-bg-canvas-default, #16181d);
 }
-.tc-domain-tile { border-left: 1px solid rgba(128, 128, 128, 0.25); display: flex; flex-direction: column; }
-.tc-threadview-tile { border-left: 1px solid rgba(128, 128, 128, 0.25); display: flex; }
+.tc-domain-tile { display: flex; flex-direction: row; }
+.tc-threadview-tile { display: flex; }
 .tc-threads-tile { transition: height 380ms cubic-bezier(0.22, 0.61, 0.36, 1); }
 @media (prefers-reduced-motion: reduce) {
   .tc-domain-tile, .tc-threadview-tile, .tc-threads-tile { transition: none; }
@@ -3058,3 +3068,158 @@ code {
    the subhead spacing of the action list above it. */
 .tc-settings-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .tc-settings-rotate { margin-top: 12px; }
+
+/* ---------------------------------------------------------------------------
+   Panel chrome, part 1: TITLE BARS (ui-depth-v1 U1).
+
+   Every panel used to head itself with a strip of the same colour as its body
+   and a hairline underneath, so the title bar was a border and nothing else.
+   One class now sinks it below its panel with a vertical shade -- darkest at
+   the top edge, fading out into the panel by the bottom -- with a 1px lip of
+   light along its top so the edge reads as an edge rather than a smudge.
+
+   A SHADE, not a colour. It composites over whatever ground the panel happens
+   to sit on -- the canvas, a subtle panel, a custom chat backdrop -- so one
+   value is right in all three places. A literal grey would be right in one and
+   a patch in the other two, and that is the whole reason this is a token.
+
+   The border-bottom is part of the class. Anything adopting it drops its own
+   inline one rather than drawing two.
+   --------------------------------------------------------------------------- */
+:root {
+  --tc-head-shade: rgba(0, 0, 0, 0.44);
+  --tc-head-line: rgba(128, 128, 128, 0.25);
+  --tc-head-lip: rgba(255, 255, 255, 0.06);
+}
+.tc-panel-head {
+  position: relative;
+  flex-shrink: 0;
+  background-image: linear-gradient(
+    180deg,
+    var(--tc-head-shade) 0%,
+    rgba(0, 0, 0, 0.17) 58%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  border-bottom: 1px solid var(--tc-head-line);
+  box-shadow: inset 0 1px 0 var(--tc-head-lip);
+}
+/* A header on a panel that is itself inset (the pinned/search overlays, the
+   settings dialog) keeps the shade but drops the lip: there is no panel edge
+   above it for the lip to describe. */
+.tc-panel-head[data-inset='true'] {
+  box-shadow: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Panel chrome, part 2: DIVIDERS (ui-depth-v1 U2).
+
+   A divider was a 5px transparent strip with a cursor on it -- invisible until
+   the pointer happened to find it. It is now a groove with a raised rail in it:
+   a light lip along the top, a dark one underneath, and a 1px outline in a tone
+   colour. Grab it and the rail SQUASHES; let go and it springs back.
+
+   THE TONE RULE, and it is the operator's worked example rather than a
+   convention invented here: a divider belongs to the panel on its RIGHT (or,
+   for a horizontal one, ABOVE it) -- the panel it is the leading edge of, which
+   is also the panel that renders it. It outlines GREEN while that panel is
+   standing furniture, and ORANGE while it is a panel that has been pulled out
+   and is currently out. So opening the domain turns the domain's left wall
+   orange and leaves the member list's wall green; opening the thread view as
+   well turns the wall they share orange, because that wall is the thread
+   view's, and the member list's wall stays green. The rule lives in
+   ui/dividerTone.ts, where it is checkable; this is only how it looks.
+
+   Green and orange, and NEITHER of them is a warning: "orange is not a warning
+   -- green and orange both mean working; orange is the one that says work is
+   happening here" (operator ruling 2026-09-01, formant tokens). A pulled-out
+   panel is exactly that: something is going on here.
+   --------------------------------------------------------------------------- */
+.tc-divider {
+  --tc-div-tone: var(--mod-accent, #38e08a);
+  /* Fallbacks, not a second opinion: the live values below are derived from
+     --tc-div-tone by relative-colour syntax, and these only stand in on an
+     engine that cannot do that arithmetic. Grep marker: DIV-TONE-FALLBACK. */
+  --tc-div-edge: rgba(56, 224, 138, 0.42);
+  --tc-div-halo: rgba(56, 224, 138, 0.14);
+
+  position: relative;
+  flex-shrink: 0;
+  z-index: 6;
+  /* The groove: dark at both lips, lighter down the middle, so the rail sits
+     in something rather than on nothing. */
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.08) 50%, rgba(0, 0, 0, 0.44));
+  touch-action: none;
+}
+.tc-divider[data-tone='active'] {
+  --tc-div-tone: var(--mod-active-fg, #ff9d3c);
+  --tc-div-edge: rgba(255, 157, 60, 0.50); /* DIV-TONE-FALLBACK */
+  --tc-div-halo: rgba(255, 157, 60, 0.20); /* DIV-TONE-FALLBACK */
+}
+@supports (color: rgb(from white r g b / 1)) {
+  .tc-divider {
+    --tc-div-edge: rgb(from var(--tc-div-tone) r g b / 0.42);
+    --tc-div-halo: rgb(from var(--tc-div-tone) r g b / 0.14);
+  }
+  .tc-divider[data-tone='active'] {
+    --tc-div-edge: rgb(from var(--tc-div-tone) r g b / 0.50);
+    --tc-div-halo: rgb(from var(--tc-div-tone) r g b / 0.20);
+  }
+}
+.tc-divider[data-axis='x'] {
+  width: 7px;
+  align-self: stretch;
+  cursor: col-resize;
+}
+.tc-divider[data-axis='y'] {
+  height: 7px;
+  width: 100%;
+  cursor: row-resize;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.08) 50%, rgba(0, 0, 0, 0.44));
+}
+.tc-divider-rail {
+  position: absolute;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.03));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.20),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.50),
+    0 0 0 1px var(--tc-div-edge),
+    0 0 8px 0 var(--tc-div-halo);
+  /* transform and opacity only, and finite: an infinite animation here would
+     be the lamp incident again (infinite-animations-cost-a-core). */
+  transition:
+    transform 170ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 170ms ease;
+}
+.tc-divider[data-axis='x'] .tc-divider-rail {
+  top: 5px;
+  bottom: 5px;
+  left: 2px;
+  right: 2px;
+}
+.tc-divider[data-axis='y'] .tc-divider-rail {
+  left: 5px;
+  right: 5px;
+  top: 2px;
+  bottom: 2px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.03));
+}
+/* Squish. The rail swells under the pointer and compresses when it is grabbed,
+   which is the whole of "squishy" -- and it is a transform on a 3px element,
+   so it composites and never reflows the panels either side (no-forced-reflow). */
+.tc-divider[data-axis='x']:hover .tc-divider-rail { transform: scaleX(1.7); }
+.tc-divider[data-axis='x']:active .tc-divider-rail { transform: scaleX(0.5); }
+.tc-divider[data-axis='y']:hover .tc-divider-rail { transform: scaleY(1.7); }
+.tc-divider[data-axis='y']:active .tc-divider-rail { transform: scaleY(0.5); }
+.tc-divider:hover .tc-divider-rail,
+.tc-divider:active .tc-divider-rail {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.26),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.55),
+    0 0 0 1px var(--tc-div-tone),
+    0 0 12px 1px var(--tc-div-halo);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tc-divider-rail { transition: none; }
+  .tc-divider .tc-divider-rail { transform: none !important; }
+}

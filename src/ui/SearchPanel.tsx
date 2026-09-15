@@ -62,7 +62,7 @@ export function SearchPanel({
 
   return (
     <div className="tc-pinned-panel" role="dialog" aria-label="Search messages">
-      <div className="tc-pinned-header">
+      <div className="tc-pinned-header tc-panel-head" data-inset="true">
         <strong>Search</strong>
         <button type="button" onClick={onClose} aria-label="Close search">
           Close

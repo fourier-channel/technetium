@@ -1,0 +1,56 @@
+<!doctype html><html><head>
+<!--#head-->
+<title>Panel chrome</title>
+<style>
+  .h-app { display:flex; height: 420px; }
+  .h-col { display:flex; flex-direction:column; min-width:0; }
+  .h-body { flex:1; min-height:0; padding:10px 12px; font-size:13px;
+            color: var(--cpd-color-text-secondary); }
+  .h-head { display:flex; align-items:center; justify-content:space-between;
+            gap:10px; padding:9px 12px; font: 600 13px var(--tc-ui-font);
+            color: var(--cpd-color-text-primary); }
+  .h-head small { font-weight:400; opacity:.55; font-size:11px; }
+</style>
+</head><body>
+<div class="h-label">Sidebar | chat | DOMAIN (pulled out) | THREAD VIEW (pulled out) | members</div>
+<div class="h-app">
+
+  <div class="h-col" style="width:150px;flex-shrink:0">
+    <div class="h-head tc-panel-head">Rooms</div>
+    <div class="h-body">general<br>random<br>tagging</div>
+  </div>
+
+  <div class="h-col" style="flex:1">
+    <div class="h-head tc-panel-head">#general <small>18 joined</small></div>
+    <div class="h-body">the conversation</div>
+  </div>
+
+  <div class="tc-divider" data-axis="x" data-tone="active"><span class="tc-divider-rail"></span></div>
+
+  <div class="h-col" style="width:170px;flex-shrink:0">
+    <div class="h-head tc-panel-head">#general <small>domain</small></div>
+    <div class="h-body">canvas</div>
+  </div>
+
+  <div class="tc-divider" data-axis="x" data-tone="active"><span class="tc-divider-rail"></span></div>
+
+  <div class="h-col" style="width:170px;flex-shrink:0">
+    <div class="h-head tc-panel-head">Thread <small>4 replies</small></div>
+    <div class="h-body">the thread</div>
+  </div>
+
+  <div class="tc-divider" data-axis="x" data-tone="neutral"><span class="tc-divider-rail"></span></div>
+
+  <div class="h-col" style="width:140px;flex-shrink:0">
+    <div class="h-head tc-panel-head">Members</div>
+    <div class="h-body">18 members</div>
+  </div>
+
+</div>
+<div class="h-label">A horizontal divider, under the DM dock</div>
+<div style="height:90px;display:flex;flex-direction:column">
+  <div class="h-head tc-panel-head">nobu <small>Direct message</small></div>
+  <div class="h-body" style="flex:1">a direct message</div>
+  <div class="tc-divider" data-axis="y" data-tone="active"><span class="tc-divider-rail"></span></div>
+</div>
+</body></html>

@@ -288,12 +288,8 @@ export function ThreadList({
       }
     >
       <div
-        className={carousel ? 'tc-carousel-head' : undefined}
-        style={{
-          padding: '10px 12px 6px',
-          borderBottom: '1px solid rgba(128,128,128,0.25)',
-          flexShrink: 0,
-        }}
+        className={carousel ? 'tc-carousel-head tc-panel-head' : 'tc-panel-head'}
+        style={{ padding: '10px 12px 6px' }}
       >
         <div
           style={{
