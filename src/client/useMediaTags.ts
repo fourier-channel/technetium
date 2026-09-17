@@ -82,14 +82,20 @@ function ingestEvent(ev: MatrixEvent): void {
 // Full sweep of every room. Reads BOTH sources:
 //
 //  - currentState, the canonical home, and
-//  - the loaded timeline, because under sliding sync `required_state` is lean
-//    (room chrome + $ME) and custom state types are NEVER delivered in the
-//    state block. The state event still travels down the TIMELINE when it is
-//    written live, which is the only reason tags appear at all today.
+//  - the loaded timeline, which carries the same state event when it is
+//    written live.
 //
-// Neither source is complete on its own: the timeline only carries writes that
-// happened inside the loaded window, and currentState only carries what sync
-// chose to send. `fetchTags` below closes the gap on demand.
+// currentState is now the COMPLETE and CURRENT source: net.41chan.media.tags
+// is listed in required_state, so sync delivers the latest value for every
+// tagged image in every joined room. That is what makes a month-old image show
+// its current tags rather than the ones it was born with.
+//
+// The timeline read stays for two reasons: a live write reaches it first, and
+// an event scrolled into view is free to ingest. It cannot make anything
+// stale -- ingestSet refuses a write older than the one it holds -- so an old
+// tag event surfacing during scrollback loses to the current value already in
+// the store. `fetchTags` below still closes the gap for a room this client has
+// not synced state for.
 function scanAll(client: MatrixClient): void {
   for (const room of client.getRooms()) {
     for (const ev of room.currentState.getStateEvents(MEDIA_TAGS_EVENT)) {

@@ -68,19 +68,43 @@ check('m.room.encryption is requested -- without it the client sends CLEARTEXT',
 
 console.log('\n== every state type read through currentState is requested')
 const files = walk('src')
+
+// SCREAMING_CASE constants assigned a string literal anywhere in src, so a read
+// spelled `getStateEvents(MEDIA_TAGS_EVENT)` resolves to its wire type instead
+// of being silently skipped.
+const constants = new Map<string, string>()
+for (const f of files) {
+  for (const m of readFileSync(f, 'utf8').matchAll(/\b([A-Z][A-Z0-9_]{2,})\s*=\s*'([^']+)'/g)) {
+    constants.set(m[1], m[2])
+  }
+}
 const unresolved: string[] = []
 const read = new Map<string, string>()
 for (const f of files) {
   const src = readFileSync(f, 'utf8')
-  for (const m of src.matchAll(/getStateEvents\(\s*(?:EventType\.([A-Za-z]+)|'([^']+)')/g)) {
+  // Three spellings reach currentState: an EventType member, a bare string, or
+  // a CONSTANT. The constant form was invisible here until 2026-09-17, which is
+  // how net.41chan.media.tags was read through currentState for months while
+  // absent from required_state -- tags fell back to whatever the loaded
+  // timeline happened to carry, so an old image showed the tags it was born
+  // with. The check that exists to catch exactly that could not see it.
+  for (const m of src.matchAll(
+    /getStateEvents?\(\s*(?:EventType\.([A-Za-z]+)|'([^']+)'|([A-Z][A-Z0-9_]+))/g,
+  )) {
     if (m[2]) read.set(m[2], f)
     else if (m[1] && EVENT_TYPE_STRINGS[m[1]]) read.set(EVENT_TYPE_STRINGS[m[1]], f)
-    else unresolved.push(`${m[1]} in ${f}`)
+    else if (m[3]) {
+      const literal = constants.get(m[3])
+      if (literal) read.set(literal, f)
+      else unresolved.push(`${m[3]} in ${f} (constant whose value could not be found)`)
+    } else unresolved.push(`${m[1]} in ${f}`)
   }
 }
-check('every EventType member used could be resolved to a wire string',
+check('every state type read could be resolved to a wire string',
   unresolved.length === 0,
-  unresolved.length ? { unresolved, fix: 'add it to EVENT_TYPE_STRINGS in this check' } : undefined)
+  unresolved.length
+    ? { unresolved, fix: 'add it to EVENT_TYPE_STRINGS, or give the constant a string literal this can find' }
+    : undefined)
 
 for (const [type, where] of [...read].sort()) {
   check(`${type} (read in ${where.replace('src/', '')}) is in required_state`,

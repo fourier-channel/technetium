@@ -80,6 +80,24 @@ const LIST_REQUIRED_STATE: string[][] = [
   // to-device and never consult room state -- so the session looked healthy
   // from the inside while it published everything it sent.
   ['m.room.encryption', ''],
+
+  // MEDIA TAGS. State keyed by the image's mxc, written by the bridge, read
+  // through currentState by the tag store.
+  //
+  // Without it the store saw tags only when the write happened to fall inside
+  // the loaded timeline window -- so a month-old image showed the tags it was
+  // BORN with, not its current ones, and a booru retag was invisible until
+  // something forced a per-image fetch. Current state is by definition the
+  // latest write, so listing it here is what makes tags correct rather than
+  // merely present.
+  //
+  // MEASURED before adding, because '*' on a per-room list is the expensive
+  // shape: across this homeserver only 4 rooms carry tags at all, 462 current
+  // values, about 800 KB of current state in total. (The 2.4 MB in the events
+  // table is every superseded version; required_state never sends those.)
+  // Re-measure before assuming this stays cheap -- the ratio of current values
+  // to writes is roughly 1:3 and only the numerator is paid here.
+  ['net.41chan.media.tags', '*'],
 ]
 const TIMELINE_LIMIT = 1
 
