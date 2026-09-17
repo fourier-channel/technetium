@@ -87,6 +87,26 @@ check('and the walk is bounded', /MAX_PAGES/.test(loadOlder) && /const MAX_PAGES
 check('the page size is a named constant, not a literal',
   /limit: PAGE_SIZE/.test(loadOlder) && /const PAGE_SIZE\s*=\s*\d+/.test(timeline))
 
+// The budget is sized against a measurement: the longest run of consecutive
+// never-drawn events in the reported room is 727 (718 bridge media-tag events
+// in one batch). A budget under that cannot cross the block, which is exactly
+// how the previous sizing still stalled.
+const pageSize = Number(/const PAGE_SIZE\s*=\s*(\d+)/.exec(timeline)?.[1] ?? 0)
+const maxPages = Number(/const MAX_PAGES\s*=\s*(\d+)/.exec(timeline)?.[1] ?? 0)
+check('one click can cross the longest measured run of invisible events',
+  pageSize * maxPages >= 727, `budget is ${pageSize * maxPages}, the measured run is 727`)
+
+console.log('== running out of budget must not be silent')
+check('a walk that rendered nothing reports how far it got',
+  /setSkipped\(/.test(loadOlder))
+check('and reports zero when the click actually produced something',
+  /gainedNothing && more \? /.test(loadOlder))
+check('skipped is returned from the hook', /skipped\s*\}/.test(timeline))
+
+const ui = stripComments(readFileSync('src/ui/Timeline.tsx', 'utf8'))
+check('the button surfaces it to the user',
+  /skipped > 0/.test(ui) && /skipped \$\{skipped\}|skipped \$\{/.test(ui))
+
 console.log('== the initial deepening has the same problem and the same fix')
 // Anchored on code, since the comments that named these spots are stripped.
 const effect = timeline.slice(timeline.indexOf('INITIAL_SCROLLBACK) {'), timeline.indexOf('const onTimeline'))

@@ -125,7 +125,7 @@ function onSpoilerKey(e: React.KeyboardEvent) {
 // they are unreadable, not a bare padlock (see client/decryptionState).
 export function Timeline({ room, onOpenThread, onOpenRoom, threadListOpen, onToggleThreadList }: { room: Room; onOpenThread?: (roomId: string, rootId: string) => void; onOpenRoom?: (roomId: string) => void; threadListOpen?: boolean; onToggleThreadList?: () => void }) {
   const { client } = useClient()
-  const { items, loadOlder, loadingOlder, atStart } = useTimeline(client, room)
+  const { items, loadOlder, loadingOlder, atStart, skipped } = useTimeline(client, room)
   // The lightbox's vertical axis for this room: every image in the loaded
   // window, in order, so up/down in the viewer walks the conversation.
   const sequence = useMemo(() => buildMediaSequence(items), [items])
@@ -282,7 +282,14 @@ export function Timeline({ room, onOpenThread, onOpenRoom, threadListOpen, onTog
               disabled={loadingOlder}
               style={{ fontSize: 12, fontWeight: 400 }}
             >
-              {loadingOlder ? 'Loading...' : 'Load older'}
+              {loadingOlder
+                ? 'Loading...'
+                : skipped > 0
+                  // The click worked and moved the token; there was simply
+                  // nothing drawable in what it crossed. Saying so beats a
+                  // button that appears to do nothing.
+                  ? `Load older (skipped ${skipped})`
+                  : 'Load older'}
             </button>
           )}
           <button

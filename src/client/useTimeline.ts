@@ -317,20 +317,28 @@ const INITIAL_SCROLLBACK = 60
 // One "Load older" click asks for PAGE_SIZE events at a time and will spend up
 // to MAX_PAGES requests while nothing RENDERS.
 //
-// Sized against what these rooms actually contain: roughly two thirds of a
-// busy room's events are net.41chan.* system events that are never drawn, and
-// they arrive in runs. A page of 50 yields perhaps fifteen visible items on
-// average and none at all across a burst, so the walk has to be allowed to
-// cross one. 8 x 50 bounds a single click at 400 events -- enough to clear a
-// long run of tag or position traffic, and far short of walking a room.
-const PAGE_SIZE = 50
-const MAX_PAGES = 8
+// SIZED AGAINST A MEASUREMENT, not a guess. In the room this was reported
+// from, runs of consecutive never-drawn events average 14.7 and the longest is
+// 727 -- 718 consecutive media-tag events written by the bridge in one 61
+// minute batch. A 400-event budget could not cross that block, which is why
+// the first sizing still stalled. 10 x 100 crosses it with room to spare.
+//
+// It is still a budget, and a bigger batch will still beat it. That is why
+// running out is REPORTED rather than silent: the token has advanced, so
+// clicking again resumes where this left off, and `skipped` lets the button
+// say so instead of flicking to Loading and back with nothing to show.
+const PAGE_SIZE = 100
+const MAX_PAGES = 10
 
 // Live timeline for a room: current events, live appends, and scrollback.
 export function useTimeline(client: MatrixClient | null, room: Room | null) {
   const [items, setItems] = useState<TimelineItem[]>([])
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [atStart, setAtStart] = useState(false)
+  // How many events the last click walked past without rendering anything.
+  // Zero whenever the click produced something, so the UI only mentions it
+  // when it is the reason the screen did not change.
+  const [skipped, setSkipped] = useState(0)
   const roomRef = useRef<Room | null>(null)
   // Read here rather than inside refresh: it is the reason to rebuild, so it
   // belongs in the dependency list and not in a closure that never sees it
@@ -507,6 +515,7 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
       //
       // Bounded, so one click can never walk the whole room.
       const before = buildItems().length
+      const eventsBefore = timeline.getEvents().length
       let more = true
       let pages = 0
       while (more && pages < MAX_PAGES && buildItems().length === before) {
@@ -514,11 +523,16 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
         pages += 1
       }
       refresh()
+      // Nothing rendered and the room has not ended: the budget ran out inside
+      // a long run of never-drawn events. Say how far it got, so a click that
+      // changed nothing on screen still shows it did something.
+      const gainedNothing = buildItems().length === before
+      setSkipped(gainedNothing && more ? timeline.getEvents().length - eventsBefore : 0)
       if (!more) setAtStart(true)
     } finally {
       setLoadingOlder(false)
     }
   }, [client, room, loadingOlder, atStart, refresh, buildItems])
 
-  return { items, loadOlder, loadingOlder, atStart }
+  return { items, loadOlder, loadingOlder, atStart, skipped }
 }
