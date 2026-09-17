@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { parseMxc } from '../client/media'
 import { booruPostUrl, booruTagUrl } from '../client/booruUrl'
 import { isHypeTag } from '../client/hypeTags'
+import { useTagDiff, tagKey, type TagPhase } from '../client/useTagDiff'
 import '../mediatags.css'
 import { useMediaTags } from '../client/useMediaTags'
 import { sortTags, type MediaRating, type MediaTag, type TagCategory } from '../client/mediaTags'
@@ -166,8 +167,12 @@ function TagPanel({
 }) {
   const shown = max === undefined ? tags : tags.slice(0, max)
   const rest = tags.length - shown.length
-  const head = shown.filter((t) => HEAD_CATEGORIES.includes(t.category))
-  const body = shown.filter((t) => !HEAD_CATEGORIES.includes(t.category))
+  // A retag arrives as a whole new set, so the panel has to work out which
+  // pill moved before it can draw the change rather than the result. Leaving
+  // pills stay in the list until their exit finishes.
+  const diffed = useTagDiff(shown)
+  const head = diffed.filter((d) => HEAD_CATEGORIES.includes(d.tag.category))
+  const body = diffed.filter((d) => !HEAD_CATEGORIES.includes(d.tag.category))
 
   return (
     <div className="mtags-panel">
@@ -175,14 +180,14 @@ function TagPanel({
       {head.length > 0 && (
         <>
           <div className="mtags-label">{head.length === 1 ? 'character' : 'characters'}</div>
-          {head.map((t) => (
-            <TagPill key={t.category + ':' + t.name} tag={t} onTagClick={onTagClick} />
+          {head.map((d) => (
+            <TagPill key={tagKey(d.tag)} tag={d.tag} phase={d.phase} onTagClick={onTagClick} />
           ))}
           <div className="mtags-rule" />
         </>
       )}
-      {body.map((t) => (
-        <TagPill key={t.category + ':' + t.name} tag={t} onTagClick={onTagClick} />
+      {body.map((d) => (
+        <TagPill key={tagKey(d.tag)} tag={d.tag} phase={d.phase} onTagClick={onTagClick} />
       ))}
       {rest > 0 && (
         <button type="button" onClick={onMore} style={ghostBtn}>
@@ -216,22 +221,42 @@ function TagPanel({
 // onTagClick still runs for callers that want to intercept (the lightbox
 // filters in place rather than navigating), and only then is the navigation
 // suppressed.
-function TagPill({ tag, onTagClick }: { tag: MediaTag; onTagClick?: (t: MediaTag) => void }) {
+function TagPill({
+  tag,
+  phase = 'steady',
+  onTagClick,
+}: {
+  tag: MediaTag
+  phase?: TagPhase
+  onTagClick?: (t: MediaTag) => void
+}) {
   const hype = isHypeTag(tag.name)
+  // A leaving pill is already gone from the data and is on screen only long
+  // enough to be seen going, so it must not be clickable on the way out.
+  const leaving = phase === 'leaving'
   return (
     <a
-      className={`mod-pill mod-pill--cat-${tag.category}${hype ? ' mod-pill--hype' : ''}`}
+      className={
+        `mod-pill mod-pill--cat-${tag.category}` +
+        (hype ? ' mod-pill--hype' : '') +
+        (phase === 'entering' ? ' mod-pill--in' : '') +
+        (leaving ? ' mod-pill--out' : '')
+      }
+      aria-hidden={leaving ? 'true' : undefined}
+      tabIndex={leaving ? -1 : undefined}
       href={tag.url ?? booruTagUrl(tag.name)}
       target="_blank"
       rel="noreferrer noopener"
       title={tag.score !== undefined ? `${tag.category} - ${Math.round(tag.score * 100)}%` : tag.category}
       onClick={
-        onTagClick
-          ? (e) => {
-              e.preventDefault()
-              onTagClick(tag)
-            }
-          : undefined
+        leaving
+          ? (e) => e.preventDefault()
+          : onTagClick
+            ? (e) => {
+                e.preventDefault()
+                onTagClick(tag)
+              }
+            : undefined
       }
     >
       <i className="mod-pill-dot" />

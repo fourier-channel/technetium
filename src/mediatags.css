@@ -204,3 +204,18 @@
   color: var(--mod-ink);
   text-decoration: underline;
 }
+
+/* --- a tag arriving, and a tag leaving ------------------------------------ */
+/* The motion is CANON (formant: mod-tag-pop-in, mod-tag-pop-out) so a tag pops
+   the same way on the booru and in the client. This file only says which pill
+   is in which phase, and useTagDiff works out which that is.
+   Both are FINITE -- one run per change -- so they are exempt from the
+   infinite-animation rule. They stay on transform and opacity regardless,
+   because a pill appearing beside thirty others must not relayout the column. */
+.mod-pill--in {
+  animation: mod-tag-pop-in var(--mod-tag-pop-in-dur) var(--mod-tag-pop-ease) both;
+}
+.mod-pill--out {
+  animation: mod-tag-pop-out var(--mod-tag-pop-out-dur) ease-in both;
+  pointer-events: none;
+}

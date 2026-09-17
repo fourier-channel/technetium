@@ -1,7 +1,7 @@
 {
   "build_stamp": null,
-  "hydrated_at": "2026-09-17T05:31:34Z",
-  "hydrated_hash": "sha256c:c40fe21158f2851ee8893023d2863d6679413a6bfe4306952545f33325d5b06d",
+  "hydrated_at": "2026-09-17T17:02:21Z",
+  "hydrated_hash": "sha256c:8ef3029e56db04ce038c784a698eeafef5d5cb4ebe2c32511da67faded8519db",
   "pinned": null,
   "source": "coherence://brain/tokens.css"
 }

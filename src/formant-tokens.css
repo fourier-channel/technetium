@@ -253,3 +253,52 @@
     --mod-hype-tilt: 0deg;
   }
 }
+
+/* ===========================================================================
+ * TAG POP -- a tag arriving, and a tag leaving.
+ *
+ * Tags are live: a person retags on the booru and every surface showing that
+ * image should say so without a reload. A silent swap is indistinguishable
+ * from having missed it, so the CHANGE is what gets drawn, not the new state.
+ *
+ * Operator, 2026-09-17: "then for animations you would just diff the tags to
+ * pop them in and out as they get added or removed." The diff belongs to the
+ * consumer -- it knows what it drew last -- and only the motion is here.
+ *
+ * FINITE, unlike mod-hype-*. These run once per change, so they are free to
+ * touch what they like; they stay on transform and opacity anyway because a
+ * pill popping in beside thirty others should not relayout the column.
+ *
+ * SCALE FROM THE CENTRE and never from zero WIDTH: animating width or height
+ * reflows every sibling on every frame, which is the standing no-forced-reflow
+ * rule, and at these sizes the difference is visible as a shudder.
+ * ======================================================================== */
+
+:root {
+  --mod-tag-pop-in-dur:   220ms;
+  --mod-tag-pop-out-dur:  160ms;
+  --mod-tag-pop-ease:     cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+@keyframes mod-tag-pop-in {
+  /* Slight overshoot, so an arriving tag reads as arriving rather than as
+     having always been there. */
+  0%   { opacity: 0; transform: scale(0.72); }
+  60%  { opacity: 1; transform: scale(1.06); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes mod-tag-pop-out {
+  /* Leaves smaller and faster than it arrived: a removal should not hold the
+     eye as long as an addition. The consumer keeps the element mounted for
+     --mod-tag-pop-out-dur and then drops it. */
+  0%   { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.6); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --mod-tag-pop-in-dur:  1ms;
+    --mod-tag-pop-out-dur: 1ms;
+  }
+}
