@@ -68,9 +68,24 @@ check('the old oldState token test is gone',
   !/oldState\.paginationToken/.test(loadOlder))
 
 console.log('== a page that lands nothing must not stop the walk')
-check('it keeps paging while the timeline has not grown',
-  /while\s*\(.*more.*getEvents\(\)\.length\s*===\s*before/.test(loadOlder.replace(/\s+/g, ' ')))
+// THE SECOND PRODUCTION FAILURE. Paging was fixed, the request fired, the
+// timeline grew -- and the screen did not change, so the button flicked to
+// Loading and back. Roughly two thirds of a busy room's events are
+// net.41chan.* system events that are never drawn, and they arrive in runs,
+// so a full page can contain no visible item at all. Counting timeline events
+// asks the wrong question; the walk has to continue until something RENDERS.
+check('the walk is driven by the RENDERED item count',
+  /while\s*\(.*more.*buildItems\(\)\.length\s*===\s*before/.test(loadOlder.replace(/\s+/g, ' ')))
+check('the loop does NOT decide from the timeline event count',
+  !/getEvents\(\)\.length\s*===\s*before/.test(loadOlder),
+  'a page of purely filtered events grows the timeline and shows nothing')
+check('the before-count is the rendered one too',
+  /const before = buildItems\(\)\.length/.test(loadOlder))
+check('buildItems is shared with refresh rather than reimplemented',
+  /const buildItems = useCallback/.test(timeline) && /setItems\(applyLayout\(buildItems\(\)\)\)/.test(timeline))
 check('and the walk is bounded', /MAX_PAGES/.test(loadOlder) && /const MAX_PAGES\s*=\s*\d+/.test(timeline))
+check('the page size is a named constant, not a literal',
+  /limit: PAGE_SIZE/.test(loadOlder) && /const PAGE_SIZE\s*=\s*\d+/.test(timeline))
 
 console.log('== the initial deepening has the same problem and the same fix')
 // Anchored on code, since the comments that named these spots are stripped.

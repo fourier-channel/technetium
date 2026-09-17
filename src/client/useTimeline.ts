@@ -314,11 +314,17 @@ export function toItems(events: MatrixEvent[], opts: ToItemsOptions = {}): Timel
 // Depth a freshly-opened room back-fills to (sync alone delivers ~20).
 const INITIAL_SCROLLBACK = 60
 
-// How many pages one "Load older" click may fetch while nothing visible comes
-// back. Thread replies land in their own timelines, so a page can add nothing
-// to the main one; without a bound, a click in a heavily threaded room could
-// walk the whole room.
-const MAX_PAGES = 5
+// One "Load older" click asks for PAGE_SIZE events at a time and will spend up
+// to MAX_PAGES requests while nothing RENDERS.
+//
+// Sized against what these rooms actually contain: roughly two thirds of a
+// busy room's events are net.41chan.* system events that are never drawn, and
+// they arrive in runs. A page of 50 yields perhaps fifteen visible items on
+// average and none at all across a burst, so the walk has to be allowed to
+// cross one. 8 x 50 bounds a single click at 400 events -- enough to clear a
+// long run of tag or position traffic, and far short of walking a room.
+const PAGE_SIZE = 50
+const MAX_PAGES = 8
 
 // Live timeline for a room: current events, live appends, and scrollback.
 export function useTimeline(client: MatrixClient | null, room: Room | null) {
@@ -331,23 +337,25 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
   // change.
   const showSystemEvents = useShowSystemEvents()
 
+  // What the timeline would render right now, before layout.
+  //
+  // Extracted from refresh so scrollback can ask "did that page actually put
+  // anything on screen?" -- a question the timeline's event count cannot
+  // answer, because most of what this room stores is never rendered.
+  const buildItems = useCallback(() => {
+    if (!room) return []
+    const myUserId = client?.getUserId() ?? null
+    return toItems(room.getLiveTimeline().getEvents(), {
+      showSystemEvents,
+      myUserId,
+      ignoredUsers: client ? getIgnoredUsers(client) : undefined,
+    })
+  }, [client, room, showSystemEvents])
+
   // Rebuild the item list from the room's current live timeline.
   const refresh = useCallback(() => {
-    if (!room) {
-      setItems([])
-      return
-    }
-    const myUserId = client?.getUserId() ?? null
-    setItems(
-      applyLayout(
-        toItems(room.getLiveTimeline().getEvents(), {
-          showSystemEvents,
-          myUserId,
-          ignoredUsers: client ? getIgnoredUsers(client) : undefined,
-        }),
-      ),
-    )
-  }, [client, room, showSystemEvents])
+    setItems(applyLayout(buildItems()))
+  }, [buildItems])
 
   useEffect(() => {
     roomRef.current = room
@@ -480,22 +488,29 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
       // one sliding sync actually sets, and resolves false only when the
       // server says the timeline has ended.
       const timeline = room.getLiveTimeline()
-      const before = timeline.getEvents().length
+      // COUNT WHAT WOULD BE RENDERED, not what arrived.
+      //
+      // A page can grow the timeline and put nothing on screen, and in these
+      // rooms that is the normal case rather than the exception. Most of what
+      // a busy room stores is never rendered: media tags, spatial positions
+      // and the rest of the net.41chan.* family are all system events, and one
+      // measured room is 69% of them -- 1342 media tags and 589 positions
+      // against 785 messages. They also arrive in bursts, so a whole page of
+      // 30 routinely contains not one visible item.
+      //
+      // Counting timeline events therefore exits after a page that changed
+      // nothing the user can see: the button flicks to Loading and back, which
+      // is exactly the reported symptom. Thread replies do the same thing for
+      // a different reason -- the SDK partitions them into their own timelines
+      // -- so both faults have the same correct answer: keep paging until
+      // something RENDERS.
+      //
+      // Bounded, so one click can never walk the whole room.
+      const before = buildItems().length
       let more = true
       let pages = 0
-      // A page can legitimately add NOTHING to this timeline: thread replies
-      // are partitioned into their own thread timelines by the SDK, so in a
-      // thread-heavy room an entire page of 30 lands out of view. One click
-      // would then appear to do nothing. Keep paging until something actually
-      // arrives, the room ends, or we have spent MAX_PAGES requests -- bounded
-      // so a single click can never turn into an unbounded walk of the room.
-      //
-      // The count is of timeline events, not rendered items, so a page of
-      // purely filtered content (system events, an ignored user) can still
-      // come back looking empty. That is rarer and it still advances the
-      // token, so the next click continues rather than stalling.
-      while (more && pages < MAX_PAGES && timeline.getEvents().length === before) {
-        more = await client.paginateEventTimeline(timeline, { backwards: true, limit: 30 })
+      while (more && pages < MAX_PAGES && buildItems().length === before) {
+        more = await client.paginateEventTimeline(timeline, { backwards: true, limit: PAGE_SIZE })
         pages += 1
       }
       refresh()
@@ -503,7 +518,7 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
     } finally {
       setLoadingOlder(false)
     }
-  }, [client, room, loadingOlder, atStart, refresh])
+  }, [client, room, loadingOlder, atStart, refresh, buildItems])
 
   return { items, loadOlder, loadingOlder, atStart }
 }
