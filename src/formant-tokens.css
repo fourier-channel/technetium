@@ -68,6 +68,38 @@
   --mod-pending-fg:     #b7b3a8;
   --mod-meta-fg:        #8f8b80;
 
+  /* --- tag category ------------------------------------------------------ */
+  /* What KIND of thing a tag names, which is a different question from who put
+   * it there. Provenance above answers "person or autotagger"; these answer
+   * "artist, character, copyright, meta, or plain". A surface showing tags
+   * needs both axes and they must not borrow each other's colours.
+   *
+   * VALUES ARE MODULATION'S, not the booru's base palette. That distinction is
+   * the whole point of writing it down: the underlying Danbooru palette holds
+   * --red-6 #c00004 and --magenta-6 #a800aa, which are not these and were never
+   * what a reader saw. The category vocabulary was set by the Modulation
+   * redesign, in modulation_gallery_component.scss as --cat-artist and its
+   * four siblings, and that is the surface users have actually been reading.
+   *
+   * Extracted on the SECOND use, per the rule at the top of this file:
+   * Modulation is the first, Technetium the second -- and Technetium had
+   * drifted to an unrelated palette entirely (artist #c2410c against #ff6b7a,
+   * character #15803d against #38e08a, general #0369a1 against #6db8ff). Two
+   * palettes for one vocabulary is this file's founding complaint.
+   *
+   * CHARACTER SHARES A VALUE WITH --mod-creator-fg (#38e08a) and that is a
+   * coincidence, not a relationship. Keep the names separate: the day either
+   * moves, one token serving both would make the other wrong.
+   *
+   * The PILL treatment that carries these -- the 30% border mix, the 12%
+   * background mix, the dot -- is a component and stays in the consumer. This
+   * file holds names and values only. */
+  --mod-tag-artist-fg:     #ff6b7a;
+  --mod-tag-copyright-fg:  #c78bff;
+  --mod-tag-character-fg:  #38e08a;
+  --mod-tag-general-fg:    #6db8ff;
+  --mod-tag-meta-fg:       #c9a15a;
+
   /* --- health, the lamp states ------------------------------------------ */
   /* Deliberately NOT the provenance colours above. "The autotagger put this
    * here" and "this service is degraded" are different meanings that happen to
@@ -140,4 +172,84 @@
   /* A system stack on purpose: these render at 11-13px in dense grids, and a
    * webfont buys nothing there while costing a flash. */
   --mod-mono:           ui-monospace, "SFMono-Regular", "Menlo", monospace;
+}
+
+/* ===========================================================================
+ * TAG HYPE -- a named, shared BEHAVIOUR.
+ *
+ * Operator ruling 2026-09-17: certain tags are meant to be delighted about, and
+ * the delight must be identical on every surface. "The exact same tag behavior
+ * will be visible on all surfaces." So it is defined once, here, rather than
+ * re-typed per consumer.
+ *
+ * THIS STRETCHES WHAT THIS FILE CARRIES, and that is deliberate rather than an
+ * oversight. The header says names not values, and no components -- keyframes
+ * are neither a component nor a selector (a @keyframes block matches nothing on
+ * its own; it is the value an animation-name refers to), but they are more than
+ * a scalar. The reason to accept that: an animation copied into two stylesheets
+ * drifts exactly the way a hex does, and drift is the one thing this file
+ * exists to prevent. A consumer still chooses WHICH element wears it.
+ *
+ * IT OBEYS THE INFINITE-ANIMATION RULE. Standing org rule, paid for once: an
+ * infinite animation may touch TRANSFORM and OPACITY and nothing else. The
+ * incident was `lamp-alarm`, an infinite box-shadow on a health lamp, measured
+ * at 45.2% of a core with a style recalc and layout on every frame; box-shadow
+ * is a paint property and cannot be composited. The fix that measured 5.1% for
+ * the same look was a STATIC shadow on a pseudo-element whose opacity animates,
+ * and that is the shape the sparkle below uses.
+ *
+ * So: no box-shadow, no filter, no background-position, no width. Transform for
+ * the jitter and the bounce, opacity and transform for the sparkle. Both are
+ * compositable, which is why this can run forever on a pill in a chat log.
+ *
+ * ONE KEYFRAME FOR JITTER AND BOUNCE, not two animations. Two animations on one
+ * element that both drive `transform` do not compose -- the later one wins and
+ * the first silently does nothing. They are combined into a single track here
+ * so the behaviour is what it reads as.
+ * ======================================================================== */
+
+:root {
+  /* The knobs. A surface may retune these without redefining the motion. */
+  --mod-hype-period:       1.15s;
+  --mod-hype-rise:         -2.5px;   /* peak of the bounce */
+  --mod-hype-jitter:       0.6px;    /* horizontal wobble amplitude */
+  --mod-hype-tilt:         1.5deg;
+  --mod-hype-sparkle-size: 5px;
+  --mod-hype-sparkle-dim:  0.15;     /* trough opacity, never fully gone */
+}
+
+@keyframes mod-hype-move {
+  /* Bounce and jitter in ONE transform track. The bounce is the slow arc; the
+     jitter rides on it as the x-offset and the tilt. */
+  0%   { transform: translate(0,                     0)                   rotate(0deg); }
+  12%  { transform: translate(var(--mod-hype-jitter), var(--mod-hype-rise)) rotate(var(--mod-hype-tilt)); }
+  24%  { transform: translate(calc(var(--mod-hype-jitter) * -1), 0)        rotate(calc(var(--mod-hype-tilt) * -1)); }
+  36%  { transform: translate(var(--mod-hype-jitter), calc(var(--mod-hype-rise) * 0.45)) rotate(var(--mod-hype-tilt)); }
+  48%  { transform: translate(calc(var(--mod-hype-jitter) * -0.6), 0)      rotate(0deg); }
+  60%  { transform: translate(0,                     calc(var(--mod-hype-rise) * 0.2)) rotate(calc(var(--mod-hype-tilt) * -0.5)); }
+  72%  { transform: translate(var(--mod-hype-jitter), 0)                   rotate(0deg); }
+  100% { transform: translate(0,                     0)                   rotate(0deg); }
+}
+
+@keyframes mod-hype-sparkle {
+  /* Opacity and scale only. The glint itself is a STATIC gradient painted on a
+     pseudo-element; only its opacity and size are animated, which is the exact
+     shape that took the lamp incident from 45% of a core to 5%. */
+  0%,
+  100% { opacity: var(--mod-hype-sparkle-dim); transform: scale(0.6) rotate(0deg); }
+  30%  { opacity: 1;                           transform: scale(1)   rotate(45deg); }
+  55%  { opacity: var(--mod-hype-sparkle-dim); transform: scale(0.7) rotate(90deg); }
+  80%  { opacity: 0.85;                        transform: scale(0.95) rotate(135deg); }
+}
+
+/* MOTION IS A PREFERENCE, and an infinite one most of all. A surface that
+   honours prefers-reduced-motion inherits that here rather than remembering to
+   write it -- the tag stays legible and simply stops moving. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --mod-hype-period: 0s;
+    --mod-hype-rise: 0px;
+    --mod-hype-jitter: 0px;
+    --mod-hype-tilt: 0deg;
+  }
 }

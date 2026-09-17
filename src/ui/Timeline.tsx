@@ -591,16 +591,23 @@ export function Row({ item, onOpenThread, sequence }: { item: TimelineItem; onOp
       // (320 snaps to the gateway's allowed sizes). Click opens the full-res
       // image in the lightbox via an authed full fetch.
       body = (
-        <div>
-          <AuthedImage
-            mxc={mxc}
-            width={320}
-            roomId={roomId}
-            lazy
-            reserve={reserveBox(content)}
-            alt={typeof content.body === 'string' ? content.body : undefined}
-            onClick={() => open([{ mxc, roomId, ...imageMeta(event) }], 0, thread)}
-          />
+        // The tag panel stands BESIDE the picture, so the two are one flex
+        // row: the image sets the row's height, which is the boundary the
+        // panel's columns spill down to before opening rightward, and the
+        // panel takes the width that is actually left rather than escaping
+        // the message on top of whatever is next to it.
+        <div className="mtags-row">
+          <div className="mtags-media">
+            <AuthedImage
+              mxc={mxc}
+              width={320}
+              roomId={roomId}
+              lazy
+              reserve={reserveBox(content)}
+              alt={typeof content.body === 'string' ? content.body : undefined}
+              onClick={() => open([{ mxc, roomId, ...imageMeta(event) }], 0, thread)}
+            />
+          </div>
           <MediaTags mxc={mxc} roomId={event.getRoomId()} />
         </div>
       )

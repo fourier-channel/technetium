@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { parseMxc } from '../client/media'
+import { booruPostUrl, booruTagUrl } from '../client/booruUrl'
+import { isHypeTag } from '../client/hypeTags'
+import '../mediatags.css'
 import { useMediaTags } from '../client/useMediaTags'
 import { sortTags, type MediaRating, type MediaTag, type TagCategory } from '../client/mediaTags'
 import { useMediaTagPrefs } from './mediaTagSettings'
@@ -54,6 +57,11 @@ function useCategoryColors(): Record<TagCategory, string> {
   }, [])
   return dark ? CATEGORY_COLOR_DARK : CATEGORY_COLOR
 }
+
+// Categories pulled out of the flow into their own bucket at the head of the
+// panel, in this order. Mirrors Modulation's .mod-cats: the question "who is
+// this" is answered before "what is in it".
+const HEAD_CATEGORIES: readonly TagCategory[] = ['character']
 
 export interface MediaTagsProps {
   mxc: string | undefined
@@ -125,15 +133,110 @@ export function MediaTags({ mxc, roomId, variant = 'strip', max = 12, onTagClick
   }
 
   return (
-    <TagList
+    <TagPanel
       tags={tags}
       max={showAll ? undefined : max}
       onMore={() => setShowAll(true)}
       onTagClick={onTagClick}
-      source={set.source}
       meta={meta}
       onCollapse={() => prefs.setOverride(mediaId ?? '', 'hide')}
     />
+  )
+}
+
+// The panel that stands beside the image.
+//
+// Sorting is sortTags': category order, then alphabetical inside it. The head
+// bucket is then split off the front, so `character` leads and everything else
+// keeps that same alphabetical-within-category order below the rule.
+function TagPanel({
+  tags,
+  max,
+  onMore,
+  onTagClick,
+  meta,
+  onCollapse,
+}: {
+  tags: MediaTag[]
+  max?: number
+  onMore: () => void
+  onTagClick?: (tag: MediaTag) => void
+  meta?: TagMeta
+  onCollapse?: () => void
+}) {
+  const shown = max === undefined ? tags : tags.slice(0, max)
+  const rest = tags.length - shown.length
+  const head = shown.filter((t) => HEAD_CATEGORIES.includes(t.category))
+  const body = shown.filter((t) => !HEAD_CATEGORIES.includes(t.category))
+
+  return (
+    <div className="mtags-panel">
+      {meta?.rating && <RatingBadge rating={meta.rating} by={meta.updatedBy} />}
+      {head.length > 0 && (
+        <>
+          <div className="mtags-label">{head.length === 1 ? 'character' : 'characters'}</div>
+          {head.map((t) => (
+            <TagPill key={t.category + ':' + t.name} tag={t} onTagClick={onTagClick} />
+          ))}
+          <div className="mtags-rule" />
+        </>
+      )}
+      {body.map((t) => (
+        <TagPill key={t.category + ':' + t.name} tag={t} onTagClick={onTagClick} />
+      ))}
+      {rest > 0 && (
+        <button type="button" onClick={onMore} style={ghostBtn}>
+          +{rest} more
+        </button>
+      )}
+      {meta?.postId !== undefined && (
+        <a
+          className="mtags-id"
+          href={booruPostUrl(meta.postId)}
+          target="_blank"
+          rel="noreferrer noopener"
+          title="Open this post on the booru"
+        >
+          #{meta.postId}
+        </a>
+      )}
+      {onCollapse && (
+        <button type="button" onClick={onCollapse} style={ghostBtn} title="Hide tags for this image">
+          hide
+        </button>
+      )}
+    </div>
+  )
+}
+
+// One tag.
+//
+// An ANCHOR, not a button: a tag is a place on the booru, so it has to be
+// middle-clickable, copyable and openable in a new tab like any other link.
+// onTagClick still runs for callers that want to intercept (the lightbox
+// filters in place rather than navigating), and only then is the navigation
+// suppressed.
+function TagPill({ tag, onTagClick }: { tag: MediaTag; onTagClick?: (t: MediaTag) => void }) {
+  const hype = isHypeTag(tag.name)
+  return (
+    <a
+      className={`mod-pill mod-pill--cat-${tag.category}${hype ? ' mod-pill--hype' : ''}`}
+      href={tag.url ?? booruTagUrl(tag.name)}
+      target="_blank"
+      rel="noreferrer noopener"
+      title={tag.score !== undefined ? `${tag.category} - ${Math.round(tag.score * 100)}%` : tag.category}
+      onClick={
+        onTagClick
+          ? (e) => {
+              e.preventDefault()
+              onTagClick(tag)
+            }
+          : undefined
+      }
+    >
+      <i className="mod-pill-dot" />
+      {tag.name}
+    </a>
   )
 }
 

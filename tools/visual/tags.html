@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+<head>
+<!--#head-->
+<link rel="stylesheet" href="../../src/mediatags.css">
+<style>
+  /* Harness scaffolding only. Everything that decides the LAYOUT comes from
+     src/mediatags.css above, so what is looked at here is what ships. */
+  .shot { padding: 24px; }
+  .mtags-media .fake-img {
+    display: block; border-radius: 6px;
+    background: repeating-linear-gradient(135deg, #2a3550 0 14px, #223048 14px 28px);
+  }
+</style>
+</head>
+<body>
+
+<div class="h-label">tall image -- one column, spills nowhere</div>
+<div class="shot">
+  <div class="mtags-row">
+  <div class="mtags-media">
+    <div class="fake-img" style="width:260px;height:340px"></div>
+    </div>
+    <div class="mtags-panel">
+      <div class="mtags-label">character</div>
+      <a class="mod-pill mod-pill--cat-character"><i class="mod-pill-dot"></i>hatsune_miku</a>
+      <div class="mtags-rule"></div>
+      <a class="mod-pill mod-pill--cat-artist"><i class="mod-pill-dot"></i>some_artist</a>
+      <a class="mod-pill mod-pill--cat-copyright"><i class="mod-pill-dot"></i>vocaloid</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>1girl</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>outdoors</a>
+      <a class="mod-pill mod-pill--cat-general mod-pill--hype"><i class="mod-pill-dot"></i>butthole</a>
+      <a class="mtags-id">#1284213</a>
+    </div>
+  </div>
+</div>
+
+<div class="h-label">short image, many tags -- columns fill down, then open RIGHT</div>
+<div class="shot">
+  <div class="mtags-row">
+  <div class="mtags-media">
+    <div class="fake-img" style="width:300px;height:190px"></div>
+    </div>
+    <div class="mtags-panel">
+      <div class="mtags-label">character</div>
+      <a class="mod-pill mod-pill--cat-character"><i class="mod-pill-dot"></i>hatsune_miku</a>
+      <a class="mod-pill mod-pill--cat-character"><i class="mod-pill-dot"></i>kagamine_rin</a>
+      <div class="mtags-rule"></div>
+      <a class="mod-pill mod-pill--cat-artist"><i class="mod-pill-dot"></i>some_artist</a>
+      <a class="mod-pill mod-pill--cat-copyright"><i class="mod-pill-dot"></i>vocaloid</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>1girl</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>blue_hair</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>detached_sleeves</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>long_hair</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>outdoors</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>smile</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>twintails</a>
+      <a class="mod-pill mod-pill--cat-general mod-pill--hype"><i class="mod-pill-dot"></i>butthole</a>
+      <a class="mod-pill mod-pill--cat-meta"><i class="mod-pill-dot"></i>highres</a>
+      <a class="mtags-id">#1284213</a>
+    </div>
+  </div>
+</div>
+
+<div class="h-label">narrow container -- the panel must not escape the message width</div>
+<div class="shot" style="max-width:560px;outline:1px dashed #444;">
+  <div class="mtags-row">
+  <div class="mtags-media">
+    <div class="fake-img" style="width:300px;height:190px"></div>
+    </div>
+    <div class="mtags-panel">
+      <div class="mtags-label">character</div>
+      <a class="mod-pill mod-pill--cat-character"><i class="mod-pill-dot"></i>hatsune_miku</a>
+      <div class="mtags-rule"></div>
+      <a class="mod-pill mod-pill--cat-artist"><i class="mod-pill-dot"></i>some_artist</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>1girl</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>blue_hair</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>detached_sleeves</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>long_hair</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>outdoors</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>smile</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>twintails</a>
+      <a class="mod-pill mod-pill--cat-general mod-pill--hype"><i class="mod-pill-dot"></i>butthole</a>
+      <a class="mod-pill mod-pill--cat-meta"><i class="mod-pill-dot"></i>highres</a>
+      <a class="mtags-id">#1284213</a>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -336,8 +336,11 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
             ) : (
               <span style={{ color: 'var(--cpd-color-text-secondary)' }}>Loading...</span>
             )}
-            {/* Full strip here: the lightbox is where a user actually reads the
-                tag set, so no cap and no chip. */}
+            {/* The lightbox is where a user actually reads the tag set, so no
+                cap and no chip. It cannot be a row member here -- the image is
+                sized in viewport units by the block above and the panel would
+                fight it for width -- so it keeps its own full-width band under
+                the picture and simply wraps. */}
             <div style={{ maxWidth: '92vw', display: 'flex', justifyContent: 'center' }}>
               <MediaTags mxc={current.mxc} max={40} />
             </div>

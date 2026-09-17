@@ -1,0 +1,206 @@
+/* The media tag panel.
+ *
+ * A stylesheet rather than inline styles because three things here cannot be
+ * expressed inline: @keyframes-driven animation, a ::after pseudo-element, and
+ * color-mix recipes that have to resolve against a token. The rest of this
+ * component stays inline like its neighbours.
+ *
+ * LAYOUT. The panel stands BESIDE the image, top edges level, and it is
+ * ABSOLUTELY POSITIONED against the image's own box.
+ *
+ * That is not the first choice and it is worth saying why it is the right one.
+ * A flex-row member is tidier -- it would take the width actually left over and
+ * could not overlap anything. It also does not work: a wrapping COLUMN needs a
+ * definite height to wrap against, a stretched row member contributes its own
+ * content height to the line, and the two are circular. Rendered, it produced
+ * one endless column straight past the bottom of the picture. min-height:0 did
+ * not break the cycle either. Pinning to the image gives `max-height: 100%` a
+ * real number -- the image's height -- for free.
+ *
+ * The cost is that the panel does not reserve layout width, so a very wide one
+ * could reach past the message. That is bounded two ways: max-width here, and
+ * the caller's `max` prop collapsing the tail into "+N more".
+ *
+ * Within the panel, a column-direction flex container that WRAPS. Items fill
+ * the first column downward; when the next will not fit, a new column opens to
+ * the RIGHT -- "spill down to the bottom of the image, then expand right" as
+ * the layout mechanism itself rather than a measurement anyone maintains.
+ *
+ * Multicol (`columns:`) cannot do this: it balances a known number of columns
+ * instead of growing them on demand.
+ */
+
+ /* THE POSITIONED ANCESTOR is the ROW, and it shrink-wraps the image:
+    inline-flex, with the panel taken out of flow, means the row's box IS the
+    picture's box. So `left: 100%` lands on the image's right edge and
+    `max-height: 100%` is the image's height -- both for free, and the panel
+    stays a SIBLING of the image in the markup, which is what the component
+    renders. Making it a child instead would work in a harness and break in the
+    app the moment anything else became a positioned ancestor. */
+.mtags-row {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-start;
+  max-width: 100%;
+}
+/* line-height:0 stops the inline baseline gap adding phantom height below the
+   picture, which would make the panel taller than the image it is bounded by. */
+.mtags-row > .mtags-media {
+  flex: none;
+  min-width: 0;
+  line-height: 0;
+}
+.mtags-panel {
+  position: absolute;
+  top: 0;
+  left: 100%;
+  margin-left: 8px;
+  max-height: 100%;
+  /* WIDTH MUST BE max-content. An absolutely positioned box with `left: 100%`
+     and no `right` gets a shrink-to-fit width bounded by what is left of the
+     containing block -- and the containing block is the image, so "what is
+     left" is zero. Rendered, that clipped the second column to a sliver of
+     pill. max-content sizes to the columns instead.
+     The overlap bound then has to be explicit: roughly three columns before the
+     tail is collapsed into "+N more" by the caller's `max`. */
+  width: max-content;
+  max-width: 34rem;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 4px 6px;
+  line-height: 1.2;
+  overflow: hidden;
+}
+
+.mtags-label {
+  font-family: var(--mono, ui-monospace, "SFMono-Regular", Menlo, monospace);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mod-ink-dim);
+  margin: 0 2px 1px;
+}
+/* Under the character bucket, so it reads as its own shelf rather than as the
+   first few of one list. */
+.mtags-rule {
+  height: 1px;
+  align-self: stretch;
+  background: var(--mod-line);
+  margin: 3px 2px;
+}
+
+/* --- the pill: Modulation's recipe, so the booru and the client agree ------ */
+.mod-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: var(--mod-pill-radius, 999px);
+  font-size: 0.8rem;
+  line-height: 1.2;
+  text-decoration: none;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  background: var(--mod-surface-2);
+  /* The panel is a flex COLUMN: without this every pill stretches to the width
+     of the widest one in its column. */
+  align-self: flex-start;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.mod-pill:focus-visible {
+  outline: 2px solid var(--mod-tag-general-fg);
+  outline-offset: 1px;
+}
+.mod-pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.9;
+  flex: none;
+}
+
+.mod-pill--cat-artist {
+  color: var(--mod-tag-artist-fg);
+  border-color: color-mix(in srgb, var(--mod-tag-artist-fg) 30%, transparent);
+  background: color-mix(in srgb, var(--mod-tag-artist-fg) 12%, var(--mod-surface));
+}
+.mod-pill--cat-copyright {
+  color: var(--mod-tag-copyright-fg);
+  border-color: color-mix(in srgb, var(--mod-tag-copyright-fg) 30%, transparent);
+  background: color-mix(in srgb, var(--mod-tag-copyright-fg) 12%, var(--mod-surface));
+}
+.mod-pill--cat-character {
+  color: var(--mod-tag-character-fg);
+  border-color: color-mix(in srgb, var(--mod-tag-character-fg) 30%, transparent);
+  background: color-mix(in srgb, var(--mod-tag-character-fg) 12%, var(--mod-surface));
+}
+.mod-pill--cat-general {
+  color: var(--mod-tag-general-fg);
+  border-color: color-mix(in srgb, var(--mod-tag-general-fg) 30%, transparent);
+  background: color-mix(in srgb, var(--mod-tag-general-fg) 12%, var(--mod-surface));
+}
+.mod-pill--cat-meta {
+  color: var(--mod-tag-meta-fg);
+  border-color: color-mix(in srgb, var(--mod-tag-meta-fg) 30%, transparent);
+  background: color-mix(in srgb, var(--mod-tag-meta-fg) 12%, var(--mod-surface));
+}
+
+/* --- hype: the shared behaviour, worn ------------------------------------- */
+/* The motion itself is CANON (formant tokens.css: mod-hype-move,
+   mod-hype-sparkle) so every surface moves identically. This file only decides
+   WHICH element wears it.
+   Both animations obey the infinite-animation rule -- transform and opacity
+   only -- so this can run forever in a chat log without a repaint per frame. */
+.mod-pill--hype {
+  position: relative;
+  animation: mod-hype-move var(--mod-hype-period) ease-in-out infinite;
+  /* Its own layer, so the bounce never reflows the pills around it. */
+  will-change: transform;
+}
+.mod-pill--hype::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  right: 1px;
+  width: var(--mod-hype-sparkle-size);
+  height: var(--mod-hype-sparkle-size);
+  pointer-events: none;
+  /* STATIC paint. Only opacity and transform are animated, which is the exact
+     shape that took the lamp incident from 45% of a core to 5%. */
+  background:
+    linear-gradient(to bottom, transparent 42%, currentColor 42%, currentColor 58%, transparent 58%),
+    linear-gradient(to right, transparent 42%, currentColor 42%, currentColor 58%, transparent 58%);
+  animation: mod-hype-sparkle var(--mod-hype-period) ease-in-out infinite;
+}
+
+/* prefers-reduced-motion is handled in canon by zeroing the distances, so the
+   pill stays exactly where it is. Belt and braces: stop the tracks too, because
+   a zero-distance animation still ticks. */
+@media (prefers-reduced-motion: reduce) {
+  .mod-pill--hype,
+  .mod-pill--hype::after {
+    animation: none;
+  }
+  .mod-pill--hype::after {
+    opacity: 0.6;
+  }
+}
+
+.mtags-id {
+  font-family: var(--mono, ui-monospace, "SFMono-Regular", Menlo, monospace);
+  font-size: 0.66rem;
+  color: var(--mod-ink-dim);
+  text-decoration: none;
+  padding: 0.1rem 0.4rem;
+  align-self: flex-start;
+}
+.mtags-id:hover {
+  color: var(--mod-ink);
+  text-decoration: underline;
+}
