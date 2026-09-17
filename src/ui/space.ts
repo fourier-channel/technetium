@@ -67,12 +67,21 @@ export type OverflowMode = 'replace' | 'layer'
 export const DEFAULT_OVERFLOW: OverflowMode = 'replace'
 
 export interface Space {
-  v: 3
+  v: 4
   leaves: Record<PanelId, Leaf>
   vp: Viewport
   // Panels covered by the current occupant, oldest first. Runtime only: it is
   // where you came from, not part of the layout, so it is never serialized.
   stack: PanelId[]
+  /**
+   * Member-list element scale. 1 is the designed size; the slider moves the
+   * lamp, the honorific, the avatar and the name together.
+   *
+   * It lives on Space rather than in its own store so it rides the UI-export
+   * number: a layout you send someone arrives looking the way you had it,
+   * which is the whole point of that number existing.
+   */
+  memberScale: number
 }
 
 // A fractional minimum is device-independent and therefore meaningless: 0.1
@@ -118,9 +127,10 @@ export function defaultSpace(): Space {
   const leaf = (id: PanelId, r: Rect, extra: Partial<Leaf> = {}): Leaf =>
     ({ id, ...r, locked: false, pinned: false, open: true, min: DEFAULT_MIN, last: null, ...extra })
   return {
-    v: 3,
+    v: 4,
     vp: { ...DEFAULT_VIEWPORT },
     stack: [],
+    memberScale: 1,
     leaves: {
       sidebar: leaf('sidebar', { x0: 0, y0: 0, x1: 0.18, y1: 1 }),
       dock:    leaf('dock',    { x0: 0.18, y0: 0, x1: 0.85, y1: 0.28 }, { locked: true, open: false }),
@@ -140,7 +150,7 @@ export function openLeaves(s: Space): Leaf[] {
 function clone(s: Space): Space {
   const leaves = {} as Record<PanelId, Leaf>
   for (const id of PANEL_IDS) leaves[id] = { ...s.leaves[id], last: s.leaves[id].last ? { ...s.leaves[id].last! } : null }
-  return { v: 3, vp: { ...s.vp }, stack: [...s.stack], leaves }
+  return { v: 4, vp: { ...s.vp }, stack: [...s.stack], leaves, memberScale: s.memberScale }
 }
 
 const lo = (l: Rect, a: Axis) => (a === 'x' ? l.x0 : l.y0)
@@ -678,11 +688,33 @@ export function dismiss(s: Space, id: PanelId, mode: OverflowMode = DEFAULT_OVER
 const Q = 1023n
 const LEAF_BITS = 40n + 3n + 6n + 3n
 
+// Member scale, stored in 6 bits across its whole range. Clamped rather than
+// rejected: a hand-typed number is still a layout, and refusing the entire code
+// over one out-of-range field would throw away six panels of geometry.
+export const MEMBER_SCALE_MIN = 0.6
+export const MEMBER_SCALE_MAX = 2
+const SCALE_STEPS = 63
+export function clampMemberScale(v: number): number {
+  if (!Number.isFinite(v)) return 1
+  return Math.min(MEMBER_SCALE_MAX, Math.max(MEMBER_SCALE_MIN, v))
+}
+function scaleBits(v: number): bigint {
+  const t = (clampMemberScale(v) - MEMBER_SCALE_MIN) / (MEMBER_SCALE_MAX - MEMBER_SCALE_MIN)
+  return BigInt(Math.round(t * SCALE_STEPS))
+}
+function scaleFromBits(b: number): number {
+  return MEMBER_SCALE_MIN + (b / SCALE_STEPS) * (MEMBER_SCALE_MAX - MEMBER_SCALE_MIN)
+}
+
 function q(v: number): bigint { return BigInt(Math.max(0, Math.min(1023, Math.round(v * 1023)))) }
 function checksum(x: bigint): bigint { let s = 0n, v = x; while (v > 0n) { s = (s + (v & 0xffn)) & 0xffn; v >>= 8n } return s }
 
 export function serialize(s: Space): string {
-  let acc = 3n
+  // Version 4 = version 3 plus the member scale. The scale sits immediately
+  // after the version marker, so a decoder that has consumed every leaf finds
+  // scale-then-version left over and can tell the two formats apart.
+  let acc = 4n
+  acc = (acc << 6n) | scaleBits(s.memberScale)
   for (const id of PANEL_IDS) {
     const l = s.leaves[id]
     const last = l.last ? BigInt((l.last.axis === 'x' ? 1 : 3) + (l.last.dir === 1 ? 1 : 0)) : 0n
@@ -730,7 +762,15 @@ export function deserialize(code: string, vp?: Viewport): Space | null {
     Object.assign(l, { x0, y0, x1, y1, min, locked: !!(flags & 1), pinned: !!(flags & 2), open: !!(flags & 4) })
     l.last = last === 0 ? null : { axis: last <= 2 ? 'x' : 'y', dir: last % 2 === 0 ? 1 : -1 }
   }
-  if (acc !== 3n) return null
+  // WHAT IS LEFT decides the version, and a v3 code must still load: people
+  // have these numbers written down. v4 leaves scale-then-4; v3 leaves just 3.
+  if ((acc >> 6n) === 4n) {
+    s.memberScale = clampMemberScale(scaleFromBits(Number(acc & 63n)))
+  } else if (acc === 3n) {
+    s.memberScale = 1
+  } else {
+    return null
+  }
   // Quantisation can leave a hair of overlap; snap coincident edges together.
   return validTiling(snap(s)) ? snap(s) : null
 }

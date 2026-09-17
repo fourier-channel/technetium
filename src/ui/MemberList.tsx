@@ -15,6 +15,8 @@ import { compareByStanding, honorificFor, maxPower, type MergedMember } from '..
 import { useFlipList } from './flip'
 import { usePopEnter } from './pop'
 import { AvatarDisc } from './AvatarDisc'
+import { useSpace } from './spaceContext'
+import { MEMBER_SCALE_MAX, MEMBER_SCALE_MIN } from './space'
 import { useReducedMotion } from './reducedMotion'
 import { useRoomListSettings } from './roomListSettings'
 import {
@@ -54,6 +56,11 @@ export function MemberList({
   // From the layout; 220 is the preset.
   width?: number
 }) {
+  // The scale lives on Space, so it rides the UI-export number: a layout sent
+  // to someone else arrives at the size it was set to.
+  const { space, setMemberScale } = useSpace()
+  const memberScale = space.memberScale
+
   const { client } = useClient()
   const members = useMembers(client)
   // U9. The panel's own display switch, and the low-animation state that
@@ -172,6 +179,25 @@ export function MemberList({
           {density === 'rich' ? 'Full' : 'Compact'}
         </button>
       </div>
+      {/* SCALE. Moves the lamp, the honorific, the avatar and the name
+          together -- one control rather than four, because they are read as
+          one row and drifting apart makes the column ragged. It writes
+          straight into Space, so the change is visible while dragging and is
+          saved with everything else in the layout number. */}
+      <label className="tc-member-scale" title="Size of the member row: lamp, rank, avatar and name together">
+        <span aria-hidden="true">A</span>
+        <input
+          type="range"
+          min={MEMBER_SCALE_MIN}
+          max={MEMBER_SCALE_MAX}
+          step={0.05}
+          value={memberScale}
+          aria-label="Member list scale"
+          onChange={(e) => setMemberScale(Number(e.target.value))}
+          onDoubleClick={() => setMemberScale(1)}
+        />
+        <span className="tc-member-scale-val">{Math.round(memberScale * 100)}%</span>
+      </label>
       {/* A switch that silently does nothing is worse than no switch: with
           motion turned down, flipping to Full would otherwise look broken. */}
       {overridden && (
@@ -341,6 +367,7 @@ export function MemberList({
         </div>
         {shown.map((m) => (
           <MemberRow
+            scale={memberScale}
             key={m.id}
             member={m}
             room={room}
@@ -362,6 +389,7 @@ function MemberRow({
   room,
   mode,
   density,
+  scale,
 }: {
   member: MergedMember
   presence: PresenceState | undefined
@@ -369,6 +397,7 @@ function MemberRow({
   room: Room | null
   mode: Mode
   density: MemberDensity
+  scale: number
 }) {
   const rich = density === 'rich'
   // Honorific IDENTITY = highest power the member holds anywhere in the space.
@@ -425,8 +454,8 @@ function MemberRow({
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: rich ? 8 : 6,
-        height: rich ? 34 : 26,
+        gap: (rich ? 8 : 6) * scale,
+        height: (rich ? 34 : 26) * scale,
         margin: rich ? '1px 0' : 0,
         padding: rich ? '0 8px 0 6px' : '0 8px',
         borderRadius: 6,
@@ -438,18 +467,6 @@ function MemberRow({
       }}
       title={member.id}
     >
-      {/* The avatar is the rich display's whole reason to be taller. Compact
-          keeps the presence dot, which is the same information in one pixel. */}
-      {rich && (
-        <span style={{ flexShrink: 0, lineHeight: 0 }}>
-          <AvatarDisc
-            userId={member.id}
-            name={member.displayName}
-            avatarMxc={member.avatarMxc ?? null}
-            size={24}
-          />
-        </span>
-      )}
       {presence && (
         <span
           className="tc-presence-dot"
@@ -465,19 +482,35 @@ function MemberRow({
         // (infinite-animations-cost-a-core, checks/cssAnimations.check.ts).
         data-glyph={identityHonor ?? ''}
         style={{
-          width: rich ? 14 : 12,
-          fontSize: rich ? 15 : 13,
+          width: (rich ? 14 : 12) * scale,
+          fontSize: (rich ? 15 : 13) * scale,
           color: honorColor,
         }}
       >
         {identityHonor ?? ''}
       </span>
+      {/* ORDER: lamp, honorific, avatar, username (operator, 2026-09-17). The
+          two one-glyph facts come first so the column reads as a status list
+          that happens to carry faces, rather than a row of faces you have to
+          scan past to find who is online. The avatar is still the rich
+          display's whole reason to be taller; compact drops it and keeps the
+          dot, which is the same information in one pixel. */}
+      {rich && (
+        <span style={{ flexShrink: 0, lineHeight: 0 }}>
+          <AvatarDisc
+            userId={member.id}
+            name={member.displayName}
+            avatarMxc={member.avatarMxc ?? null}
+            size={Math.round(24 * scale)}
+          />
+        </span>
+      )}
       <span
         style={{
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
-          fontSize: rich ? 14.5 : 13,
+          fontSize: (rich ? 14.5 : 13) * scale,
           letterSpacing: rich ? 0.1 : 0,
         }}
       >

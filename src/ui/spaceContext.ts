@@ -15,6 +15,8 @@ export interface SpaceApi {
   // Push a panel's edge; resolved against the latest space (drag-safe).
   pushEdge: (id: PanelId, axis: Axis, side: Side, deltaFraction: number) => void
   setPanelFlag: (id: PanelId, flag: 'locked' | 'pinned', value: boolean) => void
+  /** Member-list element scale; clamped, and carried by the UI-export number. */
+  setMemberScale: (v: number) => void
   setPanelMin: (id: PanelId, min: number) => void
   exportCode: () => string
   // False when the pasted number is not a space. Nothing changes then.

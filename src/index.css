@@ -3794,3 +3794,16 @@ code {
   min-width: 7.5em;
   opacity: 0.8;
 }
+
+/* Member list scale slider. Sits under the density switch; the percentage is
+   shown because a slider with no number cannot be set back to where it was. */
+.tc-member-scale {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px 6px;
+  font-size: 10px;
+  color: var(--cpd-color-text-secondary);
+}
+.tc-member-scale input[type='range'] { flex: 1; min-width: 0; }
+.tc-member-scale-val { font-variant-numeric: tabular-nums; min-width: 3em; text-align: right; }
