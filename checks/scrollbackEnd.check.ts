@@ -1,23 +1,32 @@
-// How scrollback decides it has reached the start of a room.
+// How the timeline pages backwards, and why it cannot use client.scrollback().
 //
-// THE BUG THIS EXISTS FOR. loadOlder used to compare the main timeline's event
-// count before and after a page and treat "no growth" as "start of the room".
-// That is not what no-growth means. client.scrollback() runs the returned page
-// through room.partitionThreadedEvents() and adds ONLY the non-threaded part to
-// the live timeline -- thread replies go to processThreadEvents and never touch
-// it. A page that happens to be entirely thread replies therefore leaves the
-// main timeline exactly as long as it was, while the pagination token is still
-// perfectly live and there is plenty of history left.
+// THE BUG THIS EXISTS FOR. Paging back did nothing in any room with a thread.
+// Two faults stacked, and the first one hid the second.
 //
-// The consequence was not a missing page, it was a latch: loadOlder checks
-// atStart on entry, so once set, scrollback was dead for the rest of that
-// room's visit and only switching rooms cleared it. Reported from production as
-// "any channel with threads is unable to go back in history".
+// 1. client.scrollback() NEVER FETCHED ANYTHING IN THIS CLIENT. It reads
+//    room.oldState.paginationToken -- a field on RoomState maintained only by
+//    the legacy /sync path. This client runs sliding sync, which sets the
+//    backward token on the TIMELINE instead:
+//        room.getLiveTimeline().setPaginationToken(prev_batch, BACKWARDS)
+//    RoomState.paginationToken therefore stays at its initial null, and
+//    scrollback's first guard returns "already at the start" without issuing a
+//    request. Both the initial deepening and every Load-older click were
+//    no-ops, so a room only ever showed its sliding-sync window.
 //
-// WHAT THIS CANNOT SEE: it reads source. It proves the decision is made from
-// the pagination token and not from a length comparison, and it pins the two
-// SDK behaviours the fix depends on. It does NOT prove a real room paginates --
-// that needs a server with a threaded room and is an operator check.
+// 2. A PAGE CAN LEGITIMATELY ADD NOTHING VISIBLE. The SDK partitions each page
+//    with partitionThreadedEvents and routes thread replies into their own
+//    thread timelines, so in a thread-heavy room a full page of 30 lands out of
+//    the main timeline. Deciding "start of the room" from the main timeline not
+//    growing -- which the first version of this fix still did -- reads a normal
+//    page as the end of history and latches scrollback off.
+//
+// The fix paginates the timeline directly, believes the boolean the SDK
+// returns, and keeps paging (bounded) while nothing lands.
+//
+// WHAT THIS CANNOT SEE: it reads source. It proves the call, the termination
+// signal and the bound are the right ones, and it pins the SDK behaviours the
+// reasoning rests on. It does NOT prove a real room pages -- that needs a
+// server with threaded history and is an operator check.
 import { readFileSync } from 'node:fs'
 
 let failures = 0
@@ -26,71 +35,93 @@ function check(name: string, cond: boolean, extra?: unknown) {
   else { failures++; console.log('  FAIL ' + name, extra ?? '') }
 }
 
-const timeline = readFileSync('src/client/useTimeline.ts', 'utf8')
+// Assertions about CODE must not be satisfied -- or broken -- by prose. The
+// comments in useTimeline.ts necessarily NAME the calls this check forbids,
+// explaining why they are wrong; matching raw source made three assertions
+// fire on their own explanation. Strip comments first.
+function stripComments(src: string): string {
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
+}
 
-// The body of loadOlder, so an assertion cannot be satisfied by some unrelated
-// part of the file that happens to mention the same identifier.
+const timelineRaw = readFileSync('src/client/useTimeline.ts', 'utf8')
+const timeline = stripComments(timelineRaw)
 const loadOlder = timeline.slice(
   timeline.indexOf('const loadOlder'),
   timeline.indexOf('return { items, loadOlder'),
 )
 
-console.log('== the end-of-room decision')
+console.log('== the call that actually fetches')
 check('loadOlder was found', loadOlder.length > 0)
-check('it asks the SDK for the pagination token',
-  /paginationToken/.test(loadOlder))
-check('reaching the start is decided by that token being null',
-  /paginationToken\s*===\s*null/.test(loadOlder))
+check('loadOlder paginates the timeline',
+  /paginateEventTimeline\(/.test(loadOlder))
+check('it paginates BACKWARDS', /backwards:\s*true/.test(loadOlder))
+check('client.scrollback is not used anywhere in this file',
+  !/client\.scrollback\(/.test(timeline),
+  'scrollback reads room.oldState.paginationToken, which sliding sync never sets')
 
-// The actual regression. Any of these shapes is the old heuristic returning.
-console.log('== the heuristic that caused it must not come back')
-check('no before/after event-count comparison decides atStart',
-  !/const\s+before\b/.test(loadOlder) && !/const\s+after\b/.test(loadOlder),
-  'a length comparison cannot see a page that was routed into thread timelines')
-check('atStart is never set from an equality between two lengths',
+console.log('== the end-of-room decision')
+check('atStart comes from the boolean the SDK returns',
+  /if\s*\(\s*!more\s*\)\s*setAtStart\(true\)/.test(loadOlder))
+check('no before/after length comparison decides atStart',
   !/if\s*\(\s*after\s*===\s*before\s*\)/.test(loadOlder))
-check('getEvents().length is not consulted in loadOlder at all',
-  !/getEvents\(\)\.length/.test(loadOlder))
+check('the old oldState token test is gone',
+  !/oldState\.paginationToken/.test(loadOlder))
 
-console.log('== the latch must be cleared when the timeline is replaced')
-// A gappy sync swaps the live timeline; the old verdict was about a timeline
-// the room no longer owns, and the replacement has its own token. Keeping it
-// would switch scrollback off over history that is reachable again.
-const onReset = timeline.slice(timeline.indexOf('const onReset'), timeline.indexOf('const onDecrypted'))
-check('onReset was found', onReset.length > 0)
-check('a timeline reset clears atStart', /setAtStart\(false\)/.test(onReset))
+console.log('== a page that lands nothing must not stop the walk')
+check('it keeps paging while the timeline has not grown',
+  /while\s*\(.*more.*getEvents\(\)\.length\s*===\s*before/.test(loadOlder.replace(/\s+/g, ' ')))
+check('and the walk is bounded', /MAX_PAGES/.test(loadOlder) && /const MAX_PAGES\s*=\s*\d+/.test(timeline))
+
+console.log('== the initial deepening has the same problem and the same fix')
+// Anchored on code, since the comments that named these spots are stripped.
+const effect = timeline.slice(timeline.indexOf('INITIAL_SCROLLBACK) {'), timeline.indexOf('const onTimeline'))
+check('initial deepening was found', effect.length > 0)
+check('it paginates rather than calling scrollback',
+  /paginateEventTimeline\(/.test(effect) && !/scrollback\(room/.test(effect))
 
 // ---------------------------------------------------------------------------
-// The SDK contract the fix rests on. This repo deep-couples to matrix-js-sdk
-// internals elsewhere and has been bitten by upgrades; if either behaviour
-// below changes, the fix above is silently wrong again and this says so.
+// The SDK behaviours the reasoning rests on. This repo deep-couples to
+// matrix-js-sdk internals and has been bitten by upgrades; if any of these
+// change, the argument above is stale and this says so rather than letting a
+// silent no-op come back.
 // ---------------------------------------------------------------------------
 console.log('== matrix-js-sdk contract (pinned deliberately)')
-let sdk = ''
+let client = ''
+let roomState = ''
+let slidingSync = ''
 try {
-  sdk = readFileSync('node_modules/matrix-js-sdk/lib/client.js', 'utf8')
+  client = readFileSync('node_modules/matrix-js-sdk/lib/client.js', 'utf8')
+  roomState = readFileSync('node_modules/matrix-js-sdk/lib/models/room-state.js', 'utf8')
+  slidingSync = readFileSync('node_modules/matrix-js-sdk/lib/sliding-sync-sdk.js', 'utf8')
 } catch {
-  // Not a pass. An unreadable dependency is unmeasured, and unmeasured is
-  // never reported as clean.
+  // Unmeasured is never reported as clean.
   failures++
-  console.log('  FAIL could not read matrix-js-sdk to verify the contract it rests on')
+  console.log('  FAIL could not read matrix-js-sdk to verify the contract this rests on')
 }
 
-if (sdk) {
-  const scrollback = sdk.slice(sdk.indexOf('scrollback(room)'), sdk.indexOf('scrollback(room)') + 3000)
+if (client && roomState && slidingSync) {
+  const scrollback = client.slice(client.indexOf('scrollback(room)'), client.indexOf('scrollback(room)') + 3000)
+  check('scrollback still short-circuits on a null oldState token',
+    /oldState\.paginationToken === null/.test(scrollback),
+    'this is why it never fetched; if it changed, re-read the whole argument')
+  check('RoomState.paginationToken still defaults to null',
+    /_defineProperty\(this, "paginationToken", null\)/.test(roomState))
+  check('sliding sync still sets the backward token on the TIMELINE',
+    /getLiveTimeline\(\)\.setPaginationToken\(/.test(slidingSync))
+  check('sliding sync still does NOT set oldState.paginationToken',
+    !/oldState\.paginationToken\s*=/.test(slidingSync),
+    'if it started doing so, scrollback would work and this fix could be simplified')
+  check('paginateEventTimeline still reads the token off the timeline',
+    /var token = eventTimeline\.getPaginationToken\(dir\)/.test(client))
+  check('it still resolves false only at the end of the timeline',
+    /resolves to a boolean: false if there are no\s*\*\s*events and we reached either end/.test(client))
   check('scrollback still partitions threaded events out of the page',
     /partitionThreadedEvents/.test(scrollback),
-    'if this is gone, thread replies may now reach the live timeline and the old heuristic was not wrong for the reason stated')
-  check('only the non-threaded part is added to the live timeline',
-    /addEventsToTimeline\(\s*timelineEvents/.test(scrollback))
-  check('the token is set from res.end each page',
-    /paginationToken\s*=\s*\(?_?res\$?end/.test(scrollback) || /paginationToken\s*=\s*res\.end/.test(scrollback))
-  check('the token is nulled only on an empty chunk',
-    /chunk\.length\s*===\s*0/.test(scrollback),
-    'the null-token signal is what loadOlder now trusts; if the condition moved, re-read it')
-  check('an already-null token short-circuits, so a latched atStart is not needed for correctness',
-    /paginationToken\s*===\s*null/.test(scrollback))
+    'the reason a page can add nothing to the main timeline')
 }
 
-console.log(failures === 0 ? '\nOK' : `\n${failures} FAILURE(S)`)
-process.exit(failures === 0 ? 0 : 1)
+if (failures > 0) {
+  console.log(`\n${failures} FAILED`)
+  process.exit(1)
+}
+console.log('\nALL CHECKS PASSED')

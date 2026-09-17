@@ -314,6 +314,12 @@ export function toItems(events: MatrixEvent[], opts: ToItemsOptions = {}): Timel
 // Depth a freshly-opened room back-fills to (sync alone delivers ~20).
 const INITIAL_SCROLLBACK = 60
 
+// How many pages one "Load older" click may fetch while nothing visible comes
+// back. Thread replies land in their own timelines, so a page can add nothing
+// to the main one; without a bound, a click in a heavily threaded room could
+// walk the whole room.
+const MAX_PAGES = 5
+
 // Live timeline for a room: current events, live appends, and scrollback.
 export function useTimeline(client: MatrixClient | null, room: Room | null) {
   const [items, setItems] = useState<TimelineItem[]>([])
@@ -370,9 +376,16 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
 
     // Deepen a shallow initial view once per room open, so a fresh room
     // shows real history without the user clicking for it.
+    //
+    // NOT client.scrollback(). See loadOlder: under sliding sync that call
+    // returns without fetching anything, so this deepening has been silently
+    // doing nothing and every room has shown only its sync window.
     if (room.getLiveTimeline().getEvents().length < INITIAL_SCROLLBACK) {
       client
-        .scrollback(room, INITIAL_SCROLLBACK)
+        .paginateEventTimeline(room.getLiveTimeline(), {
+          backwards: true,
+          limit: INITIAL_SCROLLBACK,
+        })
         .then(() => {
           if (!cancelled) refresh()
         })
@@ -450,25 +463,43 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
     if (!client || !room || loadingOlder || atStart) return
     setLoadingOlder(true)
     try {
-      await client.scrollback(room, 30)
+      // NOT client.scrollback(). It reads room.oldState.paginationToken, which
+      // is a field on RoomState that only the legacy /sync path maintains.
+      // This client runs SLIDING SYNC, which sets the backward token on the
+      // TIMELINE instead:
+      //
+      //   room.getLiveTimeline().setPaginationToken(prev_batch, BACKWARDS)
+      //
+      // RoomState.paginationToken therefore stays at its initial null, and
+      // scrollback()'s first guard -- `if (paginationToken === null) return
+      // Promise.resolve(room) // already at the start` -- returned without
+      // ever issuing a request. Scrollback has never fetched a page in this
+      // client, for any room.
+      //
+      // paginateEventTimeline reads the token off the timeline, which is the
+      // one sliding sync actually sets, and resolves false only when the
+      // server says the timeline has ended.
+      const timeline = room.getLiveTimeline()
+      const before = timeline.getEvents().length
+      let more = true
+      let pages = 0
+      // A page can legitimately add NOTHING to this timeline: thread replies
+      // are partitioned into their own thread timelines by the SDK, so in a
+      // thread-heavy room an entire page of 30 lands out of view. One click
+      // would then appear to do nothing. Keep paging until something actually
+      // arrives, the room ends, or we have spent MAX_PAGES requests -- bounded
+      // so a single click can never turn into an unbounded walk of the room.
+      //
+      // The count is of timeline events, not rendered items, so a page of
+      // purely filtered content (system events, an ignored user) can still
+      // come back looking empty. That is rarer and it still advances the
+      // token, so the next click continues rather than stalling.
+      while (more && pages < MAX_PAGES && timeline.getEvents().length === before) {
+        more = await client.paginateEventTimeline(timeline, { backwards: true, limit: 30 })
+        pages += 1
+      }
       refresh()
-      // ASK THE SDK WHETHER MORE REMAINS. Never infer it from the main
-      // timeline's length.
-      //
-      // scrollback() runs the returned page through partitionThreadedEvents
-      // and adds only the non-threaded part to the live timeline; thread
-      // replies are handed to processThreadEvents and never touch it. So a
-      // page that happens to be all thread replies leaves the main timeline
-      // exactly as long as it was, and the old `after === before` test read
-      // that as "the start of the room". It then latched atStart, which
-      // loadOlder checks on entry, so scrollback stayed dead for the rest of
-      // that room's visit and only a room switch cleared it. Every room with
-      // threads hit this, which is most of them.
-      //
-      // The pagination token is the real signal. The SDK sets it from res.end
-      // on every page and nulls it only when the server returns an empty
-      // chunk -- the one condition that actually means there is no more.
-      if (room.oldState.paginationToken === null) setAtStart(true)
+      if (!more) setAtStart(true)
     } finally {
       setLoadingOlder(false)
     }
