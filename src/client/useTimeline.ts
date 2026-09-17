@@ -395,8 +395,17 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
     }
     // A gappy sync swaps the live timeline object out from under us; without
     // this the view keeps rendering a timeline the room no longer owns.
+    //
+    // It also invalidates any conclusion we had reached about reaching the
+    // start: atStart was decided against a timeline this room no longer has,
+    // and the replacement carries its own pagination token. Keeping the old
+    // verdict would leave scrollback switched off over history that is once
+    // again reachable. setState from a handler is fine; only an effect body
+    // is not (G-tc01).
     const onReset = (evRoom: Room | undefined) => {
-      if (evRoom?.roomId === roomRef.current?.roomId) scheduleRefresh()
+      if (evRoom?.roomId !== roomRef.current?.roomId) return
+      setAtStart(false)
+      scheduleRefresh()
     }
     // DECRYPTION FINISHING IS A TIMELINE CHANGE, and it is the only one that
     // arrives without a Timeline event.
@@ -441,12 +450,25 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
     if (!client || !room || loadingOlder || atStart) return
     setLoadingOlder(true)
     try {
-      const before = room.getLiveTimeline().getEvents().length
       await client.scrollback(room, 30)
-      const after = room.getLiveTimeline().getEvents().length
       refresh()
-      // No new events came back -> we've reached the start of the room.
-      if (after === before) setAtStart(true)
+      // ASK THE SDK WHETHER MORE REMAINS. Never infer it from the main
+      // timeline's length.
+      //
+      // scrollback() runs the returned page through partitionThreadedEvents
+      // and adds only the non-threaded part to the live timeline; thread
+      // replies are handed to processThreadEvents and never touch it. So a
+      // page that happens to be all thread replies leaves the main timeline
+      // exactly as long as it was, and the old `after === before` test read
+      // that as "the start of the room". It then latched atStart, which
+      // loadOlder checks on entry, so scrollback stayed dead for the rest of
+      // that room's visit and only a room switch cleared it. Every room with
+      // threads hit this, which is most of them.
+      //
+      // The pagination token is the real signal. The SDK sets it from res.end
+      // on every page and nulls it only when the server returns an empty
+      // chunk -- the one condition that actually means there is no more.
+      if (room.oldState.paginationToken === null) setAtStart(true)
     } finally {
       setLoadingOlder(false)
     }
