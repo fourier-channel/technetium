@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import { RoomEvent, RoomStateEvent, type MatrixClient, type MatrixEvent } from 'matrix-js-sdk'
 import { parseMxc } from './media'
+import { createLimiter } from './concurrency'
+import { ensureBooruSession } from './booruSession'
+import { fetchBooruTags } from './booruTags'
+import { mayRead, mergeBooruIntoSet, newBooruReadState } from './booruLive'
 import {
   MEDIA_TAGS_EVENT,
   mediaIdFromStateKey,
@@ -77,6 +81,16 @@ function ingestEvent(ev: MatrixEvent): void {
   for (const key of [...missing]) {
     if (key.endsWith('|' + mediaId)) missing.delete(key)
   }
+  // A push means somebody retagged, so whatever this event carried, the live
+  // set is now the truth: ignore the TTL and read it again.
+  //
+  // ONLY FOR AN IMAGE SOMETHING IS CURRENTLY RENDERING. `listeners` has an
+  // entry exactly while a panel or chip for this image is mounted, and that
+  // bound is the whole reason this is safe: one measured bridge backfill wrote
+  // 718 tag events in a single batch, and reacting to each of them
+  // unconditionally would have been 718 booru reads for images nobody was
+  // looking at.
+  if (listeners.has(mediaId)) refreshBooruTags(mediaId, true)
 }
 
 // Full sweep of every room. Reads BOTH sources:
@@ -153,6 +167,69 @@ export function fetchTags(roomId: string, mxc: string): void {
     })
 }
 
+// ---------------------------------------------------------------------------
+// The live read. Matrix supplies the POINTER (post_id); the booru supplies the
+// tags, for the images actually on screen.
+//
+// Capped through the same LIFO limiter the pictures use, for the same reason
+// and with one extra: LIFO means the image that just scrolled in is served
+// before the one scrolled past, and the cap means a room whose whole first page
+// is pictures cannot open forty connections to the booru at once. Each read is
+// about 157 bytes measured against production, so the cost that matters here is
+// the REQUEST COUNT, not the bytes.
+//
+// Nothing here polls. A read happens when an image comes into view, and again
+// when the bridge says the tags changed.
+// ---------------------------------------------------------------------------
+
+const BOORU_MAX_INFLIGHT = 4
+
+const booruLimiter = createLimiter(BOORU_MAX_INFLIGHT)
+const booruReads = newBooruReadState()
+
+/**
+ * Pull this image's CURRENT tags from the booru and let them win.
+ *
+ * Safe to call on every render and every scroll: mayRead refuses a duplicate
+ * in-flight read and a repeat inside the TTL. `force` skips the TTL only, and
+ * is what a state push uses.
+ *
+ * Silent when the image has no post_id -- that is an image the booru does not
+ * know about, and there is nothing to ask it.
+ */
+export function refreshBooruTags(mediaId: string, force = false): void {
+  const postId = sets.get(mediaId)?.postId
+  if (postId === undefined) return
+  if (!mayRead(booruReads, postId, Date.now(), force)) return
+
+  booruReads.inFlight.add(postId)
+  // Marked ASKED at the start, not at the end. Marking on completion would let
+  // a slow or failing booru be re-asked by every render that happens while the
+  // first read is still out -- the in-flight set catches that, but only until
+  // the failure clears it, and then the whole TTL would restart from a request
+  // that never landed.
+  booruReads.askedAt.set(postId, Date.now())
+
+  void booruLimiter
+    .run(() => fetchBooruTags(postId))
+    .then((live) => {
+      if (!live) return
+      // Re-read the store rather than closing over the earlier set: the read
+      // took a round trip, and a state push may have replaced it meanwhile.
+      const current = sets.get(mediaId)
+      if (!current) return
+      ingestSet(mergeBooruIntoSet(current, live, Date.now()), mediaId)
+    })
+    .catch(() => {
+      // A booru that is down, challenged, or refusing must not take the tag
+      // panel with it -- the Matrix copy stays on screen, which is exactly what
+      // shipped before this existed. The TTL is the backoff.
+    })
+    .finally(() => {
+      booruReads.inFlight.delete(postId)
+    })
+}
+
 function subscribeTo(mediaId: string, cb: Listener): () => void {
   let subs = listeners.get(mediaId)
   if (!subs) {
@@ -173,6 +250,12 @@ export function useMediaTagSync(client: MatrixClient | null): void {
     if (!client) return
     fetchClient = client
     scanAll(client)
+
+    // The live read is credentialed, so the booru applies the VIEWER's own
+    // visibility rather than handing an anonymous client a quietly reduced
+    // answer. Memoised per token, so this costs one request even though
+    // BooruFrame asks for the same thing whenever it mounts.
+    void ensureBooruSession(client.getAccessToken() ?? null)
 
     // Both channels: state writes that sync surfaces as state, AND the same
     // events arriving down the timeline (the only path that currently fires,

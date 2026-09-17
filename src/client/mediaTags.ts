@@ -55,6 +55,12 @@ export interface MediaTagSet {
   rating?: MediaRating
   // Who last wrote the tags (`updated_by`), for the strip's tooltip.
   updatedBy?: string
+  // The post's tag_string exactly as the BOORU last reported it, present only
+  // on a set that came from a live read. Sent back as old_tag_string when this
+  // client edits the tags, which is what makes the edit a delta against what it
+  // actually saw rather than a blind overwrite of whatever is there now. Absent
+  // means "this set came from Matrix alone", and an edit must read live first.
+  tagString?: string
   // Last-write-wins clock. Prefers the bridge's own `updated_at` over the event
   // ts: a re-send of unchanged tags bumps origin_server_ts but not updated_at,
   // so using the bridge's clock avoids counting a replay as an update.

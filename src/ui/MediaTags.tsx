@@ -4,7 +4,8 @@ import { booruPostUrl, booruTagUrl } from '../client/booruUrl'
 import { isHypeTag } from '../client/hypeTags'
 import { useTagDiff, tagKey, type TagPhase } from '../client/useTagDiff'
 import '../mediatags.css'
-import { useMediaTags } from '../client/useMediaTags'
+import { refreshBooruTags, useMediaTags } from '../client/useMediaTags'
+import { useOnScreen } from './useOnScreen'
 import { sortTags, type MediaRating, type MediaTag, type TagCategory } from '../client/mediaTags'
 import { useMediaTagPrefs } from './mediaTagSettings'
 import { useReducedMotion } from './reducedMotion'
@@ -85,7 +86,15 @@ export function MediaTags({ mxc, roomId, variant = 'strip', max = 12, onTagClick
 
   // Nothing to show: no tags for this image (yet). Render nothing at all rather
   // than an empty container, so untagged images keep their exact layout.
-  if (!set || set.tags.length === 0) return null
+  //
+  // A set with NO TAGS BUT A POST ID is not nothing: it is the pointer, and the
+  // panel is what triggers the live read that fills it. Returning null there
+  // would be a deadlock -- no panel, so no read, so no tags, so no panel -- and
+  // it is the shape the bridge moves towards as it stops copying tag lists into
+  // room state. Chips stay out of it: they are previews with nothing but a
+  // count to show, and a "0" badge on every picture is worse than silence.
+  if (!set) return null
+  if (set.tags.length === 0 && (set.postId === undefined || variant === 'chip')) return null
 
   const tags = sortTags(set.tags)
   const meta = { rating: set.rating, postId: set.postId, updatedBy: set.updatedBy }
@@ -136,6 +145,7 @@ export function MediaTags({ mxc, roomId, variant = 'strip', max = 12, onTagClick
   return (
     <TagPanel
       tags={tags}
+      mediaId={mediaId}
       max={showAll ? undefined : max}
       onMore={() => setShowAll(true)}
       onTagClick={onTagClick}
@@ -152,6 +162,7 @@ export function MediaTags({ mxc, roomId, variant = 'strip', max = 12, onTagClick
 // keeps that same alphabetical-within-category order below the rule.
 function TagPanel({
   tags,
+  mediaId,
   max,
   onMore,
   onTagClick,
@@ -159,6 +170,7 @@ function TagPanel({
   onCollapse,
 }: {
   tags: MediaTag[]
+  mediaId?: string
   max?: number
   onMore: () => void
   onTagClick?: (tag: MediaTag) => void
@@ -174,8 +186,21 @@ function TagPanel({
   const head = diffed.filter((d) => HEAD_CATEGORIES.includes(d.tag.category))
   const body = diffed.filter((d) => !HEAD_CATEGORIES.includes(d.tag.category))
 
+  // Scrolled into view -> read this image's CURRENT tags from the booru, which
+  // is the only copy that is definitely right. Whatever comes back differs
+  // from what is drawn arrives through the same diff above, so a tag added on
+  // the booru pops in here and a tag removed there pops out, without this
+  // component knowing a request happened.
+  //
+  // refreshBooruTags is idempotent -- it refuses a duplicate read and a repeat
+  // inside its TTL -- so an image scrolled past and back costs nothing.
+  const { ref: panelRef, onScreen } = useOnScreen<HTMLDivElement>()
+  useEffect(() => {
+    if (onScreen && mediaId) refreshBooruTags(mediaId)
+  }, [onScreen, mediaId])
+
   return (
-    <div className="mtags-panel">
+    <div className="mtags-panel" ref={panelRef}>
       {meta?.rating && <RatingBadge rating={meta.rating} by={meta.updatedBy} />}
       {head.length > 0 && (
         <>
