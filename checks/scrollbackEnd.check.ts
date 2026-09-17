@@ -74,15 +74,27 @@ console.log('== a page that lands nothing must not stop the walk')
 // net.41chan.* system events that are never drawn, and they arrive in runs,
 // so a full page can contain no visible item at all. Counting timeline events
 // asks the wrong question; the walk has to continue until something RENDERS.
-check('the walk is driven by the RENDERED item count',
-  /while\s*\(.*more.*buildItems\(\)\.length\s*===\s*before/.test(loadOlder.replace(/\s+/g, ' ')))
+check('the walk continues until something RENDERS',
+  /while\s*\(.*more.*landed === 0/.test(loadOlder.replace(/\s+/g, ' ')))
 check('the loop does NOT decide from the timeline event count',
   !/getEvents\(\)\.length\s*===\s*before/.test(loadOlder),
   'a page of purely filtered events grows the timeline and shows nothing')
-check('the before-count is the rendered one too',
-  /const before = buildItems\(\)\.length/.test(loadOlder))
-check('buildItems is shared with refresh rather than reimplemented',
-  /const buildItems = useCallback/.test(timeline) && /setItems\(applyLayout\(buildItems\(\)\)\)/.test(timeline))
+check('renderability is asked per event, via the shared predicate',
+  /rendersAsItem\(events\[i\], opts\)/.test(loadOlder))
+
+console.log('== the walk must stay linear in what it fetched')
+// It used to rebuild the entire item list once per page: O(n) inside the page
+// loop, about half a million event visits per click at a 10000-event budget.
+check('buildItems is NOT called inside the loop',
+  !/while[\s\S]*?buildItems\(\)/.test(loadOlder),
+  'rebuilding the whole list per page is quadratic in the timeline')
+check('only the newly prepended slice is examined',
+  /events\.length - seen/.test(loadOlder))
+check('ONE rule: toItems uses the same predicate the walk does',
+  /if \(!rendersAsItem\(ev, opts\)\) continue/.test(timeline),
+  'two copies of "is this drawable" is how they drift apart')
+check('the render options are built once and shared',
+  /const itemOpts = useCallback/.test(timeline) && /const opts = itemOpts\(\)/.test(loadOlder))
 check('and the walk is bounded', /MAX_PAGES/.test(loadOlder) && /const MAX_PAGES\s*=\s*\d+/.test(timeline))
 check('the page size is a named constant, not a literal',
   /limit: PAGE_SIZE/.test(loadOlder) && /const PAGE_SIZE\s*=\s*\d+/.test(timeline))
@@ -100,7 +112,7 @@ console.log('== running out of budget must not be silent')
 check('a walk that rendered nothing reports how far it got',
   /setSkipped\(/.test(loadOlder))
 check('and reports zero when the click actually produced something',
-  /gainedNothing && more \? /.test(loadOlder))
+  /landed === 0 && more \?/.test(loadOlder))
 check('skipped is returned from the hook', /skipped\s*\}/.test(timeline))
 
 const ui = stripComments(readFileSync('src/ui/Timeline.tsx', 'utf8'))

@@ -211,42 +211,63 @@ function galleryTag(ev: MatrixEvent): GalleryTag | null {
   }
 }
 
+/**
+ * Would this event, on its own, produce a row?
+ *
+ * ONE RULE, TWO CALLERS. toItems uses it to decide what to draw, and
+ * scrollback uses it to decide whether a page it just fetched put anything on
+ * screen. Scrollback used to answer that by rebuilding the whole item list once
+ * per page, which is O(n) inside an O(pages) loop -- around half a million
+ * event visits per click at a 10000-event budget. Asking per event instead
+ * makes the walk linear in what it actually fetched.
+ *
+ * WHAT IT DOES NOT KNOW: gallery folding. toItems can absorb an image into a
+ * gallery that is already on screen, producing no new row; this returns true
+ * for it. That makes the predicate OPTIMISTIC -- scrollback may stop one page
+ * early in that case, never late -- and the authoritative list is still
+ * whatever toItems builds afterwards.
+ */
+export function rendersAsItem(ev: MatrixEvent, opts: ToItemsOptions = {}): boolean {
+  if (!ev.getId()) return false
+  // Dropped before anything else looks at it, so a hidden system event cannot
+  // break a sender cluster in two or strand a day separator above nothing.
+  if (!opts.showSystemEvents && isSystemEvent(ev.getType())) return false
+  // Edits and reactions modify another event; they are never rows of their
+  // own. Without this they render as duplicate messages and `[m.reaction]`
+  // junk -- which is exactly what the client does today.
+  if (isRelationOnlyEvent(ev)) return false
+  // Filtered here rather than in the renderer so an ignored sender leaves no
+  // gap, no "message hidden" row, and no reaction or receipt behind.
+  if (opts.ignoredUsers?.length && opts.ignoredUsers.includes(ev.getSender() ?? '')) return false
+  // Spatial-mode presence/position events ride the timeline (so they work at
+  // PL0) but are never chat -- keep them out of every message log.
+  if (ev.getType().startsWith('net.41chan.spatial.')) return false
+  // Chat interactions (a slap, a wave) are ephemeral animations played by the
+  // overlay, not things anyone said. Without this they render as
+  // `[net.41chan.interaction]` rows, and a lively room's history becomes
+  // unreadable as conversation (D-in04).
+  if (ev.getType() === INTERACTION_EVENT) return false
+  // Bridge tag writes are STATE events, but state events also travel down the
+  // timeline -- without this they render as `[net.41chan.media.tags]` junk
+  // rows between messages. The tag store reads them from the same stream.
+  if (ev.getType() === MEDIA_TAGS_EVENT) return false
+  // A background is POSTED so the media gate can authorize it (the gate
+  // authorizes media with a message behind it), but it is wallpaper, not
+  // something someone said -- so it stays out of the chat log.
+  if (isBackgroundPost(ev.getOriginalContent())) return false
+  return true
+}
+
 export function toItems(events: MatrixEvent[], opts: ToItemsOptions = {}): TimelineItem[] {
   const out: TimelineItem[] = []
   const consumed = new Set<string>()
-  const ignored = opts.ignoredUsers?.length ? new Set(opts.ignoredUsers) : null
   const rel = buildRelationIndex(events, opts.myUserId)
 
   for (let i = 0; i < events.length; i++) {
     const ev = events[i]
     const evId = ev.getId() ?? ''
     if (!evId || consumed.has(evId)) continue
-    // Dropped before anything else looks at it, so a hidden system event cannot
-    // break a sender cluster in two or strand a day separator above nothing.
-    if (!opts.showSystemEvents && isSystemEvent(ev.getType())) continue
-    // Edits and reactions modify another event; they are never rows of their
-    // own. Without this they render as duplicate messages and `[m.reaction]`
-    // junk -- which is exactly what the client does today.
-    if (isRelationOnlyEvent(ev)) continue
-    // Filtered here rather than in the renderer so an ignored sender leaves no
-    // gap, no "message hidden" row, and no reaction or receipt behind.
-    if (ignored && ignored.has(ev.getSender() ?? '')) continue
-    // Spatial-mode presence/position events ride the timeline (so they work at
-    // PL0) but are never chat -- keep them out of every message log.
-    if (ev.getType().startsWith('net.41chan.spatial.')) continue
-    // Chat interactions (a slap, a wave) are ephemeral animations played by the
-    // overlay, not things anyone said. Without this they render as
-    // `[net.41chan.interaction]` rows, and a lively room's history becomes
-    // unreadable as conversation (D-in04).
-    if (ev.getType() === INTERACTION_EVENT) continue
-    // Bridge tag writes are STATE events, but state events also travel down the
-    // timeline -- without this they render as `[net.41chan.media.tags]` junk
-    // rows between messages. The tag store reads them from the same stream.
-    if (ev.getType() === MEDIA_TAGS_EVENT) continue
-    // A background is POSTED so the media gate can authorize it (the gate
-    // authorizes media with a message behind it), but it is wallpaper, not
-    // something someone said -- so it stays out of the chat log.
-    if (isBackgroundPost(ev.getOriginalContent())) continue
+    if (!rendersAsItem(ev, opts)) continue
 
     const tag = galleryTag(ev)
     if (tag) {
@@ -350,15 +371,19 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
   // Extracted from refresh so scrollback can ask "did that page actually put
   // anything on screen?" -- a question the timeline's event count cannot
   // answer, because most of what this room stores is never rendered.
+  const itemOpts = useCallback(
+    (): ToItemsOptions => ({
+      showSystemEvents,
+      myUserId: client?.getUserId() ?? null,
+      ignoredUsers: client ? getIgnoredUsers(client) : undefined,
+    }),
+    [client, showSystemEvents],
+  )
+
   const buildItems = useCallback(() => {
     if (!room) return []
-    const myUserId = client?.getUserId() ?? null
-    return toItems(room.getLiveTimeline().getEvents(), {
-      showSystemEvents,
-      myUserId,
-      ignoredUsers: client ? getIgnoredUsers(client) : undefined,
-    })
-  }, [client, room, showSystemEvents])
+    return toItems(room.getLiveTimeline().getEvents(), itemOpts())
+  }, [room, itemOpts])
 
   // Rebuild the item list from the room's current live timeline.
   const refresh = useCallback(() => {
@@ -514,25 +539,34 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
       // something RENDERS.
       //
       // Bounded, so one click can never walk the whole room.
-      const before = buildItems().length
+      const opts = itemOpts()
       const eventsBefore = timeline.getEvents().length
+      let seen = eventsBefore
+      let landed = 0
       let more = true
       let pages = 0
-      while (more && pages < MAX_PAGES && buildItems().length === before) {
+      while (more && pages < MAX_PAGES && landed === 0) {
         more = await client.paginateEventTimeline(timeline, { backwards: true, limit: PAGE_SIZE })
         pages += 1
+        // Backwards pagination PREPENDS, so whatever is new sits at the front.
+        // Only the new slice is examined, which is what keeps this linear in
+        // what was fetched rather than quadratic in the whole timeline.
+        const events = timeline.getEvents()
+        for (let i = 0; i < events.length - seen; i++) {
+          if (rendersAsItem(events[i], opts)) landed += 1
+        }
+        seen = events.length
       }
       refresh()
       // Nothing rendered and the room has not ended: the budget ran out inside
       // a long run of never-drawn events. Say how far it got, so a click that
       // changed nothing on screen still shows it did something.
-      const gainedNothing = buildItems().length === before
-      setSkipped(gainedNothing && more ? timeline.getEvents().length - eventsBefore : 0)
+      setSkipped(landed === 0 && more ? seen - eventsBefore : 0)
       if (!more) setAtStart(true)
     } finally {
       setLoadingOlder(false)
     }
-  }, [client, room, loadingOlder, atStart, refresh, buildItems])
+  }, [client, room, loadingOlder, atStart, refresh, itemOpts])
 
   return { items, loadOlder, loadingOlder, atStart, skipped }
 }
