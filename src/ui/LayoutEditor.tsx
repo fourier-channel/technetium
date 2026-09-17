@@ -1,10 +1,23 @@
 import { useState } from 'react'
 import { useSpace } from './spaceContext'
+import { PANEL_IDS, type PanelId } from './space'
+import { PanelChrome } from './PanelChrome'
+
+// What each panel is called to a person. The ids are internal.
+const PANEL_LABEL: Record<PanelId, string> = {
+  sidebar: 'Room list',
+  dock: 'DM dock',
+  threads: 'Thread list',
+  main: 'Chat',
+  thread: 'Thread view',
+  members: 'Member list',
+  domain: 'Domain',
+}
 
 // The Edit Mode surface: the layout's number, in and out, and reset. Lives
 // as a small floating card so it covers no panel it is editing.
 export function LayoutEditor() {
-  const { editMode, setEditMode, exportCode, importCode, resetSpace, presets, overflow, setOverflow, singleSlot } = useSpace()
+  const { space, editMode, setEditMode, exportCode, importCode, resetSpace, presets, overflow, setOverflow, singleSlot } = useSpace()
   const [pasted, setPasted] = useState('')
   const [note, setNote] = useState<string | null>(null)
   const [picked, setPicked] = useState('')
@@ -23,6 +36,22 @@ export function LayoutEditor() {
       </div>
       <div className="tc-layout-editor-help">
         Drag a divider and every panel on it accommodates. Lock fixes a panel's size (it moves whole); Pin fixes its center (it warps around it). Together: a fixed object.
+      </div>
+      {/* EVERY OPEN PANEL, not just the two that happened to carry their own
+          chrome. Lock and Pin have always worked for any panel -- setPanelFlag
+          takes any id -- but the buttons were mounted only inside Sidebar and
+          DmDock, so the flanking panels had no way to reach them. That is what
+          made the chat's left and right dividers look welded together: a LOCKED
+          panel propagates a divider push to its opposite edge with the SAME
+          delta, which is precisely "both edges move identically", and with no
+          control on those panels there was no way to see it or undo it. */}
+      <div className="tc-layout-editor-panels">
+        {PANEL_IDS.filter((id) => space.leaves[id].open).map((id) => (
+          <div className="tc-layout-editor-row" key={id}>
+            <span>{PANEL_LABEL[id]}</span>
+            <PanelChrome id={id} inline />
+          </div>
+        ))}
       </div>
       <label className="tc-layout-editor-row">
         <span>Your layout number</span>

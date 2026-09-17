@@ -3777,3 +3777,20 @@ code {
   background: transparent;
   color: inherit;
 }
+
+/* Edit Mode: the per-panel Lock/Pin roster. One row per OPEN panel, so every
+   panel can be locked or pinned rather than only the two that happened to
+   mount their own chrome. */
+.tc-layout-editor-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 6px 0;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.tc-layout-editor-panels .tc-layout-editor-row > span:first-child {
+  min-width: 7.5em;
+  opacity: 0.8;
+}
