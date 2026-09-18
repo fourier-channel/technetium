@@ -152,7 +152,40 @@
   --mod-active-bg:      #241a0e;
 
   /* --- accent ----------------------------------------------------------- */
-  --mod-accent:         #38e08a;
+  /* THE BRAND GREEN, AT TEXT WEIGHT. Operator ruling 2026-09-18, after this
+   * token was found to be the wrong green on the first surface that used it
+   * for headings and links at size:
+   *
+   *   "The ultra-light mint green would serve well as a glow or a stroke but
+   *   way too light for the site's intended green. Compare it to the actual
+   *   site logo on the front page."
+   *
+   * So it was compared, by sampling the mark's own pixels rather than by
+   * eye. 41chan.png is hue 120 at 95.6% saturation: a third of the opaque
+   * mark is #038403, and the extrusion faces run hue 112-118 at 100%. The
+   * previous value, #38e08a, sits at hue 149 -- twenty-nine degrees toward
+   * cyan from the mark it is supposed to belong to, at 73% saturation.
+   *
+   * Nobody chose that. It was extracted from Modulation's palette, which is
+   * where the vocabulary was established, and the logo was never one of the
+   * surfaces measured. That is the gap: an accent extracted from surfaces is
+   * an accent nobody checked against the mark.
+   *
+   * WHY NOT THE MARK'S VALUE ITSELF. #038403 is lightness 26.5% -- a solid
+   * fill on white-ish paper, not ink on a dark ground. As text on
+   * --mod-surface it measures 3.6:1 -- under the 4.5:1 that body copy needs,
+   * and the old page green #00b200 was only 6.1:1. The hue and the
+   * saturation are the brand; the lightness is the medium. So this is the
+   * mark's character carried to text weight: hue 128, 90% saturation,
+   * lightness 48%, which measures 10.5:1 on --mod-surface.
+   *
+   * WHAT DID NOT MOVE, and this is why the names were kept separate:
+   * --mod-creator-fg, --mod-tag-character-fg and --mod-ok-fg still hold the
+   * mint. "Who put this tag here", "what kind of thing this tag names" and
+   * "this service is healthy" are not the brand, and one token serving both
+   * would have made the other wrong the day either moved. That day was
+   * today. */
+  --mod-accent:         #0ce92a;
 
   /* --- shape ------------------------------------------------------------ */
   /* 10px is the PRESET-level value. A component may narrow it -- the creator

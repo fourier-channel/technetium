@@ -3153,7 +3153,7 @@ code {
    panel is exactly that: something is going on here.
    --------------------------------------------------------------------------- */
 .tc-divider {
-  --tc-div-tone: var(--mod-accent, #38e08a);
+  --tc-div-tone: var(--mod-accent, #0ce92a);
   /* Fallbacks, not a second opinion: the live values below are derived from
      --tc-div-tone by relative-colour syntax, and these only stand in on an
      engine that cannot do that arithmetic. Grep marker: DIV-TONE-FALLBACK. */
@@ -3551,7 +3551,7 @@ code {
   cursor: pointer;
 }
 .tc-density-btn[aria-pressed='true'] {
-  color: var(--mod-accent, #38e08a);
+  color: var(--mod-accent, #0ce92a);
   border-color: rgba(56, 224, 138, 0.45);
 }
 @supports (color: rgb(from white r g b / 1)) {
@@ -3590,7 +3590,7 @@ code {
 }
 .tc-settings-tabs button[aria-selected='true'] {
   color: var(--cpd-color-text-primary);
-  border-bottom-color: var(--mod-accent, #38e08a);
+  border-bottom-color: var(--mod-accent, #0ce92a);
 }
 
 .tc-perm { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
@@ -3642,7 +3642,7 @@ code {
   font-size: 11.5px;
   padding: 5px 8px;
   border-radius: 6px;
-  border-left: 3px solid var(--mod-accent, #38e08a);
+  border-left: 3px solid var(--mod-accent, #0ce92a);
   background: var(--cpd-color-bg-subtle-secondary);
 }
 

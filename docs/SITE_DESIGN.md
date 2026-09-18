@@ -363,6 +363,32 @@ grammar of where things go and how they behave. The second has never had a home
 in most projects, and it is the one that makes three separately-built surfaces
 feel like one site.
 
+The public pages on 41chan.net -- the one you are reading included -- joined on
+2026-09-17, and they were the last surface in the estate still painting from
+values typed by hand: a pure black ground, and a green and an orange that
+existed on these pages and nowhere else. They are not SERVED the token file,
+because every page on that origin is a single self-contained file that cannot
+break because a request did not arrive. The renderer reads the delivered copy
+and writes the declarations into each page instead, and the command that
+compares the two is that repository's gate -- so a page painting from something
+other than canon fails a commit rather than going quietly out of step.
+
+Two rules govern how the two loud colours are spent, and they hold on every
+surface:
+
+- **Green is structure.** Headings, links, and anything you can act on. It
+  means IMPORTANT.
+- **Orange is urgency.** The one thing on a screen meant to be read first. It
+  means IMPORTANT, RIGHT NOW.
+
+They are easy to invert and expensive to leave inverted. These generated pages
+had green as the body text colour with orange on every heading, every link and
+every inline name, which spent both colours on every sentence and left neither
+able to mark anything. The ground underneath is now formant's warm dark grey
+rather than black, with a vignette falling to black at the edge of the viewport
+-- the same ground Technetium sits on, so moving between the client and the
+pages describing it no longer changes the room.
+
 The tokens are delivered to each surface rather than copied. chanbooru is the
 exception and holds itself to them by ASSERTION instead: its tokens live inside
 a theme mixin applied at a preset, while canon declares them at the root, and
