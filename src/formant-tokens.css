@@ -187,6 +187,61 @@
    * today. */
   --mod-accent:         #0ce92a;
 
+  /* --- depth ------------------------------------------------------------ */
+  /* THE SHADE THAT MAKES A HEADER CHROME AND A PAGE A PAGE.
+   *
+   * Extracted 2026-09-18 on the operator's question -- "is the gradient
+   * background from the page (and Technetium's headers) set as a formant
+   * token to be reused on the booru, technetium, etc" -- to which the answer
+   * was no, in both directions and for opposite reasons.
+   *
+   * The HEAD treatment is Technetium's `ui-depth-v1`, and it was never a
+   * candidate for a guess: ten components wear `.tc-panel-head` already --
+   * Timeline, Sidebar, MemberList, ThreadList, ThreadPanel, PinnedPanel,
+   * SearchPanel, DmDock, SettingsDialog, DomainView. That is a measurement
+   * many times over, and it stayed a local name only because nobody asked.
+   * The booru could not borrow it because there was no name to borrow.
+   *
+   * THE VALUES ARE NEUTRAL ALPHAS ON PURPOSE, not palette colours, and that
+   * is what makes them shareable at all. A shade of black at 0.44 sits
+   * correctly on a warm surface, a cool one, or an upstream preset this file
+   * has no opinion about. A hue here would have made the token a second
+   * opinion about somebody else's ground.
+   *
+   * THE GRADIENT ITSELF IS A TOKEN, which stretches the no-components rule
+   * the same way the keyframes below do, and for the same reason: a gradient
+   * re-typed in three stylesheets drifts exactly the way a hex does. A
+   * consumer still chooses WHICH element wears it. The lip is a separate
+   * inset shadow rather than part of the gradient, because a header on an
+   * already-inset panel keeps the shade and drops the lip -- there is no
+   * panel edge above it for a lip to describe.
+   *
+   * THE PAGE VIGNETTE is the same idea at page scale and the opposite
+   * provenance: it had exactly ONE consumer when 41chan.net grew it on
+   * 2026-09-17, and was deliberately left out of this file that day for
+   * being a guess. It is here now because the operator asked for it on other
+   * surfaces, which is what turns one caller into three. Radial and fixed to
+   * the VIEWPORT, so it describes the rendered edge rather than the
+   * document -- a long page must not carry a dark band down its middle. */
+  --mod-head-shade:     rgba(0, 0, 0, 0.44);
+  --mod-head-shade-mid: rgba(0, 0, 0, 0.17);
+  --mod-head-line:      rgba(128, 128, 128, 0.25);
+  --mod-head-lip:       rgba(255, 255, 255, 0.06);
+  --mod-head-gradient:  linear-gradient(180deg,
+                          var(--mod-head-shade) 0%,
+                          var(--mod-head-shade-mid) 58%,
+                          transparent 100%);
+  /* Opaque. The ending SHAPE extends past the viewport, so the darkest thing
+     actually on screen is a corner partway along the ramp -- the fade reads as
+     subtle because of the geometry, not because the last stop is soft. Making
+     this stop translucent lightens every corner and is a different design. */
+  --mod-page-edge:      #000;
+  --mod-page-vignette:  radial-gradient(75% 72% at 50% 42%,
+                          transparent 45%,
+                          rgba(0, 0, 0, 0.22) 70%,
+                          rgba(0, 0, 0, 0.45) 86%,
+                          var(--mod-page-edge) 100%);
+
   /* --- shape ------------------------------------------------------------ */
   /* 10px is the PRESET-level value. A component may narrow it -- the creator
    * gallery uses 12px under .modcreator -- and that is what a token is for. The

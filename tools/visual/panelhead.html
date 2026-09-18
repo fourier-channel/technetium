@@ -1,0 +1,50 @@
+<!doctype html><html><head>
+<!--#head-->
+<title>Panel head -- formant depth tokens</title>
+<style>
+  /* The rebinding of .tc-panel-head onto formant's --mod-head-* tokens is
+     meant to move OWNERSHIP and not pixels. This page puts the live rule
+     beside a literal copy of what it said before, so "identical" is looked at
+     rather than asserted (VERIFICATION-DOCTRINE rule 9).
+
+     Delete the .h-was rule if the treatment is ever deliberately changed --
+     it is a frozen record of one moment, not a second source of truth. */
+  .h-wrap { width: 560px; padding: 14px; }
+  .h-panel { background: var(--cpd-color-bg-canvas-default); margin-bottom: 26px;
+             border: 1px solid var(--mod-line); border-radius: 6px; overflow: hidden; }
+  .h-head { padding: 10px 16px; font: 600 14px var(--tc-ui-font);
+            display: flex; justify-content: space-between; align-items: center; }
+  .h-body { height: 54px; }
+  .h-btn { font: 400 12px var(--tc-ui-font); padding: 3px 9px; border-radius: 6px;
+           border: 1px solid var(--mod-line-strong); background: transparent;
+           color: var(--cpd-color-text-primary); }
+  /* What the rule said before the extraction, copied literally. */
+  .h-was {
+    position: relative;
+    background-image: linear-gradient(180deg,
+      rgba(0, 0, 0, 0.44) 0%, rgba(0, 0, 0, 0.17) 58%, rgba(0, 0, 0, 0) 100%);
+    border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+</style>
+</head><body>
+<div class="h-wrap">
+  <div class="h-label">now -- .tc-panel-head, from formant --mod-head-*</div>
+  <div class="h-panel">
+    <header class="tc-panel-head h-head">
+      <span>general</span>
+      <button class="h-btn" type="button">Load older</button>
+    </header>
+    <div class="h-body"></div>
+  </div>
+
+  <div class="h-label">before -- the literal rule this replaced</div>
+  <div class="h-panel">
+    <header class="h-was h-head">
+      <span>general</span>
+      <button class="h-btn" type="button">Load older</button>
+    </header>
+    <div class="h-body"></div>
+  </div>
+</div>
+</body></html>

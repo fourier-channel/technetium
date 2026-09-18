@@ -3105,19 +3105,19 @@ code {
    inline one rather than drawing two.
    --------------------------------------------------------------------------- */
 :root {
-  --tc-head-shade: rgba(0, 0, 0, 0.44);
-  --tc-head-line: rgba(128, 128, 128, 0.25);
-  --tc-head-lip: rgba(255, 255, 255, 0.06);
+  /* ui-depth-v1's shade is formant's now (2026-09-18). It was three local
+     names on ten components here and unreachable from any other stack, which
+     is why the booru could not wear the same chrome. Values unchanged; only
+     who owns them moved. --tc-head-shade is gone rather than aliased: the
+     shade travels inside --mod-head-gradient, so a local name for it would
+     have been defined and never read. */
+  --tc-head-line: var(--mod-head-line);
+  --tc-head-lip: var(--mod-head-lip);
 }
 .tc-panel-head {
   position: relative;
   flex-shrink: 0;
-  background-image: linear-gradient(
-    180deg,
-    var(--tc-head-shade) 0%,
-    rgba(0, 0, 0, 0.17) 58%,
-    rgba(0, 0, 0, 0) 100%
-  );
+  background-image: var(--mod-head-gradient);
   border-bottom: 1px solid var(--tc-head-line);
   box-shadow: inset 0 1px 0 var(--tc-head-lip);
 }
