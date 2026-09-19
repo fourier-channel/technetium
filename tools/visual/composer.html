@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+<head>
+<!--#head-->
+<link rel="stylesheet" href="../../src/composer.css">
+<style>
+  .shot { padding: 20px; }
+  .bar { display:flex; align-items:center; gap:8px; border-top:1px solid rgba(128,128,128,0.25); padding:6px 10px; }
+  .tc-composer-input { flex:1; resize:none; padding:5px 10px; border-radius:8px;
+    border:1px solid #444; background:#11151c; color:#e6e9ef; font-family:inherit; font-size:14px; line-height:1.4; }
+  .tc-composer-send { padding:0 14px; border-radius:8px; font-weight:600; font-size:14px; cursor:pointer; }
+  .tc-composer-attach { border-radius:8px; border:1px solid #444; background:#1a2029; color:#e6e9ef; font-size:16px; padding:0; }
+  .ruler { height:32px; width:3px; background:#f0b429; }
+</style>
+</head>
+<body>
+
+<div class="h-label">AT REST -- one line; the amber rule is 32px, everything matches it</div>
+<div class="shot"><div class="tc-composer bar">
+  <span class="ruler"></span>
+  <button class="tc-composer-attach">&#128247;</button>
+  <textarea class="tc-composer-input" rows="1" placeholder="Message #general"></textarea>
+  <button class="tc-composer-send">Send</button>
+</div></div>
+
+<div class="h-label">NOTHING TO SEND -- the glow is OUT, not dimmed</div>
+<div class="shot"><div class="tc-composer bar">
+  <button class="tc-composer-attach">&#128247;</button>
+  <textarea class="tc-composer-input" rows="1" placeholder="Message #general"></textarea>
+  <button class="tc-composer-send" disabled>Send</button>
+</div></div>
+
+<div class="h-label">FOCUSED -- the ring is amber, and the border moves with it</div>
+<div class="shot"><div class="tc-composer bar">
+  <button class="tc-composer-attach">&#128247;</button>
+  <textarea class="tc-composer-input" rows="1" autofocus>a pasted screenshot goes to the tray</textarea>
+  <button class="tc-composer-send">Send</button>
+</div></div>
+
+<div class="h-label">GROWN -- several lines, capped before it eats the timeline</div>
+<div class="shot"><div class="tc-composer bar">
+  <button class="tc-composer-attach">&#128247;</button>
+  <textarea class="tc-composer-input" rows="5">one
+two
+three
+four
+five</textarea>
+  <button class="tc-composer-send">Send</button>
+</div></div>
+
+</body>
+</html>

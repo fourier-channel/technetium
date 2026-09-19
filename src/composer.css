@@ -1,0 +1,79 @@
+/* The composer's three things that inline styles cannot express: a focus
+ * state, a hover state, and a glow that has to resolve against a token.
+ *
+ * HEIGHT. The bar is one line at rest and every control in it is the same
+ * height, so the row reads as one object rather than three stacked ones. That
+ * height is a variable because four places have to agree on it -- the input,
+ * the Send button, the attach button, and the row's own gap -- and they were
+ * previously agreeing by coincidence at three different numbers.
+ *
+ * COLOUR IS FROM CANON. Green is --mod-ok-fg and amber is --mod-warn-fg, the
+ * same two the lamps and the tag panel use. The composer does not get its own
+ * opinion about which green.
+ */
+
+.tc-composer {
+  /* One line, and everything in the row matches it. */
+  --tc-composer-h: 32px;
+}
+
+/* --- the input ------------------------------------------------------------ */
+/* ONE LINE AT REST, and it grows only when there is something to grow for.
+   box-sizing matters: without it the padding is added to the height and the
+   input stands taller than Send however carefully the number is chosen.
+   The height itself is then set from the content by the autosize effect in
+   Composer.tsx -- this is the resting value and the ceiling. */
+.tc-composer-input {
+  box-sizing: border-box;
+  height: var(--tc-composer-h);
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+/* FOCUS IS AMBER, not the app's link blue.
+   Both the outline and the border move, because leaving the border blue under
+   an amber ring reads as two focus states disagreeing. */
+.tc-composer-input:focus,
+.tc-composer-input:focus-visible {
+  outline: 2px solid var(--mod-warn-fg);
+  outline-offset: -1px;
+  border-color: var(--mod-warn-fg);
+}
+
+/* --- Send ----------------------------------------------------------------- */
+/* GREEN, and it GLOWS -- but the glow is STATIC paint, not an animation.
+   An infinite animation here would idle a core for nothing; the standing rule
+   is that an infinite animation may touch transform and opacity only, and a
+   box-shadow is exactly what that rule was written about. Painted once, it
+   costs nothing and still reads as lit. */
+.tc-composer-send {
+  height: var(--tc-composer-h);
+  background: color-mix(in srgb, var(--mod-ok-fg) 22%, var(--mod-surface-2));
+  color: var(--mod-ok-fg);
+  border: 1px solid color-mix(in srgb, var(--mod-ok-fg) 55%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--mod-ok-fg) 18%, transparent),
+    0 0 10px color-mix(in srgb, var(--mod-ok-fg) 30%, transparent);
+  transition: box-shadow 120ms ease-out, background 120ms ease-out;
+}
+.tc-composer-send:hover:not(:disabled),
+.tc-composer-send:focus-visible:not(:disabled) {
+  background: color-mix(in srgb, var(--mod-ok-fg) 34%, var(--mod-surface-2));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--mod-ok-fg) 30%, transparent),
+    0 0 16px color-mix(in srgb, var(--mod-ok-fg) 45%, transparent);
+}
+/* Nothing to send: the glow goes out entirely rather than dimming, so "armed"
+   and "not armed" are different in kind and not just in strength. */
+.tc-composer-send:disabled {
+  background: var(--mod-surface-2);
+  color: var(--mod-ink-dim);
+  border-color: var(--mod-line);
+  box-shadow: none;
+  cursor: default;
+}
+
+.tc-composer-attach {
+  height: var(--tc-composer-h);
+  width: var(--tc-composer-h);
+}

@@ -22,6 +22,7 @@ import { useTypingSender } from '../client/useTyping'
 import { mentionQueryAt, type MentionTarget } from '../client/mentions'
 import { MentionPicker } from './MentionPicker'
 import { panelEnterSends } from './composerEnter'
+import '../composer.css'
 
 type GalleryLayout = 'grid' | 'stack' | 'strip'
 
@@ -528,6 +529,26 @@ export function Composer({
     }
   }
 
+  // ONE LINE AT REST, taller only when the text needs it.
+  //
+  // A textarea has no intrinsic "fit the content" height, so without this the
+  // box is whatever `rows` says forever and a four-line message scrolls inside
+  // one line. Measured off scrollHeight, which needs the height reset first --
+  // scrollHeight of an element already tall enough is just its own height, so
+  // skipping the reset makes the box grow and never shrink back.
+  //
+  // Written straight to the DOM in an effect rather than held in state: this is
+  // a measurement of the layout, and routing it through a render would mean a
+  // second pass on every keystroke to tell React something the browser already
+  // knows.
+  useEffect(() => {
+    const el = taRef.current
+    if (!el) return
+    el.style.height = ''
+    const max = parseFloat(getComputedStyle(el).maxHeight) || 140
+    el.style.height = Math.min(el.scrollHeight, max) + 'px'
+  }, [text])
+
   const onDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     setDragging(false)
@@ -539,6 +560,34 @@ export function Composer({
     if (!dragging) setDragging(true)
   }
 
+  // PASTE AN IMAGE. The third way into the same tray as the button and the
+  // drop, so a pasted picture gets the layout picker, the caption, the
+  // encryption path and the cleanup for free -- nothing here knows how to send.
+  //
+  // `files` is not enough on its own. A screenshot from the system clipboard
+  // arrives as an ITEM of kind "file" with an empty `files` list in some
+  // browsers, so both are read and de-duplicated by identity.
+  //
+  // DO NOT preventDefault unconditionally. A paste carrying both an image and
+  // text (copying a picture out of a web page is usually both) must still drop
+  // its text into the box; only a paste that is images AND NOTHING ELSE has
+  // its default suppressed, or pasting ordinary text would stop working.
+  const onPaste = (e: React.ClipboardEvent<HTMLElement>) => {
+    const dt = e.clipboardData
+    if (!dt) return
+    const found: File[] = []
+    for (const f of Array.from(dt.files)) if (f.type.startsWith('image/')) found.push(f)
+    for (const item of Array.from(dt.items)) {
+      if (item.kind !== 'file') continue
+      const f = item.getAsFile()
+      if (f && f.type.startsWith('image/') && !found.includes(f)) found.push(f)
+    }
+    if (found.length === 0) return
+    const hasText = Array.from(dt.items).some((i) => i.kind === 'string')
+    if (!hasText) e.preventDefault()
+    addFiles(found)
+  }
+
   const canSend = !sending && (text.trim().length > 0 || attachments.length > 0)
 
   return (
@@ -547,10 +596,14 @@ export function Composer({
       onDragOver={onDragOver}
       onDragLeave={() => setDragging(false)}
       onKeyDown={onPanelKeyDown}
+      onPaste={onPaste}
+      className="tc-composer"
       style={{
         position: 'relative',
         borderTop: '1px solid rgba(128,128,128,0.25)',
-        padding: '10px 16px',
+        // One line at rest: the bar was 10px of padding around a 38px box
+        // around a 14px line, which is three separate reasons to be tall.
+        padding: '6px 10px',
         outline: dragging
           ? '2px dashed var(--cpd-color-text-action-accent, #1d8a64)'
           : 'none',
@@ -687,9 +740,10 @@ export function Composer({
           type="button"
           onClick={() => fileRef.current?.click()}
           disabled={sending}
-          title="Attach image"
+          title="Attach image (or just paste one)"
+          className="tc-composer-attach"
           style={{
-            padding: '8px 12px',
+            padding: 0,
             borderRadius: 8,
             border: '1px solid var(--cpd-color-border-interactive-secondary, #444)',
             cursor: sending ? 'default' : 'pointer',
@@ -718,12 +772,14 @@ export function Composer({
               : `Message ${room.name || 'this room'}`
           }
           rows={1}
+          className="tc-composer-input"
           style={{
             flex: 1,
             resize: 'none',
-            minHeight: 38,
-            maxHeight: 160,
-            padding: '8px 12px',
+            // Vertical padding is what decides whether one line of text sits
+            // in a 32px box or a 38px one; the heights themselves live in
+            // composer.css so the input and Send cannot drift apart.
+            padding: '5px 10px',
             borderRadius: 8,
             border: '1px solid var(--cpd-color-border-interactive-secondary, #444)',
             background: 'var(--cpd-color-bg-canvas-default)',
@@ -738,16 +794,13 @@ export function Composer({
           data-tc-send="true"
           onClick={() => void send()}
           disabled={!canSend}
+          className="tc-composer-send"
           style={{
-            padding: '8px 16px',
+            padding: '0 14px',
             borderRadius: 8,
-            border: 'none',
             cursor: canSend ? 'pointer' : 'default',
-            background: 'var(--cpd-color-bg-action-primary-rest)',
-            color: 'var(--cpd-color-text-on-solid-primary, #fff)',
             fontWeight: 600,
             fontSize: 14,
-            opacity: canSend ? 1 : 0.5,
           }}
         >
           Send
