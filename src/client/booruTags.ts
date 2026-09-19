@@ -29,6 +29,7 @@
 // still applies only its own delta. That is why old_tag_string is sent and why
 // no Ruby needed writing.
 import { BOORU_ORIGIN } from './booruUrl'
+import { booruCsrfToken, resetBooruCsrf } from './booruCsrf'
 import type { MediaTag, TagCategory } from './mediaTags'
 
 // Only the fields the panel draws. The whole point is that this stays small.
@@ -136,6 +137,20 @@ export function applyEdit(seen: string, edit: TagEdit): string {
  * the post says right now, so a concurrent edit by someone else survives and a
  * stale client cannot revert it.
  *
+ * A POST CARRYING _method=put, NOT A PUT, and that is not cosmetic. A real PUT
+ * is not a CORS-simple method, so the browser sends an OPTIONS preflight
+ * first -- and a preflight carries no cookies by specification, so the booru's
+ * Caddy rule (which refuses anything without a session or a Cloudflare
+ * clearance cookie) answers it 403 with no CORS headers at all. Measured:
+ * OPTIONS to a post returns 403 and the real request is never sent. Rails'
+ * Rack::MethodOverride reads _method from the body, so a plain POST reaches
+ * the same update action with no preflight to refuse.
+ *
+ * Everything else here is shaped by the same constraint. Only CORS-safelisted
+ * headers (Accept, and a form-urlencoded Content-Type); the CSRF token rides
+ * in the BODY rather than X-CSRF-Token, because one custom header would put
+ * the preflight straight back.
+ *
  * @returns the post's tags as the server left them, so the caller can settle
  *          its optimistic state on the truth rather than on its own guess.
  */
@@ -147,23 +162,55 @@ export async function writeBooruTags(
 ): Promise<BooruTagSet | null> {
   const next = applyEdit(seenTagString, edit)
   if (next === seenTagString) return null // nothing to say
-  const body = new URLSearchParams()
-  body.set('post[old_tag_string]', seenTagString)
-  body.set('post[tag_string]', next)
-  const res = await fetchImpl(`${BOORU_ORIGIN}/posts/${postId}.json?only=${FIELDS}`, {
-    method: 'PUT',
-    credentials: 'include',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: body.toString(),
-  })
+
+  const send = async (csrf: string | null): Promise<Response> => {
+    const body = new URLSearchParams()
+    body.set('_method', 'put')
+    if (csrf) body.set('authenticity_token', csrf)
+    body.set('post[old_tag_string]', seenTagString)
+    body.set('post[tag_string]', next)
+    return fetchImpl(`${BOORU_ORIGIN}/posts/${postId}.json?only=${FIELDS}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: body.toString(),
+    })
+  }
+
+  // No token, no point sending: Rails will refuse it, every time. Fail here
+  // with the reason instead of letting it come back as an opaque 422 from a
+  // request that never had a chance.
+  const csrf = await booruCsrfToken(fetchImpl)
+  if (!csrf) {
+    throw new Error(
+      'could not read a CSRF token from the booru, so the edit would be refused. ' +
+        'Fix: this usually means there is no booru session in this browser -- open ' +
+        'the booru panel once to run the sign-in exchange, then try again.',
+    )
+  }
+
+  let res = await send(csrf)
+  // A 422 here is nearly always the token: Rails masks it per call but every
+  // mask validates against ONE session, so a session replaced since the fetch
+  // (a re-login, an expiry, another tab) invalidates the cached copy and would
+  // otherwise refuse every edit for the life of the page. Drop it and ask
+  // once more. Only once -- a second 422 is the booru rejecting the TAGS, and
+  // retrying that forever is how a client hammers a server over its own bug.
+  if (res.status === 422) {
+    resetBooruCsrf()
+    const fresh = await booruCsrfToken(fetchImpl)
+    if (fresh && fresh !== csrf) res = await send(fresh)
+  }
+
   if (!res.ok) {
     throw new Error(
       `the booru refused the tag edit on post ${postId} (HTTP ${res.status}). ` +
         'Fix: a 403 is usually the Cloudflare challenge or a missing booru session ' +
-        '(ensureBooruSession); a 422 is the booru rejecting the tags themselves.',
+        '(ensureBooruSession); a 422 after a retry is the booru rejecting the tags ' +
+        'themselves, or an account without permission to edit them.',
     )
   }
   return parsePostTags((await res.json()) as PostTagJson)
