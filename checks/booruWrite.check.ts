@@ -145,6 +145,31 @@ console.log('== with no token obtainable, nothing doomed is sent')
   check('and the error names the remedy', /booru session/.test(msg), msg)
 }
 
+console.log('== a refused read is a FAULT, not an absence')
+{
+  const m = await import('../src/client/booruTags')
+  // The exact shape that hid the CORS breakage: the booru answers, but
+  // refuses. Returning null here made "refused" and "untagged" identical.
+  const refusing = (async () => ({
+    ok: false, status: 403, json: async () => ({}), text: async () => '',
+  })) as unknown as typeof fetch
+  let msg = ''
+  try {
+    await m.fetchBooruTags(4, refusing)
+  } catch (e) {
+    msg = e instanceof Error ? e.message : String(e)
+  }
+  check('a 403 throws rather than reading as no tags', msg !== '', msg)
+  check('and the message names the credentialed-CORS cause',
+    /Allow-Credentials|wildcard/.test(msg), msg)
+
+  const absent = (async () => ({
+    ok: false, status: 404, json: async () => ({}), text: async () => '',
+  })) as unknown as typeof fetch
+  const gone = await m.fetchBooruTags(4, absent)
+  check('a 404 is still an answer, not a fault', gone === null)
+}
+
 if (failures > 0) {
   console.log(`\n${failures} FAILED`)
   process.exit(1)

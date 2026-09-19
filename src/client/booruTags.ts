@@ -110,7 +110,22 @@ export async function fetchBooruTags(postId: number, fetchImpl: typeof fetch = f
     credentials: 'include',
     headers: { Accept: 'application/json' },
   })
-  if (!res.ok) return null
+  // A 404 is an ANSWER: the booru has no such post, and the caller should
+  // treat that as "no tags" and stop asking.
+  if (res.status === 404) return null
+  // Anything else is a FAULT and must not be returned as absence. Returning
+  // null for a 403 is what made the CORS breakage invisible for days -- a
+  // refused read and an untagged image looked identical to every caller, so
+  // the panel drew the stale copy and nothing anywhere said why.
+  if (!res.ok) {
+    throw new Error(
+      `the booru refused to read post ${postId} (HTTP ${res.status}). ` +
+        'Fix: a 403 is usually the Cloudflare challenge or a missing booru ' +
+        'session (ensureBooruSession); check that the booru echoes this ' +
+        'origin with Access-Control-Allow-Credentials, because a credentialed ' +
+        'fetch discards a wildcard.',
+    )
+  }
   return parsePostTags((await res.json()) as PostTagJson)
 }
 

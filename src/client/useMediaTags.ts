@@ -2,6 +2,7 @@ import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import { RoomEvent, RoomStateEvent, type MatrixClient, type MatrixEvent } from 'matrix-js-sdk'
 import { parseMxc } from './media'
 import { createLimiter } from './concurrency'
+import { reportIgnored } from './report'
 import { ensureBooruSession } from './booruSession'
 import { fetchBooruTags, writeBooruTags, type TagEdit } from './booruTags'
 import { mayRead, mergeBooruIntoSet, newBooruReadState, optimisticSet } from './booruLive'
@@ -220,10 +221,19 @@ export function refreshBooruTags(mediaId: string, force = false): void {
       if (!current) return
       ingestSet(mergeBooruIntoSet(current, live, Date.now()), mediaId)
     })
-    .catch(() => {
+    .catch((err: unknown) => {
       // A booru that is down, challenged, or refusing must not take the tag
       // panel with it -- the Matrix copy stays on screen, which is exactly what
       // shipped before this existed. The TTL is the backoff.
+      //
+      // BUT IT IS RECORDED. This was a bare `catch (){}`, and that is why a
+      // CORS misconfiguration ran for days with no trace anywhere: every live
+      // read was rejected by the browser, the panel kept drawing the stale
+      // Matrix copy, and the only symptom was tags that looked slightly old.
+      // Continuing past a failure is a choice; making the choice invisible is
+      // not part of it. Deduped per post, so a booru that is down does not
+      // flood the console once per scroll.
+      reportIgnored('media tags: live read for booru post ' + postId, err)
     })
     .finally(() => {
       booruReads.inFlight.delete(postId)
