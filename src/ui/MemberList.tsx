@@ -14,7 +14,7 @@ import { useMemberBackfill } from '../client/useMemberBackfill'
 import { compareByStanding, honorificFor, maxPower, type MergedMember } from '../client/members'
 import { useFlipList } from './flip'
 import { usePopEnter } from './pop'
-import { AvatarDisc } from './AvatarDisc'
+import { UserLine } from './UserLine'
 import { useSpace } from './spaceContext'
 import { MEMBER_SCALE_MAX, MEMBER_SCALE_MIN } from './space'
 import { useReducedMotion } from './reducedMotion'
@@ -454,68 +454,38 @@ function MemberRow({
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: (rich ? 8 : 6) * scale,
         height: (rich ? 34 : 26) * scale,
         margin: rich ? '1px 0' : 0,
         padding: rich ? '0 8px 0 6px' : '0 8px',
         borderRadius: 6,
         cursor: 'pointer',
-        color: nameDimmed
-          ? 'var(--cpd-color-text-secondary)'
-          : 'var(--cpd-color-text-primary)',
-        opacity: nameDimmed ? 0.6 : 1,
+        color: 'var(--cpd-color-text-primary)',
       }}
       title={member.id}
     >
-      {presence && (
-        <span
-          className="tc-presence-dot"
-          data-presence={presence}
-          title={presence === 'online' ? 'Online' : presence === 'unavailable' ? 'Away' : 'Offline'}
-          aria-hidden="true"
-        />
-      )}
-      <span
-        className={pulses ? 'tc-honor tc-honor-pulse' : 'tc-honor'}
-        // The pulsing copy is drawn by a pseudo-element reading this, so the
-        // pulse is an OPACITY animation and not an infinite repaint of colour
-        // (infinite-animations-cost-a-core, checks/cssAnimations.check.ts).
-        data-glyph={identityHonor ?? ''}
-        style={{
-          width: (rich ? 14 : 12) * scale,
-          fontSize: (rich ? 15 : 13) * scale,
-          color: honorColor,
-        }}
-      >
-        {identityHonor ?? ''}
-      </span>
-      {/* ORDER: lamp, honorific, avatar, username (operator, 2026-09-17). The
-          two one-glyph facts come first so the column reads as a status list
-          that happens to carry faces, rather than a row of faces you have to
-          scan past to find who is online. The avatar is still the rich
-          display's whole reason to be taller; compact drops it and keeps the
-          dot, which is the same information in one pixel. */}
-      {rich && (
-        <span style={{ flexShrink: 0, lineHeight: 0 }}>
-          <AvatarDisc
-            userId={member.id}
-            name={member.displayName}
-            avatarMxc={member.avatarMxc ?? null}
-            size={Math.round(24 * scale)}
-          />
-        </span>
-      )}
-      <span
-        style={{
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          fontSize: (rich ? 14.5 : 13) * scale,
-          letterSpacing: rich ? 0.1 : 0,
-        }}
-      >
-        {member.displayName}
-      </span>
+      {/* THE TEMPLATE, not this panel's own layout any more. Order, sizes and
+          the lamp's colours all come from formant (--mod-userline-*); what
+          stays here is the part only this panel can know -- which room is
+          being viewed, and therefore whether a rank is backed here and whether
+          the person is present.
+
+          One deliberate change: the row used to drop to 0.6 opacity for an
+          absent member, greying the face and the rank along with the name.
+          Canon's rule is that only the NAME dims, because rank is a fact about
+          them and presence is a fact about here. */}
+      <UserLine
+        userId={member.id}
+        name={member.displayName}
+        avatarMxc={member.avatarMxc ?? null}
+        presence={presence}
+        honorific={identityHonor}
+        honorificColor={honorColor}
+        pulse={pulses}
+        size={rich ? 'md' : 'sm'}
+        scale={scale}
+        dimmed={nameDimmed}
+        showAvatar={rich}
+      />
     </div>
   )
 }

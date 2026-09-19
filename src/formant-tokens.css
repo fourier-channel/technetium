@@ -323,6 +323,56 @@
   --mod-lamp-live:      var(--mod-ok-fg);
   --mod-lamp-live-glow: 0 0 6px color-mix(in srgb, var(--mod-ok-fg) 55%, transparent);
 
+  /* --- the user line ---------------------------------------------------- */
+  /* ONE WAY TO DRAW A PERSON, everywhere a person is drawn.
+   *
+   * Operator, 2026-09-19: the user list's row "shows all of the information
+   * needed: is this person here, are they important, are they online" -- so it
+   * becomes the template rather than one panel's layout. Four slots, always in
+   * this order, any of them omittable:
+   *
+   *   lamp        presence. Is this person here right now.
+   *   honorific   rank. Are they important.
+   *   avatar      face. Who they are.
+   *   name        the name.
+   *
+   * The two one-glyph facts lead so a column reads as a status list that
+   * happens to carry faces, rather than a row of faces to scan past. That
+   * order was ruled on 2026-09-17 for the member list and is now the rule for
+   * every surface.
+   *
+   * WHY THIS IS A TOKEN AND NOT A COMPONENT'S CONSTANTS. The same person is
+   * drawn in the member list, the timeline, a thread and an overlay, and each
+   * had its own numbers -- a 34px avatar in the timeline against 24px in the
+   * list, with no relationship between them. A surface says which SIZE it
+   * wants; it does not get to invent one.
+   *
+   * SIZES ARE A SCALE, not a set of magic numbers: each step is the avatar
+   * diameter, and the glyph and type sizes are derived from it by the
+   * consumer so a scale slider moves all four together. The member list's
+   * own scale multiplies these.
+   */
+  --mod-userline-gap:        8px;
+  --mod-userline-gap-tight:  6px;
+  /* Avatar diameter per step. `sm` is the dense list, `md` the default line,
+   * `lg` the timeline's lead row. Nothing else may invent a fifth. */
+  --mod-userline-av-sm:      20px;
+  --mod-userline-av-md:      24px;
+  --mod-userline-av-lg:      34px;
+  /* The lamp is the smallest thing on the line and does not scale with the
+   * avatar: a presence dot big enough to read is the same size at every
+   * density, and growing it turns a status list into a row of bullets. */
+  --mod-userline-lamp:       7px;
+  /* The honorific's column. Fixed, so names left-align down a list whether or
+   * not a given person has a rank -- a ragged name edge is what makes a member
+   * list look like a pile. */
+  --mod-userline-honor-w:    14px;
+  --mod-userline-name-weight: 500;
+  /* Name colour when the person is NOT present in the room being viewed. The
+   * name dims; the honorific does not, because rank is a fact about them and
+   * presence is a fact about here. */
+  --mod-userline-absent-fg:  var(--mod-ink-dim);
+
   /* --- shape ------------------------------------------------------------ */
   /* 10px is the PRESET-level value. A component may narrow it -- the creator
    * gallery uses 12px under .modcreator -- and that is what a token is for. The

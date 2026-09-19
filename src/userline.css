@@ -1,0 +1,56 @@
+/* The user line. Geometry only -- every number comes from formant
+ * (--mod-userline-*), which is hydrated from canon, so the member list, the
+ * timeline and a thread cannot drift apart again.
+ *
+ * A stylesheet rather than inline styles because the lamp's colours have to
+ * come from the lamp tokens, and a component that set them inline would be a
+ * fourth opinion about which green means "here".
+ */
+
+.tc-userline {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* The face never shrinks and the NAME does: a squeezed panel should ellipsis
+   the name, not squash the person. */
+.tc-userline-av {
+  flex: none;
+  line-height: 0;
+}
+
+.tc-userline-name {
+  font-weight: var(--mod-userline-name-weight);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* Not in the room being viewed. The name greys; nothing else does. */
+.tc-userline.is-absent .tc-userline-name {
+  color: var(--mod-userline-absent-fg);
+}
+
+/* THE LAMP COMES FROM CANON. It was 7px of hardcoded #3ba776 in index.css,
+   which is a different green from the one every other lamp on every other
+   surface uses -- exactly the drift the tokens were extracted to end. Scoped
+   under .tc-userline so the older call sites keep their current look until
+   they move over, rather than changing under them in the same commit. */
+.tc-userline > .tc-presence-dot {
+  width: var(--mod-userline-lamp);
+  height: var(--mod-userline-lamp);
+  flex: none;
+}
+.tc-userline > .tc-presence-dot[data-presence='online'] {
+  background: var(--mod-lamp-live);
+  box-shadow: var(--mod-lamp-live-glow);
+}
+.tc-userline > .tc-presence-dot[data-presence='unavailable'] {
+  background: var(--mod-warn-fg);
+}
+.tc-userline > .tc-presence-dot[data-presence='offline'] {
+  background: var(--mod-lamp-unlit);
+}

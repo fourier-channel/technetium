@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+<head>
+<!--#head-->
+<link rel="stylesheet" href="../../src/userline.css">
+<style>
+  .shot { padding: 16px 20px; }
+  .stack { display: flex; flex-direction: column; gap: 2px; }
+  /* Stands in for AvatarDisc, which is React. Same box, same clip. */
+  .fake-av { display: grid; place-items: center; border-radius: 50%;
+             color: #fff; font-weight: 700; background: #4a6fa5; }
+  .narrow { width: 380px; border: 1px dashed rgba(240,180,41,.5); }
+</style>
+</head>
+<body>
+
+<div class="h-label">THE FOUR SLOTS -- lamp, honorific, avatar, name; any omittable</div>
+<div class="shot stack">
+  <span class="tc-userline" data-size="md" style="gap:var(--mod-userline-gap)">
+    <span class="tc-presence-dot" data-presence="online"></span>
+    <span class="tc-honor" style="width:var(--mod-userline-honor-w);font-size:14.9px;color:#c9a15a">&#9670;</span>
+    <span class="tc-userline-av"><span class="fake-av" style="width:24px;height:24px;font-size:11px">S</span></span>
+    <span class="tc-userline-name" style="font-size:14.4px">saber</span>
+  </span>
+  <span class="tc-userline" data-size="md" style="gap:var(--mod-userline-gap)">
+    <span class="tc-presence-dot" data-presence="unavailable"></span>
+    <span class="tc-honor" style="width:var(--mod-userline-honor-w);font-size:14.9px;color:#38e08a">&#9678;</span>
+    <span class="tc-userline-av"><span class="fake-av" style="width:24px;height:24px;font-size:11px">K</span></span>
+    <span class="tc-userline-name" style="font-size:14.4px">kagami</span>
+  </span>
+  <span class="tc-userline is-absent" data-size="md" style="gap:var(--mod-userline-gap)">
+    <span class="tc-presence-dot" data-presence="offline"></span>
+    <span class="tc-honor" style="width:var(--mod-userline-honor-w);font-size:14.9px;color:#8b93a1">&#9670;</span>
+    <span class="tc-userline-av"><span class="fake-av" style="width:24px;height:24px;font-size:11px">N</span></span>
+    <span class="tc-userline-name" style="font-size:14.4px">not_in_this_room</span>
+  </span>
+  <span class="tc-userline" data-size="md" style="gap:var(--mod-userline-gap)">
+    <span class="tc-presence-dot" data-presence="online"></span>
+    <span class="tc-honor" style="width:var(--mod-userline-honor-w)"></span>
+    <span class="tc-userline-av"><span class="fake-av" style="width:24px;height:24px;font-size:11px">R</span></span>
+    <span class="tc-userline-name" style="font-size:14.4px">no_rank_at_all</span>
+  </span>
+</div>
+
+<div class="h-label">NAMES ALIGN whether or not a person has a rank -- the honorific column is fixed</div>
+
+<div class="h-label">SIZES -- sm (compact list, no face), md (default), lg (timeline lead)</div>
+<div class="shot stack">
+  <span class="tc-userline" data-size="sm" style="gap:var(--mod-userline-gap-tight)">
+    <span class="tc-presence-dot" data-presence="online"></span>
+    <span class="tc-honor" style="width:var(--mod-userline-honor-w);font-size:12.4px;color:#c9a15a">&#9670;</span>
+    <span class="tc-userline-name" style="font-size:12px">saber &mdash; sm, no face</span>
+  </span>
+  <span class="tc-userline" data-size="md" style="gap:var(--mod-userline-gap)">
+    <span class="tc-presence-dot" data-presence="online"></span>
+    <span class="tc-honor" style="width:var(--mod-userline-honor-w);font-size:14.9px;color:#c9a15a">&#9670;</span>
+    <span class="tc-userline-av"><span class="fake-av" style="width:24px;height:24px;font-size:11px">S</span></span>
+    <span class="tc-userline-name" style="font-size:14.4px">saber &mdash; md</span>
+  </span>
+  <span class="tc-userline" data-size="lg" style="gap:var(--mod-userline-gap)">
+    <span class="tc-presence-dot" data-presence="online"></span>
+    <span class="tc-honor" style="width:var(--mod-userline-honor-w);font-size:21px;color:#c9a15a">&#9670;</span>
+    <span class="tc-userline-av"><span class="fake-av" style="width:34px;height:34px;font-size:15px">S</span></span>
+    <span class="tc-userline-name" style="font-size:20.4px">saber &mdash; lg</span>
+  </span>
+</div>
+
+<div class="h-label">IN A 380px THREAD PANEL -- the whole identity is one line, and a long name ellipses rather than squashing the face</div>
+<div class="shot">
+  <div class="narrow">
+    <span class="tc-userline" data-size="md" style="gap:var(--mod-userline-gap)">
+      <span class="tc-presence-dot" data-presence="online"></span>
+      <span class="tc-honor" style="width:var(--mod-userline-honor-w);font-size:14.9px;color:#c9a15a">&#9670;</span>
+      <span class="tc-userline-av"><span class="fake-av" style="width:24px;height:24px;font-size:11px">A</span></span>
+      <span class="tc-userline-name" style="font-size:14.4px">a_person_with_a_really_quite_excessive_display_name</span>
+    </span>
+  </div>
+</div>
+
+</body>
+</html>
