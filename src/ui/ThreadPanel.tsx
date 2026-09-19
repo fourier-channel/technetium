@@ -9,6 +9,7 @@ import { Composer } from './Composer'
 import { ComposerModeProvider } from './ComposerModeProvider'
 import { MessageVerbsProvider } from './MessageVerbs'
 import { TypingBar } from './TypingBar'
+import { usePresence } from '../client/usePresence'
 
 // Thread panel: a thread's root + replies, resolved by (roomId, rootId) so it
 // stays open and correct even when the user navigates to other rooms. Renders via
@@ -81,6 +82,21 @@ export function ThreadPanel({
   // whole thread and not a window of it -- up/down really does walk the thread.
   const sequence = buildMediaSequence(items)
 
+  // ONE presence subscription for the whole thread, not one per row.
+  // usePresence attaches a listener and rebuilds a map; per row that would be
+  // an effect and a listener set per message, which is the shape that makes a
+  // long thread cost more the longer it gets.
+  //
+  // No useMemo, on purpose. The obvious version memoised this array, and the
+  // linter was right to refuse the computed dependency it needed -- but the
+  // memo was pointless anyway: usePresence keys its own effect on the ids
+  // JOINED, so a fresh array of the same ids re-subscribes to nothing. Sorted
+  // and de-duped so that key is stable across a re-order.
+  const senderIds = [
+    ...new Set(events.map((e) => e.getSender()).filter((id): id is string => !!id)),
+  ].sort()
+  const presence = usePresence(client, senderIds)
+
   return (
     // Its own composer-mode scope: a reply started in the thread panel must not
     // retarget the room composer.
@@ -125,7 +141,13 @@ export function ThreadPanel({
               ) : item.kind === 'day' ? (
                 <DaySeparator key={item.id} item={item} />
               ) : (
-                <Row key={item.id} item={item} sequence={sequence} />
+                <Row
+                  key={item.id}
+                  item={item}
+                  sequence={sequence}
+                  narrow
+                  presence={presence.get(item.event.getSender() ?? '')}
+                />
               ),
             )}
           </MessageVerbsProvider>

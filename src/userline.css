@@ -54,3 +54,31 @@
 .tc-userline > .tc-presence-dot[data-presence='offline'] {
   background: var(--mod-lamp-unlit);
 }
+
+/* --- a row drawn narrow --------------------------------------------------- */
+/* The avatar gutter is two variables, not a layout: --tc-av-w reserves the
+   column and --tc-body-x indents the body past it. Zeroing them here gives the
+   width back without touching .tc-row-line's rules, so the wide timeline is
+   provably unaffected -- it never reads these values differently. */
+.tc-row[data-narrow='true'] {
+  --tc-av-w: 0px;
+  --tc-body-x: 0px;
+}
+/* The identity is one line now, so it no longer needs the block's stacked
+   name-over-guild centring. The guild rides beside the name instead. */
+.tc-ident-row-narrow {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  cursor: pointer;
+  padding-bottom: 2px;
+}
+.tc-ident-row-narrow .tc-ident-guild {
+  flex: none;
+  margin-left: 6px;
+}
+.tc-ident-row-narrow:focus-visible {
+  outline: 2px solid var(--tc-link);
+  outline-offset: 2px;
+  border-radius: 4px;
+}

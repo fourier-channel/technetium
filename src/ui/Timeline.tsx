@@ -15,6 +15,10 @@ import { Drench } from './Drench'
 import { FaceFlash } from './FaceFlash'
 import { detectFace } from '../client/faces'
 import { SenderIdentity } from './SenderIdentity'
+import { UserLine } from './UserLine'
+import { decoratedName, displayDecoration } from './displayDecoration'
+import { honorificFor } from '../client/members'
+import type { PresenceState } from '../client/usePresence'
 import { MemberEvent } from './MemberEvent'
 import { useLightbox, type LightboxItem, type LightboxThread } from './lightboxContext'
 import { buildMediaSequence, imageMeta, lightboxItem, type MediaSequence } from './mediaSequence'
@@ -482,7 +486,26 @@ export function Timeline({ room, onOpenThread, onOpenRoom, threadListOpen, onTog
   )
 }
 
-export function Row({ item, onOpenThread, sequence }: { item: TimelineItem; onOpenThread?: (roomId: string, rootId: string) => void; sequence?: MediaSequence }) {
+export function Row({
+  item,
+  onOpenThread,
+  sequence,
+  narrow = false,
+  presence,
+}: {
+  item: TimelineItem
+  onOpenThread?: (roomId: string, rootId: string) => void
+  sequence?: MediaSequence
+  // NARROW: draw the sender as one user line and give the avatar gutter back
+  // to the body. Explicit rather than measured -- a panel knows whether it is
+  // a side panel, and a width threshold would make the main timeline change
+  // shape at some browser size nobody chose.
+  narrow?: boolean
+  // Supplied by the caller because presence is a SUBSCRIPTION: usePresence per
+  // row would be one effect and one listener set per message. The panel asks
+  // once for everyone in the thread and hands each row its answer.
+  presence?: PresenceState
+}) {
   const { event, kind, cells, layout } = item
   const { open } = useLightbox()
   const { client } = useClient()
@@ -674,6 +697,7 @@ export function Row({ item, onOpenThread, sequence }: { item: TimelineItem; onOp
       className="tc-row"
       data-event-id={item.id}
       data-grouped={item.showHeader === false ? 'true' : undefined}
+      data-narrow={narrow ? 'true' : undefined}
       style={{ padding: '4px 0' }}
     >
       {/* Water left by a squirt. Renders null when dry, which is nearly always
@@ -686,14 +710,29 @@ export function Row({ item, onOpenThread, sequence }: { item: TimelineItem; onOp
           The avatar repeats on every line of the run, and every decoration
           below (reply pill, body, edited marker, reactions, receipts, thread
           chip) is untouched either way. */}
-      {item.showHeader !== false && (
-        <SenderIdentity
-          userId={senderId}
-          name={senderName}
-          onOpenProfile={openProfile}
-          onOpenInteractions={openInteractions}
-        />
-      )}
+      {item.showHeader !== false &&
+        (narrow ? (
+          // The whole identity on ONE line, which is the point: a 34px avatar
+          // gutter on every message of a 380px panel is a tenth of its width,
+          // repeated down the thread, to repeat what the header already said.
+          // Said once, as a user line, the pictures get the rest.
+          <SenderUserLine
+            userId={senderId}
+            name={senderName}
+            avatarMxc={senderAvatar}
+            presence={presence}
+            powerLevel={senderMember?.powerLevel}
+            onOpenProfile={openProfile}
+            onOpenInteractions={openInteractions}
+          />
+        ) : (
+          <SenderIdentity
+            userId={senderId}
+            name={senderName}
+            onOpenProfile={openProfile}
+            onOpenInteractions={openInteractions}
+          />
+        ))}
       <div className="tc-row-line">
         {/* The avatar column, left-justified and out of flow, so its width is
             fixed whether or not the image has loaded and nothing shifts when
@@ -705,6 +744,7 @@ export function Row({ item, onOpenThread, sequence }: { item: TimelineItem; onOp
             directly above you flew to the TOP of their run instead -- which is
             further the more they had said. Their most recent line is where you
             think of them as being, and now that is what it is. */}
+        {!narrow && (
         <span
           className="tc-row-av"
           data-user-anchor={senderId}
@@ -735,6 +775,10 @@ export function Row({ item, onOpenThread, sequence }: { item: TimelineItem; onOp
           <AvatarDisc userId={senderId} name={senderName} avatarMxc={senderAvatar} size={34} />
           {face && <FaceFlash face={face} seed={item.id} />}
         </span>
+        )}
+        {/* A face flash still has to land somewhere when the avatar column is
+            gone, or a squirt aimed at a thread would silently do nothing. */}
+        {narrow && face && <FaceFlash face={face} seed={item.id} />}
         <div
           className="tc-row-col"
           style={{
@@ -1130,5 +1174,78 @@ function ReplyPill({ replyTo }: { replyTo: ReplyRef }) {
       <span className="tc-reply-pill-name">{name}</span>
       <span className="tc-reply-pill-text">{jumping ? 'Searching...' : preview}</span>
     </button>
+  )
+}
+
+// The sender drawn as ONE user line, for a narrow panel.
+//
+// Same four slots as the member list, from the same template, so a person is
+// recognisably the same person in the list and in a thread. The room-specific
+// parts are decided here because only a row knows them: the guild decoration,
+// and the honorific from this room's power level.
+//
+// ROOM-LOCAL POWER, deliberately. The member list shows the highest rank a
+// person holds anywhere in the space, because that list is about the space.
+// Inside a thread the question is who this is HERE, and that is the room's own
+// power level -- the cheap answer and the right one.
+function SenderUserLine({
+  userId,
+  name,
+  avatarMxc,
+  presence,
+  powerLevel,
+  onOpenProfile,
+  onOpenInteractions,
+}: {
+  userId: string
+  name: string
+  avatarMxc: string | null
+  presence?: PresenceState
+  powerLevel?: number
+  onOpenProfile?: (userId: string, x: number, y: number) => void
+  onOpenInteractions?: (userId: string, x: number, y: number) => void
+}) {
+  const dec = displayDecoration(userId)
+  const honorific = powerLevel === undefined ? null : honorificFor(powerLevel)
+  return (
+    <div
+      className="tc-ident-row tc-ident-row-narrow"
+      data-user-anchor={userId}
+      role={onOpenProfile ? 'button' : undefined}
+      tabIndex={onOpenProfile ? 0 : undefined}
+      onClick={onOpenProfile ? (e) => onOpenProfile(userId, e.clientX, e.clientY) : undefined}
+      onKeyDown={
+        onOpenProfile
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                const r = e.currentTarget.getBoundingClientRect()
+                onOpenProfile(userId, r.left, r.bottom)
+              }
+            }
+          : undefined
+      }
+      onContextMenu={
+        onOpenInteractions
+          ? (e) => {
+              e.preventDefault()
+              onOpenInteractions(userId, e.clientX, e.clientY)
+            }
+          : undefined
+      }
+    >
+      <UserLine
+        userId={userId}
+        // The decoration is part of the NAME, concatenated with no separator
+        // of its own -- see displayDecoration.ts.
+        name={decoratedName(name, dec)}
+        avatarMxc={avatarMxc}
+        presence={presence}
+        honorific={honorific}
+        size="md"
+      >
+        {dec.guild !== null && <span className="tc-ident-guild">{dec.guild}</span>}
+      </UserLine>
+    </div>
   )
 }
