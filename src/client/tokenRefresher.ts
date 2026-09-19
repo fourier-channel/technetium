@@ -1,6 +1,7 @@
 import { OidcTokenRefresher } from 'matrix-js-sdk'
 import type { TokenRefreshFunction } from 'matrix-js-sdk'
 import type { IdTokenClaims } from 'oidc-client-ts'
+import { ensureBooruSession } from './booruSession'
 import { loadSession, saveSession } from './session'
 import { persistVerdict } from './sessionIdentity'
 import { reportIgnored } from './report'
@@ -51,6 +52,12 @@ class PersistingOidcTokenRefresher extends OidcTokenRefresher {
       refreshToken: tokens.refreshToken ?? s.refreshToken,
     })
     console.log('Token refreshed and session updated')
+    // The booru's cookie was minted from the PREVIOUS access token (zero-click
+    // exchange) and the gate has no refresh token for it, so from here on it
+    // would refuse Matrix pictures in the booru frame until the frame
+    // happened to remount. Trade the new token for a new cookie at once.
+    // Memoised per token, so this costs one exchange per refresh.
+    void ensureBooruSession(tokens.accessToken)
   }
 }
 

@@ -3916,3 +3916,22 @@ live homeserver. Specifically unverified: the feel of the divider
 squash, the pacing of the three animators, Enter-posts-the-picture in a
 real browser, a power level actually round-tripping through a room, and
 the Server Permissions panel against real server state.
+
+## 2026-09-19 -- the booru cookie outlived its token [auto]
+
+**draft-01 (gotcha) -- a zero-click booru session is minted from ONE
+access token, and MAS access tokens live five minutes.** The SDK refreshes
+Technetium's own token on a 401, and `persistTokens` saved the new pair,
+but the booru frame's cookie still carried the old one; the gate cannot
+renew a session minted from a client's bearer, so Matrix pictures inside
+the frame were refused until the frame happened to remount with the new
+token. `persistTokens` now calls `ensureBooruSession(newToken)` at once
+(memoised per token, so one exchange per refresh). Same-day siblings in
+fourier-auth: the login path keeps its refresh token and renews; the gate's
+`/healthz` goes red on refusals to signed-in readers; the booru's session
+bar says the token's own life.
+
+Gate: tsc clean, lint clean, checks passing (`npm run check`), build
+passing. PENDING OPERATOR VERIFICATION in a live browser: a frame left open
+across a token refresh keeps loading Matrix pictures. Not deployed; the
+operator runs `./deploy.sh`.
