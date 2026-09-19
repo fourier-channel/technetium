@@ -7,6 +7,7 @@
   /* Harness scaffolding only. Everything that decides the LAYOUT comes from
      src/mediatags.css above, so what is looked at here is what ships. */
   .shot { padding: 24px; }
+  .h-ghost { font: inherit; font-size: 11px; line-height: 1.4; padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(128,128,128,0.35); background: transparent; color: #aaa; }
   .mtags-media .fake-img {
     display: block; border-radius: 6px;
     background: repeating-linear-gradient(135deg, #2a3550 0 14px, #223048 14px 28px);
@@ -119,6 +120,35 @@
       <input class="mtags-add" placeholder="add tags">
       <div class="mtags-error">the booru refused the tag edit on post 1284213 (HTTP 403). Fix: a 403 is usually the Cloudflare challenge or a missing booru session (ensureBooruSession); a 422 is the booru rejecting the tags themselves.</div>
       <a class="mtags-id">#1284213</a>
+    </div>
+  </div>
+</div>
+
+<div class="h-label">REAL CHAT SHAPE -- 320x200 thumbnail, 12 tags, controls at the HEAD where they cannot be clipped</div>
+<div class="shot">
+  <div class="mtags-row">
+  <div class="mtags-media">
+    <div class="fake-img" style="width:320px;height:200px"></div>
+    </div>
+    <div class="mtags-panel">
+      <div class="mtags-head"><span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;border:1px solid #be123c66;background:#be123c22;color:#be123c">e</span><button class="mtags-edit">edit tags</button></div>
+      <div class="mtags-label">character</div>
+      <a class="mod-pill mod-pill--cat-character"><i class="mod-pill-dot"></i>hatsune_miku</a>
+      <div class="mtags-rule"></div>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>1girl</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>solo</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>long_hair</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>blue_eyes</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>detached_sleeves</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>outdoors</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>smile</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>twintails</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>skirt</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>looking_at_viewer</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>blush</a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i>sky</a>
+      <a class="mtags-id">#1284213</a>
+      <button class="h-ghost">hide</button>
     </div>
   </div>
 </div>

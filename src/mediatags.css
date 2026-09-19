@@ -403,3 +403,40 @@
   background: color-mix(in srgb, var(--mod-tag-artist-fg) 12%, var(--mod-surface));
   border: 1px solid color-mix(in srgb, var(--mod-tag-artist-fg) 30%, transparent);
 }
+
+/* The control row. One flex item, so the rating and the edit control ride
+   together at the head of column one and never wrap away from each other. */
+.mtags-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+/* Deliberately NOT a ghost pill. It sat among the tags looking exactly like
+   `hide` and `+N more`, and was unfindable; a control that performs writes to
+   the booru has to read as a control. Dashed, to match the input it opens,
+   and with no dot -- the dot is what says "this is a tag". */
+.mtags-edit {
+  font: inherit;
+  font-size: 0.7rem;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--mod-pill-radius, 999px);
+  border: 1px dashed color-mix(in srgb, var(--mod-tag-general-fg) 55%, transparent);
+  background: color-mix(in srgb, var(--mod-tag-general-fg) 10%, transparent);
+  color: var(--mod-tag-general-fg);
+  cursor: pointer;
+  flex: none;
+}
+.mtags-edit:hover,
+.mtags-edit:focus-visible {
+  background: color-mix(in srgb, var(--mod-tag-general-fg) 22%, transparent);
+}
+.mtags-edit.is-on {
+  border-style: solid;
+  background: color-mix(in srgb, var(--mod-tag-general-fg) 28%, transparent);
+}

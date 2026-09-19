@@ -199,6 +199,10 @@ function TagPanel({
       .finally(() => setBusy(false))
   }
 
+  // Only where there is a post to write to. Without one the booru has nothing
+  // to edit, and a control that always fails is worse than no control.
+  const canEdit = meta?.postId !== undefined && !!mediaId
+
   const submit = () => {
     const names = parseTagInput(draft)
     if (names.length === 0) return
@@ -208,7 +212,61 @@ function TagPanel({
 
   return (
     <div className="mtags-panel" ref={panelRef}>
-      {meta?.rating && <RatingBadge rating={meta.rating} by={meta.updatedBy} />}
+      {/* THE CONTROLS LIVE AT THE TOP, and that is not a style preference.
+          The panel is a WRAPPING column bounded by the picture's height, so
+          anything late in the flow lands in the last column -- the one that
+          gets clipped first and that nobody reads. Rendered at the end, the
+          edit control was a faint pill in column three, indistinguishable
+          from `hide`, and the operator could not find it at all. First item,
+          first column, always. */}
+      {(meta?.rating || canEdit) && (
+        <div className="mtags-head">
+          {meta?.rating && <RatingBadge rating={meta.rating} by={meta.updatedBy} />}
+          {canEdit && (
+            <button
+              type="button"
+              className={'mtags-edit' + (editing ? ' is-on' : '')}
+              onClick={() => {
+                setEditing((v) => !v)
+                setError(null)
+              }}
+              title={editing ? 'Stop editing tags' : 'Add or remove tags on the booru'}
+              aria-pressed={editing}
+            >
+              {editing ? 'done' : 'edit tags'}
+            </button>
+          )}
+        </div>
+      )}
+      {canEdit && editing && (
+        <input
+          className="mtags-add"
+          value={draft}
+          autoFocus
+          disabled={busy}
+          placeholder="add tags"
+          aria-label="Add tags to this post"
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              submit()
+            } else if (e.key === 'Escape') {
+              e.preventDefault()
+              setDraft('')
+              setEditing(false)
+            }
+            // The timeline binds single keys; a tag being typed is not a shortcut.
+            e.stopPropagation()
+          }}
+          onBlur={submit}
+        />
+      )}
+      {error && (
+        <div className="mtags-error" role="alert">
+          {error}
+        </div>
+      )}
       {head.length > 0 && (
         <>
           <div className="mtags-label">{head.length === 1 ? 'character' : 'characters'}</div>
@@ -237,53 +295,6 @@ function TagPanel({
         <button type="button" onClick={onMore} style={ghostBtn}>
           +{rest} more
         </button>
-      )}
-      {/* Only where there is a post to edit. Without one the booru has nothing
-          to write to, and a control that always fails is worse than none. */}
-      {meta?.postId !== undefined && mediaId && (
-        <>
-          {editing && (
-            <input
-              className="mtags-add"
-              value={draft}
-              autoFocus
-              disabled={busy}
-              placeholder="add tags"
-              aria-label="Add tags to this post"
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  submit()
-                } else if (e.key === 'Escape') {
-                  e.preventDefault()
-                  setDraft('')
-                  setEditing(false)
-                }
-                // The timeline binds single keys; a tag being typed is not a
-                // shortcut.
-                e.stopPropagation()
-              }}
-              onBlur={submit}
-            />
-          )}
-          <button
-            type="button"
-            style={ghostBtn}
-            onClick={() => {
-              setEditing((v) => !v)
-              setError(null)
-            }}
-            title={editing ? 'Stop editing tags' : 'Edit tags on the booru'}
-          >
-            {editing ? 'done' : '+ tag'}
-          </button>
-          {error && (
-            <div className="mtags-error" role="alert">
-              {error}
-            </div>
-          )}
-        </>
       )}
       {meta?.postId !== undefined && (
         <a
@@ -655,6 +666,10 @@ function TagChip({
 }
 
 const ghostBtn: React.CSSProperties = {
+  // In the panel's flex COLUMN a child with no align-self stretches to the
+  // widest pill beside it, which is why `hide` and `+N more` were drawn as
+  // full-column bars rather than buttons.
+  alignSelf: 'flex-start',
   font: 'inherit',
   fontSize: 11,
   lineHeight: 1.4,
