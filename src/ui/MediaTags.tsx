@@ -27,37 +27,16 @@ import { useReducedMotion } from './reducedMotion'
 // restyling anything (operator: wire for interaction, stay scoped for v1).
 // ---------------------------------------------------------------------------
 
-// Category -> accent. Compound tokens where one fits; the booru buckets have no
-// semantic token of their own, so these are explicit and theme-neutral (they
-// read on both grounds).
-const CATEGORY_COLOR: Record<TagCategory, string> = {
-  artist: '#c2410c',
-  character: '#15803d',
-  copyright: '#7e22ce',
-  meta: '#64748b',
-  general: '#0369a1',
-}
-
-const CATEGORY_COLOR_DARK: Record<TagCategory, string> = {
-  artist: '#fb923c',
-  character: '#4ade80',
-  copyright: '#c084fc',
-  meta: '#94a3b8',
-  general: '#38bdf8',
-}
-
-function useCategoryColors(): Record<TagCategory, string> {
-  const [dark, setDark] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches,
-  )
-  useEffect(() => {
-    const m = window.matchMedia?.('(prefers-color-scheme: dark)')
-    if (!m) return
-    const on = () => setDark(m.matches)
-    m.addEventListener('change', on)
-    return () => m.removeEventListener('change', on)
-  }, [])
-  return dark ? CATEGORY_COLOR_DARK : CATEGORY_COLOR
+// Category -> canon token. The chip variant used to carry its own light and
+// dark palettes for the five categories, which is exactly the drift the
+// formant tokens were extracted to end (artist #fb923c here against #ff6b7a
+// on the booru); it now names the same tokens the panel's stylesheet does.
+const CATEGORY_TOKEN: Record<TagCategory, string> = {
+  artist: 'var(--mod-tag-artist-fg)',
+  character: 'var(--mod-tag-character-fg)',
+  copyright: 'var(--mod-tag-copyright-fg)',
+  meta: 'var(--mod-tag-meta-fg)',
+  general: 'var(--mod-tag-general-fg)',
 }
 
 // Categories pulled out of the flow into their own bucket at the head of the
@@ -369,7 +348,6 @@ function TagList({
   onCollapse?: () => void
   floating?: boolean
 }) {
-  const colors = useCategoryColors()
   const reduced = useReducedMotion()
   const ref = useRef<HTMLDivElement | null>(null)
   const prevCount = useRef(tags.length)
@@ -430,9 +408,9 @@ function TagList({
             lineHeight: 1.4,
             padding: '1px 6px',
             borderRadius: 999,
-            border: `1px solid ${colors[t.category]}55`,
-            background: `${colors[t.category]}1f`,
-            color: colors[t.category],
+            border: `1px solid color-mix(in srgb, ${CATEGORY_TOKEN[t.category]} 33%, transparent)`,
+            background: `color-mix(in srgb, ${CATEGORY_TOKEN[t.category]} 12%, transparent)`,
+            color: CATEGORY_TOKEN[t.category],
             cursor: onTagClick ? 'pointer' : 'default',
             whiteSpace: 'nowrap',
             maxWidth: 220,

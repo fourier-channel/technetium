@@ -50,6 +50,43 @@
   min-width: 0;
   line-height: 0;
 }
+/* THE RAISE for the picture (canon --mod-raise-*): the WRAPPER scales, on its
+   own layer, with the ring, the lift and the sweep -- never the <img>, which
+   its own box would clip. The panel is positioned against the row, not the
+   wrapper, so a transform here moves nothing beside it. */
+.mtags-media {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: transform var(--mod-raise-ease), box-shadow var(--mod-raise-ease);
+  will-change: transform;
+}
+.mtags-media::before {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0; left: -60%; width: 220%;
+  z-index: 1;
+  pointer-events: none;
+  background: var(--mod-sweep);
+  opacity: 0;
+  transform: translateX(-40%);
+}
+.mtags-media:hover,
+.mtags-media:focus-within {
+  transform: scale(var(--mod-raise-scale));
+  z-index: 3;
+  box-shadow: var(--mod-raise-ring), var(--mod-raise-lift);
+}
+.mtags-media:hover::before,
+.mtags-media:focus-within::before {
+  opacity: 1;
+  animation: mod-sweep var(--mod-sweep-period) ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mtags-media, .mod-pill { transition: none; }
+  .mtags-media:hover, .mod-pill:hover { transform: none; }
+  .mtags-media:hover::before, .mod-pill:hover::before { animation: none; opacity: 0; }
+}
 .mtags-panel {
   position: absolute;
   top: 0;
@@ -111,6 +148,39 @@
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
+  /* THE RAISE, canon's one tag hover (formant --mod-raise-*, mod-sweep),
+     measured from fourier-sampling's published thread and worn identically
+     on the booru's post page: the pill scales on its own layer with an
+     orange ring and a lift, its edge brightens, a static gradient sweeps
+     across it on transform alone, and a pill not painted by category takes
+     the slate ground and white ink. overflow: hidden above clips the sweep. */
+  position: relative;
+  transition: transform var(--mod-raise-ease), box-shadow var(--mod-raise-ease),
+    background-color var(--mod-raise-ease), color var(--mod-raise-ease), border-color var(--mod-raise-ease);
+  will-change: transform;
+}
+.mod-pill::before {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0; left: -60%; width: 220%;
+  pointer-events: none;
+  background: var(--mod-sweep);
+  opacity: 0;
+  transform: translateX(-40%);
+}
+.mod-pill:hover,
+.mod-pill:focus-visible {
+  transform: scale(var(--mod-raise-scale));
+  z-index: 3;
+  box-shadow: var(--mod-raise-ring), var(--mod-raise-lift);
+  background: var(--mod-raise-bg);
+  color: var(--mod-raise-fg);
+  border-color: color-mix(in srgb, currentcolor var(--mod-raise-edge), transparent);
+}
+.mod-pill:hover::before,
+.mod-pill:focus-visible::before {
+  opacity: 1;
+  animation: mod-sweep var(--mod-sweep-period) ease-in-out infinite;
 }
 .mod-pill:focus-visible {
   outline: 2px solid var(--mod-tag-general-fg);
@@ -130,15 +200,33 @@
   border-color: color-mix(in srgb, var(--mod-tag-artist-fg) 30%, transparent);
   background: color-mix(in srgb, var(--mod-tag-artist-fg) 12%, var(--mod-surface));
 }
+.mod-pill--cat-artist:hover,
+.mod-pill--cat-artist:focus-visible {
+  color: var(--mod-tag-artist-fg);
+  background: color-mix(in srgb, var(--mod-tag-artist-fg) 12%, var(--mod-surface));
+  border-color: color-mix(in srgb, var(--mod-tag-artist-fg) var(--mod-raise-edge), transparent);
+}
 .mod-pill--cat-copyright {
   color: var(--mod-tag-copyright-fg);
   border-color: color-mix(in srgb, var(--mod-tag-copyright-fg) 30%, transparent);
   background: color-mix(in srgb, var(--mod-tag-copyright-fg) 12%, var(--mod-surface));
 }
+.mod-pill--cat-copyright:hover,
+.mod-pill--cat-copyright:focus-visible {
+  color: var(--mod-tag-copyright-fg);
+  background: color-mix(in srgb, var(--mod-tag-copyright-fg) 12%, var(--mod-surface));
+  border-color: color-mix(in srgb, var(--mod-tag-copyright-fg) var(--mod-raise-edge), transparent);
+}
 .mod-pill--cat-character {
   color: var(--mod-tag-character-fg);
   border-color: color-mix(in srgb, var(--mod-tag-character-fg) 30%, transparent);
   background: color-mix(in srgb, var(--mod-tag-character-fg) 12%, var(--mod-surface));
+}
+.mod-pill--cat-character:hover,
+.mod-pill--cat-character:focus-visible {
+  color: var(--mod-tag-character-fg);
+  background: color-mix(in srgb, var(--mod-tag-character-fg) 12%, var(--mod-surface));
+  border-color: color-mix(in srgb, var(--mod-tag-character-fg) var(--mod-raise-edge), transparent);
 }
 .mod-pill--cat-general {
   color: var(--mod-tag-general-fg);
@@ -162,6 +250,12 @@
   animation: mod-hype-move var(--mod-hype-period) ease-in-out infinite;
   /* Its own layer, so the bounce never reflows the pills around it. */
   will-change: transform;
+  /* The sparkle (::after) rides the pill's edge, so the raise's clipping is
+     off here and its sweep with it; the spin is this pill's hover. */
+  overflow: visible;
+}
+.mod-pill--hype::before {
+  display: none;
 }
 /* Three states, one animation at a time, ALL CLASSES -- the same contract as
    the booru's post page, from the same canon keyframes. Spinning tumbles on

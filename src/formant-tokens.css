@@ -58,13 +58,25 @@
   /* --- tag provenance --------------------------------------------------- */
   /* Who put a tag there: a person, the autotagger, or both. Named for what
    * they MEAN, because the palette differs between deployments and
-   * a name is the only thing that survives that. */
-  --mod-creator-fg:     #38e08a;
-  --mod-creator-bg:     #0f2c1d;
+   * a name is the only thing that survives that.
+   *
+   * THE GREEN IS THE BRAND GREEN, since 2026-09-19. It was the mint (#38e08a)
+   * until the operator, a day after --mod-accent below was corrected, looked
+   * at the Modulation post page and said its green was "still the wrong
+   * shade". The page's green IS this token -- creator pills, and every
+   * control that borrowed the provenance green for structure -- so the
+   * distinction the accent's note drew ("who put this here" is not the
+   * brand) was true of the names and false of what a reader sees: one
+   * surface, two greens, and the reader has no way to know one of them is a
+   * different semantic rather than a mistake. The names stay separate; the
+   * values now agree, and the ground is re-cut to the same hue (128) so the
+   * pill does not sit a pure green on a minty dark. */
+  --mod-creator-fg:     #0ce92a;
+  --mod-creator-bg:     #0d2a14;
   --mod-auto-fg:        #ff9d3c;
   --mod-auto-bg:        #2c1c0c;
   --mod-both-fg:        #ff9d3c;
-  --mod-both-outline:   #38e08a;
+  --mod-both-outline:   #0ce92a;
   --mod-pending-fg:     #b7b3a8;
   --mod-meta-fg:        #8f8b80;
 
@@ -87,16 +99,18 @@
    * character #15803d against #38e08a, general #0369a1 against #6db8ff). Two
    * palettes for one vocabulary is this file's founding complaint.
    *
-   * CHARACTER SHARES A VALUE WITH --mod-creator-fg (#38e08a) and that is a
+   * CHARACTER SHARES A VALUE WITH --mod-creator-fg and that is a
    * coincidence, not a relationship. Keep the names separate: the day either
-   * moves, one token serving both would make the other wrong.
+   * moves, one token serving both would make the other wrong. (Both moved
+   * together on 2026-09-19, to the brand green, for the reason given above
+   * the provenance block: they were the one green a reader saw.)
    *
    * The PILL treatment that carries these -- the 30% border mix, the 12%
    * background mix, the dot -- is a component and stays in the consumer. This
    * file holds names and values only. */
   --mod-tag-artist-fg:     #ff6b7a;
   --mod-tag-copyright-fg:  #c78bff;
-  --mod-tag-character-fg:  #38e08a;
+  --mod-tag-character-fg:  #0ce92a;
   --mod-tag-general-fg:    #6db8ff;
   --mod-tag-meta-fg:       #c9a15a;
 
@@ -111,9 +125,15 @@
    *
    * Values measured from fourier-sampling's lamp row, where the vocabulary was
    * established. Extracted on the SECOND use -- the fourier-coherence plane --
-   * per the rule at the top of this file, never on the first. */
-  --mod-ok-fg:          #35e08d;
-  --mod-ok-line:        #22402f;
+   * per the rule at the top of this file, never on the first.
+   *
+   * The ok green followed the others to the brand green on 2026-09-19: a lamp
+   * lit "healthy" beside a creator pill in a different green read as two
+   * opinions about one colour, and a creator's ACTIVITY lamp (--mod-lamp-live
+   * below) is lit with this token on the same pill. The line is re-cut to the
+   * same hue. */
+  --mod-ok-fg:          #0ce92a;
+  --mod-ok-line:        #1f4026;
   --mod-warn-fg:        #f0b429;
   --mod-warn-line:      #3a3424;
   --mod-warn-bg:        #1c1a12;
@@ -179,12 +199,16 @@
    * mark's character carried to text weight: hue 128, 90% saturation,
    * lightness 48%, which measures 10.5:1 on --mod-surface.
    *
-   * WHAT DID NOT MOVE, and this is why the names were kept separate:
-   * --mod-creator-fg, --mod-tag-character-fg and --mod-ok-fg still hold the
-   * mint. "Who put this tag here", "what kind of thing this tag names" and
-   * "this service is healthy" are not the brand, and one token serving both
-   * would have made the other wrong the day either moved. That day was
-   * today. */
+   * WHAT DID NOT MOVE THAT DAY, and why the names were kept separate:
+   * --mod-creator-fg, --mod-tag-character-fg and --mod-ok-fg kept the mint,
+   * on the argument that "who put this tag here", "what kind of thing this
+   * tag names" and "this service is healthy" are not the brand.
+   * SUPERSEDED 2026-09-19: they hold the brand green too now (see the
+   * provenance block). The argument was about names and it stands -- they
+   * are still four tokens -- but a reader sees values, and on the post page
+   * the mint was the green. The mint survives where the operator said it
+   * belonged, "as a glow or a stroke": nowhere yet, and a token for it is
+   * extracted on the second use, not the first. */
   --mod-accent:         #0ce92a;
 
   /* --- depth ------------------------------------------------------------ */
@@ -242,6 +266,63 @@
                           rgba(0, 0, 0, 0.45) 86%,
                           var(--mod-page-edge) 100%);
 
+  /* --- the raise: a clickable thing under the pointer ------------------- */
+  /* MEASURED, NOT DESIGNED. fourier-sampling's published thread grew a hover
+   * for its pictures on 2026-09-18 ("a subtle formant orange border to
+   * images that can be clicked ... an on-hover expansion ... that causes the
+   * border to brighten and shimmer"), and its tag pills, being anchors in the
+   * same box, caught the same rule -- plus a slate ground and white ink from
+   * a link rule in the curation stylesheet that happened to load after. The
+   * operator saw the two together and ruled 2026-09-19: "take sampling's
+   * exact tag design on the published inspection page and make that the one
+   * canon tag display implementation ... the same for image panels."
+   *
+   * So these are the values read back from that page's computed styles with
+   * the pointer over a pill, and the recipe a consumer applies to any
+   * clickable pill or picture:
+   *
+   *   the ANCHOR scales (never the picture inside it, which its frame would
+   *   clip), on its own layer, so it paints over its neighbours and moves
+   *   none of them; a ring in the activity orange and a lift shadow; the
+   *   border to --mod-raise-edge of the pill's own colour; and a sweep --
+   *   a static gradient on a pseudo-element 220% wide, offset -60%, whose
+   *   TRANSFORM runs from -40% to +40% for as long as the pointer stays.
+   *   A pill that is not painted by category also takes the slate ground
+   *   and white ink; one that is (artist, character, copyright) keeps its
+   *   colour, which is what was measured and is the right reading -- the
+   *   identifying kinds stay identifiable while lifted.
+   *
+   * The sweep is transform and opacity only, as the infinite-animation rule
+   * requires (see TAG HYPE below); background-position would repaint every
+   * frame. A consumer wears it on ::before, because a hyped pill already
+   * spends ::after on its sparkle. The ground is a cool slate on purpose: it
+   * is the one place the vocabulary steps off the warm surfaces, and that
+   * step is what reads as "this one, under your hand". */
+  --mod-raise-scale:    1.07;
+  --mod-raise-ease:     0.18s ease-out;
+  --mod-raise-ring:     0 0 0 1px color-mix(in srgb, var(--mod-active-fg) 60%, transparent);
+  --mod-raise-lift:     0 8px 22px rgba(0, 0, 0, 0.5);
+  --mod-raise-bg:       #1d2b3b;
+  --mod-raise-fg:       var(--mod-ink);
+  --mod-raise-edge:     70%;
+  --mod-sweep-period:   1.1s;
+  --mod-sweep:          linear-gradient(115deg,
+                          transparent 42%,
+                          color-mix(in srgb, var(--mod-active-fg) 45%, transparent) 50%,
+                          transparent 58%);
+
+  /* --- the live lamp: a creator who is here right now -------------------- */
+  /* Operator, 2026-09-19: "The lamp on the creator tag is lit up green when
+   * that creator is 'active' -- i.e. has within the past 5 minutes made a
+   * post directly to the booru, or had a post attributed to them via sample
+   * or tunnel." The WINDOW is the serving application's (chanbooru:
+   * Danbooru.config.creator_active_window); what is here is only what lit
+   * and unlit look like, so a second surface showing the same lamp shows the
+   * same lamp. Lit is the ok green with a soft halo -- a STATIC shadow, not
+   * an animated one, per the lamp incident recorded under TAG HYPE. */
+  --mod-lamp-live:      var(--mod-ok-fg);
+  --mod-lamp-live-glow: 0 0 6px color-mix(in srgb, var(--mod-ok-fg) 55%, transparent);
+
   /* --- shape ------------------------------------------------------------ */
   /* 10px is the PRESET-level value. A component may narrow it -- the creator
    * gallery uses 12px under .modcreator -- and that is what a token is for. The
@@ -260,6 +341,20 @@
   /* A system stack on purpose: these render at 11-13px in dense grids, and a
    * webfont buys nothing there while costing a flash. */
   --mod-mono:           ui-monospace, "SFMono-Regular", "Menlo", monospace;
+}
+
+/* The sweep's motion: the gradient layer crosses the element once per period.
+   Transform only. The consumer sets opacity 0 at rest and 1 while raised. */
+@keyframes mod-sweep {
+  0%   { transform: translateX(-40%); }
+  100% { transform: translateX(40%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --mod-raise-scale:  1;
+    --mod-sweep-period: 0s;
+  }
 }
 
 /* ===========================================================================
