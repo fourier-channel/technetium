@@ -314,12 +314,23 @@
    * its last frame is the identity, so the jiggle takes over with no snap.
    * Each state sets `animation` wholesale: two animations on one element
    * cannot both drive transform (see above), so a consumer swaps them rather
-   * than stacking them. The leave state needs one line of JS -- add a class on
-   * pointer-leave, remove it on animationend -- because a finite animation
-   * bound to :not(:hover) would also play on page load for every pill.
+   * than stacking them.
+   *
+   * NOT :hover. The first cut bound the spin to :hover and it reset on every
+   * pixel of pointer movement: a pill tumbling in 3D leaves its own hit
+   * region twice a turn, hover flickered, and each flicker rewrote
+   * `animation`, which restarts it -- and the flicker's "leave" also started
+   * the wind-down while the pointer was still there (operator, 2026-09-19).
+   * So both states are CLASSES a consumer sets from script: spinning goes on
+   * at pointer-enter and stays on; while it is on, the consumer polls whether
+   * the pointer is still over the pill's LAYOUT box -- offsetLeft/offsetTop
+   * against the offsetParent, which a transform does not move -- and only
+   * after the pointer has been away for --mod-hype-grace does the wind-down
+   * begin. One continuous spin; a grace period before it slows.
    * Transform only, as the rule requires; perspective() is a transform. */
-  --mod-hype-spin-period:  0.9s;     /* one full tumble while hovered */
+  --mod-hype-spin-period:  0.9s;     /* one full tumble while spinning */
   --mod-hype-spin-down:    1400ms;   /* the wind-down back to the jiggle */
+  --mod-hype-grace:        800ms;    /* pointer gone this long before slowing */
   --mod-hype-depth:        420px;    /* perspective; smaller reads wilder */
 }
 

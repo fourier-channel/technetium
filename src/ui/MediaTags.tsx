@@ -239,6 +239,30 @@ function TagPanel({
   )
 }
 
+// Where the pointer is, for every hyped pill at once. One passive listener;
+// the pills read it on their own clock. -1 means "not over the page".
+const pointer = { x: -1, y: -1 }
+if (typeof document !== 'undefined') {
+  document.addEventListener('pointermove', (e) => { pointer.x = e.clientX; pointer.y = e.clientY }, { passive: true })
+  document.addEventListener('pointerout', (e) => { if (!e.relatedTarget) { pointer.x = -1; pointer.y = -1 } })
+}
+
+// Is the pointer over the element's LAYOUT box -- where it sits on the page,
+// which a transform does not move? getBoundingClientRect would follow the
+// tumble and answer "no" twice a turn; offsetLeft/offsetTop do not.
+function overLayoutBox(el: HTMLElement): boolean {
+  const op = (el.offsetParent as HTMLElement | null) ?? document.body
+  const pr = op.getBoundingClientRect()
+  const l = pr.left + el.offsetLeft
+  const t = pr.top + el.offsetTop
+  const pad = 6
+  return pointer.x >= l - pad && pointer.x <= l + el.offsetWidth + pad && pointer.y >= t - pad && pointer.y <= t + el.offsetHeight + pad
+}
+
+function hypeGraceMs(el: HTMLElement): number {
+  return parseFloat(getComputedStyle(el).getPropertyValue('--mod-hype-grace')) || 800
+}
+
 // One tag.
 //
 // An ANCHOR, not a button: a tag is a place on the booru, so it has to be
@@ -256,12 +280,30 @@ function TagPill({
   onTagClick?: (t: MediaTag) => void
 }) {
   const hype = isHypeTag(tag.name)
-  // A hyped pill's third state. Hover is CSS (mod-hype-spin); the wind-down
-  // (mod-hype-spin-down) is a finite animation that must start when the
-  // pointer LEAVES and never on mount, so it is state: on at pointer-leave,
-  // off when its animation ends, and off again if the pointer comes back so
-  // :hover's spin takes over. Same contract as the booru's post page.
-  const [winding, setWinding] = useState(false)
+  // A hyped pill's states, all classes -- never :hover, which a tumbling pill
+  // leaves twice a turn, restarting the animation on every flicker. Spinning
+  // goes on at pointer-enter and stays on; while it is on, a 100ms poll asks
+  // whether the pointer is still over the pill's layout box, and only after
+  // it has been away for the grace period does the wind-down start. Same
+  // contract as the booru's post page.
+  const [spin, setSpin] = useState<'idle' | 'spinning' | 'winding'>('idle')
+  const ref = useRef<HTMLAnchorElement>(null)
+  const timer = useRef<number | null>(null)
+  useEffect(() => {
+    if (spin !== 'spinning') return
+    let away: number | null = null
+    const grace = ref.current ? hypeGraceMs(ref.current) : 800
+    const tick = () => {
+      const el = ref.current
+      if (!el || !el.isConnected) { setSpin('idle'); return }
+      if (overLayoutBox(el)) away = null
+      else if (away === null) away = performance.now()
+      if (away !== null && performance.now() - away >= grace) { setSpin('winding'); return }
+      timer.current = window.setTimeout(tick, 100)
+    }
+    tick()
+    return () => { if (timer.current !== null) window.clearTimeout(timer.current) }
+  }, [spin])
   // A leaving pill is already gone from the data and is on screen only long
   // enough to be seen going, so it must not be clickable on the way out.
   const leaving = phase === 'leaving'
@@ -270,13 +312,14 @@ function TagPill({
       className={
         `mod-pill mod-pill--cat-${tag.category}` +
         (hype ? ' mod-pill--hype' : '') +
-        (hype && winding ? ' is-spinning-down' : '') +
+        (hype && spin === 'spinning' ? ' is-spinning' : '') +
+        (hype && spin === 'winding' ? ' is-spinning-down' : '') +
         (phase === 'entering' ? ' mod-pill--in' : '') +
         (leaving ? ' mod-pill--out' : '')
       }
-      onPointerLeave={hype ? () => setWinding(true) : undefined}
-      onPointerEnter={hype ? () => setWinding(false) : undefined}
-      onAnimationEnd={hype ? (e) => { if (e.animationName === 'mod-hype-spin-down') setWinding(false) } : undefined}
+      ref={ref}
+      onPointerEnter={hype ? () => setSpin('spinning') : undefined}
+      onAnimationEnd={hype ? (e) => { if (e.animationName === 'mod-hype-spin-down') setSpin('idle') } : undefined}
       aria-hidden={leaving ? 'true' : undefined}
       tabIndex={leaving ? -1 : undefined}
       href={tag.url ?? booruTagUrl(tag.name)}
