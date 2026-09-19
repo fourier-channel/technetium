@@ -86,3 +86,71 @@ export function mergeBooruIntoSet(prev: MediaTagSet, live: BooruTagSet, now: num
     ts: now,
   }
 }
+
+// ---------------------------------------------------------------------------
+// Editing, from this side.
+// ---------------------------------------------------------------------------
+
+/**
+ * The name the booru will actually store, from what a person typed.
+ *
+ * Danbooru downcases and turns whitespace into underscores, so "Blue Sky" and
+ * "blue_sky" are ONE tag there. Doing it here rather than letting the server do
+ * it silently is what makes the optimistic pill match the one that comes back:
+ * otherwise "Blue Sky" pops in, the server answers "blue_sky", and the diff
+ * reads that as one tag leaving and a different one arriving -- a visible
+ * flicker on every edit that used a capital letter.
+ *
+ * Returns '' for anything that is not a tag once normalised; the caller must
+ * treat that as "nothing was typed" rather than sending it.
+ */
+export function normaliseTagName(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/^[_]+|[_]+$/g, '')
+}
+
+/** Split a typed line into tag names. People paste space-separated lists. */
+export function parseTagInput(raw: string): string[] {
+  const out: string[] = []
+  for (const part of raw.split(/[\s,]+/)) {
+    const name = normaliseTagName(part)
+    if (name && !out.includes(name)) out.push(name)
+  }
+  return out
+}
+
+/**
+ * The set as it will look if the edit succeeds, applied at once so the pill
+ * moves under the finger rather than after a round trip.
+ *
+ * An ADDED tag is guessed 'general', because the category is the booru's to
+ * decide and it has not been asked yet. The server's answer replaces this whole
+ * set a moment later, so a tag that turns out to be a character recolours then.
+ * Guessing is safe; leaving it out until the server replies is what would feel
+ * slow.
+ *
+ * `tagString` is deliberately NOT updated. It records what this client last saw
+ * the SERVER say, and it is what a subsequent edit sends as old_tag_string. If
+ * an optimistic guess were written into it, a second edit made before the first
+ * reply landed would claim the server had already agreed to the first one, and
+ * the delta would be computed against something that never existed.
+ */
+export function optimisticSet(
+  prev: MediaTagSet,
+  edit: { add?: readonly string[]; remove?: readonly string[] },
+  now: number,
+): MediaTagSet {
+  const removed = new Set(edit.remove ?? [])
+  const tags = prev.tags.filter((t) => !removed.has(t.name))
+  const have = new Set(tags.map((t) => t.name))
+  for (const name of edit.add ?? []) {
+    if (!have.has(name)) {
+      tags.push({ name, category: 'general' })
+      have.add(name)
+    }
+  }
+  return { ...prev, tags, ts: now }
+}

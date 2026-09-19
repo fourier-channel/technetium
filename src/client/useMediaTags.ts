@@ -3,8 +3,8 @@ import { RoomEvent, RoomStateEvent, type MatrixClient, type MatrixEvent } from '
 import { parseMxc } from './media'
 import { createLimiter } from './concurrency'
 import { ensureBooruSession } from './booruSession'
-import { fetchBooruTags } from './booruTags'
-import { mayRead, mergeBooruIntoSet, newBooruReadState } from './booruLive'
+import { fetchBooruTags, writeBooruTags, type TagEdit } from './booruTags'
+import { mayRead, mergeBooruIntoSet, newBooruReadState, optimisticSet } from './booruLive'
 import {
   MEDIA_TAGS_EVENT,
   mediaIdFromStateKey,
@@ -228,6 +228,81 @@ export function refreshBooruTags(mediaId: string, force = false): void {
     .finally(() => {
       booruReads.inFlight.delete(postId)
     })
+}
+
+// ---------------------------------------------------------------------------
+// The write. Same pointer, the other direction.
+//
+// OPTIMISTIC, because the whole point of the interaction is that it feels
+// immediate: the pill is in the panel before the request leaves, and
+// useTagDiff pops it exactly as it pops one that arrived from somebody else.
+// The server answer then REPLACES the guess rather than confirming it, so a
+// tag that turns out to be a character recolours a moment later and a tag the
+// booru rewrote (an alias -- anus becomes butthole) shows its real name.
+//
+// A FAILED EDIT MUST NOT LEAVE A LIE ON SCREEN. The optimistic set is rolled
+// back and a live read is forced: a 403 means nothing changed, but a 5xx is
+// genuinely ambiguous and guessing which one it was is how a panel ends up
+// permanently disagreeing with the booru. 157 bytes settles it.
+// ---------------------------------------------------------------------------
+
+/**
+ * Add or remove tags on the image's booru post.
+ *
+ * Resolves when the booru has agreed and the store holds its answer; REJECTS
+ * with a message naming its own remedy, after the optimistic change has been
+ * rolled back. Callers surface that text -- it is the only place the user
+ * learns the booru refused them.
+ */
+export async function editBooruTags(mediaId: string, edit: TagEdit): Promise<void> {
+  const before = sets.get(mediaId)
+  const postId = before?.postId
+  if (!before || postId === undefined) {
+    throw new Error(
+      'this image has no booru post, so there is nothing to tag. ' +
+        'Fix: it reaches the booru through the bridge; an image posted directly to ' +
+        'Matrix has no post to edit.',
+    )
+  }
+
+  // old_tag_string is what the SERVER last said, and it is what makes the write
+  // a delta instead of an overwrite. A set assembled from Matrix alone has
+  // never seen the server, so read once -- and only in that case.
+  let seen = before.tagString
+  if (seen === undefined) {
+    const live = await booruLimiter.run(() => fetchBooruTags(postId))
+    if (!live) {
+      throw new Error(
+        `could not read post ${postId} from the booru, so an edit would overwrite ` +
+          'rather than amend. Fix: check the booru session (a 403 is usually the ' +
+          'Cloudflare challenge or a signed-out booru cookie) and try again.',
+      )
+    }
+    const current = sets.get(mediaId)
+    if (current) ingestSet(mergeBooruIntoSet(current, live, Date.now()), mediaId)
+    seen = live.tagString
+  }
+
+  // Snapshot AFTER the read above, so a rollback restores what was really on
+  // screen when the edit was made rather than a set two steps stale.
+  const base = sets.get(mediaId) ?? before
+  ingestSet(optimisticSet(base, edit, Date.now()), mediaId)
+
+  try {
+    const after = await booruLimiter.run(() => writeBooruTags(postId, seen, edit))
+    // The write answered with the post's real tags, so the TTL starts here: a
+    // panel still on screen must not immediately spend a read re-asking what it
+    // was just told.
+    booruReads.askedAt.set(postId, Date.now())
+    if (after) {
+      const current = sets.get(mediaId)
+      if (current) ingestSet(mergeBooruIntoSet(current, after, Date.now()), mediaId)
+    }
+  } catch (err) {
+    ingestSet({ ...base, ts: Date.now() }, mediaId)
+    refreshBooruTags(mediaId, true)
+    throw err
+  }
 }
 
 function subscribeTo(mediaId: string, cb: Listener): () => void {

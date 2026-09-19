@@ -329,3 +329,77 @@
   animation: mod-tag-pop-out var(--mod-tag-pop-out-dur) ease-in both;
   pointer-events: none;
 }
+
+/* --- editing, from this side ---------------------------------------------- */
+/* The pill and its x are ONE flex item, so the x rides the column with the tag
+   it belongs to instead of wrapping to the next line on its own. align-self
+   repeats .mod-pill's, because the wrapper is now the column's child and would
+   otherwise stretch to the widest pill beside it. */
+.mtags-tagrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  align-self: flex-start;
+  max-width: 100%;
+}
+.mtags-tagrow > .mod-pill {
+  min-width: 0;
+}
+.mtags-x {
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1;
+  padding: 0.1rem 0.3rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--mod-ink-dim);
+  cursor: pointer;
+  flex: none;
+}
+.mtags-x:hover,
+.mtags-x:focus-visible {
+  color: var(--mod-tag-artist-fg);
+  background: color-mix(in srgb, var(--mod-tag-artist-fg) 14%, transparent);
+}
+
+.mtags-add {
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--mod-pill-radius, 999px);
+  border: 1px dashed color-mix(in srgb, var(--mod-tag-general-fg) 45%, transparent);
+  background: var(--mod-surface);
+  color: var(--mod-ink);
+  align-self: flex-start;
+  /* The panel is a wrapping flex COLUMN: an input with no width is an input at
+     its browser default, which is wider than the whole panel. */
+  width: 11rem;
+  max-width: 100%;
+}
+.mtags-add:disabled {
+  opacity: 0.6;
+}
+
+/* The only place a user learns the booru refused them.
+   The panel is bounded by the PICTURE's height and clips what does not fit, so
+   on a short image the refusal is exactly the thing that would be cut off --
+   the failure would be silent, which is the one outcome this text exists to
+   prevent. While an error is up, the panel is allowed to outgrow the image;
+   there is at most one, and it is gone as soon as the next edit is tried. */
+.mtags-panel:has(.mtags-error) {
+  max-height: none;
+}
+.mtags-error {
+  align-self: stretch;
+  max-width: 22rem;
+  font-size: 0.7rem;
+  line-height: 1.3;
+  white-space: normal;
+  padding: 0.25rem 0.4rem;
+  border-radius: 6px;
+  color: var(--mod-tag-artist-fg);
+  background: color-mix(in srgb, var(--mod-tag-artist-fg) 12%, var(--mod-surface));
+  border: 1px solid color-mix(in srgb, var(--mod-tag-artist-fg) 30%, transparent);
+}

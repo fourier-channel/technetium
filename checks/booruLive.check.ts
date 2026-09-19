@@ -12,6 +12,9 @@ import {
   mayRead,
   mergeBooruIntoSet,
   newBooruReadState,
+  normaliseTagName,
+  optimisticSet,
+  parseTagInput,
 } from '../src/client/booruLive'
 import type { BooruTagSet } from '../src/client/booruTags'
 import type { MediaTagSet } from '../src/client/mediaTags'
@@ -160,6 +163,66 @@ console.log('== the merged set wins in the store, which settles on ts')
   // otherwise the correction is silently dropped and the panel never updates.
   const merged = mergeBooruIntoSet(prev, live, T0 + 1)
   check('the live read is newer than the state event it replaces', merged.ts > prev.ts)
+}
+
+console.log('== a typed tag is normalised to what the booru will store')
+check('a plain tag is unchanged', normaliseTagName('outdoors') === 'outdoors')
+check('capitals are lowered', normaliseTagName('Blue Sky') === 'blue_sky')
+check('spaces become underscores', normaliseTagName('long hair') === 'long_hair')
+check('runs of whitespace collapse', normaliseTagName('a   b') === 'a_b')
+check('surrounding space is dropped', normaliseTagName('  tagme  ') === 'tagme')
+check('leading and trailing underscores go', normaliseTagName('__x__') === 'x')
+check('nothing typed is nothing', normaliseTagName('   ') === '')
+check('punctuation the booru uses survives', normaliseTagName('re:zero') === 're:zero')
+
+console.log('== a typed LINE is a list, because people paste lists')
+check('one tag', parseTagInput('outdoors').join('|') === 'outdoors')
+check('spaces separate', parseTagInput('a b c').join('|') === 'a|b|c')
+check('commas separate too', parseTagInput('a, b,c').join('|') === 'a|b|c')
+check('and the parts are still normalised',
+  parseTagInput('Blue Sky').join('|') === 'blue|sky')
+check('a repeat is sent once', parseTagInput('a b a').join('|') === 'a|b')
+check('an empty line is no tags', parseTagInput('   ').length === 0)
+
+console.log('== the optimistic set moves before the request does')
+{
+  const now = T0 + 9
+  const added = optimisticSet(prev, { add: ['fresh'] }, now)
+  check('the tag is there at once', added.tags.some((t) => t.name === 'fresh'))
+  check('guessed general until the booru says otherwise',
+    added.tags.find((t) => t.name === 'fresh')?.category === 'general')
+  check('the old tags are still there', added.tags.length === prev.tags.length + 1)
+  check('the clock moves, so the store accepts it', added.ts === now)
+  check('the input is not mutated', prev.tags.length === 2)
+
+  const removed = optimisticSet(prev, { remove: ['stale_tag'] }, now)
+  check('a removed tag is gone at once',
+    !removed.tags.some((t) => t.name === 'stale_tag'))
+  check('and its neighbour stays', removed.tags.some((t) => t.name === 'also_stale'))
+
+  const both = optimisticSet(prev, { add: ['fresh'], remove: ['stale_tag'] }, now)
+  check('add and remove in one edit',
+    both.tags.map((t) => t.name).join('|') === 'also_stale|fresh', both.tags)
+
+  const dupe = optimisticSet(prev, { add: ['stale_tag'] }, now)
+  check('adding a tag already there changes nothing',
+    dupe.tags.length === prev.tags.length, dupe.tags)
+
+  check('the pointer survives an optimistic edit', added.postId === 4)
+}
+
+console.log('== the optimistic guess never becomes what we claim the server said')
+{
+  // tagString is the ONLY input to old_tag_string. If a guess were written into
+  // it, a second edit made before the first reply landed would compute its delta
+  // against a string the server never agreed to, and the two edits would fight.
+  const seen = mergeBooruIntoSet(prev, live, T0 + 1)
+  check('a live read sets it', seen.tagString === 'fresh_tag someone')
+  const guessed = optimisticSet(seen, { add: ['not_yet'] }, T0 + 2)
+  check('an optimistic edit leaves it exactly as the server left it',
+    guessed.tagString === 'fresh_tag someone', guessed.tagString)
+  check('even though the drawn tags already include the guess',
+    guessed.tags.some((t) => t.name === 'not_yet'))
 }
 
 if (failures > 0) {

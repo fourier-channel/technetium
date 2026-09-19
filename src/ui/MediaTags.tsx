@@ -4,7 +4,8 @@ import { booruPostUrl, booruTagUrl } from '../client/booruUrl'
 import { isHypeTag } from '../client/hypeTags'
 import { useTagDiff, tagKey, type TagPhase } from '../client/useTagDiff'
 import '../mediatags.css'
-import { refreshBooruTags, useMediaTags } from '../client/useMediaTags'
+import { editBooruTags, refreshBooruTags, useMediaTags } from '../client/useMediaTags'
+import { parseTagInput } from '../client/booruLive'
 import { useOnScreen } from './useOnScreen'
 import { sortTags, type MediaRating, type MediaTag, type TagCategory } from '../client/mediaTags'
 import { useMediaTagPrefs } from './mediaTagSettings'
@@ -178,6 +179,33 @@ function TagPanel({
     if (onScreen && mediaId) refreshBooruTags(mediaId)
   }, [onScreen, mediaId])
 
+  // Editing is OFF by default and per-panel. The x on every pill is a
+  // destructive control one pixel from a link people click all day, so it
+  // appears only once somebody has said they are tagging.
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  // The booru's answer replaces the guess, so nothing here waits on the round
+  // trip -- `busy` only dims the input, it does not gate the pill.
+  const [busy, setBusy] = useState(false)
+
+  const run = (edit: { add?: string[]; remove?: string[] }) => {
+    if (!mediaId) return
+    setError(null)
+    setBusy(true)
+    editBooruTags(mediaId, edit)
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setBusy(false))
+  }
+
+  const submit = () => {
+    const names = parseTagInput(draft)
+    if (names.length === 0) return
+    setDraft('')
+    run({ add: names })
+  }
+
   return (
     <div className="mtags-panel" ref={panelRef}>
       {meta?.rating && <RatingBadge rating={meta.rating} by={meta.updatedBy} />}
@@ -185,18 +213,77 @@ function TagPanel({
         <>
           <div className="mtags-label">{head.length === 1 ? 'character' : 'characters'}</div>
           {head.map((d) => (
-            <TagPill key={tagKey(d.tag)} tag={d.tag} phase={d.phase} onTagClick={onTagClick} />
+            <TagPill
+              key={tagKey(d.tag)}
+              tag={d.tag}
+              phase={d.phase}
+              onTagClick={onTagClick}
+              onRemove={editing ? () => run({ remove: [d.tag.name] }) : undefined}
+            />
           ))}
           <div className="mtags-rule" />
         </>
       )}
       {body.map((d) => (
-        <TagPill key={tagKey(d.tag)} tag={d.tag} phase={d.phase} onTagClick={onTagClick} />
+        <TagPill
+          key={tagKey(d.tag)}
+          tag={d.tag}
+          phase={d.phase}
+          onTagClick={onTagClick}
+          onRemove={editing ? () => run({ remove: [d.tag.name] }) : undefined}
+        />
       ))}
       {rest > 0 && (
         <button type="button" onClick={onMore} style={ghostBtn}>
           +{rest} more
         </button>
+      )}
+      {/* Only where there is a post to edit. Without one the booru has nothing
+          to write to, and a control that always fails is worse than none. */}
+      {meta?.postId !== undefined && mediaId && (
+        <>
+          {editing && (
+            <input
+              className="mtags-add"
+              value={draft}
+              autoFocus
+              disabled={busy}
+              placeholder="add tags"
+              aria-label="Add tags to this post"
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  submit()
+                } else if (e.key === 'Escape') {
+                  e.preventDefault()
+                  setDraft('')
+                  setEditing(false)
+                }
+                // The timeline binds single keys; a tag being typed is not a
+                // shortcut.
+                e.stopPropagation()
+              }}
+              onBlur={submit}
+            />
+          )}
+          <button
+            type="button"
+            style={ghostBtn}
+            onClick={() => {
+              setEditing((v) => !v)
+              setError(null)
+            }}
+            title={editing ? 'Stop editing tags' : 'Edit tags on the booru'}
+          >
+            {editing ? 'done' : '+ tag'}
+          </button>
+          {error && (
+            <div className="mtags-error" role="alert">
+              {error}
+            </div>
+          )}
+        </>
       )}
       {meta?.postId !== undefined && (
         <a
@@ -253,10 +340,14 @@ function TagPill({
   tag,
   phase = 'steady',
   onTagClick,
+  onRemove,
 }: {
   tag: MediaTag
   phase?: TagPhase
   onTagClick?: (t: MediaTag) => void
+  // Present only while the panel is in edit mode. Its absence is what keeps a
+  // destructive control away from a link people click all day.
+  onRemove?: () => void
 }) {
   const hype = isHypeTag(tag.name)
   // A hyped pill's states, all classes -- never :hover, which a tumbling pill
@@ -286,7 +377,7 @@ function TagPill({
   // A leaving pill is already gone from the data and is on screen only long
   // enough to be seen going, so it must not be clickable on the way out.
   const leaving = phase === 'leaving'
-  return (
+  const pill = (
     <a
       className={
         `mod-pill mod-pill--cat-${tag.category}` +
@@ -319,6 +410,30 @@ function TagPill({
       <i className="mod-pill-dot" />
       {tag.name}
     </a>
+  )
+
+  // Not in edit mode: the pill IS the flex item, exactly as it was. Wrapping it
+  // unconditionally would change every panel's layout to buy a control almost
+  // nobody has open.
+  //
+  // A leaving pill gets no x either: it is already gone from the data and is on
+  // screen only long enough to be seen going, so removing it again is a write
+  // that would either do nothing or undo somebody else's.
+  if (!onRemove || leaving) return pill
+
+  return (
+    <span className="mtags-tagrow">
+      {pill}
+      <button
+        type="button"
+        className="mtags-x"
+        onClick={onRemove}
+        title={`Remove ${tag.name} from this post`}
+        aria-label={`Remove tag ${tag.name}`}
+      >
+        {'\u00d7'}
+      </button>
+    </span>
   )
 }
 
