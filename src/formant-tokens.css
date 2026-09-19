@@ -304,6 +304,23 @@
   --mod-hype-tilt:         1.5deg;
   --mod-hype-sparkle-size: 5px;
   --mod-hype-sparkle-dim:  0.15;     /* trough opacity, never fully gone */
+
+  /* THE SPIN. Operator, 2026-09-19: "on mouseover I want the tag to spin
+   * around wildly on various axes, slowing back down to its 'dormant' state
+   * of slightly jiggling when taken off mouseover." Three states, then:
+   * dormant is mod-hype-move above; hovered is mod-hype-spin, a fast tumble
+   * on all three axes that runs for as long as the pointer stays; leaving is
+   * mod-hype-spin-down, one finite tumble that eases out and ENDS AT REST --
+   * its last frame is the identity, so the jiggle takes over with no snap.
+   * Each state sets `animation` wholesale: two animations on one element
+   * cannot both drive transform (see above), so a consumer swaps them rather
+   * than stacking them. The leave state needs one line of JS -- add a class on
+   * pointer-leave, remove it on animationend -- because a finite animation
+   * bound to :not(:hover) would also play on page load for every pill.
+   * Transform only, as the rule requires; perspective() is a transform. */
+  --mod-hype-spin-period:  0.9s;     /* one full tumble while hovered */
+  --mod-hype-spin-down:    1400ms;   /* the wind-down back to the jiggle */
+  --mod-hype-depth:        420px;    /* perspective; smaller reads wilder */
 }
 
 @keyframes mod-hype-move {
@@ -330,6 +347,25 @@
   80%  { opacity: 0.85;                        transform: scale(0.95) rotate(135deg); }
 }
 
+@keyframes mod-hype-spin {
+  /* All three axes at once, at different rates, so no two tumbles look
+     alike; X does two turns per period, Y one, Z wobbles. Every frame is a
+     full transform list of the same shape so the browser interpolates each
+     function rather than falling back to a matrix decomposition. */
+  0%   { transform: perspective(var(--mod-hype-depth)) rotateX(0deg)   rotateY(0deg)   rotateZ(0deg); }
+  25%  { transform: perspective(var(--mod-hype-depth)) rotateX(200deg) rotateY(70deg)  rotateZ(-25deg); }
+  50%  { transform: perspective(var(--mod-hype-depth)) rotateX(360deg) rotateY(200deg) rotateZ(20deg); }
+  75%  { transform: perspective(var(--mod-hype-depth)) rotateX(560deg) rotateY(290deg) rotateZ(-15deg); }
+  100% { transform: perspective(var(--mod-hype-depth)) rotateX(720deg) rotateY(360deg) rotateZ(0deg); }
+}
+
+@keyframes mod-hype-spin-down {
+  /* Two turns on each axis, decelerating (the consumer applies an ease-out),
+     landing on multiples of 360 so the final frame IS the resting pose. */
+  0%   { transform: perspective(var(--mod-hype-depth)) rotateX(0deg)   rotateY(0deg)   rotateZ(0deg); }
+  100% { transform: perspective(var(--mod-hype-depth)) rotateX(720deg) rotateY(720deg) rotateZ(0deg); }
+}
+
 /* MOTION IS A PREFERENCE, and an infinite one most of all. A surface that
    honours prefers-reduced-motion inherits that here rather than remembering to
    write it -- the tag stays legible and simply stops moving. */
@@ -339,6 +375,8 @@
     --mod-hype-rise: 0px;
     --mod-hype-jitter: 0px;
     --mod-hype-tilt: 0deg;
+    --mod-hype-spin-period: 0s;
+    --mod-hype-spin-down: 0ms;
   }
 }
 

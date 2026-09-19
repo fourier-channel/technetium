@@ -256,6 +256,12 @@ function TagPill({
   onTagClick?: (t: MediaTag) => void
 }) {
   const hype = isHypeTag(tag.name)
+  // A hyped pill's third state. Hover is CSS (mod-hype-spin); the wind-down
+  // (mod-hype-spin-down) is a finite animation that must start when the
+  // pointer LEAVES and never on mount, so it is state: on at pointer-leave,
+  // off when its animation ends, and off again if the pointer comes back so
+  // :hover's spin takes over. Same contract as the booru's post page.
+  const [winding, setWinding] = useState(false)
   // A leaving pill is already gone from the data and is on screen only long
   // enough to be seen going, so it must not be clickable on the way out.
   const leaving = phase === 'leaving'
@@ -264,9 +270,13 @@ function TagPill({
       className={
         `mod-pill mod-pill--cat-${tag.category}` +
         (hype ? ' mod-pill--hype' : '') +
+        (hype && winding ? ' is-spinning-down' : '') +
         (phase === 'entering' ? ' mod-pill--in' : '') +
         (leaving ? ' mod-pill--out' : '')
       }
+      onPointerLeave={hype ? () => setWinding(true) : undefined}
+      onPointerEnter={hype ? () => setWinding(false) : undefined}
+      onAnimationEnd={hype ? (e) => { if (e.animationName === 'mod-hype-spin-down') setWinding(false) } : undefined}
       aria-hidden={leaving ? 'true' : undefined}
       tabIndex={leaving ? -1 : undefined}
       href={tag.url ?? booruTagUrl(tag.name)}

@@ -163,6 +163,19 @@
   /* Its own layer, so the bounce never reflows the pills around it. */
   will-change: transform;
 }
+/* Three states, one animation at a time -- the same contract as the booru's
+   post page, from the same canon keyframes. Hover tumbles on every axis for
+   as long as the pointer stays; leaving winds down once, eased out, ending at
+   rest so the jiggle resumes with no snap. The wind-down is a class set on
+   pointer-leave and cleared on animationend (MediaTags.tsx), never bound to
+   :not(:hover), which would play it on mount for every pill. :hover is
+   declared last so it wins over a wind-down still in flight. */
+.mod-pill--hype.is-spinning-down {
+  animation: mod-hype-spin-down var(--mod-hype-spin-down) cubic-bezier(0.16, 1, 0.3, 1) 1 both;
+}
+.mod-pill--hype:hover {
+  animation: mod-hype-spin var(--mod-hype-spin-period) linear infinite;
+}
 .mod-pill--hype::after {
   content: '';
   position: absolute;
@@ -184,6 +197,8 @@
    a zero-distance animation still ticks. */
 @media (prefers-reduced-motion: reduce) {
   .mod-pill--hype,
+  .mod-pill--hype:hover,
+  .mod-pill--hype.is-spinning-down,
   .mod-pill--hype::after {
     animation: none;
   }
