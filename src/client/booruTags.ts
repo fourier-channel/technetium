@@ -30,6 +30,13 @@
 // no Ruby needed writing.
 import { BOORU_ORIGIN } from './booruUrl'
 import { booruCsrfToken, resetBooruCsrf } from './booruCsrf'
+// THE GRAMMAR IS CANON (formant/tagedit.js, hydrated). applyEdit and the two
+// refusals below were defined here first; the booru's own page now runs the
+// same bytes, so "what an edit means" cannot drift between the two surfaces
+// that make one.
+import { applyEdit, editFields, refuseEdit } from '../formant-tagedit.js'
+
+export { applyEdit }
 import type { MediaTag, TagCategory, TagLamp, TagProvenance } from './mediaTags'
 
 // Only the fields the panel draws. The whole point is that this stays small.
@@ -136,13 +143,6 @@ export interface TagEdit {
   remove?: readonly string[]
 }
 
-/** The tag_string a delta implies, given what this client last saw. */
-export function applyEdit(seen: string, edit: TagEdit): string {
-  const names = new Set(seen.split(/\s+/).filter(Boolean))
-  for (const t of edit.remove ?? []) names.delete(t)
-  for (const t of edit.add ?? []) names.add(t)
-  return [...names].join(' ')
-}
 
 /**
  * Add or remove tags on a post.
@@ -175,45 +175,11 @@ export async function writeBooruTags(
   edit: TagEdit,
   fetchImpl: typeof fetch = fetch,
 ): Promise<BooruTagSet | null> {
-  const seen = new Set(seenTagString.split(/\s+/).filter(Boolean))
-  const next = applyEdit(seenTagString, edit)
-
-  // A REMOVAL THAT REMOVES NOTHING WAS SILENT, and that is why removals
-  // "did not work" while additions did. An add always introduces a token the
-  // server string lacks, so `next` always differs and the request always went
-  // out. A remove whose tag is absent from old_tag_string produces an
-  // IDENTICAL string, hit the early return, and sent nothing -- while the
-  // optimistic update had already taken the pill off screen. It came back on
-  // the next live read, with no error anywhere.
-  //
-  // The mismatch is the thing worth reporting, because it means the panel is
-  // drawing a tag the booru does not have under that name: an alias applied
-  // since the last read, a rename, or a stale set. Naming the tag and what
-  // the server actually holds is what makes that diagnosable in one look.
-  const absent = (edit.remove ?? []).filter((t) => !seen.has(t))
-  if (absent.length > 0) {
-    throw new Error(
-      `the booru's copy of post ${postId} does not contain ` +
-        `${absent.map((t) => `"${t}"`).join(', ')}, so there is nothing to remove. ` +
-        `It currently holds: ${[...seen].join(' ') || '(no tags)'}. ` +
-        'Fix: the panel is showing a tag the booru knows by another name -- ' +
-        'usually an alias applied after this client last read the post. ' +
-        'Scroll it out of view and back to force a fresh read.',
-    )
-  }
-  if (next === seenTagString) {
-    throw new Error(
-      `that edit would change nothing on post ${postId}. ` +
-        'Fix: the tag is already in the state you asked for; nothing was sent.',
-    )
-  }
+  const refusal = refuseEdit(postId, seenTagString, edit)
+  if (refusal) throw new Error(refusal)
 
   const send = async (csrf: string | null): Promise<Response> => {
-    const body = new URLSearchParams()
-    body.set('_method', 'put')
-    if (csrf) body.set('authenticity_token', csrf)
-    body.set('post[old_tag_string]', seenTagString)
-    body.set('post[tag_string]', next)
+    const body = new URLSearchParams(editFields(seenTagString, edit, csrf))
     return fetchImpl(`${BOORU_ORIGIN}/posts/${postId}.json?only=${FIELDS}`, {
       method: 'POST',
       credentials: 'include',

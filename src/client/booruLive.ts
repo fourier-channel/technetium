@@ -19,8 +19,17 @@
 // nothing: a post whose tags were all removed must come back empty, or a
 // detagging never shows up and the panel quietly disagrees with the booru
 // forever.
+import { nextNames, normaliseTagName, parseTagInput } from '../formant-tagedit.js'
 import type { BooruTagSet } from './booruTags'
 import type { MediaRating, MediaTagSet } from './mediaTags'
+
+// THE GRAMMAR IS CANON. normaliseTagName, parseTagInput and the optimistic
+// apply were written here first and now live in formant
+// (docs/design/formant/tagedit.js), hydrated into this repo and into the
+// booru, so both surfaces agree on what an edit MEANS. Re-exported under the
+// same names because the call sites and the checks are unchanged -- what
+// moved is where the definition lives, not what it does.
+export { normaliseTagName, parseTagInput }
 
 /**
  * How long a live read stands before the same post is asked again.
@@ -92,37 +101,6 @@ export function mergeBooruIntoSet(prev: MediaTagSet, live: BooruTagSet, now: num
 // ---------------------------------------------------------------------------
 
 /**
- * The name the booru will actually store, from what a person typed.
- *
- * Danbooru downcases and turns whitespace into underscores, so "Blue Sky" and
- * "blue_sky" are ONE tag there. Doing it here rather than letting the server do
- * it silently is what makes the optimistic pill match the one that comes back:
- * otherwise "Blue Sky" pops in, the server answers "blue_sky", and the diff
- * reads that as one tag leaving and a different one arriving -- a visible
- * flicker on every edit that used a capital letter.
- *
- * Returns '' for anything that is not a tag once normalised; the caller must
- * treat that as "nothing was typed" rather than sending it.
- */
-export function normaliseTagName(raw: string): string {
-  return raw
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '_')
-    .replace(/^[_]+|[_]+$/g, '')
-}
-
-/** Split a typed line into tag names. People paste space-separated lists. */
-export function parseTagInput(raw: string): string[] {
-  const out: string[] = []
-  for (const part of raw.split(/[\s,]+/)) {
-    const name = normaliseTagName(part)
-    if (name && !out.includes(name)) out.push(name)
-  }
-  return out
-}
-
-/**
  * The set as it will look if the edit succeeds, applied at once so the pill
  * moves under the finger rather than after a round trip.
  *
@@ -143,14 +121,11 @@ export function optimisticSet(
   edit: { add?: readonly string[]; remove?: readonly string[] },
   now: number,
 ): MediaTagSet {
-  const removed = new Set(edit.remove ?? [])
-  const tags = prev.tags.filter((t) => !removed.has(t.name))
-  const have = new Set(tags.map((t) => t.name))
-  for (const name of edit.add ?? []) {
-    if (!have.has(name)) {
-      tags.push({ name, category: 'general' })
-      have.add(name)
-    }
-  }
+  // Names are canon's job (nextNames); mapping them back onto MediaTag objects
+  // is this surface's, because only this surface has the objects.
+  const by = new Map(prev.tags.map((t) => [t.name, t]))
+  const tags = nextNames(prev.tags.map((t) => t.name), edit).map(
+    (name) => by.get(name) ?? { name, category: 'general' as const },
+  )
   return { ...prev, tags, ts: now }
 }

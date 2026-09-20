@@ -9,6 +9,11 @@
 
     /* Bundler mode */
     "moduleResolution": "bundler",
+    /* formant/tagedit.js is canon, hydrated here as plain JS with JSDoc types
+       so the booru's webpack can import the same bytes. checkJs means it is
+       type-checked like the rest of src rather than trusted. */
+    "allowJs": true,
+    "checkJs": true,
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
