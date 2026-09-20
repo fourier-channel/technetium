@@ -30,9 +30,22 @@ export type TagCategory = 'artist' | 'character' | 'copyright' | 'meta' | 'gener
 
 const CATEGORIES: readonly TagCategory[] = ['artist', 'character', 'copyright', 'meta', 'general']
 
+// WHO put the tag there, which is a DIFFERENT QUESTION from what kind of tag
+// it is. The booru answers both and they must not borrow each other's colours
+// -- an autotagged character is still a character, and a creator-declared
+// general tag is still general. Modulation paints the pill by one axis and
+// dots it with the other; this client now has both facts to do the same.
+//
+// `unsourced` is a real answer, not a gap: the post carries the tag but the
+// provenance sidecar has no row for it, which is what every tag looked like
+// before the sidecar existed.
+export type TagProvenance = 'creator' | 'auto' | 'both' | 'meta' | 'pending' | 'unsourced'
+
 export interface MediaTag {
   name: string
   category: TagCategory
+  /** Absent when provenance has not been read for this post yet. */
+  provenance?: TagProvenance
   // 0..1 from the tagger when present. Kept so a confidence threshold can be
   // added later without a schema change; unused by the v1 strip.
   score?: number

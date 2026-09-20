@@ -440,3 +440,58 @@
   border-style: solid;
   background: color-mix(in srgb, var(--mod-tag-general-fg) 28%, transparent);
 }
+
+/* --- provenance paints the pill, category keeps the dot ------------------- */
+/* The booru answers two questions about a tag and they are not the same one:
+   WHAT KIND of tag it is (artist, character, general) and WHO PUT IT THERE
+   (the creator, the autotagger, both). Canon is explicit that the two axes
+   must not borrow each other's colours.
+   Modulation paints its pills by provenance and this now matches it, so a tag
+   is the same colour in the client and on the post page. The dot keeps the
+   category, so both facts stay answerable on one pill.
+
+   Declared AFTER .mod-pill--cat-* and matching two classes, so it wins on
+   specificity regardless of what order a later edit leaves these blocks in --
+   the same trap Modulation's own comment records paying for. */
+.mod-pill--cat.mod-pill--src-creator,
+.mod-pill[class*="mod-pill--cat-"].mod-pill--src-creator {
+  color: var(--mod-creator-fg);
+  border-color: color-mix(in srgb, var(--mod-creator-fg) 40%, transparent);
+  background: color-mix(in srgb, var(--mod-creator-fg) 12%, var(--mod-surface));
+}
+.mod-pill[class*="mod-pill--cat-"].mod-pill--src-auto {
+  color: var(--mod-auto-fg);
+  border-color: color-mix(in srgb, var(--mod-auto-fg) 40%, transparent);
+  background: color-mix(in srgb, var(--mod-auto-fg) 12%, var(--mod-surface));
+}
+/* BOTH is the one that carries two colours at once, because it is the one
+   answer that is genuinely two: the autotagger's orange with the creator's
+   green on the edge. */
+.mod-pill[class*="mod-pill--cat-"].mod-pill--src-both {
+  color: var(--mod-both-fg);
+  border-color: var(--mod-both-outline);
+  background: color-mix(in srgb, var(--mod-both-fg) 12%, var(--mod-surface));
+}
+.mod-pill[class*="mod-pill--cat-"].mod-pill--src-meta {
+  color: var(--mod-meta-fg);
+  border-color: color-mix(in srgb, var(--mod-meta-fg) 40%, transparent);
+  background: color-mix(in srgb, var(--mod-meta-fg) 12%, var(--mod-surface));
+}
+.mod-pill[class*="mod-pill--cat-"].mod-pill--src-pending {
+  color: var(--mod-pending-fg);
+  border-color: color-mix(in srgb, var(--mod-pending-fg) 40%, transparent);
+  background: color-mix(in srgb, var(--mod-pending-fg) 12%, var(--mod-surface));
+}
+/* `unsourced` gets NO rule on purpose. The post carries the tag and the
+   sidecar has no row for it, which is not a provenance -- it is the absence
+   of one, and the honest thing to show is the category colour it had before
+   provenance was read at all. */
+
+/* THE DOT NOW CARRIES THE CATEGORY, so the axis that lost the pill is still
+   on it. currentColor would make it the provenance colour again and the
+   second fact would vanish. */
+.mod-pill--cat-artist > .mod-pill-dot { background: var(--mod-tag-artist-fg); }
+.mod-pill--cat-character > .mod-pill-dot { background: var(--mod-tag-character-fg); }
+.mod-pill--cat-copyright > .mod-pill-dot { background: var(--mod-tag-copyright-fg); }
+.mod-pill--cat-general > .mod-pill-dot { background: var(--mod-tag-general-fg); }
+.mod-pill--cat-meta > .mod-pill-dot { background: var(--mod-tag-meta-fg); }

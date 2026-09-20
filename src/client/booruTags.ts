@@ -30,7 +30,7 @@
 // no Ruby needed writing.
 import { BOORU_ORIGIN } from './booruUrl'
 import { booruCsrfToken, resetBooruCsrf } from './booruCsrf'
-import type { MediaTag, TagCategory } from './mediaTags'
+import type { MediaTag, TagCategory, TagProvenance } from './mediaTags'
 
 // Only the fields the panel draws. The whole point is that this stays small.
 const FIELDS = [
@@ -259,4 +259,74 @@ export async function writeBooruTags(
     )
   }
   return parsePostTags((await res.json()) as PostTagJson)
+}
+
+
+// ---------------------------------------------------------------------------
+// PROVENANCE: who put each tag there.
+//
+// A SECOND ENDPOINT, deliberately, because it is a second question. The
+// category strings come off the post itself; provenance lives in chanbooru's
+// fourier_tag_sources sidecar and is IDENTITY-GATED -- a creator's private
+// tags are visible to the creator and to moderators and to nobody else. The
+// default (no ?scope) is that gated view, so the booru decides what this
+// viewer may see rather than the client filtering afterwards. `?scope=public`
+// exists for bots and must not be used here.
+//
+// The buckets are chanbooru's own: creator / auto / both / meta / pending,
+// plus `unsourced` for tags the post carries with no sidecar row.
+// ---------------------------------------------------------------------------
+
+const BUCKETS: readonly TagProvenance[] = ['creator', 'auto', 'both', 'meta', 'pending', 'unsourced']
+
+/** tag name -> who put it there. Empty when the post has no sidecar rows. */
+export function parseProvenance(json: unknown): Map<string, TagProvenance> {
+  const out = new Map<string, TagProvenance>()
+  if (!json || typeof json !== 'object') return out
+  const o = json as Record<string, unknown>
+  for (const bucket of BUCKETS) {
+    const list = o[bucket]
+    if (!Array.isArray(list)) continue
+    for (const name of list) {
+      // FIRST BUCKET WINS. chanbooru's `both` is its own bucket rather than a
+      // tag appearing in two, so an overlap here would be a server-side bug;
+      // taking the first keeps one wrong row from silently recolouring a tag
+      // on every render depending on object key order.
+      if (typeof name === 'string' && name && !out.has(name)) out.set(name, bucket)
+    }
+  }
+  return out
+}
+
+export async function fetchBooruProvenance(
+  postId: number,
+  fetchImpl: typeof fetch = fetch,
+): Promise<Map<string, TagProvenance> | null> {
+  const res = await fetchImpl(`${BOORU_ORIGIN}/posts/${postId}/tag_sources.json`, {
+    credentials: 'include',
+    headers: { Accept: 'application/json' },
+  })
+  // 404 means the post has no sidecar rows at all -- an answer, and a common
+  // one for anything posted before the sidecar existed.
+  if (res.status === 404) return new Map()
+  if (!res.ok) {
+    throw new Error(
+      `the booru refused the provenance read for post ${postId} (HTTP ${res.status}). ` +
+        'Fix: same causes as the tag read -- the Cloudflare challenge, or a ' +
+        'missing booru session (ensureBooruSession).',
+    )
+  }
+  return parseProvenance(await res.json())
+}
+
+/** Attach provenance to a tag list, leaving the category axis untouched. */
+export function withProvenance(
+  tags: MediaTag[],
+  who: Map<string, TagProvenance>,
+): MediaTag[] {
+  if (who.size === 0) return tags
+  return tags.map((t) => {
+    const p = who.get(t.name)
+    return p ? { ...t, provenance: p } : t
+  })
 }

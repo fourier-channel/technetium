@@ -4,7 +4,13 @@ import { parseMxc } from './media'
 import { createLimiter } from './concurrency'
 import { reportIgnored } from './report'
 import { ensureBooruSession } from './booruSession'
-import { fetchBooruTags, writeBooruTags, type TagEdit } from './booruTags'
+import {
+  fetchBooruProvenance,
+  fetchBooruTags,
+  withProvenance,
+  writeBooruTags,
+  type TagEdit,
+} from './booruTags'
 import { mayRead, mergeBooruIntoSet, newBooruReadState, optimisticSet } from './booruLive'
 import {
   MEDIA_TAGS_EVENT,
@@ -212,7 +218,26 @@ export function refreshBooruTags(mediaId: string, force = false): void {
   booruReads.askedAt.set(postId, Date.now())
 
   void booruLimiter
-    .run(() => fetchBooruTags(postId))
+    .run(async () => {
+      // TWO READS, ONE SLOT. Category comes off the post, provenance off the
+      // sidecar, and they are different questions -- but they are one
+      // logical refresh, so they share a limiter slot rather than competing
+      // for two. Together they are well under a kilobyte.
+      //
+      // Provenance is allowed to fail on its own: a post with no sidecar
+      // rows, or a booru that refuses that endpoint, must still show tags.
+      // The pill then falls back to its category colour, which is what
+      // shipped before provenance existed.
+      const live = await fetchBooruTags(postId)
+      if (!live) return null
+      let who = null
+      try {
+        who = await fetchBooruProvenance(postId)
+      } catch (err) {
+        reportIgnored('media tags: provenance for booru post ' + postId, err)
+      }
+      return who ? { ...live, tags: withProvenance(live.tags, who) } : live
+    })
     .then((live) => {
       if (!live) return
       // Re-read the store rather than closing over the earlier set: the read

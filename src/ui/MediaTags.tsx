@@ -391,7 +391,19 @@ function TagPill({
   const pill = (
     <a
       className={
+        // TWO AXES, AND THEY MUST NOT BORROW EACH OTHER'S COLOURS. Provenance
+        // paints the pill -- who put the tag there is the question a reader
+        // asks of a tag list -- and the category keeps the dot. That is the
+        // same split Modulation makes on the booru's own post page, inverted
+        // only in which axis got the larger surface, and it is why a general
+        // tag here is no longer a blue pill: on the booru it is orange
+        // because the autotagger supplied it.
+        //
+        // No provenance yet (the sidecar has no row, or it has not been read)
+        // falls back to the category colour, which is exactly what shipped
+        // before provenance existed.
         `mod-pill mod-pill--cat-${tag.category}` +
+        (tag.provenance ? ` mod-pill--src-${tag.provenance}` : '') +
         (hype ? ' mod-pill--hype' : '') +
         (hype && spin === 'spinning' ? ' is-spinning' : '') +
         (hype && spin === 'winding' ? ' is-spinning-down' : '') +
