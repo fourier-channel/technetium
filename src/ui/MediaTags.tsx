@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { parseMxc } from '../client/media'
 import { booruPostUrl, booruTagUrl } from '../client/booruUrl'
 import { isHypeTag } from '../client/hypeTags'
@@ -178,6 +178,34 @@ function TagPanel({
   useEffect(() => {
     if (onScreen && mediaId) refreshBooruTags(mediaId)
   }, [onScreen, mediaId])
+
+  // PIN THE WIDTH TO THE COLUMNS. Firefox sizes a column-wrap flex box's
+  // intrinsic width to one column and hides the rest behind overflow:hidden
+  // (measured: 172px drawn, 301px of content). Both engines report the true
+  // content width as scrollWidth even when they draw the box too narrow, so
+  // the width is read from that and written back. A layout effect, so it
+  // lands before paint and nothing is ever seen at the wrong width; the
+  // reset first, because scrollWidth of a box already wide enough is just
+  // its own width and the panel would never shrink again.
+  //
+  // AND RESERVE IT. The panel is out of flow (that is how it gets the
+  // picture's height), so it takes no width and the reaction rail after the
+  // picture was laid out under the first column. The row's margin-right is
+  // set to the same measurement plus the panel's own margin-left, which
+  // pushes everything after the picture past the tags. Margin is outside the
+  // row's padding box, so the panel's `left: 100%` does not move.
+  useLayoutEffect(() => {
+    const el = panelRef.current
+    if (!el) return
+    el.style.width = ''
+    const w = el.scrollWidth
+    el.style.width = w + 'px'
+    const row = el.parentElement
+    if (row && row.classList.contains('mtags-row')) {
+      const gap = parseFloat(getComputedStyle(el).marginLeft) || 0
+      row.style.marginRight = w + gap + 'px'
+    }
+  }, [diffed, panelRef])
 
   // Editing is OFF by default and per-panel. The x on every pill is a
   // destructive control one pixel from a link people click all day, so it

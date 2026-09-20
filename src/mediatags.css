@@ -30,13 +30,33 @@
  * instead of growing them on demand.
  */
 
- /* THE POSITIONED ANCESTOR is the ROW, and it shrink-wraps the image:
-    inline-flex, with the panel taken out of flow, means the row's box IS the
-    picture's box. So `left: 100%` lands on the image's right edge and
-    `max-height: 100%` is the image's height -- both for free, and the panel
-    stays a SIBLING of the image in the markup, which is what the component
-    renders. Making it a child instead would work in a harness and break in the
-    app the moment anything else became a positioned ancestor. */
+/* THE POSITIONED ANCESTOR is the ROW, and it shrink-wraps the image:
+   inline-flex, with the panel taken out of flow, means the row's box IS the
+   picture's box. So `left: 100%` lands on the image's right edge and
+   `max-height: 100%` is the image's height -- both for free.
+
+   THE PANEL RESERVES ITS WIDTH ANYWAY, and this is the 2026-09-20 fix for
+   "the reaction rail does need space". An out-of-flow box takes no width,
+   so the rail and timestamp that follow the picture were laid out under the
+   first column of tags. Two in-flow arrangements were tried and measured
+   first, and both failed for reasons worth keeping:
+     - a stretched flex item's hypothetical height is its content height, so
+       a column-wrap panel with no height put every pill in one column, the
+       row grew to that, and the panel stretched to the row -- circular.
+     - `contain: size` breaks that loop but zeroes the WIDTH contribution too;
+       the panel came out 42px wide and every pill clamped to max-width:100%
+       of it (measured, both engines).
+   So the panel stays out of flow for its height, and TagPanel's layout
+   effect reserves the width: it pins the panel to its own scrollWidth and
+   sets the row's margin-right to match. Margin is outside the padding box,
+   so `left: 100%` does not move.
+
+   WHY scrollWidth AND NOT INTRINSIC SIZING. Firefox sizes a column-wrap
+   container's max-content width to ONE column (measured: 172px drawn,
+   301px of content, second column entirely behind overflow:hidden). Both
+   engines report the true content width as scrollWidth even when they draw
+   the box too narrow, so that is what the effect reads. `max-content` below
+   is only the starting value it measures from. */
 .mtags-row {
   position: relative;
   display: inline-flex;
@@ -50,65 +70,14 @@
   min-width: 0;
   line-height: 0;
 }
-/* THE RAISE for the picture (canon --mod-raise-*): the WRAPPER scales, on its
-   own layer, with the ring, the lift and the sweep -- never the <img>, which
-   its own box would clip. The panel is positioned against the row, not the
-   wrapper, so a transform here moves nothing beside it. */
-.mtags-media {
-  position: relative;
-  border-radius: 8px;
-  overflow: hidden;
-  transition: transform var(--mod-raise-ease), box-shadow var(--mod-raise-ease);
-  will-change: transform;
-}
-.mtags-media::before {
-  content: '';
-  position: absolute;
-  top: 0; bottom: 0; left: -60%; width: 220%;
-  z-index: 1;
-  pointer-events: none;
-  background: var(--mod-sweep);
-  opacity: 0;
-  transform: translateX(-40%);
-}
-.mtags-media:hover,
-.mtags-media:focus-within {
-  transform: scale(var(--mod-raise-scale));
-  z-index: 3;
-  box-shadow: var(--mod-raise-ring), var(--mod-raise-lift);
-}
-.mtags-media:hover::before,
-.mtags-media:focus-within::before {
-  opacity: 1;
-  animation: mod-sweep var(--mod-sweep-period) ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .mtags-media, .mod-pill { transition: none; }
-  .mtags-media:hover, .mod-pill:hover { transform: none; }
-  .mtags-media:hover::before, .mod-pill:hover::before { animation: none; opacity: 0; }
-}
 .mtags-panel {
   position: absolute;
   top: 0;
   left: 100%;
   margin-left: 8px;
   max-height: 100%;
-  /* THE WIDTH IS EXPLICIT, AND THIS IS A FIREFOX FINDING. It was
-     `max-content`, which is the right idea -- an absolutely positioned box
-     with `left: 100%` shrink-fits to zero otherwise -- and Chromium sizes a
-     column-wrap flex container's max-content width to all of its columns.
-     FIREFOX SIZES IT TO ONE. Measured on the identical markup, 2026-09-20:
-     Chromium panel 301px wide with two columns visible; Firefox panel 172px
-     wide, content 301px, second column at x=564 with the panel ending at
-     558 -- entirely behind overflow:hidden. Every harness render had passed
-     because the harness is headless Chromium. The operator saw one column
-     and no unfurl, and was right.
-     A fixed width sidesteps intrinsic sizing in both engines. The box is
-     out of flow, so it reserves no layout; pointer-events below keeps its
-     empty remainder from eating clicks meant for what sits under it. */
-  width: 34rem;
+  width: max-content;
   max-width: 34rem;
-  pointer-events: none;
   display: flex;
   flex-direction: column;
   flex-wrap: wrap;
@@ -116,11 +85,6 @@
   gap: 3px 5px;
   line-height: 1.2;
   overflow: hidden;
-}
-/* The panel box is transparent to the pointer (see width above); everything
-   IN it is not. */
-.mtags-panel > * {
-  pointer-events: auto;
 }
 
 .mtags-label {
