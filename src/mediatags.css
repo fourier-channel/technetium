@@ -93,22 +93,34 @@
   left: 100%;
   margin-left: 8px;
   max-height: 100%;
-  /* WIDTH MUST BE max-content. An absolutely positioned box with `left: 100%`
-     and no `right` gets a shrink-to-fit width bounded by what is left of the
-     containing block -- and the containing block is the image, so "what is
-     left" is zero. Rendered, that clipped the second column to a sliver of
-     pill. max-content sizes to the columns instead.
-     The overlap bound then has to be explicit: roughly three columns before the
-     tail is collapsed into "+N more" by the caller's `max`. */
-  width: max-content;
+  /* THE WIDTH IS EXPLICIT, AND THIS IS A FIREFOX FINDING. It was
+     `max-content`, which is the right idea -- an absolutely positioned box
+     with `left: 100%` shrink-fits to zero otherwise -- and Chromium sizes a
+     column-wrap flex container's max-content width to all of its columns.
+     FIREFOX SIZES IT TO ONE. Measured on the identical markup, 2026-09-20:
+     Chromium panel 301px wide with two columns visible; Firefox panel 172px
+     wide, content 301px, second column at x=564 with the panel ending at
+     558 -- entirely behind overflow:hidden. Every harness render had passed
+     because the harness is headless Chromium. The operator saw one column
+     and no unfurl, and was right.
+     A fixed width sidesteps intrinsic sizing in both engines. The box is
+     out of flow, so it reserves no layout; pointer-events below keeps its
+     empty remainder from eating clicks meant for what sits under it. */
+  width: 34rem;
   max-width: 34rem;
+  pointer-events: none;
   display: flex;
   flex-direction: column;
   flex-wrap: wrap;
   align-content: flex-start;
-  gap: 4px 6px;
+  gap: 3px 5px;
   line-height: 1.2;
   overflow: hidden;
+}
+/* The panel box is transparent to the pointer (see width above); everything
+   IN it is not. */
+.mtags-panel > * {
+  pointer-events: auto;
 }
 
 .mtags-label {
@@ -132,15 +144,23 @@
 .mod-pill {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.2rem 0.65rem;
+  gap: 0.3rem;
+  /* "Tags are still far too large" (operator, 2026-09-20). About a fifth
+     smaller than Modulation's 0.82rem / 0.22rem 0.7rem: a chat log is denser
+     than a post page and the pills sit beside a 320px picture, not under a
+     full-width one. */
+  padding: 0.12rem 0.5rem;
   border-radius: var(--mod-pill-radius, 999px);
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   line-height: 1.2;
   text-decoration: none;
   border: 1px solid transparent;
   white-space: nowrap;
   background: var(--mod-surface-2);
+  /* WHITE TEXT, always. The category and provenance colours paint the
+     border, the tint and the dot -- never the words. Operator ruling
+     2026-09-20; token --mod-tag-ink. */
+  color: var(--mod-tag-ink);
   /* The panel is a flex COLUMN: without this every pill stretches to the width
      of the widest one in its column. */
   align-self: flex-start;
@@ -190,13 +210,15 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: currentColor;
+  /* The text is white now, so currentColor would blank the dot. The
+     per-category rules below set it; this is the fallback for a pill with no
+     category class at all. */
+  background: var(--mod-tag-general-fg);
   opacity: 0.9;
   flex: none;
 }
 
 .mod-pill--cat-artist {
-  color: var(--mod-tag-artist-fg);
   border-color: color-mix(in srgb, var(--mod-tag-artist-fg) 30%, transparent);
   background: color-mix(in srgb, var(--mod-tag-artist-fg) 12%, var(--mod-surface));
 }
@@ -207,7 +229,6 @@
   border-color: color-mix(in srgb, var(--mod-tag-artist-fg) var(--mod-raise-edge), transparent);
 }
 .mod-pill--cat-copyright {
-  color: var(--mod-tag-copyright-fg);
   border-color: color-mix(in srgb, var(--mod-tag-copyright-fg) 30%, transparent);
   background: color-mix(in srgb, var(--mod-tag-copyright-fg) 12%, var(--mod-surface));
 }
@@ -218,7 +239,6 @@
   border-color: color-mix(in srgb, var(--mod-tag-copyright-fg) var(--mod-raise-edge), transparent);
 }
 .mod-pill--cat-character {
-  color: var(--mod-tag-character-fg);
   border-color: color-mix(in srgb, var(--mod-tag-character-fg) 30%, transparent);
   background: color-mix(in srgb, var(--mod-tag-character-fg) 12%, var(--mod-surface));
 }
@@ -229,12 +249,10 @@
   border-color: color-mix(in srgb, var(--mod-tag-character-fg) var(--mod-raise-edge), transparent);
 }
 .mod-pill--cat-general {
-  color: var(--mod-tag-general-fg);
   border-color: color-mix(in srgb, var(--mod-tag-general-fg) 30%, transparent);
   background: color-mix(in srgb, var(--mod-tag-general-fg) 12%, var(--mod-surface));
 }
 .mod-pill--cat-meta {
-  color: var(--mod-tag-meta-fg);
   border-color: color-mix(in srgb, var(--mod-tag-meta-fg) 30%, transparent);
   background: color-mix(in srgb, var(--mod-tag-meta-fg) 12%, var(--mod-surface));
 }
@@ -455,12 +473,10 @@
    the same trap Modulation's own comment records paying for. */
 .mod-pill--cat.mod-pill--src-creator,
 .mod-pill[class*="mod-pill--cat-"].mod-pill--src-creator {
-  color: var(--mod-creator-fg);
   border-color: color-mix(in srgb, var(--mod-creator-fg) 40%, transparent);
   background: color-mix(in srgb, var(--mod-creator-fg) 12%, var(--mod-surface));
 }
 .mod-pill[class*="mod-pill--cat-"].mod-pill--src-auto {
-  color: var(--mod-auto-fg);
   border-color: color-mix(in srgb, var(--mod-auto-fg) 40%, transparent);
   background: color-mix(in srgb, var(--mod-auto-fg) 12%, var(--mod-surface));
 }
@@ -468,17 +484,14 @@
    answer that is genuinely two: the autotagger's orange with the creator's
    green on the edge. */
 .mod-pill[class*="mod-pill--cat-"].mod-pill--src-both {
-  color: var(--mod-both-fg);
   border-color: var(--mod-both-outline);
   background: color-mix(in srgb, var(--mod-both-fg) 12%, var(--mod-surface));
 }
 .mod-pill[class*="mod-pill--cat-"].mod-pill--src-meta {
-  color: var(--mod-meta-fg);
   border-color: color-mix(in srgb, var(--mod-meta-fg) 40%, transparent);
   background: color-mix(in srgb, var(--mod-meta-fg) 12%, var(--mod-surface));
 }
 .mod-pill[class*="mod-pill--cat-"].mod-pill--src-pending {
-  color: var(--mod-pending-fg);
   border-color: color-mix(in srgb, var(--mod-pending-fg) 40%, transparent);
   background: color-mix(in srgb, var(--mod-pending-fg) 12%, var(--mod-surface));
 }

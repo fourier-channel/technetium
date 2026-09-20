@@ -387,6 +387,12 @@ export function Timeline({ room, onOpenThread, onOpenRoom, threadListOpen, onTog
             zIndex: 1,
             flex: 1,
             overflowY: 'auto',
+            // A chat log never scrolls sideways. The tag panel beside a picture
+            // is a fixed 34rem out-of-flow box (a Firefox intrinsic-sizing
+            // finding, see mediatags.css), and without this an overflow-y of
+            // auto implies overflow-x auto and gives every wide panel a
+            // horizontal scrollbar.
+            overflowX: 'hidden',
             padding: '12px 16px',
             color: 'var(--cpd-color-text-primary)',
           }}

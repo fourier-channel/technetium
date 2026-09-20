@@ -105,13 +105,32 @@
    * together on 2026-09-19, to the brand green, for the reason given above
    * the provenance block: they were the one green a reader saw.)
    *
-   * The PILL treatment that carries these -- the 30% border mix, the 12%
-   * background mix, the dot -- is a component and stays in the consumer. This
-   * file holds names and values only. */
+   * The PILL treatment that carries these -- the border mix, the background
+   * mix, the dot -- is a component and stays in the consumer. This file holds
+   * names and values only.
+   *
+   * TWO RULINGS, 2026-09-20, after the blue was defended one time too many:
+   *
+   * 1. "Blue should not be anywhere in tags." --mod-tag-general-fg was
+   *    #6db8ff, inherited from Danbooru's --general-tag-color, itself a
+   *    cascade down to the historical link colour. It is now the autotagger's
+   *    orange -- the SAME VALUE as --mod-auto-fg, deliberately and by name
+   *    below, because on this booru nearly every general tag IS an autotagger
+   *    tag and a reader should see one colour for that fact, not two. Every
+   *    surface that painted a general tag blue was "correct against its
+   *    token" and wrong against the operator; the token was the fault.
+   *
+   * 2. "The text on tags should be white by default, not the same color as
+   *    the pill itself." --mod-tag-ink is the pill's text, and it is NOT the
+   *    category or provenance colour. Those paint the border, the tint and
+   *    the dot; the words stay legible on all of them. Pure white rather than
+   *    --mod-ink: a pill sits on a tinted ground and the off-white read as
+   *    dim there. */
+  --mod-tag-ink:           #ffffff;
   --mod-tag-artist-fg:     #ff6b7a;
   --mod-tag-copyright-fg:  #c78bff;
   --mod-tag-character-fg:  #0ce92a;
-  --mod-tag-general-fg:    #6db8ff;
+  --mod-tag-general-fg:    var(--mod-auto-fg);
   --mod-tag-meta-fg:       #c9a15a;
 
   /* --- health, the lamp states ------------------------------------------ */

@@ -126,7 +126,7 @@ export function ThreadPanel({
 
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', minHeight: 0, color: 'var(--cpd-color-text-primary)' }}>
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '12px 16px', minHeight: 0, color: 'var(--cpd-color-text-primary)' }}>
         {items.length === 0 ? (
           <div style={{ fontSize: 13, opacity: 0.6 }}>
             {thread ? 'No messages in this thread.' : 'Loading thread\u2026'}
