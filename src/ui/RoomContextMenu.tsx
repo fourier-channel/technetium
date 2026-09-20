@@ -6,7 +6,7 @@ import { useRoomListSettings } from './roomListSettings'
 import { markNodeRead } from '../client/markRead'
 import { describeInviteError } from '../client/userDirectory'
 import { reportAlways } from '../client/report'
-import { directRoomIds } from '../client/dm'
+import { isDirect } from '../client/roomClass'
 import { closeDm, dmCloseWarning, leaveLabel, leaveConfirmLabel } from '../client/dmClose'
 
 const PRESET_ICONS = ['💬', '📌', '🎮', '🎨', '🔥', '⭐', '🛠️', '📁', '🤖', '👾', '🧪', '📷']
@@ -48,7 +48,16 @@ export function RoomContextMenu({
   // A DM is not left, it is CLOSED: leave, forget, and drop it from m.direct,
   // so it stops being offered as the existing conversation with that person.
   // Saying "Leave room" for one would describe a third of what happens.
-  const isDm = !!client && !node.isSpace && directRoomIds(client).has(node.roomId)
+  //
+  // isDirect, NOT a fresh m.direct lookup. Its own comment says it exists so
+  // that "the question the room list actually asks" lives in one place, and
+  // the first version of this asked a narrower one: classifyRoom trusts a
+  // stamped create-event class BEFORE m.direct, so a DM stamped at creation
+  // and missing from the map is drawn as a person in the strip and would have
+  // been offered "Leave room" here. Two answers to one question, three days
+  // from being a bug report.
+  const dmRoom = node.room ?? (client ? client.getRoom(node.roomId) : null)
+  const isDm = !!client && !!dmRoom && !node.isSpace && isDirect(client, dmRoom)
   const kind = node.isSpace ? 'space' : isDm ? 'dm' : 'room'
   const isRoom = !node.isSpace
   const joined = node.membership === 'join'
