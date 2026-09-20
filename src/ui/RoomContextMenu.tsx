@@ -6,6 +6,8 @@ import { useRoomListSettings } from './roomListSettings'
 import { markNodeRead } from '../client/markRead'
 import { describeInviteError } from '../client/userDirectory'
 import { reportAlways } from '../client/report'
+import { directRoomIds } from '../client/dm'
+import { closeDm, dmCloseWarning, leaveLabel, leaveConfirmLabel } from '../client/dmClose'
 
 const PRESET_ICONS = ['💬', '📌', '🎮', '🎨', '🔥', '⭐', '🛠️', '📁', '🤖', '👾', '🧪', '📷']
 
@@ -43,6 +45,11 @@ export function RoomContextMenu({
   const [renaming, setRenaming] = useState(false)
   const [renameDraft, setRenameDraft] = useState('')
 
+  // A DM is not left, it is CLOSED: leave, forget, and drop it from m.direct,
+  // so it stops being offered as the existing conversation with that person.
+  // Saying "Leave room" for one would describe a third of what happens.
+  const isDm = !!client && !node.isSpace && directRoomIds(client).has(node.roomId)
+  const kind = node.isSpace ? 'space' : isDm ? 'dm' : 'room'
   const isRoom = !node.isSpace
   const joined = node.membership === 'join'
   const muted = settings.isMutedNow(node.roomId)
@@ -94,6 +101,20 @@ export function RoomContextMenu({
   }
   const leave = async () => {
     if (!client) return
+    if (isDm) {
+      // The bookkeeping half can fail on its own, and then the room IS left
+      // and something else is not done. That is a different sentence from
+      // "leaving failed", and the menu says whichever one happened.
+      const result = await closeDm(client, node.roomId)
+      if (!result.left) {
+        reportAlways('dm: close', result.problem)
+        setLeaveError(result.problem ?? 'could not leave the room')
+        return
+      }
+      if (result.problem) reportAlways('dm: close (partial)', result.problem)
+      onClose()
+      return
+    }
     try {
       await client.leave(node.roomId)
     } catch (err) {
@@ -336,18 +357,49 @@ export function RoomContextMenu({
         <>
           <Divider />
           {confirmLeave ? (
-            <MenuItem danger onClick={leave}>
-              ⚠ Click again to confirm
-            </MenuItem>
+            <>
+              {/* The warning belongs BEFORE the confirm, not after it. It
+                  answers the question people actually have -- whether a new
+                  conversation brings this back -- and the answer is no. */}
+              {isDm && <DmCloseWarningText who={node.name} />}
+              <MenuItem danger onClick={leave}>
+                {'⚠ ' + leaveConfirmLabel(kind)}
+              </MenuItem>
+            </>
           ) : (
             <MenuItem danger onClick={() => setConfirmLeave(true)}>
-              {node.isSpace ? 'Leave space' : 'Leave room'}
+              {leaveLabel(kind)}
             </MenuItem>
           )}
         </>
       )}
     </div>,
     document.body,
+  )
+}
+
+// What closing costs and what it does not, before the confirm rather than
+// after it. Every line is a fact about Matrix; see dmClose.ts.
+function DmCloseWarningText({ who }: { who: string }) {
+  const warning = dmCloseWarning(who)
+  return (
+    <div
+      style={{
+        padding: '8px 12px',
+        fontSize: 11,
+        lineHeight: 1.45,
+        color: 'var(--tc-ui-dim, #9aa0a6)',
+        maxWidth: MENU_W,
+        whiteSpace: 'normal',
+      }}
+    >
+      {warning.losses.map((line) => (
+        <p key={line} style={{ margin: '0 0 6px' }}>{line}</p>
+      ))}
+      {warning.keeps.map((line) => (
+        <p key={line} style={{ margin: '0 0 6px', opacity: 0.85 }}>{line}</p>
+      ))}
+    </div>
   )
 }
 

@@ -54,6 +54,29 @@ export function dmCloseWarning(who: string): DmCloseWarning {
   }
 }
 
+/**
+ * What the destructive item in a room's context menu says.
+ *
+ * A pure function rather than an expression inside JSX, because the WORD is
+ * the feature here: "Leave room" on a DM describes a third of what happens,
+ * and a string buried in a ternary is a string no check can hold to account.
+ */
+export type RoomKind = 'space' | 'dm' | 'room'
+
+export function leaveLabel(kind: RoomKind): string {
+  if (kind === 'space') return 'Leave space'
+  // Leaving is the act; closing is what it means for a conversation. Both are
+  // named, in the order they happen.
+  if (kind === 'dm') return 'Leave and Close'
+  return 'Leave room'
+}
+
+export function leaveConfirmLabel(kind: RoomKind): string {
+  // The confirm repeats the VERB rather than saying "confirm", so the second
+  // click is still a sentence about what is about to happen.
+  return kind === 'dm' ? 'Click again to leave and close' : 'Click again to confirm'
+}
+
 export interface CloseDmResult {
   left: boolean
   /** Best-effort: leaving is what matters, forgetting is tidiness. */

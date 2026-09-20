@@ -3,7 +3,7 @@
 // The gap this closes: a DM window could not be closed at all. Removing the
 // other person did not do it, so a conversation could be over in every sense
 // except the one on screen.
-import { closeDm, pruneFromDirect, dmCloseWarning } from '../src/client/dmClose.ts'
+import { closeDm, pruneFromDirect, dmCloseWarning, leaveLabel, leaveConfirmLabel } from '../src/client/dmClose.ts'
 
 let failures = 0
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -104,6 +104,19 @@ console.log('== the warning tells the truth, including the unwelcome half')
   check('says media stops being readable', /pictures stop being readable/.test(all))
   check('names the person rather than saying "this user"', !/this user/.test(all) && /Neru-chan/.test(all))
   check('has both halves', w.losses.length >= 2 && w.keeps.length >= 2)
+}
+
+console.log('== the destructive item says what it will do')
+{
+  // "Leave room" on a DM describes a third of what happens. The word is the
+  // feature, so it is a function and not a ternary inside JSX.
+  check('a DM says both halves, in order', leaveLabel('dm') === 'Leave and Close')
+  check('an ordinary room is unchanged', leaveLabel('room') === 'Leave room')
+  check('a space is unchanged', leaveLabel('space') === 'Leave space')
+  check('the DM confirm repeats the verb, not the word "confirm"',
+    leaveConfirmLabel('dm') === 'Click again to leave and close')
+  check('other rooms keep the old confirm', leaveConfirmLabel('room') === 'Click again to confirm')
+  check('no label is empty', (['space', 'dm', 'room'] as const).every((k) => leaveLabel(k).length > 0))
 }
 
 if (failures) { console.log(`\n${failures} check(s) failed`); process.exit(1) }
