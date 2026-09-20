@@ -111,7 +111,7 @@ console.log('== the read is a simple request too')
 {
   const m = await import('../src/client/booruTags')
   const rec = recorder()
-  await m.fetchBooruTags(4, rec.impl)
+  await m.fetchBooruPool(4, rec.impl)
   check('one request', rec.sent.length === 1)
   assertSimple('read', rec.sent[0])
 }
@@ -198,7 +198,7 @@ console.log('== a refused read is a FAULT, not an absence')
   })) as unknown as typeof fetch
   let msg = ''
   try {
-    await m.fetchBooruTags(4, refusing)
+    await m.fetchBooruPool(4, refusing)
   } catch (e) {
     msg = e instanceof Error ? e.message : String(e)
   }
@@ -209,7 +209,7 @@ console.log('== a refused read is a FAULT, not an absence')
   const absent = (async () => ({
     ok: false, status: 404, json: async () => ({}), text: async () => '',
   })) as unknown as typeof fetch
-  const gone = await m.fetchBooruTags(4, absent)
+  const gone = await m.fetchBooruPool(4, absent)
   check('a 404 is still an answer, not a fault', gone === null)
 }
 

@@ -26,8 +26,20 @@ const REAL = {
   meta: ['ai-generated', 'non-web_source'],
   pending: ['loli'],
   unsourced: ['window'],
-  // THE LAMP: which model. Shape from FourierTagSource.buckets_for.
+  // THE LAMP: which model. Shape from FourierTagSource.lamps_for.
   lamp: { spectrum: ['barefoot', 'bed'], hydra: ['curtains'], both: ['1girl'], manual: ['pearlyka', 'cosmic_eyes'] },
+  // What live_read adds, so one request answers the whole panel
+  // (chanbooru 89bdd0ac2). `tag_string` here is the VIEWER's union of the
+  // buckets, never the post's denormalised string.
+  rating: 'q',
+  tag_string: 'pearlyka cosmic_eyes barefoot bed curtains 1girl ai-generated non-web_source loli window',
+  categories: {
+    artist: ['pearlyka'],
+    character: ['cosmic_eyes'],
+    copyright: [],
+    general: ['barefoot', 'bed', 'curtains', '1girl', 'loli', 'window'],
+    meta: ['ai-generated', 'non-web_source'],
+  },
 }
 
 console.log('== every chanbooru bucket is understood')
@@ -86,7 +98,7 @@ console.log('== no provenance at all changes nothing')
     'an empty read must not cost a re-render of every pill')
 }
 
-console.log('== the identity-gated endpoint is the one used')
+console.log('== ONE request answers the whole panel')
 {
   const seen: string[] = []
   const impl = (async (url: unknown) => {
@@ -94,23 +106,43 @@ console.log('== the identity-gated endpoint is the one used')
     return { ok: true, status: 200, json: async () => REAL } as unknown as Response
   }) as unknown as typeof fetch
   const m = await import('../src/client/booruTags')
-  await m.fetchBooruProvenance(7, impl)
+  const pool = await m.fetchBooruPool(7, impl)
+  check('exactly one read, not two', seen.length === 1, seen)
   check('it asks for the post it was given', /\/posts\/7\/tag_sources\.json$/.test(seen[0]), seen[0])
   check('and NOT with scope=public -- that is the bot view and it leaks nothing to us',
     !seen[0].includes('scope=public'), seen[0])
+  check('the post id comes from the caller, not the document', pool?.postId === 7, pool?.postId)
+  check('categories arrive', pool?.tags.find((t) => t.name === 'pearlyka')?.category === 'artist')
+  check('so does the rating', pool?.rating === 'q')
+  check('and provenance is already on the tags',
+    pool?.tags.find((t) => t.name === '1girl')?.provenance === 'both')
+  check('and the lamp with it', pool?.tags.find((t) => t.name === 'curtains')?.lamp === 'hydra')
 }
 
-console.log('== a refused provenance read is a fault, a 404 is not')
+console.log('== the tag string is the viewer\'s, and it is what an edit amends')
+{
+  const m = await import('../src/client/booruTags')
+  const pool = m.parseLiveRead(REAL)
+  check('it is the served string, not a rebuild', pool?.tagString === REAL.tag_string, pool?.tagString)
+  // A post whose server forgot to send one still has to be editable, and the
+  // only honest fallback is the names we were actually shown.
+  const { tag_string: _omit, ...noString } = REAL
+  const rebuilt = m.parseLiveRead(noString)
+  check('and without one it falls back to the names we were shown',
+    rebuilt !== null && rebuilt.tagString.split(' ').includes('barefoot'), rebuilt?.tagString)
+  check('a document with no categories is not a pool', m.parseLiveRead({ lamp: {} }) === null)
+}
+
+console.log('== a refused read is a fault, a 404 is not')
 {
   const m = await import('../src/client/booruTags')
   const code = (n: number) => (async () => ({
     ok: n < 400, status: n, json: async () => ({}),
   })) as unknown as typeof fetch
-  const empty = await m.fetchBooruProvenance(7, code(404))
-  check('404 is an empty answer', empty !== null && empty.who.size === 0 && empty.lamp.size === 0)
+  check('404 is an answer, not a fault', (await m.fetchBooruPool(7, code(404))) === null)
   let msg = ''
   try {
-    await m.fetchBooruProvenance(7, code(403))
+    await m.fetchBooruPool(7, code(403))
   } catch (e) {
     msg = e instanceof Error ? e.message : String(e)
   }

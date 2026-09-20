@@ -104,37 +104,6 @@ export function parsePostTags(json: PostTagJson): BooruTagSet | null {
   }
 }
 
-/**
- * Current tags for one post, live.
- *
- * Credentialed, so the viewer's own identity-gated view applies -- the booru
- * decides what this user may see rather than the client filtering after the
- * fact. ensureBooruSession must have run; it has, wherever the booru frame or a
- * tagged image is on screen.
- */
-export async function fetchBooruTags(postId: number, fetchImpl: typeof fetch = fetch): Promise<BooruTagSet | null> {
-  const res = await fetchImpl(`${BOORU_ORIGIN}/posts/${postId}.json?only=${FIELDS}`, {
-    credentials: 'include',
-    headers: { Accept: 'application/json' },
-  })
-  // A 404 is an ANSWER: the booru has no such post, and the caller should
-  // treat that as "no tags" and stop asking.
-  if (res.status === 404) return null
-  // Anything else is a FAULT and must not be returned as absence. Returning
-  // null for a 403 is what made the CORS breakage invisible for days -- a
-  // refused read and an untagged image looked identical to every caller, so
-  // the panel drew the stale copy and nothing anywhere said why.
-  if (!res.ok) {
-    throw new Error(
-      `the booru refused to read post ${postId} (HTTP ${res.status}). ` +
-        'Fix: a 403 is usually the Cloudflare challenge or a missing booru ' +
-        'session (ensureBooruSession); check that the booru echoes this ' +
-        'origin with Access-Control-Allow-Credentials, because a credentialed ' +
-        'fetch discards a wildcard.',
-    )
-  }
-  return parsePostTags((await res.json()) as PostTagJson)
-}
 
 export interface TagEdit {
   /** Tag names to add. */
@@ -290,26 +259,87 @@ export function parseProvenance(json: unknown): Map<string, TagProvenance> {
   return out
 }
 
-export async function fetchBooruProvenance(
+
+/** The categories chanbooru's live read names, mapped to ours. */
+const CATEGORY_NAMES: readonly TagCategory[] = ['artist', 'character', 'copyright', 'general', 'meta']
+
+/**
+ * A whole tag pool from ONE response: tags with their categories, the rating,
+ * the tag string to edit against, and provenance already attached.
+ *
+ * ITS tag_string IS THE VIEWER'S. chanbooru sends the union of the buckets
+ * this viewer may see, not the post's denormalised string, which still holds
+ * the private creator tags the sidecar exists to withhold -- the old path put
+ * those in this client's memory, undisplayed, for every tagged image on
+ * screen. It is also the right value for old_tag_string: the booru applies
+ * only the difference between the two strings, so a tag in neither is
+ * untouched.
+ */
+export function parseLiveRead(json: unknown): BooruTagSet | null {
+  if (!json || typeof json !== 'object') return null
+  const o = json as Record<string, unknown>
+  const cats = o.categories
+  if (!cats || typeof cats !== 'object') return null
+  const byCategory = cats as Record<string, unknown>
+
+  const tags: MediaTag[] = []
+  const seen = new Set<string>()
+  for (const category of CATEGORY_NAMES) {
+    const list = byCategory[category]
+    if (!Array.isArray(list)) continue
+    for (const name of list) {
+      // FIRST CATEGORY WINS, as in parseProvenance: the server groups each
+      // name once, so an overlap is a server bug, and taking the first keeps
+      // one wrong row from recolouring a tag by object key order.
+      if (typeof name === 'string' && name && !seen.has(name)) {
+        seen.add(name)
+        tags.push({ name, category })
+      }
+    }
+  }
+
+  return {
+    postId: -1,
+    tags: withProvenance(tags, { who: parseProvenance(json), lamp: parseLamps(json) }),
+    rating: typeof o.rating === 'string' ? o.rating : undefined,
+    tagString: typeof o.tag_string === 'string' ? o.tag_string : [...seen].join(' '),
+  }
+}
+
+/**
+ * Current tags, categories, rating and provenance for one post, live, in ONE
+ * credentialed request. Replaces a pair of reads that asked the booru two
+ * questions per image on screen to draw one panel.
+ *
+ * Credentialed, so the booru applies the viewer's own identity gate and the
+ * client never filters after the fact.
+ */
+export async function fetchBooruPool(
   postId: number,
   fetchImpl: typeof fetch = fetch,
-): Promise<Provenance | null> {
+): Promise<BooruTagSet | null> {
   const res = await fetchImpl(`${BOORU_ORIGIN}/posts/${postId}/tag_sources.json`, {
     credentials: 'include',
     headers: { Accept: 'application/json' },
   })
-  // 404 means the post has no sidecar rows at all -- an answer, and a common
-  // one for anything posted before the sidecar existed.
-  if (res.status === 404) return { who: new Map(), lamp: new Map() }
+  // A 404 is an ANSWER: the booru has no such post, and the caller should
+  // treat that as "no tags" and stop asking.
+  if (res.status === 404) return null
+  // Anything else is a FAULT and must not be returned as absence. Returning
+  // null for a 403 is what made the CORS breakage invisible for days -- a
+  // refused read and an untagged image looked identical to every caller, so
+  // the panel drew the stale copy and nothing anywhere said why.
   if (!res.ok) {
     throw new Error(
-      `the booru refused the provenance read for post ${postId} (HTTP ${res.status}). ` +
-        'Fix: same causes as the tag read -- the Cloudflare challenge, or a ' +
-        'missing booru session (ensureBooruSession).',
+      `the booru refused to read post ${postId} (HTTP ${res.status}). ` +
+        'Fix: a 403 is usually the Cloudflare challenge or a missing booru ' +
+        'session (ensureBooruSession); check that the booru echoes this ' +
+        'origin with Access-Control-Allow-Credentials, because a credentialed ' +
+        'fetch discards a wildcard.',
     )
   }
-  const json = await res.json()
-  return { who: parseProvenance(json), lamp: parseLamps(json) }
+  const pool = parseLiveRead(await res.json())
+  return pool ? { ...pool, postId } : null
 }
 
 /** Attach provenance to a tag list, leaving the category axis untouched. */

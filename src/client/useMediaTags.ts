@@ -5,9 +5,7 @@ import { createLimiter } from './concurrency'
 import { reportIgnored } from './report'
 import { ensureBooruSession } from './booruSession'
 import {
-  fetchBooruProvenance,
-  fetchBooruTags,
-  withProvenance,
+  fetchBooruPool,
   writeBooruTags,
   type TagEdit,
 } from './booruTags'
@@ -218,26 +216,19 @@ export function refreshBooruTags(mediaId: string, force = false): void {
   booruReads.askedAt.set(postId, Date.now())
 
   void booruLimiter
-    .run(async () => {
-      // TWO READS, ONE SLOT. Category comes off the post, provenance off the
-      // sidecar, and they are different questions -- but they are one
-      // logical refresh, so they share a limiter slot rather than competing
-      // for two. Together they are well under a kilobyte.
+    .run(() =>
+      // ONE READ. This was two -- the post for categories and rating, the
+      // sidecar for buckets and lamps -- asking the booru two questions per
+      // image on screen to draw one panel. chanbooru's live_read answers all
+      // of it from the query it was already making (chanbooru 89bdd0ac2), so
+      // the second round trip bought nothing but latency and a partial-failure
+      // case to handle.
       //
-      // Provenance is allowed to fail on its own: a post with no sidecar
-      // rows, or a booru that refuses that endpoint, must still show tags.
-      // The pill then falls back to its category colour, which is what
-      // shipped before provenance existed.
-      const live = await fetchBooruTags(postId)
-      if (!live) return null
-      let who = null
-      try {
-        who = await fetchBooruProvenance(postId)
-      } catch (err) {
-        reportIgnored('media tags: provenance for booru post ' + postId, err)
-      }
-      return who ? { ...live, tags: withProvenance(live.tags, who) } : live
-    })
+      // It also narrows what this client holds: the tag_string here is the
+      // union of the buckets the VIEWER may see, where /posts/:id.json hands
+      // out the denormalised one, private creator tags included.
+      fetchBooruPool(postId),
+    )
     .then((live) => {
       if (!live) return
       // Re-read the store rather than closing over the earlier set: the read
@@ -305,7 +296,7 @@ export async function editBooruTags(mediaId: string, edit: TagEdit): Promise<voi
   // never seen the server, so read once -- and only in that case.
   let seen = before.tagString
   if (seen === undefined) {
-    const live = await booruLimiter.run(() => fetchBooruTags(postId))
+    const live = await booruLimiter.run(() => fetchBooruPool(postId))
     if (!live) {
       throw new Error(
         `could not read post ${postId} from the booru, so an edit would overwrite ` +
@@ -324,15 +315,14 @@ export async function editBooruTags(mediaId: string, edit: TagEdit): Promise<voi
   ingestSet(optimisticSet(base, edit, Date.now()), mediaId)
 
   try {
-    const after = await booruLimiter.run(() => writeBooruTags(postId, seen, edit))
-    // The write answered with the post's real tags, so the TTL starts here: a
-    // panel still on screen must not immediately spend a read re-asking what it
-    // was just told.
-    booruReads.askedAt.set(postId, Date.now())
-    if (after) {
-      const current = sets.get(mediaId)
-      if (current) ingestSet(mergeBooruIntoSet(current, after, Date.now()), mediaId)
-    }
+    await booruLimiter.run(() => writeBooruTags(postId, seen, edit))
+    // RE-READ RATHER THAN TRUST THE WRITE'S OWN ANSWER. The write replies with
+    // Danbooru's post JSON, which knows nothing about buckets or lamps and
+    // carries the denormalised tag_string. Ingesting it stripped every lamp
+    // off the panel until the TTL expired, and put the private tags back into
+    // this client's copy of tagString, undoing the narrowing the single read
+    // just bought. One forced read costs a request and answers all three.
+    refreshBooruTags(mediaId, true)
   } catch (err) {
     ingestSet({ ...base, ts: Date.now() }, mediaId)
     refreshBooruTags(mediaId, true)
