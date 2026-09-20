@@ -88,7 +88,10 @@ for (const [file, src] of text) {
   let m: RegExpExecArray | null
   while ((m = re.exec(src)) !== null) {
     const name = m[1]
-    const body = m[2]
+    // Comments are not declarations here either. Found by a keyframes block
+    // whose comment read "Rotation only: the gradient ..." -- the colon made
+    // `only` a property and the swirl was reported as animating it.
+    const body = uncomment(m[2])
     const props = new Set<string>()
     const pre = /(^|[{;\s])([a-zA-Z-]+)\s*:/g
     let p: RegExpExecArray | null

@@ -9,7 +9,7 @@
 // The parse is checked against chanbooru's REAL bucket names, taken from
 // FourierTagSource.buckets_for -- creator/auto/both/meta/pending -- plus the
 // `unsourced` key for_viewer merges in.
-import { parseProvenance, withProvenance } from '../src/client/booruTags'
+import { parseLamps, parseProvenance, withProvenance } from '../src/client/booruTags'
 import type { MediaTag } from '../src/client/mediaTags'
 
 let failures = 0
@@ -26,6 +26,8 @@ const REAL = {
   meta: ['ai-generated', 'non-web_source'],
   pending: ['loli'],
   unsourced: ['window'],
+  // THE LAMP: which model. Shape from FourierTagSource.buckets_for.
+  lamp: { spectrum: ['barefoot', 'bed'], hydra: ['curtains'], both: ['1girl'], manual: ['pearlyka', 'cosmic_eyes'] },
 }
 
 console.log('== every chanbooru bucket is understood')
@@ -67,7 +69,7 @@ console.log('== provenance attaches without disturbing the category')
     { name: 'barefoot', category: 'general' },
     { name: 'untouched', category: 'meta' },
   ]
-  const out = withProvenance(tags, parseProvenance(REAL))
+  const out = withProvenance(tags, { who: parseProvenance(REAL), lamp: parseLamps(REAL) })
   check('the creator tag is marked', out[0].provenance === 'creator')
   check('and keeps its CATEGORY', out[0].category === 'character',
     'the two axes must not borrow each other')
@@ -79,7 +81,7 @@ console.log('== provenance attaches without disturbing the category')
 console.log('== no provenance at all changes nothing')
 {
   const tags: MediaTag[] = [{ name: 'a', category: 'general' }]
-  const out = withProvenance(tags, new Map())
+  const out = withProvenance(tags, { who: new Map(), lamp: new Map() })
   check('the same array comes back', out === tags,
     'an empty read must not cost a re-render of every pill')
 }
@@ -104,7 +106,8 @@ console.log('== a refused provenance read is a fault, a 404 is not')
   const code = (n: number) => (async () => ({
     ok: n < 400, status: n, json: async () => ({}),
   })) as unknown as typeof fetch
-  check('404 is an empty answer', (await m.fetchBooruProvenance(7, code(404)))?.size === 0)
+  const empty = await m.fetchBooruProvenance(7, code(404))
+  check('404 is an empty answer', empty !== null && empty.who.size === 0 && empty.lamp.size === 0)
   let msg = ''
   try {
     await m.fetchBooruProvenance(7, code(403))
@@ -113,6 +116,29 @@ console.log('== a refused provenance read is a fault, a 404 is not')
   }
   check('403 throws', msg !== '')
   check('and names the remedy', /ensureBooruSession/.test(msg), msg)
+}
+
+console.log('== the lamp: which model put the tag here')
+{
+  const lamp = parseLamps(REAL)
+  check('spectrum is orange territory', lamp.get('barefoot') === 'spectrum')
+  check('hydra -- green appears only where hydra has been', lamp.get('curtains') === 'hydra')
+  check('both is the swirl', lamp.get('1girl') === 'both')
+  check('a person is white', lamp.get('pearlyka') === 'manual')
+  check('a tag in no lamp bucket has no lamp', lamp.get('window') === undefined)
+  check('no lamp key at all is an empty map, not a crash', parseLamps({ creator: ['x'] }).size === 0)
+  check('a lamp value that is not a list is skipped', parseLamps({ lamp: { hydra: 'x' } }).size === 0)
+
+  // `both` must win if a server bug ever lists a tag under two lamps: it is
+  // the only answer that is genuinely two, and it is listed first.
+  const clash = parseLamps({ lamp: { spectrum: ['t'], both: ['t'] } })
+  check('both wins a clash', clash.get('t') === 'both')
+
+  const tags: MediaTag[] = [{ name: '1girl', category: 'general' }, { name: 'window', category: 'general' }]
+  const out = withProvenance(tags, { who: new Map(), lamp })
+  check('the lamp rides on the tag', out[0].lamp === 'both')
+  check('and the category is untouched -- two axes', out[0].category === 'general')
+  check('a tag with no lamp stays lampless', out[1].lamp === undefined)
 }
 
 if (failures > 0) {

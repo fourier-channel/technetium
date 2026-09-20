@@ -41,11 +41,20 @@ const CATEGORIES: readonly TagCategory[] = ['artist', 'character', 'copyright', 
 // before the sidecar existed.
 export type TagProvenance = 'creator' | 'auto' | 'both' | 'meta' | 'pending' | 'unsourced'
 
+// WHICH MODEL put the tag here -- the LAMP (operator ruling 2026-09-20).
+// spectrum orange, hydra green, both a swirl, a person white. "Green only
+// appears anywhere hydra has been, and we now have a visual diff for how the
+// models are comparing to one another." Derived on the booru
+// (FourierTagSource#lamp) so both surfaces light the same dot.
+export type TagLamp = 'spectrum' | 'hydra' | 'both' | 'manual'
+
 export interface MediaTag {
   name: string
   category: TagCategory
   /** Absent when provenance has not been read for this post yet. */
   provenance?: TagProvenance
+  /** Absent until the booru has said which model saw it. */
+  lamp?: TagLamp
   // 0..1 from the tagger when present. Kept so a confidence threshold can be
   // added later without a schema change; unused by the v1 strip.
   score?: number

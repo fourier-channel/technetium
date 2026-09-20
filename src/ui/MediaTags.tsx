@@ -430,8 +430,11 @@ function TagPill({
         // No provenance yet (the sidecar has no row, or it has not been read)
         // falls back to the category colour, which is exactly what shipped
         // before provenance existed.
+        // The PILL is the category; the DOT is the lamp. Provenance used to
+        // paint the pill (mod-pill--src-*) for one evening; the operator's
+        // ruling of 2026-09-20 moved it to the dot as WHICH MODEL, and the
+        // tint went back to category so each axis has one surface.
         `mod-pill mod-pill--cat-${tag.category}` +
-        (tag.provenance ? ` mod-pill--src-${tag.provenance}` : '') +
         (hype ? ' mod-pill--hype' : '') +
         (hype && spin === 'spinning' ? ' is-spinning' : '') +
         (hype && spin === 'winding' ? ' is-spinning-down' : '') +
@@ -458,7 +461,7 @@ function TagPill({
             : undefined
       }
     >
-      <i className="mod-pill-dot" />
+      <i className={'mod-pill-dot' + (tag.lamp ? ` mod-pill-dot--${tag.lamp}` : '')} />
       {tag.name}
     </a>
   )

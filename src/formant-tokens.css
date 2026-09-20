@@ -392,6 +392,35 @@
    * presence is a fact about here. */
   --mod-userline-absent-fg:  var(--mod-ink-dim);
 
+  /* --- the tag lamp: which MODEL put this tag here ---------------------- */
+  /* Operator ruling 2026-09-20: "for spectrum tags, the lamp is orange. for
+   * hydra tags, the lamp is green. for tags that just so happen to be both,
+   * the lamp is a swirling green/orange. so green only appears anywhere hydra
+   * has been, and we now have a visual diff for how the models are comparing
+   * to one another. If the tag is manually added, the dot is white. The lamp
+   * is visible provenance."
+   *
+   * This SUPERSEDES the 2026-08 ruling recorded in fourier-sampling's poster
+   * ("no visual difference by provenance ... nothing about them says which
+   * model supplied them"). The difference is now the point: two taggers run
+   * on the same images and the lamp is how a reader sees where they agree.
+   *
+   * The lamp is the DOT. The pill's tint stays the category (general is the
+   * autotagger orange by the earlier ruling; blue is nowhere), so the two axes
+   * canon separates -- what kind of tag, who put it here -- still each have
+   * one surface. Spectrum shares --mod-auto-fg by name: it IS the autotagger
+   * the provenance orange has always meant. Hydra is the brand green.
+   *
+   * THE SWIRL IS TRANSFORM-ONLY. A rotating conic gradient is a static paint
+   * turned on its own layer, which is the one kind of infinite animation this
+   * file permits (the lamp incident: an infinite box-shadow idled a core at
+   * 45%). Under prefers-reduced-motion it holds still as a half-and-half. */
+  --mod-lamp-spectrum:     var(--mod-auto-fg);
+  --mod-lamp-hydra:        #0ce92a;
+  --mod-lamp-manual:       #ffffff;
+  --mod-lamp-swirl:        conic-gradient(var(--mod-lamp-hydra) 0 50%, var(--mod-lamp-spectrum) 50% 100%);
+  --mod-lamp-swirl-period: 2.4s;
+
   /* --- shape ------------------------------------------------------------ */
   /* 10px is the PRESET-level value. A component may narrow it -- the creator
    * gallery uses 12px under .modcreator -- and that is what a token is for. The
@@ -602,4 +631,16 @@
     --mod-tag-pop-in-dur:  1ms;
     --mod-tag-pop-out-dur: 1ms;
   }
+}
+
+/* Rotation only -- the gradient is painted once and turned. (The note sits
+   OUTSIDE the block on purpose: a colon inside a keyframes comment reads as a
+   declaration to a regex parser, and technetium's animation check caught
+   exactly that on the first hydration.) */
+@keyframes mod-lamp-swirl {
+  to { transform: rotate(1turn); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --mod-lamp-swirl-period: 0s; }
 }

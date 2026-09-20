@@ -30,7 +30,7 @@
 // no Ruby needed writing.
 import { BOORU_ORIGIN } from './booruUrl'
 import { booruCsrfToken, resetBooruCsrf } from './booruCsrf'
-import type { MediaTag, TagCategory, TagProvenance } from './mediaTags'
+import type { MediaTag, TagCategory, TagLamp, TagProvenance } from './mediaTags'
 
 // Only the fields the panel draws. The whole point is that this stays small.
 const FIELDS = [
@@ -278,6 +278,32 @@ export async function writeBooruTags(
 // ---------------------------------------------------------------------------
 
 const BUCKETS: readonly TagProvenance[] = ['creator', 'auto', 'both', 'meta', 'pending', 'unsourced']
+// `both` first: a tag in both lists is the swirl, and first-bucket-wins below.
+const LAMPS: readonly TagLamp[] = ['both', 'hydra', 'spectrum', 'manual']
+
+export interface Provenance {
+  /** tag name -> who put it there */
+  who: Map<string, TagProvenance>
+  /** tag name -> which model saw it (the lamp) */
+  lamp: Map<string, TagLamp>
+}
+
+/** tag name -> which model. From the payload's `lamp` buckets. */
+export function parseLamps(json: unknown): Map<string, TagLamp> {
+  const out = new Map<string, TagLamp>()
+  if (!json || typeof json !== 'object') return out
+  const lamp = (json as Record<string, unknown>).lamp
+  if (!lamp || typeof lamp !== 'object') return out
+  const o = lamp as Record<string, unknown>
+  for (const l of LAMPS) {
+    const list = o[l]
+    if (!Array.isArray(list)) continue
+    for (const name of list) {
+      if (typeof name === 'string' && name && !out.has(name)) out.set(name, l)
+    }
+  }
+  return out
+}
 
 /** tag name -> who put it there. Empty when the post has no sidecar rows. */
 export function parseProvenance(json: unknown): Map<string, TagProvenance> {
@@ -301,14 +327,14 @@ export function parseProvenance(json: unknown): Map<string, TagProvenance> {
 export async function fetchBooruProvenance(
   postId: number,
   fetchImpl: typeof fetch = fetch,
-): Promise<Map<string, TagProvenance> | null> {
+): Promise<Provenance | null> {
   const res = await fetchImpl(`${BOORU_ORIGIN}/posts/${postId}/tag_sources.json`, {
     credentials: 'include',
     headers: { Accept: 'application/json' },
   })
   // 404 means the post has no sidecar rows at all -- an answer, and a common
   // one for anything posted before the sidecar existed.
-  if (res.status === 404) return new Map()
+  if (res.status === 404) return { who: new Map(), lamp: new Map() }
   if (!res.ok) {
     throw new Error(
       `the booru refused the provenance read for post ${postId} (HTTP ${res.status}). ` +
@@ -316,17 +342,16 @@ export async function fetchBooruProvenance(
         'missing booru session (ensureBooruSession).',
     )
   }
-  return parseProvenance(await res.json())
+  const json = await res.json()
+  return { who: parseProvenance(json), lamp: parseLamps(json) }
 }
 
 /** Attach provenance to a tag list, leaving the category axis untouched. */
-export function withProvenance(
-  tags: MediaTag[],
-  who: Map<string, TagProvenance>,
-): MediaTag[] {
-  if (who.size === 0) return tags
+export function withProvenance(tags: MediaTag[], prov: Provenance): MediaTag[] {
+  if (prov.who.size === 0 && prov.lamp.size === 0) return tags
   return tags.map((t) => {
-    const p = who.get(t.name)
-    return p ? { ...t, provenance: p } : t
+    const p = prov.who.get(t.name)
+    const l = prov.lamp.get(t.name)
+    return p || l ? { ...t, ...(p ? { provenance: p } : {}), ...(l ? { lamp: l } : {}) } : t
   })
 }

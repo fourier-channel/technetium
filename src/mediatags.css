@@ -174,10 +174,9 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  /* The text is white now, so currentColor would blank the dot. The
-     per-category rules below set it; this is the fallback for a pill with no
-     category class at all. */
-  background: var(--mod-tag-general-fg);
+  /* The text is white, so currentColor would blank the dot. The lamp rules
+     below set it; unlit until the booru has said which model saw the tag. */
+  background: var(--mod-lamp-unlit);
   opacity: 0.9;
   flex: none;
 }
@@ -423,52 +422,30 @@
   background: color-mix(in srgb, var(--mod-tag-general-fg) 28%, transparent);
 }
 
-/* --- provenance paints the pill, category keeps the dot ------------------- */
-/* The booru answers two questions about a tag and they are not the same one:
-   WHAT KIND of tag it is (artist, character, general) and WHO PUT IT THERE
-   (the creator, the autotagger, both). Canon is explicit that the two axes
-   must not borrow each other's colours.
-   Modulation paints its pills by provenance and this now matches it, so a tag
-   is the same colour in the client and on the post page. The dot keeps the
-   category, so both facts stay answerable on one pill.
+/* --- the lamp: which model put the tag here ------------------------------ */
+/* Operator ruling 2026-09-20: "for spectrum tags, the lamp is orange. for
+   hydra tags, the lamp is green. for tags that just so happen to be both, the
+   lamp is a swirling green/orange ... If the tag is manually added, the dot is
+   white. The lamp is visible provenance."
+   The pill's tint is the CATEGORY (general is the autotagger orange; blue is
+   nowhere). The dot is the lamp. Two axes, one surface each.
+   Tokens are canon (formant --mod-lamp-*), so Modulation's dots are these dots.
+   A tag with no lamp -- provenance unread, or a row from before the model bits
+   existed and not yet re-derived -- keeps the unlit dot, which says nothing
+   rather than something wrong. */
+.mod-pill-dot {
+  background: var(--mod-lamp-unlit);
+  opacity: 1;
+}
+.mod-pill-dot--spectrum { background: var(--mod-lamp-spectrum); }
+.mod-pill-dot--hydra    { background: var(--mod-lamp-hydra); }
+.mod-pill-dot--manual   { background: var(--mod-lamp-manual); }
+/* The swirl: a conic gradient painted once and ROTATED. Transform only, on
+   its own layer -- the one kind of infinite animation permitted here. Under
+   prefers-reduced-motion canon zeroes the period and it holds half-and-half. */
+.mod-pill-dot--both {
+  background: var(--mod-lamp-swirl);
+  animation: mod-lamp-swirl var(--mod-lamp-swirl-period) linear infinite;
+  will-change: transform;
+}
 
-   Declared AFTER .mod-pill--cat-* and matching two classes, so it wins on
-   specificity regardless of what order a later edit leaves these blocks in --
-   the same trap Modulation's own comment records paying for. */
-.mod-pill--cat.mod-pill--src-creator,
-.mod-pill[class*="mod-pill--cat-"].mod-pill--src-creator {
-  border-color: color-mix(in srgb, var(--mod-creator-fg) 40%, transparent);
-  background: color-mix(in srgb, var(--mod-creator-fg) 12%, var(--mod-surface));
-}
-.mod-pill[class*="mod-pill--cat-"].mod-pill--src-auto {
-  border-color: color-mix(in srgb, var(--mod-auto-fg) 40%, transparent);
-  background: color-mix(in srgb, var(--mod-auto-fg) 12%, var(--mod-surface));
-}
-/* BOTH is the one that carries two colours at once, because it is the one
-   answer that is genuinely two: the autotagger's orange with the creator's
-   green on the edge. */
-.mod-pill[class*="mod-pill--cat-"].mod-pill--src-both {
-  border-color: var(--mod-both-outline);
-  background: color-mix(in srgb, var(--mod-both-fg) 12%, var(--mod-surface));
-}
-.mod-pill[class*="mod-pill--cat-"].mod-pill--src-meta {
-  border-color: color-mix(in srgb, var(--mod-meta-fg) 40%, transparent);
-  background: color-mix(in srgb, var(--mod-meta-fg) 12%, var(--mod-surface));
-}
-.mod-pill[class*="mod-pill--cat-"].mod-pill--src-pending {
-  border-color: color-mix(in srgb, var(--mod-pending-fg) 40%, transparent);
-  background: color-mix(in srgb, var(--mod-pending-fg) 12%, var(--mod-surface));
-}
-/* `unsourced` gets NO rule on purpose. The post carries the tag and the
-   sidecar has no row for it, which is not a provenance -- it is the absence
-   of one, and the honest thing to show is the category colour it had before
-   provenance was read at all. */
-
-/* THE DOT NOW CARRIES THE CATEGORY, so the axis that lost the pill is still
-   on it. currentColor would make it the provenance colour again and the
-   second fact would vanish. */
-.mod-pill--cat-artist > .mod-pill-dot { background: var(--mod-tag-artist-fg); }
-.mod-pill--cat-character > .mod-pill-dot { background: var(--mod-tag-character-fg); }
-.mod-pill--cat-copyright > .mod-pill-dot { background: var(--mod-tag-copyright-fg); }
-.mod-pill--cat-general > .mod-pill-dot { background: var(--mod-tag-general-fg); }
-.mod-pill--cat-meta > .mod-pill-dot { background: var(--mod-tag-meta-fg); }
