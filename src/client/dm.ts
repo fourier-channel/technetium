@@ -42,16 +42,29 @@ export function directRoomIds(client: MatrixClient): Set<string> {
   return out
 }
 
-// An existing, still-joined DM with this user, or null.
+// An existing DM with this user that BOTH of us are still in, or null.
 //
-// The m.direct map is not self-cleaning: it keeps rooms the user has left, so
-// a hit has to be verified against actual membership or we would "reuse" a
+// The m.direct map is not self-cleaning: it keeps rooms either of us has left,
+// so a hit has to be verified against actual membership or we would "reuse" a
 // room nobody is in.
+//
+// BOTH memberships, which is the whole fix. This checked only MY membership
+// while its own comment said reusing a room "the user has left" would be
+// wrong -- and the user it checked was me. So a DM whose other person had been
+// removed stayed the answer forever: starting a DM with them reopened the dead
+// room, inviting them again preferred a window with nobody in it, and there
+// was no way to get a fresh conversation short of editing account data.
+//
+// An INVITE counts as present. Someone who has not accepted yet is still the
+// person this conversation is with, and treating a pending invite as absent
+// would spawn a new room every time you tried to reach someone slow to answer.
 export function findExistingDm(client: MatrixClient, userId: string): string | null {
   const map = readDirectMap(client)
   for (const roomId of map[userId] ?? []) {
     const room = client.getRoom(roomId)
-    if (room?.getMyMembership() === 'join') return roomId
+    if (room?.getMyMembership() !== 'join') continue
+    const theirs = room.getMember(userId)?.membership
+    if (theirs === 'join' || theirs === 'invite') return roomId
   }
   return null
 }
