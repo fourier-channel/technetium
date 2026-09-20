@@ -116,13 +116,56 @@ console.log('== the read is a simple request too')
   assertSimple('read', rec.sent[0])
 }
 
-console.log('== an edit that changes nothing is not sent')
+console.log('== a no-op edit is refused OUT LOUD, not silently')
+{
+  // THE REMOVAL BUG. An add always introduces a token the server string
+  // lacks, so it always sent. A remove whose tag is absent produced an
+  // identical string and returned null -- while the optimistic update had
+  // already taken the pill off screen. Removals "did not work" and nothing
+  // anywhere said why.
+  const m = await import('../src/client/booruTags')
+  resetBooruCsrf()
+  let msg = ''
+  const rec = recorder()
+  try {
+    await m.writeBooruTags(4, 'a b', { add: ['a'] }, rec.impl)
+  } catch (e) {
+    msg = e instanceof Error ? e.message : String(e)
+  }
+  check('nothing is sent', rec.sent.length === 0, rec.sent.map((s) => s.url))
+  check('and it says so instead of returning null', /change nothing/.test(msg), msg)
+}
+
+console.log('== removing a tag the booru does not have names the tag AND the truth')
 {
   const m = await import('../src/client/booruTags')
+  resetBooruCsrf()
   const rec = recorder()
-  const out = await m.writeBooruTags(4, 'a b', { add: ['a'] }, rec.impl)
-  check('no request at all', rec.sent.length === 0, rec.sent.map((s) => s.url))
-  check('and it reports nothing to say', out === null)
+  let msg = ''
+  try {
+    await m.writeBooruTags(4, 'blue_sky 1girl', { remove: ['bluesky'] }, rec.impl)
+  } catch (e) {
+    msg = e instanceof Error ? e.message : String(e)
+  }
+  check('nothing is sent', rec.sent.length === 0)
+  check('the missing tag is named', /"bluesky"/.test(msg), msg)
+  check('and so is what the server actually holds',
+    /blue_sky 1girl/.test(msg), msg)
+  check('the fix points at the likely cause', /alias/.test(msg), msg)
+}
+
+console.log('== a real removal still goes out')
+{
+  const m = await import('../src/client/booruTags')
+  resetBooruCsrf()
+  const rec = recorder()
+  await m.writeBooruTags(4, 'blue_sky 1girl', { remove: ['blue_sky'] }, rec.impl)
+  const write = rec.sent[rec.sent.length - 1]
+  const body = String(write.init.body ?? '')
+  check('old_tag_string carries BOTH tags',
+    body.includes('post%5Bold_tag_string%5D=blue_sky+1girl'), body)
+  check('tag_string carries only the survivor',
+    /post%5Btag_string%5D=1girl(&|$)/.test(body), body)
 }
 
 console.log('== with no token obtainable, nothing doomed is sent')

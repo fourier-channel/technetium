@@ -175,8 +175,38 @@ export async function writeBooruTags(
   edit: TagEdit,
   fetchImpl: typeof fetch = fetch,
 ): Promise<BooruTagSet | null> {
+  const seen = new Set(seenTagString.split(/\s+/).filter(Boolean))
   const next = applyEdit(seenTagString, edit)
-  if (next === seenTagString) return null // nothing to say
+
+  // A REMOVAL THAT REMOVES NOTHING WAS SILENT, and that is why removals
+  // "did not work" while additions did. An add always introduces a token the
+  // server string lacks, so `next` always differs and the request always went
+  // out. A remove whose tag is absent from old_tag_string produces an
+  // IDENTICAL string, hit the early return, and sent nothing -- while the
+  // optimistic update had already taken the pill off screen. It came back on
+  // the next live read, with no error anywhere.
+  //
+  // The mismatch is the thing worth reporting, because it means the panel is
+  // drawing a tag the booru does not have under that name: an alias applied
+  // since the last read, a rename, or a stale set. Naming the tag and what
+  // the server actually holds is what makes that diagnosable in one look.
+  const absent = (edit.remove ?? []).filter((t) => !seen.has(t))
+  if (absent.length > 0) {
+    throw new Error(
+      `the booru's copy of post ${postId} does not contain ` +
+        `${absent.map((t) => `"${t}"`).join(', ')}, so there is nothing to remove. ` +
+        `It currently holds: ${[...seen].join(' ') || '(no tags)'}. ` +
+        'Fix: the panel is showing a tag the booru knows by another name -- ' +
+        'usually an alias applied after this client last read the post. ' +
+        'Scroll it out of view and back to force a fresh read.',
+    )
+  }
+  if (next === seenTagString) {
+    throw new Error(
+      `that edit would change nothing on post ${postId}. ` +
+        'Fix: the tag is already in the state you asked for; nothing was sent.',
+    )
+  }
 
   const send = async (csrf: string | null): Promise<Response> => {
     const body = new URLSearchParams()
