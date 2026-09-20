@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { parseMxc } from '../client/media'
 import { booruPostUrl, booruTagUrl } from '../client/booruUrl'
 import { isHypeTag } from '../client/hypeTags'
@@ -63,6 +63,20 @@ export function MediaTags({ mxc, roomId, variant = 'strip', max = 12, onTagClick
   const visible = prefs.visibleFor(mediaId)
   const [expanded, setExpanded] = useState(false)
   const [showAll, setShowAll] = useState(false)
+  // SORTED ONCE PER SET, NOT ONCE PER RENDER. This was a bare
+  // `sortTags(set.tags)` below, so every render handed useTagDiff a brand-new
+  // array -- a new identity for the same tags, on a pointer move, a presence
+  // tick, anything. Its effect keys on that identity, so it re-ran every
+  // render: the cleanup cancelled the pending settle and the nothing-moved
+  // branch returned without scheduling another, and the pills stayed
+  // `entering` for good. That is what stopped the hype pill bouncing
+  // (2026-09-20); the settle now reschedules, but the wasted work was the
+  // reason it was ever asked to.
+  //
+  // Hoisted ABOVE the early returns below, because a hook cannot run
+  // conditionally. `set.tags` is replaced only by a real store write, so this
+  // recomputes exactly when the tags actually change.
+  const tags = useMemo(() => sortTags(set?.tags ?? []), [set?.tags])
 
   // Nothing to show: no tags for this image (yet). Render nothing at all rather
   // than an empty container, so untagged images keep their exact layout.
@@ -76,7 +90,6 @@ export function MediaTags({ mxc, roomId, variant = 'strip', max = 12, onTagClick
   if (!set) return null
   if (set.tags.length === 0 && (set.postId === undefined || variant === 'chip')) return null
 
-  const tags = sortTags(set.tags)
   const meta = { rating: set.rating, postId: set.postId, updatedBy: set.updatedBy }
   const hidden = !visible
 
@@ -157,7 +170,9 @@ function TagPanel({
   meta?: TagMeta
   onCollapse?: () => void
 }) {
-  const shown = max === undefined ? tags : tags.slice(0, max)
+  // Memoised for the same reason `tags` is: this is what useTagDiff keys on,
+  // and a fresh slice every render is a fresh identity for an unchanged list.
+  const shown = useMemo(() => (max === undefined ? tags : tags.slice(0, max)), [tags, max])
   const rest = tags.length - shown.length
   // A retag arrives as a whole new set, so the panel has to work out which
   // pill moved before it can draw the change rather than the result. Leaving
