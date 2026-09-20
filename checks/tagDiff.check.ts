@@ -97,5 +97,29 @@ console.log('== the exit duration is shared with the stylesheet')
     'if these drift the ghost is unmounted mid-animation or lingers after it')
 }
 
+console.log('== a settle is always owed, even when nothing moved')
+{
+  // THE ONE THING withGhosts CANNOT ANSWER. The stuck-`entering` bug of
+  // 2026-09-20 was not in this function -- every call returned the right
+  // phases -- it was in the effect around it: the cleanup clears the settle
+  // timer on every `tags` identity change, and the nothing-moved branch used
+  // to bare-`return` without scheduling another. A set that changed identity
+  // inside the 160ms window (tags from one read, lamps from the next) held
+  // `entering` for good, and .mod-pill--in silently overrode the hype jiggle.
+  //
+  // Driving a React effect needs a renderer this suite does not have, so this
+  // reads the source: the branch must settle, not return bare. A structural
+  // assertion is worth more than nothing here, and it is the shape that would
+  // have caught it.
+  const src = readFileSync('src/client/useTagDiff.ts', 'utf8')
+  const branch = /if \(entering\.size === 0 && gone\.length === 0\) \{([\s\S]*?)\n    \}/.exec(src)
+  check('the nothing-moved branch is a block, not a bare return',
+    branch !== null,
+    'a bare `return` here leaves a cancelled settle unscheduled')
+  check('and it settles the list back to steady',
+    branch !== null && /setRendered\(steady\(tags\)\)/.test(branch[1]),
+    branch?.[1])
+}
+
 if (failures > 0) { console.log(`\n${failures} FAILED`); process.exit(1) }
 console.log('\nALL CHECKS PASSED')

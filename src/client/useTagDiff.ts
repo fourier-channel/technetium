@@ -86,9 +86,31 @@ export function useTagDiff(tags: MediaTag[]): DiffedTag[] {
     const entering = new Set(tags.filter((t) => !beforeKeys.has(tagKey(t))).map(tagKey))
     const gone = before.filter((t) => !afterKeys.has(tagKey(t)))
 
-    if (entering.size === 0 && gone.length === 0) return
-
     let cancelled = false
+
+    // NOTHING MOVED -- BUT THE SETTLE THIS EFFECT JUST CANCELLED MAY STILL BE
+    // OWED. The cleanup below clears the settle timer on every `tags` identity
+    // change, and this branch used to `return` without scheduling another one.
+    // So an identity change that arrived INSIDE the 160ms settle window left
+    // every pill stuck in `entering` for good.
+    //
+    // That window stopped being rare the day provenance landed: the tags
+    // arrive from one read and the lamps from the next a moment later, and
+    // withProvenance rebuilds every tag object, so the second read is exactly
+    // such a change. `.mod-pill--in` is declared after `.mod-pill--hype` at
+    // the same specificity, so a stuck `entering` overrides the hype jiggle
+    // while leaving ::after alone -- which is why the hyped tag kept its
+    // sparkle, kept its colours, answered the pointer, and stopped bouncing
+    // (operator, 2026-09-20).
+    if (entering.size === 0 && gone.length === 0) {
+      queueMicrotask(() => {
+        if (!cancelled) setRendered(steady(tags))
+      })
+      return () => {
+        cancelled = true
+      }
+    }
+
     // setState out of the effect BODY, per react-hooks/set-state-in-effect. A
     // microtask still lands the same frame, so nothing flickers first.
     queueMicrotask(() => {
