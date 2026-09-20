@@ -151,7 +151,7 @@ export function NavTree({
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [dmOpen, setDmOpen] = useState(false)
   const [dmRevealKey, setDmRevealKey] = useState(0)
-  const [menu, setMenu] = useState<{ node: TreeNode; x: number; y: number } | null>(null)
+  const [menu, setMenu] = useState<{ node: TreeNode; x: number; y: number; conversation: boolean } | null>(null)
   // The invite picker's target: a joined room/space whose menu offered it.
   const [inviteNode, setInviteNode] = useState<TreeNode | null>(null)
   const [inviteNotice, setInviteNotice] = useState<string | null>(null)
@@ -194,9 +194,13 @@ export function NavTree({
   useEffect(() => {
     if (tree && onDefaultWidth) onDefaultWidth(computeDefaultPanelWidth(tree))
   }, [tree, onDefaultWidth])
-  const onContext = (node: TreeNode, e: React.MouseEvent) => {
+  // `conversation` records WHERE the click came from. A row right-clicked in
+  // the DM strip is one of the conversation windows whatever the room
+  // classifier makes of it -- see RoomContextMenu for the two kinds that the
+  // classifier correctly refuses to call DMs and that still need closing.
+  const onContext = (node: TreeNode, e: React.MouseEvent, conversation = false) => {
     e.preventDefault()
-    setMenu({ node, x: e.clientX, y: e.clientY })
+    setMenu({ node, x: e.clientX, y: e.clientY, conversation })
   }
 
   const toggle = (roomId: string) =>
@@ -564,7 +568,7 @@ export function NavTree({
                         const live = client?.getRoom(node.roomId) ?? node.room ?? null
                         if (live) onSelectRoom?.(live)
                       }}
-                      onContextMenu={(e) => onContext(node, e)}
+                      onContextMenu={(e) => onContext(node, e, true)}
                       title={dmTitle(node, isDm, counts)}
                       style={dmFaceStyle({ ping, unread })}
                       className={ping ? 'tc-dm-waiting tc-dm-waiting--ping' : unread ? 'tc-dm-waiting' : undefined}
@@ -605,6 +609,7 @@ export function NavTree({
           node={menu.node}
           x={menu.x}
           y={menu.y}
+          conversation={menu.conversation}
           onClose={() => setMenu(null)}
           onInvite={
             // Offered only where the room itself says this viewer may invite

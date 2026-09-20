@@ -23,6 +23,7 @@ export function RoomContextMenu({
   y,
   onClose,
   onInvite,
+  conversation = false,
 }: {
   node: TreeNode
   x: number
@@ -30,6 +31,9 @@ export function RoomContextMenu({
   onClose: () => void
   // Present only when the viewer has invite power here; opens the picker.
   onInvite?: () => void
+  // The row was right-clicked in the DM strip, so it IS one of the
+  // conversation windows whatever the classifier thinks. See below.
+  conversation?: boolean
 }) {
   const { client } = useClient()
   const settings = useRoomListSettings()
@@ -56,8 +60,22 @@ export function RoomContextMenu({
   // and missing from the map is drawn as a person in the strip and would have
   // been offered "Leave room" here. Two answers to one question, three days
   // from being a bug report.
+  // WHETHER YOU MAY CLOSE A CONVERSATION IS NOT WHAT KIND OF ROOM IT IS, and
+  // gating the affordance on the classifier meant two kinds of window could
+  // not be closed at all (reported 2026-09-20): a conversation with three
+  // people in it, which the server stamps `room` and the stamp beats
+  // m.direct; and a DM whose other person left before you ever opened it,
+  // which was never adopted into m.direct on your side and predates stamping.
+  // Both are conversations. Both were offered "Leave room", which does a
+  // third of what closing one means.
+  //
+  // classifyRoom is right to be strict -- it answers what a room IS, and
+  // "absence from m.direct proves nothing" is its own comment. So the
+  // affordance asks a different question, answered by the surface the click
+  // came from: the DM strip's rooms are conversation windows by definition,
+  // and that definition cannot drift because the strip's contents ARE it.
   const dmRoom = node.room ?? (client ? client.getRoom(node.roomId) : null)
-  const isDm = !!client && !!dmRoom && !node.isSpace && isDirect(client, dmRoom)
+  const isDm = !node.isSpace && (conversation || (!!client && !!dmRoom && isDirect(client, dmRoom)))
   const kind = node.isSpace ? 'space' : isDm ? 'dm' : 'room'
   const isRoom = !node.isSpace
   const joined = node.membership === 'join'
@@ -370,7 +388,7 @@ export function RoomContextMenu({
               {/* The warning belongs BEFORE the confirm, not after it. It
                   answers the question people actually have -- whether a new
                   conversation brings this back -- and the answer is no. */}
-              {isDm && <DmCloseWarningText who={node.name} />}
+              {isDm && <DmCloseWarningText />}
               <MenuItem danger onClick={leave}>
                 {'⚠ ' + leaveConfirmLabel(kind)}
               </MenuItem>
@@ -389,8 +407,8 @@ export function RoomContextMenu({
 
 // What closing costs and what it does not, before the confirm rather than
 // after it. Every line is a fact about Matrix; see dmClose.ts.
-function DmCloseWarningText({ who }: { who: string }) {
-  const warning = dmCloseWarning(who)
+function DmCloseWarningText() {
+  const warning = dmCloseWarning()
   return (
     <div
       style={{

@@ -94,16 +94,19 @@ console.log('== pruning touches every entry, not the first')
 
 console.log('== the warning tells the truth, including the unwelcome half')
 {
-  const w = dmCloseWarning('Neru-chan')
+  const w = dmCloseWarning()
   const all = [...w.losses, ...w.keeps].join(' ')
   check('says a new conversation is a NEW room', /NEW room/.test(all))
   check('says this history will not be in it', /will not be in it/.test(all))
   check('says nothing is deleted', /Nothing is deleted/.test(all))
-  check('says they keep it', /Neru-chan keeps this room/.test(all))
-  check('says the one route back, which is theirs to offer', /invites you back to this same room/.test(all))
+  check('says the room survives for whoever is left', /stays, for everyone still in it/.test(all))
+  check('says the one route back', /invited back to this same room/.test(all))
   check('says media stops being readable', /pictures stop being readable/.test(all))
-  check('names the person rather than saying "this user"', !/this user/.test(all) && /Neru-chan/.test(all))
   check('has both halves', w.losses.length >= 2 && w.keeps.length >= 2)
+  // It must read correctly for a conversation with three people in it, which
+  // is one of the kinds that could not be closed at all before.
+  check('names nobody, so it is true for one person and for five',
+    !/\bwith [A-Z]/.test(all) && !/\bkeeps this room/.test(all), all)
 }
 
 console.log('== the destructive item says what it will do')

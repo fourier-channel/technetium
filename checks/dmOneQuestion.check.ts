@@ -40,5 +40,19 @@ const inMap = {
 } as never
 check('a room only in m.direct IS a DM', isDirect(inMap, stamped) === true)
 
+console.log('== the close affordance does NOT depend on the classifier')
+// Two kinds of window could not be closed at all while it did: a conversation
+// with three people in it, which the server stamps `room` and the stamp beats
+// m.direct; and a DM whose other person left before it was ever opened, never
+// adopted into m.direct on this side. classifyRoom is right to refuse both --
+// it answers what a room IS. The affordance asks where the click came from.
+check('the menu takes a `conversation` prop', /conversation\s*=\s*false/.test(menu) && /conversation\?:\s*boolean/.test(menu))
+check('and it alone can make the item appear',
+  /conversation \|\| \(!!client/.test(menu),
+  'the surface must be able to say yes without the classifier agreeing')
+check('the DM strip says yes for its own rows', /onContext\(node, e, true\)/.test(nav))
+check('the menu is handed it', /conversation=\{menu\.conversation\}/.test(nav))
+check('a space is still never a conversation', /!node\.isSpace && \(conversation/.test(menu))
+
 if (failures) { console.log(`\n${failures} check(s) failed`); process.exit(1) }
 console.log('\ndm one question: all checks passed')

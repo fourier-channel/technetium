@@ -41,15 +41,20 @@ export interface DmCloseWarning {
  *   visibility is "shared" -- so if they invite you back to THAT room, you see
  *   all of it again. That is the only route back, and it is theirs to offer.
  */
-export function dmCloseWarning(who: string): DmCloseWarning {
+export function dmCloseWarning(): DmCloseWarning {
+  // NO NAME IN THE TEXT. It said "Starting a new conversation with Neru-chan"
+  // and read as nonsense the moment a conversation had three people in it --
+  // and a group conversation is exactly one of the cases that could not be
+  // closed at all. One phrasing that is true for one person and for five
+  // beats two that are each true half the time.
   return {
     losses: [
-      `You leave this room. Its messages and pictures stop being readable to you, including ones you sent.`,
-      `Starting a new conversation with ${who} creates a NEW room. This history will not be in it, and nothing can put it there.`,
+      'You leave this room. Its messages and pictures stop being readable to you, including ones you sent.',
+      'Starting a new conversation creates a NEW room. This history will not be in it, and nothing can put it there.',
     ],
     keeps: [
-      `Nothing is deleted. ${who} keeps this room and everything in it.`,
-      `If ${who} invites you back to this same room, you will see the whole history again.`,
+      'Nothing is deleted. This room and everything in it stays, for everyone still in it.',
+      'If you are invited back to this same room, you will see the whole history again.',
     ],
   }
 }
