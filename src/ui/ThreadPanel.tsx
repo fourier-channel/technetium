@@ -10,11 +10,21 @@ import { ComposerModeProvider } from './ComposerModeProvider'
 import { MessageVerbsProvider } from './MessageVerbs'
 import { TypingBar } from './TypingBar'
 import { usePresence } from '../client/usePresence'
+import { useSpace } from './spaceContext'
+import { useRoomListSettings } from './roomListSettings'
 
 // Thread panel: a thread's root + replies, resolved by (roomId, rootId) so it
 // stays open and correct even when the user navigates to other rooms. Renders via
 // the shared Row, so images/markdown match the main timeline. Posting into the
 // thread (its own Composer) lands in step 3.
+// The room's name as the room list and the timeline header say it, which is
+// the user's rename when they have one. One source, so two headers cannot
+// disagree about what a room is called.
+function useRoomLabel(roomId: string, name: string | undefined): string {
+  const settings = useRoomListSettings()
+  return settings.getRename(roomId) ?? name ?? roomId
+}
+
 export function ThreadPanel({
   roomId,
   rootId,
@@ -29,6 +39,10 @@ export function ThreadPanel({
 
   const room = client?.getRoom(roomId) ?? null
   const thread = room?.getThread(rootId) ?? null
+  // On a one-slot screen a panel can be the sole occupant, and then this
+  // header is the only thing on screen that could name the room.
+  const { singleSlot: alone } = useSpace()
+  const roomLabel = useRoomLabel(roomId, room?.name)
 
   // Re-render on any change to this thread (new replies, edits).
   useEffect(() => {
@@ -120,8 +134,19 @@ export function ThreadPanel({
           padding: '10px 12px',
         }}
       >
+        {/* THE ROOM'S NAME ONLY WHEN NOTHING ELSE IS SAYING IT.
+            This read "Thread - <room>" always, and the timeline it sits beside
+            carries the same name in its own header two inches to the left --
+            so with a thread open the name was on screen twice. Worse, the two
+            did not have to AGREE: the timeline shows the user's rename
+            (RoomHeaderInfo: settings.getRename(...) ?? room.name) and this
+            showed room.name, so renaming a room made the two headers
+            contradict each other.
+            On a one-slot screen the thread can be the sole occupant
+            (space.ts present/singleSlot), and then nothing else names the
+            room -- so it is said there, from the SAME source. */}
         <strong style={{ fontSize: 13 }}>
-          Thread{room ? ` \u00b7 ${room.name || roomId}` : ''}
+          Thread{alone && room ? ` \u00b7 ${roomLabel}` : ''}
         </strong>
 
       </div>
