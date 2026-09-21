@@ -1,3 +1,4 @@
+import { domainEnabled } from '../client/domainMode'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { RoomEvent, type MatrixEvent, type Room } from 'matrix-js-sdk'
 import { useClient } from '../client/clientContextValue'
@@ -83,7 +84,11 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     closeThreadList: () => hide('threads', (prev) => closeInColumn(prev, 'threads')),
     openThreadPane: () => show('thread', (prev) => openThreadView(prev, 0.38)),
     closeThreadPane: () => hide('thread', (prev) => closeThreadView(prev)),
-    openDomain: () => show('domain', (prev) => openDomain(prev, 0.45)),
+    // A no-op when domain mode is off. Nothing but App calls this today, but
+    // it is public API on the space context, and on a one-slot screen `show`
+    // routes to present() -- which would make the domain the SOLE OCCUPANT of
+    // a phone. Insurance against a future caller, not a fix for a live bug.
+    openDomain: () => { if (domainEnabled()) show('domain', (prev) => openDomain(prev, 0.45)) },
     closeDomain: () => hide('domain', (prev) => closeDomain(prev)),
     presets: {
       list: store.presets,

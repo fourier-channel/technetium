@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useSpace } from './spaceContext'
 import { PANEL_IDS, type PanelId } from './space'
+import { domainEnabled } from '../client/domainMode'
 import { PanelChrome } from './PanelChrome'
 
 // What each panel is called to a person. The ids are internal.
@@ -46,7 +47,12 @@ export function LayoutEditor() {
           delta, which is precisely "both edges move identically", and with no
           control on those panels there was no way to see it or undo it. */}
       <div className="tc-layout-editor-panels">
-        {PANEL_IDS.filter((id) => space.leaves[id].open).map((id) => (
+        {/* A layout saved while domain mode was available can still carry its
+            leaf open, so without this the word "Domain" appears here -- with
+            working Lock and Pin buttons -- for a user the feature is turned off
+            for. It cannot mount the panel; it is still a visible mention of
+            something that is supposed to not exist. */}
+        {PANEL_IDS.filter((id) => space.leaves[id].open && (id !== 'domain' || domainEnabled())).map((id) => (
           <div className="tc-layout-editor-row" key={id}>
             <span>{PANEL_LABEL[id]}</span>
             <PanelChrome id={id} inline />

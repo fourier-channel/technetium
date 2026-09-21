@@ -77,7 +77,30 @@ check('the view is not rendered when unavailable', /\{domainAvailable && domainR
 check('the layout effect refuses to open it',
   /if \(domainExpanded && domainAvailable\) openDomain\(\); else closeDomain\(\)/.test(app),
   'a saved layout with the domain open must be closed, not honoured')
-check('and the effect re-runs when availability does', /\}, \[domainExpanded, domainAvailable\]\)/.test(app))
+check('and the effect re-runs when availability does', /\}, \[domainExpanded, domainAvailable/.test(app))
+
+console.log('== the routes a survey found that the button does not cover')
+// An 11-agent survey of every route into domain mode (2026-09-21) turned up
+// four the visible control does not reach. Three were real.
+const editor = readFileSync(new URL('../src/ui/LayoutEditor.tsx', import.meta.url), 'utf8')
+const provider = readFileSync(new URL('../src/ui/SpaceProvider.tsx', import.meta.url), 'utf8')
+
+check('the effect watches the LEAF, not just the toggle',
+  /domainExpanded, domainAvailable, domainLeafOpen\]/.test(app),
+  'the saved layout arrives after mount and can reopen the leaf behind a once-run effect')
+check('and the leaf is actually read', /const domainLeafOpen = space\.leaves\.domain\.open/.test(app))
+
+// The one that would leave marks in other people's rooms: the Composer stamps
+// net.41chan.domain_ttd onto every image while that prop is defined.
+check('the composer TTD stamp is gated on availability too',
+  /domainTtd=\{domainExpanded && domainAvailable \? domainTtd : undefined\}/.test(app))
+
+check('the layout editor does not name Domain when it is off',
+  /id !== 'domain' \|\| domainEnabled\(\)/.test(editor))
+
+check('openDomain on the space context is a no-op when off',
+  /openDomain: \(\) => \{ if \(domainEnabled\(\)\)/.test(provider),
+  'on a one-slot screen show() routes to present(), which would give the domain the whole phone')
 
 if (failures) { console.log(`\n${failures} check(s) failed`); process.exit(1) }
 console.log('\ndomain mode: all checks passed')

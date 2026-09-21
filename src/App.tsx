@@ -109,6 +109,12 @@ function App() {
   // Both panels arrive and leave the same way, from one mechanism -- the only
   // way two things stay exactly the same is for there to be one of them.
   const domainReveal = useReveal(domainExpanded, 420)
+  // The saved layout arrives AFTER this component mounts -- spaceState re-reads
+  // it in a microtask and again on every account-data echo -- so a layout
+  // carrying the domain leaf open can turn it back on behind the effect below,
+  // which would otherwise have run once and never again. Watching the leaf is
+  // what makes "closed" stay closed rather than being true only at mount.
+  const domainLeafOpen = space.leaves.domain.open
   // The thread list descends from the dock's bottom edge (no sudden jumps):
   // mounted for the whole choreography, its height going 0 -> share -> 0.
   const threadListReveal = useReveal(threadListOpen, 380)
@@ -122,7 +128,7 @@ function App() {
     // empty tile nobody asked for and nobody can shut.
     if (domainExpanded && domainAvailable) openDomain(); else closeDomain()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [domainExpanded, domainAvailable])
+  }, [domainExpanded, domainAvailable, domainLeafOpen])
   // The reading pane arrives the same way the domain does. Same hook, same
   // duration family, so "like the domain" is a fact rather than a resemblance.
   const threadPanelReveal = useReveal(!!openThread, 420)
@@ -349,7 +355,13 @@ function App() {
                 )}
                 {/* Undefined unless the domain is open, so an ordinary message
                     in an ordinary room never acquires a lifetime. */}
-                <Composer room={selectedRoom} domainTtd={domainExpanded ? domainTtd : undefined} />
+                {/* domainAvailable as well as domainExpanded, belt and braces,
+                    because this prop is a silent WRITE: Composer stamps
+                    net.41chan.domain_ttd onto every image it sends while it is
+                    defined, and that field is what makes a post a canvas
+                    object. Of everything domain mode touches, this is the one
+                    that would leave marks in other people's rooms. */}
+                <Composer room={selectedRoom} domainTtd={domainExpanded && domainAvailable ? domainTtd : undefined} />
                 {domainAvailable && (
                   <DomainTab
                     room={selectedRoom}
