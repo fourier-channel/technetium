@@ -75,6 +75,7 @@ homeserver for anyone but the developer, so set them for any real build:
 | `VITE_MAS_CLIENT_ID` | The OIDC client id registered with MAS |
 | `VITE_SLIDING_SYNC` | `1` to use sliding sync instead of classic sync |
 | `VITE_E2EE` | `1` to turn encryption on for every user of the build. Compared as the string `1`; any other value is off. The per-browser switch in Settings works either way. |
+| `VITE_DOMAIN` | `1` to offer domain mode to every user of the build. Compared as the string `1`; any other value is off, so `0` and `false` are both off. A dev server has it without setting anything. On a build with it off, the per-browser switch under Settings -> Unfinished features turns it on for one browser. |
 | `VITE_BOORU_URL`, `VITE_BOORU_LOGIN_URL`, `VITE_BOORU_EXCHANGE_URL` | The community image board panel and its sign-in bridge |
 
 Deployment is `./deploy.sh`, which builds `dist/`, ships it into a

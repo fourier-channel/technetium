@@ -29,6 +29,7 @@ import { RoomListSettingsProvider } from './ui/RoomListSettingsProvider'
 import { useReadMarker } from './client/useReadMarker'
 import { useMediaTagSync } from './client/useMediaTags'
 import { DomainView } from './ui/DomainView'
+import { domainEnabled } from './client/domainMode'
 import { AuthLanding } from './onboarding/AuthLanding'
 import { AlphaBanner } from './ui/AlphaBanner'
 import { AvatarDisc } from './ui/AvatarDisc'
@@ -93,6 +94,12 @@ function App() {
   const chatColumnShare = Math.max(1e-6, 1 - dockShareOfMain)
   const threadsShareOfChatColumn = threadsShare / chatColumnShare
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // Domain mode is not offered unless this build or this browser says so --
+  // see client/domainMode.ts. Read ONCE per mount rather than per render: the
+  // answer cannot change without a reload (the opt-in is storage, the flag is
+  // the build), and re-reading it would mean a render that disagrees with the
+  // one before it for no reason anybody could see.
+  const [domainAvailable] = useState(domainEnabled)
   const [domainExpanded, setDomainExpanded] = useState(false)
   // The canvas's time-to-die lives here rather than inside DomainView, so the
   // ONE composer can stamp it onto a post while the domain is open. The domain
@@ -108,9 +115,14 @@ function App() {
   // The domain is a TILE that takes width from the chat column below the
   // dock; opening carves it out of the space, closing hands the width back.
   useEffect(() => {
-    if (domainExpanded) openDomain(); else closeDomain()
+    // `domainAvailable` is in the condition as well as around the control,
+    // because a SAVED LAYOUT can carry the domain panel open (space.ts
+    // deserialize restores every panel's open flag) and this effect is what
+    // closes it. Gating only the button would leave that layout opening an
+    // empty tile nobody asked for and nobody can shut.
+    if (domainExpanded && domainAvailable) openDomain(); else closeDomain()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [domainExpanded])
+  }, [domainExpanded, domainAvailable])
   // The reading pane arrives the same way the domain does. Same hook, same
   // duration family, so "like the domain" is a fact rather than a resemblance.
   const threadPanelReveal = useReveal(!!openThread, 420)
@@ -338,12 +350,14 @@ function App() {
                 {/* Undefined unless the domain is open, so an ordinary message
                     in an ordinary room never acquires a lifetime. */}
                 <Composer room={selectedRoom} domainTtd={domainExpanded ? domainTtd : undefined} />
-                <DomainTab
-                  room={selectedRoom}
-                  open={domainExpanded}
-                  shown={domainReveal.shown}
-                  onToggle={() => setDomainExpanded((o) => !o)}
-                />
+                {domainAvailable && (
+                  <DomainTab
+                    room={selectedRoom}
+                    open={domainExpanded}
+                    shown={domainReveal.shown}
+                    onToggle={() => setDomainExpanded((o) => !o)}
+                  />
+                )}
               </ComposerModeProvider>
             ) : (
               <BooruFrame />
@@ -351,7 +365,7 @@ function App() {
           </div>
           {/* The domain, coming out of the thread view (or the user list when
               no thread is open): width from the space, animated, never a jump. */}
-          {domainReveal.mounted && selectedRoom && (
+          {domainAvailable && domainReveal.mounted && selectedRoom && (
             <div
               className="tc-domain-tile"
               style={{ width: domainReveal.shown ? domainWidth : 0, transitionDuration: `${domainReveal.durationMs}ms` }}
