@@ -30,6 +30,7 @@ import { useReadMarker } from './client/useReadMarker'
 import { useMediaTagSync } from './client/useMediaTags'
 import { DomainView } from './ui/DomainView'
 import { domainEnabled } from './client/domainMode'
+import { threadStripCss } from './ui/threadStrip'
 import { AuthLanding } from './onboarding/AuthLanding'
 import { AlphaBanner } from './ui/AlphaBanner'
 import { AvatarDisc } from './ui/AvatarDisc'
@@ -93,6 +94,11 @@ function App() {
   // and the chat that the model does not have.
   const chatColumnShare = Math.max(1e-6, 1 - dockShareOfMain)
   const threadsShareOfChatColumn = threadsShare / chatColumnShare
+  // The strip's bottom edge, as ONE expression. The tile's height and the tab
+  // that rides that edge both take it, because it is the same edge -- see
+  // threadStrip.ts for why the layout's share alone made the strip too tall
+  // for the cards in it.
+  const threadStripH = threadStripCss(threadsShareOfChatColumn)
   const [settingsOpen, setSettingsOpen] = useState(false)
   // Domain mode is not offered unless this build or this browser says so --
   // see client/domainMode.ts. Read ONCE per mount rather than per render: the
@@ -316,13 +322,13 @@ function App() {
               <PullTab pull="down" target="threads" label="Threads" onClick={() => setThreadListOpen(true)} style={{ top: 0, left: 'calc(50% + 40px)' }} />
             )}
             {selectedRoom && threadListOpen && (
-              <PullTab pull="up" target="threads" label="Hide threads" onClick={() => setThreadListOpen(false)} style={{ top: `${Math.round(threadsShareOfChatColumn * 1000) / 10}%`, marginTop: -12, left: 'calc(50% + 40px)' }} />
+              <PullTab pull="up" target="threads" label="Hide threads" onClick={() => setThreadListOpen(false)} style={{ top: threadStripH, marginTop: -12, left: 'calc(50% + 40px)' }} />
             )}
             {threadListReveal.mounted && selectedRoom && (
               <div
                 className="tc-threads-tile"
                 style={{
-                  height: threadListReveal.shown ? `${Math.round(threadsShareOfChatColumn * 1000) / 10}%` : 0,
+                  height: threadListReveal.shown ? threadStripH : 0,
                   transitionDuration: `${threadListReveal.durationMs}ms`,
                 }}
               >
