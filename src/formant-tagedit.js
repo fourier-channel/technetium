@@ -29,6 +29,16 @@
 /**
  * A tag name as the booru stores it: lowercase, underscores, no edge runs.
  *
+ * Danbooru downcases and turns whitespace into underscores, so "Blue Sky" and
+ * "blue_sky" are ONE tag there. Doing it on this side rather than letting the
+ * server do it silently is what makes an optimistic pill match the one that
+ * comes back: otherwise "Blue Sky" pops in, the server answers "blue_sky", and
+ * the next diff reads that as one tag leaving and a different one arriving --
+ * a visible flicker on every edit that used a capital letter.
+ *
+ * Returns '' for anything that is not a tag once normalised; the caller must
+ * treat that as "nothing was typed" rather than sending it.
+ *
  * @param {string} raw
  * @returns {string}
  */
