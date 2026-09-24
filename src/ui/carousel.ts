@@ -48,34 +48,48 @@ export function stepFocus(current: number, delta: number, count: number): number
 // Operator, 2026-09-24: "Threads travel too quickly--two positions per single
 // mousewheel tick, it should be just one." The old handler added every delta
 // to a running total and spent it 40px at a time in a loop, so one 100px
-// Chrome notch was 2 steps, a 120px notch 3, and a remainder that was never
-// cleared made each notch depend on the ones before it (2, 3, 2, 3...).
+// Chrome notch was 2 steps, a 120px notch 3.
 //
-// The rules, in order:
-//  - line or page units are a detent by definition: one step;
-//  - the first event of a gesture (after a pause, or a reversal) steps at
-//    once, whatever its size -- a slow spin and a 4px notch both count;
-//  - within a gesture, an event of a notch's size is one step, never more;
-//  - anything smaller (hi-res wheels, trackpads) adds up to about one Chrome
-//    notch before it steps, and the total is spent, not carried.
+// A NOTCH IS KNOWN BY ITS TIMING, NOT ITS SIZE. Notch sizes run from 4px (a
+// slow tick of an ordinary mouse in Chrome on macOS) to 400px, so no size
+// threshold separates "one notch" from "a piece of a stream" -- the first fix
+// tried 30px and a steady roll of small notches moved one card and stalled.
+// What separates them is time: a notch arrives ON ITS OWN, a hi-res wheel's
+// detent or a trackpad's swipe arrives as a BURST of events a few ms apart.
+//
+// The rules:
+//  - an event that starts a burst (more than BURST_GAP_MS after the last one,
+//    or in line/page units, which are a detent by definition) steps ONCE,
+//    whatever its size;
+//  - the rest of a burst is a stream: it steps again only after about a
+//    card's width of scroll (STREAM_PX) AND at least STREAM_STEP_MS since the
+//    last step, so a trackpad fling moves a handful of cards, not the list;
+//  - a reversal inside a stream counts only past REVERSE_PX, so a resting
+//    finger's jitter moves nothing.
 //
 // Time comes in with the event (its timeStamp), so this stays pure.
 export const WHEEL = {
   LINE_PX: 16,
   PAGE_PX: 400,
-  MIN_PX: 2,
-  NOTCH_PX: 30,
-  STEP_PX: 100,
-  GAP_MS: 200,
+  MIN_PX: 3,
+  BURST_GAP_MS: 25,
+  STREAM_PX: 360,
+  STREAM_STEP_MS: 180,
+  REVERSE_PX: 10,
 } as const
 
 export interface WheelState {
-  acc: number
+  /** When the last counted event arrived. */
   lastT: number
-  lastDir: -1 | 0 | 1
+  /** When the last step was taken. */
+  stepT: number
+  /** Direction of the current burst. */
+  dir: -1 | 0 | 1
+  /** Distance scrolled in the current burst since its last step. */
+  acc: number
 }
 
-export const WHEEL_IDLE: WheelState = { acc: 0, lastT: -Infinity, lastDir: 0 }
+export const WHEEL_IDLE: WheelState = { lastT: -Infinity, stepT: -Infinity, dir: 0, acc: 0 }
 
 export interface WheelInput {
   dx: number
@@ -93,15 +107,19 @@ export function wheelStep(s: WheelState, ev: WheelInput): { state: WheelState; s
     return { state: s, step: 0 }
   }
   const dir: -1 | 1 = d > 0 ? 1 : -1
-  const fresh = ev.t - s.lastT > WHEEL.GAP_MS || dir !== s.lastDir
-  if (ev.mode !== 0 || fresh || Math.abs(d) >= WHEEL.NOTCH_PX) {
-    return { state: { acc: 0, lastT: ev.t, lastDir: dir }, step: dir }
+  const inBurst = ev.mode === 0 && ev.t - s.lastT <= WHEEL.BURST_GAP_MS
+  if (inBurst && dir !== s.dir) {
+    // A reversal mid-stream: jitter unless it is decisive.
+    if (Math.abs(d) < WHEEL.REVERSE_PX) return { state: { ...s, lastT: ev.t }, step: 0 }
+  } else if (inBurst) {
+    const acc = s.acc + Math.abs(d)
+    if (acc >= WHEEL.STREAM_PX && ev.t - s.stepT >= WHEEL.STREAM_STEP_MS) {
+      return { state: { lastT: ev.t, stepT: ev.t, dir, acc: 0 }, step: dir }
+    }
+    return { state: { ...s, lastT: ev.t, acc }, step: 0 }
   }
-  const acc = s.acc + d
-  if (Math.abs(acc) >= WHEEL.STEP_PX) {
-    return { state: { acc: 0, lastT: ev.t, lastDir: dir }, step: dir }
-  }
-  return { state: { acc, lastT: ev.t, lastDir: dir }, step: 0 }
+  // A notch on its own, or the start of a new burst: one card.
+  return { state: { lastT: ev.t, stepT: ev.t, dir, acc: 0 }, step: dir }
 }
 
 // How far a card is from the focus, for styling. Capped, because a card six

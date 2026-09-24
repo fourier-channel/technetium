@@ -63,29 +63,66 @@ for (const px of [100, 120, 80, 39, 48, 57, 114]) {
   check('line-mode notches 40ms apart: one each', same(got, [1, 1, 1, 1, 1, 1]), got)
 }
 
-console.log('\n-- a high-resolution wheel: one card per detent --')
-for (const gap of [40, 120]) {
-  const got = run(hiRes(4, 8, 12.5, gap))
-  check(`8 x 12.5px per detent, ${gap}ms apart: one each`, same(got, [1, 1, 1, 1]), got)
+console.log('\n-- small notches at a natural pace: one card each, no stall --')
+// Review of the first fix: notch SIZE cannot tell a notch from a stream. A
+// slow tick of an ordinary mouse in Chrome on macOS is about 4px, Firefox at
+// one line per notch about 16-19px, and a steady roll of those moved one card
+// and stalled. Timing tells them apart.
+for (const [px, gap] of [[4.000244140625, 150], [4, 190], [8, 120], [16, 120], [19, 100], [33, 100]] as const) {
+  const got = run(notches(12, px, gap))
+  check(`12 notches of ${px}px ${gap}ms apart: twelve cards`, got.every((n) => n === 1), got)
 }
 {
-  const got = run(notches(3, 4, 300))
-  check('a 4px notch (slow, macOS-style) still steps', same(got, [1, 1, 1]), got)
+  // macOS acceleration: ticks grow as the wheel speeds up.
+  const ramp = [4, 4, 8, 8, 12, 12, 16, 20, 24, 28, 32, 40]
+  const got = run(ramp.map((px, i) => [{ dx: 0, dy: px, mode: 0, t: 1000 + i * 110 }]))
+  check('an accelerating roll, 110ms apart: one card per notch', got.every((n) => n === 1), got)
+}
+
+console.log('\n-- a high-resolution wheel: one card per detent --')
+for (const [k, each, gap] of [[8, 12.5, 120], [8, 57 / 8, 90], [8, 48 / 8, 60], [8, 120 / 8, 120], [8, 120 / 8, 60], [4, 25, 80]] as const) {
+  const got = run(hiRes(6, k, each, gap))
+  check(`${k} x ${each.toFixed(2)}px detents ${gap}ms apart: one each`, got.every((n) => n === 1), got)
+}
+{
+  // Faster than that the detents run together into one stream; it may move
+  // fewer cards than detents, never more.
+  const got = run(hiRes(6, 8, 12.5, 40))
+  const total = got.reduce((a, b) => a + b, 0)
+  check('a very fast hi-res spin moves at least one card and never more than one per detent',
+    total >= 1 && got.every((n) => n <= 1), got)
 }
 
 console.log('\n-- a trackpad does not fling across the list --')
 {
-  const stream = [Array.from({ length: 60 }, (_, j) => ({ dx: 0, dy: 3, mode: 0, t: 1000 + j * 16 }))]
-  const got = run(stream)[0]
-  check('a slow 60 x 3px drag is at most two cards', got >= 1 && got <= 2, got)
-  const jitter = [Array.from({ length: 30 }, (_, j) => ({ dx: 0, dy: j % 2 ? 1.5 : -1.5, mode: 0, t: 1000 + j * 16 }))]
-  check('sub-2px jitter moves nothing', run(jitter)[0] === 0, run(jitter))
+  const slow = [Array.from({ length: 60 }, (_, j) => ({ dx: 0, dy: 3, mode: 0, t: 1000 + j * 16 }))]
+  const got = run(slow)[0]
+  check('a slow 60 x 3px drag is one or two cards', got >= 1 && got <= 2, got)
+  // A macOS fling with momentum: ramp to 110px/frame, then 0.95 decay.
+  const fling: WheelInput[] = []
+  let v = 10, t = 1000
+  for (let i = 0; i < 99; i++) {
+    v = i < 8 ? Math.min(110, v + 15) : v * 0.95
+    fling.push({ dx: 0, dy: v, mode: 0, t })
+    t += 16
+  }
+  const flingTotal = run([fling])[0]
+  check('a hard fling with momentum moves a handful of cards, not the list', flingTotal >= 2 && flingTotal <= 8, flingTotal)
+  const flick = [Array.from({ length: 20 }, (_, j) => ({ dx: 0, dy: 35, mode: 0, t: 1000 + j * 8 }))]
+  const flickTotal = run(flick)[0]
+  check('a quick precision-touchpad flick is one or two cards', flickTotal >= 1 && flickTotal <= 2, flickTotal)
+  for (const amp of [1.5, 2.5]) {
+    const jitter = [Array.from({ length: 30 }, (_, j) => ({ dx: 0, dy: j % 2 ? amp : -amp, mode: 0, t: 1000 + j * 16 }))]
+    check(`a resting finger's +/-${amp}px jitter moves nothing`, run(jitter)[0] === 0, run(jitter))
+  }
 }
 
 console.log('\n-- direction and axis --')
 {
   const got = run([[{ dx: 0, dy: 100, mode: 0, t: 1000 }], [{ dx: 0, dy: -100, mode: 0, t: 1030 }]])
-  check('a reversal within 30ms is +1 then -1', same(got, [1, -1]), got)
+  check('a reversal 30ms later is +1 then -1', same(got, [1, -1]), got)
+  const quick = run([[{ dx: 0, dy: 100, mode: 0, t: 1000 }], [{ dx: 0, dy: -100, mode: 0, t: 1008 }]])
+  check('a decisive reversal inside a stream is +1 then -1 too', same(quick, [1, -1]), quick)
   check('a sideways wheel (dx dominant) steps right', same(run([[{ dx: 120, dy: 10, mode: 0, t: 1000 }]]), [1]))
   check('and left', same(run([[{ dx: -120, dy: 10, mode: 0, t: 1000 }]]), [-1]))
 }
@@ -121,13 +158,13 @@ console.log('\n-- seeded fuzz: one step at most, state always finite --')
     t += Math.floor(rnd() * 500)
     const ev = { dx: (rnd() - 0.5) * 2000, dy: (rnd() - 0.5) * 2000, mode: Math.floor(rnd() * 3), t }
     const r = wheelStep(s, ev)
-    if (![-1, 0, 1].includes(r.step) || !Number.isFinite(r.state.acc) || Math.abs(r.state.acc) >= 100) {
+    if (![-1, 0, 1].includes(r.step) || !Number.isFinite(r.state.acc) || r.state.acc < 0) {
       ok = false
       bad = { ev, r }
     }
     s = r.state
   }
-  check('20000 random events: every step is -1, 0 or 1 and the total stays bounded', ok, bad)
+  check('20000 random events: every step is -1, 0 or 1 and the state stays finite', ok, bad)
 }
 
 console.log('\n-- the component hands off to wheelStep and keeps no second rule --')

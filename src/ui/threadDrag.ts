@@ -86,7 +86,10 @@ export interface ThreadDragOptions {
 function measureCards(container: HTMLElement): CardGeom[] {
   const c = container.getBoundingClientRect()
   const out: CardGeom[] = []
-  const nodes = container.querySelectorAll<HTMLElement>('[data-flip-id]')
+  // A pinned card is held first by its pin and cannot be moved, so it is not
+  // a slot the dragged card can take either: leaving it out keeps the preview
+  // where the card will actually land.
+  const nodes = container.querySelectorAll<HTMLElement>('[data-flip-id]:not([data-pinned])')
   nodes.forEach((el) => {
     const id = el.dataset.flipId
     if (!id) return

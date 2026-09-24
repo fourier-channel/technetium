@@ -83,3 +83,34 @@ export function applyPins<T extends { roomId: string; rootId: string }>(
   if (first.every((it, i) => items[i] === it)) return items
   return [...first, ...items.filter((it) => !taken.has(flipIdOf(it.roomId, it.rootId)))]
 }
+
+/**
+ * The order a drag produced, with each pinned thread put back where the
+ * previous arrangement had it. Pinned cards sit first because of the pin, not
+ * because of the arrangement, so saving the drag's order verbatim would record
+ * the pin's position as the thread's place, and unpinning would leave it at
+ * the front. A pinned thread the previous order never held goes last, as a
+ * thread new to an arrangement would. Pinned threads are restored whether or
+ * not the drag's list includes them (the drag does not measure them).
+ */
+export function keepPinnedPlaces(
+  finalIds: readonly string[],
+  pins: readonly string[],
+  prev: readonly string[],
+): string[] {
+  if (pins.length === 0) return [...finalIds]
+  const pinned = new Set(pins)
+  const out = finalIds.filter((id) => !pinned.has(id))
+  // From the drag's list OR the previous order: the drag leaves pinned cards
+  // out of what it measures, so a pinned thread is usually absent from
+  // finalIds and would otherwise be dropped from the arrangement altogether.
+  const back = [...new Set([...finalIds, ...prev])]
+    .filter((id) => pinned.has(id))
+    .map((id) => ({ id, at: prev.indexOf(id) }))
+    .sort((a, b) => (a.at < 0 ? Infinity : a.at) - (b.at < 0 ? Infinity : b.at))
+  for (const { id, at } of back) {
+    if (at < 0) out.push(id)
+    else out.splice(Math.min(at, out.length), 0, id)
+  }
+  return out
+}

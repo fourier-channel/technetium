@@ -6,7 +6,7 @@
 // the custom arrangement and the hover freeze -- is asserted against
 // ThreadList.tsx, because the wrong order there is the likeliest way to break
 // the promise while every pure test still passes.
-import { applyPins, parsePins, togglePin, NO_PINS } from '../src/ui/threadPins.ts'
+import { applyPins, keepPinnedPlaces, parsePins, togglePin, NO_PINS } from '../src/ui/threadPins.ts'
 import { arrangeByCustom } from '../src/ui/threadOrder.ts'
 import { readFileSync } from 'node:fs'
 import type { ThreadListItem } from '../src/client/useThreadList.ts'
@@ -86,6 +86,23 @@ console.log('\n-- composed with a custom (drag-arranged) order: the pin still wi
   check('pinned c still leads it', id(out[0]) === id(c), ids(out))
 }
 
+console.log('\n-- a drag with a pinned card saves the pinned thread back in its place --')
+{
+  // Arrangement A,B,C,D,P; P pinned so the strip shows P,A,B,C,D; the reader
+  // drags B to the end. The drag reports P,A,C,D,B.
+  const saved = keepPinnedPlaces(['P', 'A', 'C', 'D', 'B'], ['P'], ['A', 'B', 'C', 'D', 'P'])
+  check('the drag is kept and P goes back to its own place', saved.join() === 'A,C,D,B,P', saved)
+  const fresh = keepPinnedPlaces(['P', 'B', 'A'], ['P'], ['A', 'B'])
+  check('a pinned thread the arrangement never held goes last', fresh.join() === 'B,A,P', fresh)
+  const none = ['A', 'B']
+  check('no pins: the drag is saved as it is', keepPinnedPlaces(none, [], ['B', 'A']).join() === 'A,B')
+  const two = keepPinnedPlaces(['Q', 'P', 'A', 'B'], ['Q', 'P'], ['P', 'A', 'Q', 'B'])
+  check('two pinned threads each return to their own place', two.join() === 'P,A,Q,B', two)
+  // The drag does not measure pinned cards, so its list usually lacks them.
+  const absent = keepPinnedPlaces(['A', 'C', 'D', 'B'], ['P'], ['A', 'B', 'C', 'D', 'P'])
+  check('a pinned thread absent from the drag\'s list is restored, not dropped', absent.join() === 'A,C,D,B,P', absent)
+}
+
 console.log('\n-- ThreadList applies pins LAST, and every consumer reads the result --')
 {
   const ts = readFileSync('src/ui/ThreadList.tsx', 'utf8')
@@ -95,6 +112,9 @@ console.log('\n-- ThreadList applies pins LAST, and every consumer reads the res
   check('nothing re-derives entries after the pins', (ts.match(/const entries = /g) ?? []).length === 1)
   check('a pinned card is never offered to the drag', /\{\.\.\.\(pinned \? \{\} : getCardHandlers\(/.test(ts))
   check('a pinned card is never labelled new', /&& !pinnedIds\.has\(/.test(ts))
+  check('a drag saves through keepPinnedPlaces', /const saved = keepPinnedPlaces\(finalIds, cur\.pins, prev\)/.test(ts) && /saveCustomOrder\(orderScopeKey\(scope, roomId\), saved\)/.test(ts))
+  const drag = readFileSync('src/ui/threadDrag.ts', 'utf8')
+  check('the drag leaves pinned cards out of the slots it measures', /\[data-flip-id\]:not\(\[data-pinned\]\)/.test(drag))
   check('the tile memo compares the pin state', /a\.pinned !== b\.pinned/.test(ts) && /a\.onTogglePin !== b\.onTogglePin/.test(ts))
   check('the pin button stops the card drag and the card click',
     /onPointerDown=\{\(ev\) => ev\.stopPropagation\(\)\}/.test(ts) && /ev\.stopPropagation\(\)\s*\n\s*onTogglePin\(/.test(ts))

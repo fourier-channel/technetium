@@ -17,7 +17,7 @@ import { useNow } from './useNow'
 import { useDeferredThreadOrder, arrangeByCustom } from './threadOrder'
 import { useThreadDrag } from './threadDrag'
 import { orderScopeKey, loadCustomOrder, saveCustomOrder } from './threadOrderStore'
-import { applyPins, togglePin } from './threadPins'
+import { applyPins, keepPinnedPlaces, togglePin } from './threadPins'
 import { useThreadPins } from '../client/threadPinStore'
 import {
   useThreadList,
@@ -106,6 +106,14 @@ export function ThreadList({
   const pinnedIds = new Set(pins)
   const newIds = arranged ? arranged.newIds : EMPTY_NEW_IDS
 
+  // The order, the pins and the arrangement as of the last render, for the
+  // handlers below to read at click time: closing over them would hand every
+  // card a new function on every render (threadTileEqual compares them).
+  const pinOrderRef = useRef({ ordered, pins, customOrder })
+  useEffect(() => {
+    pinOrderRef.current = { ordered, pins, customOrder }
+  })
+
   // Switching scope loads that scope's saved order (O2). If the new scope has no
   // saved custom order while in custom mode, fall back to the default sort.
   // Both are deliberate acts, so the hover freeze is dropped and the new order
@@ -133,11 +141,19 @@ export function ThreadList({
 
   // Drag-to-reorder (D4). Committing an order switches the list to custom mode
   // (O1) and persists it for the current scope (O2).
+  //
+  // Pinned cards are held first by the pin, not by the arrangement, so the
+  // order a drag produces is saved with each pinned thread back where the
+  // arrangement had it: unpinning then returns it to its place instead of
+  // leaving it wherever the pin happened to be during the drag.
   const onReorder = useCallback(
     (finalIds: string[]) => {
-      setCustomOrder(finalIds)
+      const cur = pinOrderRef.current
+      const prev = cur.customOrder ?? cur.ordered.map((e) => flipIdOf(e.roomId, e.rootId))
+      const saved = keepPinnedPlaces(finalIds, cur.pins, prev)
+      setCustomOrder(saved)
       setSort('custom')
-      saveCustomOrder(orderScopeKey(scope, roomId), finalIds)
+      saveCustomOrder(orderScopeKey(scope, roomId), saved)
     },
     [scope, roomId],
   )
@@ -248,17 +264,26 @@ export function ThreadList({
     // list has no vertical axis -- a thread list is one sequence -- so up and
     // down are left alone to scroll the page, which is what a reader expects
     // of a list taller than the window.
+    //
+    // A move made from a control inside the strip (a pill or a Pin a click
+    // left focused) hands focus back to the strip, so the Enter that follows
+    // opens the card now under the reader instead of pressing that control
+    // again -- which, on a Pin, unpinned the card the reader had just pinned.
+    const strip = e.currentTarget as HTMLElement
+    const reclaim = () => {
+      if (e.target !== strip) strip.focus({ preventScroll: true })
+    }
     const axis = axisFromKey(e, HORIZONTAL)
-    if (axis === 'next') { step(1); return }
-    if (axis === 'prev') { step(-1); return }
+    if (axis === 'next') { step(1); reclaim(); return }
+    if (axis === 'prev') { step(-1); reclaim(); return }
     if (isTypingTarget(e.target)) return
-    // A control inside the strip (a scope pill, a card's pin) answers its own
-    // Enter and Space. Without this the strip opened the focused thread
-    // instead of pressing the button the reader was on.
-    if (e.target !== e.currentTarget && (e.target as HTMLElement | null)?.closest?.('button, a')) return
-    if (e.key === 'Home') { e.preventDefault(); setFocus(0) }
-    else if (e.key === 'End') { e.preventDefault(); setFocus(count - 1) }
-    else if (e.key === 'Enter' || e.key === ' ') {
+    if (e.key === 'Home') { e.preventDefault(); setFocus(0); reclaim(); return }
+    if (e.key === 'End') { e.preventDefault(); setFocus(count - 1); reclaim(); return }
+    // A control inside the strip answers its own Enter and Space. Without this
+    // the strip opened the focused thread instead of pressing the button the
+    // reader was on.
+    if (e.target !== strip && (e.target as HTMLElement | null)?.closest?.('button, a')) return
+    if (e.key === 'Enter' || e.key === ' ') {
       const e0 = entries[focus]
       if (e0) { e.preventDefault(); handleSelect(e0.roomId, e0.rootId) }
     }
@@ -287,15 +312,9 @@ export function ThreadList({
 
   // Pin or unpin, and bring the card to the reader wherever it lands -- the
   // results come to you, and a pinned card leaving from under the pointer for
-  // the far end of the strip would read as the card vanishing.
+  // the far end of the strip would read as the card vanishing. Stable: it
+  // reads pinOrderRef rather than closing over the order.
   //
-  // Stable, because every tile compares it (threadTileEqual): the order and
-  // the pins are read from a mirror at click time rather than closed over,
-  // which would hand every card a new function on every render.
-  const pinOrderRef = useRef({ ordered, pins })
-  useEffect(() => {
-    pinOrderRef.current = { ordered, pins }
-  })
   const onTogglePin = useCallback(
     (rid: string, rootId: string) => {
       const id = flipIdOf(rid, rootId)
