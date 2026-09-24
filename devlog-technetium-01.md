@@ -3935,3 +3935,92 @@ Gate: tsc clean, lint clean, checks passing (`npm run check`), build
 passing. PENDING OPERATOR VERIFICATION in a live browser: a frame left open
 across a token refresh keeps loading Matrix pictures. Not deployed; the
 operator runs `./deploy.sh`.
+
+## 2026-09-24 -- launch-polish: the thread strip, tags under the picture, bigger reactions [auto]
+
+A seven-ask braindump from the operator, opened as a campaign
+(`docs/plan/LAUNCH_POLISH_PLAN.md`), with more asks announced. All seven
+landed, and an adversarial review of every commit confirmed further
+defects, all fixed. CLAUDE.md was rewritten in canon first, to steer by
+the project's direction rather than by this devlog.
+
+**What changed.** The thread strip is exactly its header, one card and a
+lane for its tab -- 180px, every part declared in the CSS and compared by
+a check -- where it had been a share of the layout with dead space above
+and below the cards. The title bar reads "Show Threads: (Here)
+(Everywhere) | Thread Listing | Sort By: (...)", with the title on the
+true centre. A thread can be pinned: first whatever the sort, held in
+account data. One wheel notch moves one card. Every chat image carries a
+line under it -- the creator tag, the character tag, and "expose tags",
+which unfurls the rest as a popup over the page. Reactions are the first
+column beside the picture, and twice the size.
+
+**The review was worth more than the first pass.** Two review workflows
+(three lenses each, every finding then argued against by a verifier)
+confirmed 12 defects in the strip commits and 10 in the tags commit, one
+claim refuted. The ones worth remembering are below; the rest are in the
+commit messages of `d43f19a`, `906c73d` and `f1435d7`.
+
+**draft-01 (gotcha) -- matrix-js-sdk's setAccountData sends NOTHING when
+the content asked for deep-equals its local store, and that store changes
+only when the echo arrives.** A write per click therefore loses clicks:
+unpin, pin fast sent the unpin, then asked for a list the stale store
+still held, sent nothing, and the thread ended unpinned against the last
+click. The rule: one write in flight, never ahead of the previous write's
+echo (with a deadline), and a click meanwhile only changes what the next
+write carries. `client/pinSync.ts` has no SDK in it so a check can drive
+it against a fake server with the SDK's shortcut.
+
+**draft-02 (gotcha) -- a mouse-wheel notch is known by its timing, not its
+size.** Notches run from 4px (a slow tick of an ordinary mouse in Chrome
+on macOS) to 400px. The first fix told a notch from a stream by size and
+stalled on small-notch mice while letting trackpad flings cross the list.
+An event that arrives on its own is one step whatever its size; a burst of
+events a few ms apart is a stream, paced at about a card's width of scroll
+per step.
+
+**draft-03 (gotcha) -- `overflow: hidden` is still a scroll container.**
+Focusing a control on a card the carousel had translated off-screen
+scrolled the strip by 1510px, and every later step centred wrong, because
+the geometry assumes the strip never scrolls. `overflow: clip` is not a
+scroll container.
+
+**draft-04 (gotcha) -- a React portal's events climb the COMPONENT tree,
+not the DOM.** A popup portalled to body still delivered its wheel to the
+thread strip, its right-click to a canvas object's menu, its focus to the
+card behind it. A popup's root must stop the whole family, not just click.
+
+**draft-05 (gotcha) -- flex-shrink factors that sum to less than one
+remove only that fraction of the overflow.** A 0.2 meant to protect a pill
+left the line spilling past its box.
+
+**draft-06 (gotcha) -- an animation with fill-mode `both` leaves its last
+keyframe applied.** A clip-path unfurl kept clipping the popup's own
+shadow for as long as it was open.
+
+**draft-07 (gotcha) -- `:root { font: 18px/145% }` hands every element
+that sets no line-height a computed 26px line box.** The strip's header
+was budgeted at 25px and rendered at 36; heights that arithmetic depends
+on must be declared in the CSS, not left to inheritance.
+
+**draft-08 (decision) -- the tag line is reserved only in rooms that
+carry tag state.** Reserving it everywhere leaves an empty line under
+every image in rooms that are never tagged; reserving it nowhere lets
+every new picture push the conversation 25px when its tags arrive.
+
+**draft-09 (decision) -- "for all images" covers every image that is a
+message; mosaic tiles keep their count chip.** Gallery cells, thread-card
+covers and canvas cards are tiles in fixed geometry; their chips open the
+same popup, which no longer clips.
+
+**Found, not fixed: the thread drag is vertical inside a horizontal
+carousel.** Any press with 5px of vertical movement reorders a card to an
+end and switches the list to Custom. Recorded in the ledger.
+
+Gate at the end of the session: tsc clean, lint 0 problems, checks
+passing (`npm run check`), build passing. Rendered in
+`tools/visual/threadstrip.html` and `tools/visual/mediarow.html`.
+PENDING OPERATOR VERIFICATION against a live homeserver: the wheel and
+trackpad feel, the pin round trip, the sort pill's list, the tag line
+filling on the live read, the popup over the member list and in the
+lightbox. Not deployed; the operator runs `./deploy.sh`.
