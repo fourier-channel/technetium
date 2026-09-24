@@ -802,7 +802,7 @@ function DomainMediaCard({
       </div>
       {/* Outside the clipping card: the expanded tag list floats above it and
           would be cut off by the card's own overflow: hidden. */}
-      <MediaTags mxc={obj.mxc} roomId={roomId} variant="chip" max={8} />
+      <MediaTags mxc={obj.mxc} roomId={roomId} variant="chip" />
     </div>
   )
 }
@@ -913,7 +913,7 @@ function DomainObjectCard({
       >
         <AuthedImage mxc={obj.mxc} width={180} fill alt={obj.name ?? ''} />
       </div>
-      <MediaTags mxc={obj.mxc} roomId={roomId} variant="chip" max={8} />
+      <MediaTags mxc={obj.mxc} roomId={roomId} variant="chip" />
     </div>
   )
 }

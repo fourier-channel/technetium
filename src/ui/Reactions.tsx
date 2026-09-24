@@ -178,7 +178,9 @@ export function ReactionPills({
               emoji working when first posted and 404ing on reload. */}
           <span className="tc-reaction-key">
             {isCustomEmojiKey(t.key) ? (
-              <AuthedImage mxc={t.key} width={180} fill transparentLoading alt="" fallback="?" />
+              <span className="tc-reaction-img">
+                <AuthedImage mxc={t.key} width={180} fill transparentLoading alt="" fallback="?" />
+              </span>
             ) : (
               t.key
             )}

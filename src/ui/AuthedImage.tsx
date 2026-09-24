@@ -236,6 +236,9 @@ export function AuthedImage({
                 display: 'block',
                 width: box?.width ?? 120,
                 height: box?.height ?? 90,
+                // As the loaded picture has: without it an unloaded 320px box in
+                // a narrow thread view ran under the reactions beside it.
+                maxWidth: '100%',
               }
         }
         aria-label="loading image"

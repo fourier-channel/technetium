@@ -1,134 +1,157 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { parseMxc } from '../client/media'
 import { booruPostUrl, booruTagUrl } from '../client/booruUrl'
 import { isHypeTag } from '../client/hypeTags'
-import { useTagDiff, tagKey, type TagPhase } from '../client/useTagDiff'
+import { useTagDiff, tagKey, type DiffedTag, type TagPhase } from '../client/useTagDiff'
 import '../mediatags.css'
 import { editBooruTags, refreshBooruTags, useMediaTags } from '../client/useMediaTags'
 import { parseTagInput } from '../client/booruLive'
+import { splitForBubble } from '../client/tagBubble'
 import { useOnScreen } from './useOnScreen'
-import { sortTags, type MediaRating, type MediaTag, type TagCategory } from '../client/mediaTags'
+import { sortTags, type MediaRating, type MediaTag } from '../client/mediaTags'
 import { useMediaTagPrefs } from './mediaTagSettings'
-import { useReducedMotion } from './reducedMotion'
+import { AnchoredPopup } from './AnchoredPopup'
 
 // ---------------------------------------------------------------------------
 // The tag display. ONE component attaches to every image surface; `variant`
-// picks the density, because a 180x90 thread-card preview cannot carry what a
-// full-width chat image can:
+// picks the density, because a 52px thread-card cover cannot carry what a
+// chat image can:
 //
-//   'strip'   full tag row under the image (inline chat, lightbox)
-//   'chip'    a count badge only, overlaid bottom-left (canvas cards, thread
-//             previews) -- click expands into a floating strip
+//   'bubble'  a line UNDER the image, its top-left on the image's bottom-left:
+//             the creator tag always, the character tag whenever there is
+//             one, and an "expose tags" control that unfurls the rest to the
+//             right as a popup over the page (launch-polish L5; the split is
+//             client/tagBubble.ts). Chat images, the thread view, the DM
+//             dock and the lightbox.
+//   'chip'    a count badge only, overlaid bottom-left (gallery cells, thread
+//             cards, canvas cards) -- click unfurls the same popup.
 //
-// Visibility is global-default + per-image pin (mediaTagSettings). Collapsing a
-// strip pins THAT image hidden; it does not change the global.
+// WHY UNDER, AND WHY A POPUP. The tags used to stand BESIDE the picture as an
+// out-of-flow column panel that reserved its width with a measured margin. In
+// anything narrower than about 780px -- the thread view, a chat squeezed by
+// the thread list -- the row shrank below the picture, `left: 100%` landed
+// inside it, and the panel was painted over the image (measured: the panel
+// started 8px inside the picture's left edge in a 380px thread view). In the
+// lightbox the same rule put the panel entirely off-screen. A line under the
+// picture cannot collide with it, and the full list lives in a popup that the
+// panel's clipping cannot reach.
 //
-// Tags are rendered as buttons already: v1 does nothing on click beyond the
-// per-tag `onTagClick` seam, so the filter/search layer can land later without
-// restyling anything (operator: wire for interaction, stay scoped for v1).
+// Visibility is global-default + per-image pin (mediaTagSettings). Hiding an
+// image's tags pins THAT image hidden; it does not change the global.
 // ---------------------------------------------------------------------------
-
-// Category -> canon token. The chip variant used to carry its own light and
-// dark palettes for the five categories, which is exactly the drift the
-// formant tokens were extracted to end (artist #fb923c here against #ff6b7a
-// on the booru); it now names the same tokens the panel's stylesheet does.
-const CATEGORY_TOKEN: Record<TagCategory, string> = {
-  artist: 'var(--mod-tag-artist-fg)',
-  character: 'var(--mod-tag-character-fg)',
-  copyright: 'var(--mod-tag-copyright-fg)',
-  meta: 'var(--mod-tag-meta-fg)',
-  general: 'var(--mod-tag-general-fg)',
-}
-
-// Categories pulled out of the flow into their own bucket at the head of the
-// panel, in this order. Mirrors Modulation's .mod-cats: the question "who is
-// this" is answered before "what is in it".
-const HEAD_CATEGORIES: readonly TagCategory[] = ['character']
 
 export interface MediaTagsProps {
   mxc: string | undefined
   // Enables the on-demand state fetch, so tags resolve for images whose tag
   // event is outside the loaded timeline. Pass it wherever it is known.
   roomId?: string
-  variant?: 'strip' | 'chip'
-  // Cap before "+N more"; the full set expands in place. Omit for no cap.
-  max?: number
+  variant?: 'bubble' | 'chip'
   onTagClick?: (tag: MediaTag) => void
 }
 
-export function MediaTags({ mxc, roomId, variant = 'strip', max = 12, onTagClick }: MediaTagsProps) {
+export function MediaTags({ mxc, roomId, variant = 'bubble', onTagClick }: MediaTagsProps) {
   const set = useMediaTags(mxc, roomId)
   const prefs = useMediaTagPrefs()
   const mediaId = mxc ? parseMxc(mxc)?.mediaId : undefined
   const visible = prefs.visibleFor(mediaId)
-  const [expanded, setExpanded] = useState(false)
-  const [showAll, setShowAll] = useState(false)
-  // SORTED ONCE PER SET, NOT ONCE PER RENDER. This was a bare
-  // `sortTags(set.tags)` below, so every render handed useTagDiff a brand-new
-  // array -- a new identity for the same tags, on a pointer move, a presence
-  // tick, anything. Its effect keys on that identity, so it re-ran every
-  // render: the cleanup cancelled the pending settle and the nothing-moved
-  // branch returned without scheduling another, and the pills stayed
-  // `entering` for good. That is what stopped the hype pill bouncing
-  // (2026-09-20); the settle now reschedules, but the wasted work was the
-  // reason it was ever asked to.
-  //
-  // Hoisted ABOVE the early returns below, because a hook cannot run
-  // conditionally. `set.tags` is replaced only by a real store write, so this
-  // recomputes exactly when the tags actually change.
+  // SORTED ONCE PER SET, NOT ONCE PER RENDER. A bare `sortTags(set.tags)`
+  // handed useTagDiff a brand-new array every render -- a new identity for the
+  // same tags -- and its effect keys on that identity, which is what stopped
+  // the hype pill bouncing (2026-09-20). Hoisted above the early returns
+  // because a hook cannot run conditionally; `set.tags` is replaced only by a
+  // real store write, so this recomputes exactly when the tags change.
   const tags = useMemo(() => sortTags(set?.tags ?? []), [set?.tags])
 
-  // Nothing to show: no tags for this image (yet). Render nothing at all rather
-  // than an empty container, so untagged images keep their exact layout.
+  // Nothing to show: no tags for this image (yet). Render nothing rather than
+  // an empty line, so untagged images keep their exact layout.
   //
   // A set with NO TAGS BUT A POST ID is not nothing: it is the pointer, and the
-  // panel is what triggers the live read that fills it. Returning null there
-  // would be a deadlock -- no panel, so no read, so no tags, so no panel -- and
-  // it is the shape the bridge moves towards as it stops copying tag lists into
-  // room state. Chips stay out of it: they are previews with nothing but a
-  // count to show, and a "0" badge on every picture is worse than silence.
+  // bubble is what triggers the live read that fills it. Returning null there
+  // would be a deadlock -- no bubble, so no read, so no tags, so no bubble.
+  // Chips stay out of it: a "0" badge on every picture is worse than silence.
   if (!set) return null
   if (set.tags.length === 0 && (set.postId === undefined || variant === 'chip')) return null
 
-  const meta = { rating: set.rating, postId: set.postId, updatedBy: set.updatedBy }
-  const hidden = !visible
+  const meta: TagMeta = { rating: set.rating, postId: set.postId, updatedBy: set.updatedBy }
+  const hide = () => prefs.setOverride(mediaId ?? '', 'hide')
+  const show = () => prefs.setOverride(mediaId ?? '', 'show')
 
   if (variant === 'chip') {
     return (
       <TagChip
-        count={tags.length}
-        expanded={expanded && visible}
-        onToggle={() => {
-          if (hidden) prefs.setOverride(mediaId ?? '', 'show')
-          setExpanded((e) => !e)
-        }}
-      >
-        {expanded && visible && (
-          <TagList
-            tags={tags}
-            max={showAll ? undefined : max}
-            onMore={() => setShowAll(true)}
-            onTagClick={onTagClick}
-            source={set.source}
-            meta={meta}
-            floating
-          />
-        )}
-      </TagChip>
+        tags={tags}
+        mediaId={mediaId}
+        meta={meta}
+        onTagClick={onTagClick}
+        onReveal={visible ? undefined : show}
+      />
     )
   }
 
-  // Strip pinned hidden: leave a small affordance so the tags are recoverable
-  // without hunting for the global switch (no dead states, CD-10 lineage).
+  return (
+    <TagBubble
+      tags={tags}
+      mediaId={mediaId}
+      meta={meta}
+      onTagClick={onTagClick}
+      hidden={!visible}
+      onHide={hide}
+      onShow={show}
+    />
+  )
+}
+
+// The line under the picture.
+//
+// ONE LINE, RESERVED FROM THE MOMENT THE SET EXISTS. The live read is what
+// turns Matrix's flat list into categories, so the creator and character pills
+// usually arrive a moment after the line does; they fill a line that is
+// already there instead of pushing the conversation down (no-forced-reflow).
+// The line never wraps, and never makes the picture's column wider: pills
+// shrink and ellipsize, and the control stays whole.
+function TagBubble({
+  tags,
+  mediaId,
+  meta,
+  onTagClick,
+  hidden,
+  onHide,
+  onShow,
+}: {
+  tags: MediaTag[]
+  mediaId?: string
+  meta: TagMeta
+  onTagClick?: (tag: MediaTag) => void
+  hidden: boolean
+  onHide: () => void
+  onShow: () => void
+}) {
+  // Diffed ONCE for the whole list and split after, so a tag the live read
+  // recategorises from general to character pops out of the fold and into the
+  // line as one change rather than two unrelated ones.
+  const diffed = useTagDiff(tags)
+  const { always, folded } = splitForBubble(diffed, (d) => d.tag.category)
+  const foldedCount = folded.filter((d) => d.phase !== 'leaving').length
+
+  // Scrolled into view -> read this image's CURRENT tags from the booru, which
+  // is the only copy that is definitely right, and the only place the creator
+  // and character categories come from. refreshBooruTags is idempotent -- it
+  // refuses a duplicate read and a repeat inside its TTL.
+  const { ref: lineRef, onScreen } = useOnScreen<HTMLDivElement>()
+  useEffect(() => {
+    if (onScreen && mediaId) refreshBooruTags(mediaId)
+  }, [onScreen, mediaId])
+
+  const [open, setOpen] = useState(false)
+  const exposeRef = useRef<HTMLButtonElement>(null)
+  const popId = useId()
+
+  // Hidden for this image (or globally): the line keeps its place and offers
+  // the way back, so hiding is never a dead end and never moves the row.
   if (hidden) {
     return (
-      <div style={{ marginTop: 4 }}>
-        <button
-          type="button"
-          onClick={() => prefs.setOverride(mediaId ?? '', 'show')}
-          title="Show tags for this image"
-          style={ghostBtn}
-        >
+      <div className="mtags-bubble" ref={lineRef}>
+        <button type="button" className="mtags-expose" onClick={onShow} title="Show tags for this image">
           {'\u{1F3F7}'} {tags.length}
         </button>
       </div>
@@ -136,99 +159,74 @@ export function MediaTags({ mxc, roomId, variant = 'strip', max = 12, onTagClick
   }
 
   return (
-    <TagPanel
-      tags={tags}
-      mediaId={mediaId}
-      max={showAll ? undefined : max}
-      onMore={() => setShowAll(true)}
-      onTagClick={onTagClick}
-      meta={meta}
-      onCollapse={() => prefs.setOverride(mediaId ?? '', 'hide')}
-    />
+    <div className="mtags-bubble" ref={lineRef}>
+      {always.map((d) => (
+        <TagPill key={tagKey(d.tag)} tag={d.tag} phase={d.phase} onTagClick={onTagClick} />
+      ))}
+      <button
+        ref={exposeRef}
+        type="button"
+        className="mtags-expose"
+        aria-expanded={open}
+        aria-controls={open ? popId : undefined}
+        title={foldedCount > 0 ? `Show all ${tags.length} tags` : 'Tag details'}
+        onClick={() => setOpen((v) => !v)}
+      >
+        expose tags{foldedCount > 0 ? ` (${foldedCount})` : ''}
+      </button>
+      {open && (
+        <AnchoredPopup anchorRef={exposeRef} onClose={() => setOpen(false)} label="Tags" id={popId}>
+          <TagPanel
+            tags={tags}
+            mediaId={mediaId}
+            meta={meta}
+            onTagClick={onTagClick}
+            onCollapse={() => setOpen(false)}
+            onHide={() => {
+              setOpen(false)
+              onHide()
+            }}
+          />
+        </AnchoredPopup>
+      )}
+    </div>
   )
 }
 
-// The panel that stands beside the image.
+// The whole tag set, as the popup's contents.
 //
-// Sorting is sortTags': category order, then alphabetical inside it. The head
-// bucket is then split off the front, so `character` leads and everything else
-// keeps that same alphabetical-within-category order below the rule.
+// It opens ON the control that summoned it, so its first item is the control's
+// counterpart -- "collapse" sits where "expose tags" was, and the popup reads
+// as that button unfurling rightward into the list rather than as a second
+// window. Then the controls (rating, edit), then who made it and who is in it,
+// then everything else, then the post and "hide".
 function TagPanel({
   tags,
   mediaId,
-  max,
-  onMore,
-  onTagClick,
   meta,
+  onTagClick,
   onCollapse,
+  onHide,
 }: {
   tags: MediaTag[]
   mediaId?: string
-  max?: number
-  onMore: () => void
+  meta: TagMeta
   onTagClick?: (tag: MediaTag) => void
-  meta?: TagMeta
-  onCollapse?: () => void
+  onCollapse: () => void
+  onHide?: () => void
 }) {
-  // Memoised for the same reason `tags` is: this is what useTagDiff keys on,
-  // and a fresh slice every render is a fresh identity for an unchanged list.
-  const shown = useMemo(() => (max === undefined ? tags : tags.slice(0, max)), [tags, max])
-  const rest = tags.length - shown.length
-  // A retag arrives as a whole new set, so the panel has to work out which
-  // pill moved before it can draw the change rather than the result. Leaving
-  // pills stay in the list until their exit finishes.
-  const diffed = useTagDiff(shown)
-  const head = diffed.filter((d) => HEAD_CATEGORIES.includes(d.tag.category))
-  const body = diffed.filter((d) => !HEAD_CATEGORIES.includes(d.tag.category))
+  // A retag arrives as a whole new set, so the panel works out which pill
+  // moved before drawing the change rather than the result. Leaving pills stay
+  // in the list until their exit finishes.
+  const diffed = useTagDiff(tags)
+  const { always, folded } = splitForBubble(diffed, (d) => d.tag.category)
 
-  // Scrolled into view -> read this image's CURRENT tags from the booru, which
-  // is the only copy that is definitely right. Whatever comes back differs
-  // from what is drawn arrives through the same diff above, so a tag added on
-  // the booru pops in here and a tag removed there pops out, without this
-  // component knowing a request happened.
-  //
-  // refreshBooruTags is idempotent -- it refuses a duplicate read and a repeat
-  // inside its TTL -- so an image scrolled past and back costs nothing.
-  const { ref: panelRef, onScreen } = useOnScreen<HTMLDivElement>()
-  useEffect(() => {
-    if (onScreen && mediaId) refreshBooruTags(mediaId)
-  }, [onScreen, mediaId])
-
-  // PIN THE WIDTH TO THE COLUMNS. Firefox sizes a column-wrap flex box's
-  // intrinsic width to one column and hides the rest behind overflow:hidden
-  // (measured: 172px drawn, 301px of content). Both engines report the true
-  // content width as scrollWidth even when they draw the box too narrow, so
-  // the width is read from that and written back. A layout effect, so it
-  // lands before paint and nothing is ever seen at the wrong width; the
-  // reset first, because scrollWidth of a box already wide enough is just
-  // its own width and the panel would never shrink again.
-  //
-  // AND RESERVE IT. The panel is out of flow (that is how it gets the
-  // picture's height), so it takes no width and the reaction rail after the
-  // picture was laid out under the first column. The row's margin-right is
-  // set to the same measurement plus the panel's own margin-left, which
-  // pushes everything after the picture past the tags. Margin is outside the
-  // row's padding box, so the panel's `left: 100%` does not move.
-  useLayoutEffect(() => {
-    const el = panelRef.current
-    if (!el) return
-    el.style.width = ''
-    const w = el.scrollWidth
-    el.style.width = w + 'px'
-    const row = el.parentElement
-    if (row && row.classList.contains('mtags-row')) {
-      const gap = parseFloat(getComputedStyle(el).marginLeft) || 0
-      row.style.marginRight = w + gap + 'px'
-    }
-  }, [diffed, panelRef])
-
-  // Editing is OFF by default and per-panel. The x on every pill is a
-  // destructive control one pixel from a link people click all day, so it
-  // appears only once somebody has said they are tagging.
+  // Editing is OFF by default. The x on every pill is a destructive control
+  // one pixel from a link people click all day, so it appears only once
+  // somebody has said they are tagging.
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
-
   // The booru's answer replaces the guess, so nothing here waits on the round
   // trip -- `busy` only dims the input, it does not gate the pill.
   const [busy, setBusy] = useState(false)
@@ -244,7 +242,7 @@ function TagPanel({
 
   // Only where there is a post to write to. Without one the booru has nothing
   // to edit, and a control that always fails is worse than no control.
-  const canEdit = meta?.postId !== undefined && !!mediaId
+  const canEdit = meta.postId !== undefined && !!mediaId
 
   const submit = () => {
     const names = parseTagInput(draft)
@@ -253,34 +251,38 @@ function TagPanel({
     run({ add: names })
   }
 
+  const pill = (d: DiffedTag) => (
+    <TagPill
+      key={tagKey(d.tag)}
+      tag={d.tag}
+      phase={d.phase}
+      onTagClick={onTagClick}
+      onRemove={editing ? () => run({ remove: [d.tag.name] }) : undefined}
+    />
+  )
+
   return (
-    <div className="mtags-panel" ref={panelRef}>
-      {/* THE CONTROLS LIVE AT THE TOP, and that is not a style preference.
-          The panel is a WRAPPING column bounded by the picture's height, so
-          anything late in the flow lands in the last column -- the one that
-          gets clipped first and that nobody reads. Rendered at the end, the
-          edit control was a faint pill in column three, indistinguishable
-          from `hide`, and the operator could not find it at all. First item,
-          first column, always. */}
-      {(meta?.rating || canEdit) && (
-        <div className="mtags-head">
-          {meta?.rating && <RatingBadge rating={meta.rating} by={meta.updatedBy} />}
-          {canEdit && (
-            <button
-              type="button"
-              className={'mtags-edit' + (editing ? ' is-on' : '')}
-              onClick={() => {
-                setEditing((v) => !v)
-                setError(null)
-              }}
-              title={editing ? 'Stop editing tags' : 'Add or remove tags on the booru'}
-              aria-pressed={editing}
-            >
-              {editing ? 'done' : 'edit tags'}
-            </button>
-          )}
-        </div>
-      )}
+    <div className="mtags-pop">
+      <div className="mtags-head">
+        <button type="button" className="mtags-expose is-open" aria-expanded="true" onClick={onCollapse}>
+          collapse
+        </button>
+        {meta.rating && <RatingBadge rating={meta.rating} by={meta.updatedBy} />}
+        {canEdit && (
+          <button
+            type="button"
+            className={'mtags-edit' + (editing ? ' is-on' : '')}
+            onClick={() => {
+              setEditing((v) => !v)
+              setError(null)
+            }}
+            title={editing ? 'Stop editing tags' : 'Add or remove tags on the booru'}
+            aria-pressed={editing}
+          >
+            {editing ? 'done' : 'edit tags'}
+          </button>
+        )}
+      </div>
       {canEdit && editing && (
         <input
           className="mtags-add"
@@ -310,51 +312,30 @@ function TagPanel({
           {error}
         </div>
       )}
-      {head.length > 0 && (
-        <>
-          <div className="mtags-label">{head.length === 1 ? 'character' : 'characters'}</div>
-          {head.map((d) => (
-            <TagPill
-              key={tagKey(d.tag)}
-              tag={d.tag}
-              phase={d.phase}
-              onTagClick={onTagClick}
-              onRemove={editing ? () => run({ remove: [d.tag.name] }) : undefined}
-            />
-          ))}
-          <div className="mtags-rule" />
-        </>
+      {always.length > 0 && (
+        <div className="mtags-shelf">
+          {always.map(pill)}
+        </div>
       )}
-      {body.map((d) => (
-        <TagPill
-          key={tagKey(d.tag)}
-          tag={d.tag}
-          phase={d.phase}
-          onTagClick={onTagClick}
-          onRemove={editing ? () => run({ remove: [d.tag.name] }) : undefined}
-        />
-      ))}
-      {rest > 0 && (
-        <button type="button" onClick={onMore} style={ghostBtn}>
-          +{rest} more
-        </button>
-      )}
-      {meta?.postId !== undefined && (
-        <a
-          className="mtags-id"
-          href={booruPostUrl(meta.postId)}
-          target="_blank"
-          rel="noreferrer noopener"
-          title="Open this post on the booru"
-        >
-          #{meta.postId}
-        </a>
-      )}
-      {onCollapse && (
-        <button type="button" onClick={onCollapse} style={ghostBtn} title="Hide tags for this image">
-          hide
-        </button>
-      )}
+      {folded.length > 0 && <div className="mtags-flow">{folded.map(pill)}</div>}
+      <div className="mtags-foot">
+        {meta.postId !== undefined && (
+          <a
+            className="mtags-id"
+            href={booruPostUrl(meta.postId)}
+            target="_blank"
+            rel="noreferrer noopener"
+            title="Open this post on the booru"
+          >
+            #{meta.postId}
+          </a>
+        )}
+        {onHide && (
+          <button type="button" className="mtags-ghost" onClick={onHide} title="Hide tags for this image">
+            hide
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -477,7 +458,9 @@ function TagPill({
       }
     >
       <i className={'mod-pill-dot' + (tag.lamp ? ` mod-pill-dot--${tag.lamp}` : '')} />
-      {tag.name}
+      {/* Its own box, so a pill squeezed by the bubble under a narrow picture
+          ellipsizes instead of being cut mid-letter. */}
+      <span className="mod-pill-name">{tag.name}</span>
     </a>
   )
 
@@ -506,139 +489,11 @@ function TagPill({
   )
 }
 
-// The row of tags itself.
+// What the popup says about the post besides its tags.
 interface TagMeta {
   rating?: MediaRating
   postId?: number
   updatedBy?: string
-}
-
-function TagList({
-  tags,
-  max,
-  onMore,
-  onTagClick,
-  source,
-  meta,
-  onCollapse,
-  floating = false,
-}: {
-  tags: MediaTag[]
-  max?: number
-  onMore: () => void
-  onTagClick?: (tag: MediaTag) => void
-  source?: string
-  meta?: TagMeta
-  onCollapse?: () => void
-  floating?: boolean
-}) {
-  const reduced = useReducedMotion()
-  const ref = useRef<HTMLDivElement | null>(null)
-  const prevCount = useRef(tags.length)
-
-  // Live arrival: when the bridge adds tags to an image already on screen, the
-  // strip flashes its accent once so the change is noticed without motion.
-  useEffect(() => {
-    const grew = tags.length > prevCount.current
-    prevCount.current = tags.length
-    if (!grew || !ref.current) return
-    const el = ref.current
-    const frames = reduced
-      ? [{ opacity: 0.55 }, { opacity: 1 }]
-      : [{ transform: 'translateY(2px)', opacity: 0.4 }, { transform: 'translateY(0)', opacity: 1 }]
-    el.animate(frames, { duration: 220, easing: 'ease-out', fill: 'none' })
-  }, [tags.length, reduced])
-
-  const shown = max === undefined ? tags : tags.slice(0, max)
-  const rest = tags.length - shown.length
-
-  return (
-    <div
-      ref={ref}
-      style={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: 3,
-        alignItems: 'center',
-        marginTop: floating ? 0 : 4,
-        maxWidth: floating ? 320 : '100%',
-        ...(floating
-          ? {
-              position: 'absolute',
-              bottom: '100%',
-              left: 0,
-              marginBottom: 6,
-              padding: 6,
-              borderRadius: 8,
-              background: 'var(--cpd-color-bg-canvas-default)',
-              border: '1px solid var(--mod-line))',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
-              zIndex: 40,
-            }
-          : {}),
-      }}
-    >
-      {meta?.rating && <RatingBadge rating={meta.rating} by={meta.updatedBy} />}
-
-      {shown.map((t) => (
-        <button
-          key={t.category + ':' + t.name}
-          type="button"
-          onClick={onTagClick ? () => onTagClick(t) : undefined}
-          title={t.score !== undefined ? `${t.category} · ${Math.round(t.score * 100)}%` : t.category}
-          style={{
-            font: 'inherit',
-            fontSize: 11,
-            lineHeight: 1.4,
-            padding: '1px 6px',
-            borderRadius: 999,
-            border: `1px solid color-mix(in srgb, ${CATEGORY_TOKEN[t.category]} 33%, transparent)`,
-            background: `color-mix(in srgb, ${CATEGORY_TOKEN[t.category]} 12%, transparent)`,
-            color: CATEGORY_TOKEN[t.category],
-            cursor: onTagClick ? 'pointer' : 'default',
-            whiteSpace: 'nowrap',
-            maxWidth: 220,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {t.name}
-        </button>
-      ))}
-
-      {rest > 0 && (
-        <button type="button" onClick={onMore} style={ghostBtn} title="Show all tags">
-          +{rest} more
-        </button>
-      )}
-
-      {source ? (
-        <a
-          href={source}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ ...ghostBtn, textDecoration: 'none' }}
-          title={source}
-        >
-          {'↗'} source
-        </a>
-      ) : (
-        // No source URL in the payload -- surface the booru post id instead. It
-        // becomes a real link the moment a source base URL is configured.
-        meta?.postId !== undefined && (
-          <span style={{ ...ghostBtn, cursor: 'default' }} title={`Post #${meta.postId}`}>
-            #{meta.postId}
-          </span>
-        )
-      )}
-
-      {onCollapse && (
-        <button type="button" onClick={onCollapse} style={ghostBtn} title="Hide tags for this image">
-          {'×'}
-        </button>
-      )}
-    </div>
-  )
 }
 
 // Content rating. Leads the strip because it is the one field a user may want
@@ -680,61 +535,55 @@ function RatingBadge({ rating, by }: { rating: MediaRating; by?: string }) {
   )
 }
 
-// The count badge used on small surfaces. Positioned by its container.
+
+// The count badge used on small surfaces, positioned by its container. Its
+// list is the same popup the bubble opens, so a 52px thread-card cover no
+// longer clips it -- and opening it is what reads the image's live tags, since
+// a chip is never on screen long enough for anything else to.
 function TagChip({
-  count,
-  expanded,
-  onToggle,
-  children,
+  tags,
+  mediaId,
+  meta,
+  onTagClick,
+  onReveal,
 }: {
-  count: number
-  expanded: boolean
-  onToggle: () => void
-  children?: React.ReactNode
+  tags: MediaTag[]
+  mediaId?: string
+  meta: TagMeta
+  onTagClick?: (tag: MediaTag) => void
+  // Present while this image's tags are hidden: opening shows them again.
+  onReveal?: () => void
 }) {
+  const [open, setOpen] = useState(false)
+  const chipRef = useRef<HTMLButtonElement>(null)
+  const popId = useId()
+  useEffect(() => {
+    if (open && mediaId) refreshBooruTags(mediaId)
+  }, [open, mediaId])
   return (
-    <div style={{ position: 'absolute', left: 4, bottom: 4, zIndex: 6 }}>
-      {children}
+    <div className="mtags-chip-slot">
       <button
+        ref={chipRef}
         type="button"
+        className="mtags-chip"
+        aria-expanded={open}
+        aria-controls={open ? popId : undefined}
         onClick={(e) => {
+          // The chip sits on a card that opens its thread on click.
           e.stopPropagation()
-          onToggle()
+          onReveal?.()
+          setOpen((v) => !v)
         }}
         onPointerDown={(e) => e.stopPropagation()}
-        title={`${count} tag${count === 1 ? '' : 's'}`}
-        style={{
-          font: 'inherit',
-          fontSize: 10,
-          lineHeight: 1.3,
-          padding: '1px 5px',
-          borderRadius: 999,
-          border: '1px solid rgba(255,255,255,0.25)',
-          background: expanded ? 'var(--cpd-color-bg-action-primary-rest)' : 'rgba(0,0,0,0.62)',
-          color: 'var(--cpd-color-text-on-solid-primary)',
-          cursor: 'pointer',
-          pointerEvents: 'auto',
-          backdropFilter: 'blur(2px)',
-        }}
+        title={`${tags.length} tag${tags.length === 1 ? '' : 's'}`}
       >
-        {'\u{1F3F7}'} {count}
+        {'\u{1F3F7}'} {tags.length}
       </button>
+      {open && (
+        <AnchoredPopup anchorRef={chipRef} onClose={() => setOpen(false)} label="Tags" id={popId}>
+          <TagPanel tags={tags} mediaId={mediaId} meta={meta} onTagClick={onTagClick} onCollapse={() => setOpen(false)} />
+        </AnchoredPopup>
+      )}
     </div>
   )
-}
-
-const ghostBtn: React.CSSProperties = {
-  // In the panel's flex COLUMN a child with no align-self stretches to the
-  // widest pill beside it, which is why `hide` and `+N more` were drawn as
-  // full-column bars rather than buttons.
-  alignSelf: 'flex-start',
-  font: 'inherit',
-  fontSize: 11,
-  lineHeight: 1.4,
-  padding: '1px 6px',
-  borderRadius: 999,
-  border: '1px solid rgba(128,128,128,0.35)',
-  background: 'transparent',
-  color: 'var(--cpd-color-text-secondary)',
-  cursor: 'pointer',
 }

@@ -577,7 +577,7 @@ const ThreadTile = memo(function ThreadTile({
               {isImage ? (
                 <>
                   <AuthedImage mxc={mxc} width={180} roomId={roomId} fill transparentLoading alt={preview} />
-                  <MediaTags mxc={mxc} roomId={roomId} variant="chip" max={8} />
+                  <MediaTags mxc={mxc} roomId={roomId} variant="chip" />
                 </>
               ) : (
                 'no\nimage'
@@ -700,7 +700,7 @@ const ThreadTile = memo(function ThreadTile({
           // reorder), so tags ride as a count chip that expands on click.
           <div style={{ position: 'relative' }}>
             <AuthedImage mxc={mxc} width={180} roomId={roomId} maxHeight={90} alt={preview} />
-            <MediaTags mxc={mxc} roomId={roomId} variant="chip" max={8} />
+            <MediaTags mxc={mxc} roomId={roomId} variant="chip" />
           </div>
         ) : (
           <div style={{ fontSize: 12, color: 'var(--cpd-color-text-secondary)', ...ell }}>{preview}</div>

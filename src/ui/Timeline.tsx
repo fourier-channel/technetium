@@ -387,11 +387,10 @@ export function Timeline({ room, onOpenThread, onOpenRoom, threadListOpen, onTog
             zIndex: 1,
             flex: 1,
             overflowY: 'auto',
-            // A chat log never scrolls sideways. The tag panel beside a picture
-            // is a fixed 34rem out-of-flow box (a Firefox intrinsic-sizing
-            // finding, see mediatags.css), and without this an overflow-y of
-            // auto implies overflow-x auto and gives every wide panel a
-            // horizontal scrollbar.
+            // A chat log never scrolls sideways. overflow-y auto implies
+            // overflow-x auto, so anything a pixel too wide -- a long unbroken
+            // word in a narrow thread view -- would otherwise grow a
+            // horizontal scrollbar under the whole log.
             overflowX: 'hidden',
             padding: '12px 16px',
             color: 'var(--cpd-color-text-primary)',
@@ -620,12 +619,12 @@ export function Row({
       // (320 snaps to the gateway's allowed sizes). Click opens the full-res
       // image in the lightbox via an authed full fetch.
       body = (
-        // The tag panel stands BESIDE the picture, so the two are one flex
-        // row: the image sets the row's height, which is the boundary the
-        // panel's columns spill down to before opening rightward, and the
-        // panel takes the width that is actually left rather than escaping
-        // the message on top of whatever is next to it.
-        <div className="mtags-row">
+        // The picture and its line of tags are one column: the line's
+        // top-left sits on the picture's bottom-left and it is never wider
+        // than the picture, so the reactions beside it stay on the picture's
+        // edge (launch-polish L5, L6). The full list unfurls as a popup over
+        // the page, which no scroller here can clip.
+        <div className="mtags-stack">
           <div className="mtags-media">
             <AuthedImage
               mxc={mxc}

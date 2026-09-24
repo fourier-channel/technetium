@@ -1,0 +1,109 @@
+<!doctype html><html><head>
+<!--#head-->
+<link rel="stylesheet" href="../../src/mediatags.css">
+<style>
+  /* Harness only. A picture row as Timeline.tsx builds it -- the media line
+     [picture + tag line][reaction rail][time] -- with markup copied from
+     Timeline/MediaTags/Reactions. It proves what the stylesheets do with THIS
+     markup; the React tree and a live homeserver are not exercised.
+     vesper has no emoji font, so reaction glyphs are stood in by letters of
+     the same font-size: the BOXES are what is being looked at. */
+  .shot { padding: 14px 16px; border-bottom: 1px solid #333; }
+  .fake-img { display: block; border-radius: 8px;
+    background: repeating-linear-gradient(135deg, #2a3550 0 14px, #223048 14px 28px); }
+  .line { display: flex; align-items: flex-start; gap: 8px; min-width: 0; font-size: 14px; }
+  .narrow { width: 348px; }
+  .h-time { align-self: flex-end; font-size: 11px; opacity: .5; }
+  .tc-reaction-add { opacity: 1; pointer-events: auto; }
+</style>
+</head><body><div id="root">
+
+<div class="h-label">wide -- tags under the picture, reactions the first column beside it</div>
+<div class="shot"><div class="line">
+  <div style="min-width:0"><div class="mtags-stack">
+    <div class="mtags-media"><span class="fake-img" style="width:320px;height:210px"></span></div>
+    <div class="mtags-bubble">
+      <a class="mod-pill mod-pill--cat-artist"><i class="mod-pill-dot mod-pill-dot--manual"></i><span class="mod-pill-name">saber</span></a>
+      <a class="mod-pill mod-pill--cat-character"><i class="mod-pill-dot mod-pill-dot--hydra"></i><span class="mod-pill-name">hatsune_miku</span></a>
+      <button type="button" class="mtags-expose" id="expose">expose tags (23)</button>
+    </div>
+  </div></div>
+  <div class="tc-reaction-rail">
+    <span class="tc-reaction-add-slot"><button type="button" class="tc-reaction tc-reaction-add">+</button></span>
+    <div class="tc-reactions">
+      <button type="button" class="tc-reaction" data-mine="true"><span class="tc-reaction-key">A</span><span class="tc-reaction-count">3</span></button>
+      <button type="button" class="tc-reaction"><span class="tc-reaction-key">B</span><span class="tc-reaction-count">1</span></button>
+      <button type="button" class="tc-reaction"><span class="tc-reaction-key"><span class="tc-reaction-img"><span class="fake-img" style="width:100%;height:100%;border-radius:4px;background:#c85"></span></span></span><span class="tc-reaction-count">2</span></button>
+    </div>
+  </div>
+  <span class="h-time">21:06</span>
+</div></div>
+
+<div class="h-label">narrow (a 380px thread view) -- a long creator tag ellipsizes, the rail stays on the edge</div>
+<div class="shot narrow"><div class="line">
+  <div style="min-width:0"><div class="mtags-stack">
+    <div class="mtags-media"><span class="fake-img" style="width:320px;height:180px;max-width:100%"></span></div>
+    <div class="mtags-bubble">
+      <a class="mod-pill mod-pill--cat-artist"><i class="mod-pill-dot"></i><span class="mod-pill-name">a_rather_long_creator_name_indeed</span></a>
+      <a class="mod-pill mod-pill--cat-character"><i class="mod-pill-dot"></i><span class="mod-pill-name">kagamine_rin</span></a>
+      <button type="button" class="mtags-expose">expose tags (40)</button>
+    </div>
+  </div></div>
+  <div class="tc-reaction-rail">
+    <span class="tc-reaction-add-slot"><button type="button" class="tc-reaction tc-reaction-add">+</button></span>
+    <div class="tc-reactions"><button type="button" class="tc-reaction"><span class="tc-reaction-key">C</span><span class="tc-reaction-count">4</span></button></div>
+  </div>
+  <span class="h-time">21:07</span>
+</div></div>
+
+<div class="h-label">text row -- reactions in the footer at 2x, and the "+" does not grow the line</div>
+<div class="shot">
+  <div class="tc-bubble" style="display:inline-block;font-size:14px">A plain message<span class="tc-reaction-add-slot tc-reaction-add-inline"><button type="button" class="tc-reaction tc-reaction-add">+</button></span></div>
+  <div class="tc-row-footer"><div class="tc-reactions">
+    <button type="button" class="tc-reaction"><span class="tc-reaction-key">D</span><span class="tc-reaction-count">2</span></button>
+    <button type="button" class="tc-reaction" data-mine="true"><span class="tc-reaction-key">E</span><span class="tc-reaction-count">1</span></button>
+  </div></div>
+</div>
+
+<!-- The popup, as AnchoredPopup places it: top-left on the control, over the
+     rail and anything beside it. Placed by the same rule as popupPlacement.ts. -->
+<div class="tc-anchored-pop" id="pop" role="dialog">
+  <div class="mtags-pop">
+    <div class="mtags-head">
+      <button type="button" class="mtags-expose is-open" aria-expanded="true">collapse</button>
+      <span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;border:1px solid #64748b66;color:#64748b">g</span>
+      <button type="button" class="mtags-edit">edit tags</button>
+    </div>
+    <div class="mtags-shelf">
+      <a class="mod-pill mod-pill--cat-artist"><i class="mod-pill-dot mod-pill-dot--manual"></i><span class="mod-pill-name">saber</span></a>
+      <a class="mod-pill mod-pill--cat-character"><i class="mod-pill-dot mod-pill-dot--hydra"></i><span class="mod-pill-name">hatsune_miku</span></a>
+    </div>
+    <div class="mtags-flow">
+      <a class="mod-pill mod-pill--cat-copyright"><i class="mod-pill-dot"></i><span class="mod-pill-name">vocaloid</span></a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot mod-pill-dot--spectrum"></i><span class="mod-pill-name">1girl</span></a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot mod-pill-dot--spectrum"></i><span class="mod-pill-name">aqua_hair</span></a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot mod-pill-dot--spectrum"></i><span class="mod-pill-name">long_hair</span></a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot mod-pill-dot--hydra"></i><span class="mod-pill-name">twintails</span></a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i><span class="mod-pill-name">outdoors</span></a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i><span class="mod-pill-name">smile</span></a>
+      <a class="mod-pill mod-pill--cat-general"><i class="mod-pill-dot"></i><span class="mod-pill-name">sky</span></a>
+      <a class="mod-pill mod-pill--cat-meta"><i class="mod-pill-dot"></i><span class="mod-pill-name">highres</span></a>
+    </div>
+    <div class="mtags-foot"><a class="mtags-id">#1284213</a><button type="button" class="mtags-ghost">hide</button></div>
+  </div>
+</div>
+<script>
+  const b = document.getElementById('expose').getBoundingClientRect()
+  const pop = document.getElementById('pop')
+  const m = 8, vw = innerWidth, vh = innerHeight
+  const cs = getComputedStyle(pop)
+  let x = b.left - (parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth)), y = b.top - (parseFloat(cs.paddingTop) + parseFloat(cs.borderTopWidth))
+  if (x + pop.offsetWidth > vw - m) x = vw - m - pop.offsetWidth
+  x = Math.max(m, x)
+  if (y + pop.scrollHeight > vh - m) y = vh - m - pop.scrollHeight
+  y = Math.max(m, y)
+  pop.style.left = x + 'px'; pop.style.top = y + 'px'; pop.style.maxHeight = (vh - 2 * m) + 'px'
+  pop.dataset.placed = 'true'
+  pop.style.animation = 'none'
+</script>
+</div></body></html>

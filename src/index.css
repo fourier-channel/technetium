@@ -433,6 +433,20 @@ code {
   margin-top: 2px;
 }
 
+/* Reaction sizes, named ONCE (launch-polish L7, operator 2026-09-24: "Emojis
+   need to be about twice as big as they are currently, in general"). The
+   glyph went 13px -> 26px and its box 16 -> 32; the pill 20 -> 36 to hold it.
+   Every rule below reads these, so the pill, the glyph, a custom emoji's
+   picture and the inline "+" cannot drift apart. */
+:root {
+  --tc-react-h: 36px;
+  --tc-react-emoji: 32px;
+  --tc-react-glyph: 26px;
+  --tc-react-gap: 6px;
+  /* The "+" in a text line, which is not an emoji and keeps the old size. */
+  --tc-react-add-inline-h: 20px;
+}
+
 /* A media body's reactions: a column to the RIGHT of the picture, top-aligned,
    spilling downward. The picture is the first flex child, so this column
    appearing on hover cannot shift it, and the row's height is set by the
@@ -442,7 +456,7 @@ code {
   flex-direction: column;
   align-items: flex-start;
   flex: 0 0 auto;
-  gap: 4px;
+  gap: var(--tc-react-gap);
   padding-top: 1px;
 }
 .tc-reaction-rail .tc-reactions {
@@ -456,30 +470,43 @@ code {
   position: relative;
   display: inline-flex;
 }
+/* The "+" inside a text line stays small: it is a control, not an emoji, and
+   at the reaction height it would overhang the bubble or make every reactable
+   message taller (measured 32.9 -> 51.9px, U4's work undone). Its block
+   margins take it out of the line box, so even at 20px it adds nothing --
+   it used to add 3px to every text row. */
 .tc-reaction-add-inline {
   margin-left: 6px;
-  vertical-align: text-bottom;
+  vertical-align: middle;
+  margin-block: calc((var(--tc-react-add-inline-h) - 16px) / -2);
+}
+.tc-reaction-add-inline .tc-reaction-add {
+  height: var(--tc-react-add-inline-h);
+  min-width: var(--tc-react-add-inline-h);
+  padding: 0 7px;
+  font-size: 12px;
 }
 
 .tc-reactions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--tc-react-gap);
 }
 
 .tc-reaction {
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 20px;
-  padding: 0 7px;
+  gap: 5px;
+  height: var(--tc-react-h);
+  padding: 0 10px 0 6px;
   border: 1px solid rgba(128, 128, 128, 0.3);
-  border-radius: 10px;
+  border-radius: calc(var(--tc-react-h) / 2);
   background: var(--cpd-color-bg-subtle-secondary, rgba(128, 128, 128, 0.14));
   color: var(--cpd-color-text-primary, #e7ebf0);
   font: inherit;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1;
   cursor: pointer;
 }
@@ -500,8 +527,25 @@ code {
   border-color: var(--tc-link);
   background: color-mix(in srgb, var(--tc-link) 18%, transparent);
 }
+/* The emoji itself: a fixed box, so a custom and a unicode reaction are the
+   same size (W5.4). The ONLY rule for this class -- a second one further down
+   used to set the box while this set the glyph. */
 .tc-reaction-key {
-  font-size: 13px;
+  display: inline-grid;
+  place-items: center;
+  min-width: var(--tc-react-emoji);
+  height: var(--tc-react-emoji);
+  font-size: var(--tc-react-glyph);
+  line-height: 1;
+}
+/* A custom emoji's picture, in a box of DEFINITE size. AuthedImage's `fill`
+   is 100% of its parent, and inside the key's grid with only a min-width that
+   percentage was cyclic, so a 128px emoji rendered at 128px inside a 20px
+   pill (measured). */
+.tc-reaction-img {
+  display: block;
+  width: var(--tc-react-emoji);
+  height: var(--tc-react-emoji);
 }
 .tc-reaction-count {
   font-variant-numeric: tabular-nums;
@@ -512,6 +556,10 @@ code {
    reason the footer used to grow on hover. pointer-events follows opacity so an
    invisible button is not also a clickable one. */
 .tc-reaction-add {
+  justify-content: center;
+  min-width: var(--tc-react-h);
+  padding: 0 11px;
+  font-size: 20px;
   opacity: 0;
   pointer-events: none;
   transition: opacity 90ms ease-out;
@@ -968,9 +1016,6 @@ code {
 .tc-poll-footer { font-size: 11px; color: var(--cpd-color-text-secondary, #a8b0bd); }
 @media (prefers-reduced-motion: reduce) { .tc-poll-fill { transition: none; } }
 
-/* A custom-emoji reaction renders its mxc as an image inside the pill; fixed
-   box so a custom and a unicode reaction are the same height (W5.4). */
-.tc-reaction-key { display: inline-grid; place-items: center; min-width: 16px; height: 16px; }
 
 /* Day separators (W6.1). A rule with the date centred on it. */
 .tc-day-separator {
@@ -3176,6 +3221,41 @@ code {
 .tc-threads-tile { transition: height 380ms cubic-bezier(0.22, 0.61, 0.36, 1); }
 @media (prefers-reduced-motion: reduce) {
   .tc-domain-tile, .tc-threadview-tile, .tc-threads-tile { transition: none; }
+}
+
+/* --- An attached popup (AnchoredPopup.tsx) ------------------------------
+   Drawn over the page in window coordinates, so no panel's overflow clips it
+   and it may cover the user list. Above the lightbox (1000), below dialogs
+   (2000). Hidden until placed, so it is never seen at the window's corner. It
+   unfurls rightward from the control that opened it, once, on clip-path. */
+.tc-anchored-pop {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 1001;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(34rem, calc(100vw - 16px));
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--mod-line, rgba(128, 128, 128, 0.35));
+  background: var(--mod-surface, var(--cpd-color-bg-canvas-default, #16181d));
+  color: var(--cpd-color-text-primary);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  font-size: 14px;
+  outline: none;
+  animation: tc-unfurl 160ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+.tc-anchored-pop:not([data-placed]) {
+  visibility: hidden;
+}
+@keyframes tc-unfurl {
+  from { clip-path: inset(0 100% 0 0 round 10px); }
+  to { clip-path: inset(0 0 0 0 round 10px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tc-anchored-pop { animation: none; }
 }
 
 /* --- Pull tabs: the border says what can be pulled from it ------------- */

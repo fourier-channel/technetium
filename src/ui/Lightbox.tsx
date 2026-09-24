@@ -322,28 +322,27 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
                 [image unavailable]
               </span>
             ) : src ? (
-              <img
-                src={src}
-                alt={current.name ?? 'image'}
-                style={{
-                  maxWidth: '92vw',
-                  maxHeight: hasThread ? '72vh' : '82vh',
-                  objectFit: 'contain',
-                  display: 'block',
-                  borderRadius: 4,
-                }}
-              />
+              // The picture and the line of tags under it are one column, so
+              // the line's top-left sits on the picture's bottom-left and is
+              // exactly as wide as the picture (launch-polish L5). The full list
+              // unfurls as a popup above the lightbox, not inside it.
+              <div className="mtags-stack">
+                <img
+                  src={src}
+                  alt={current.name ?? 'image'}
+                  style={{
+                    maxWidth: '92vw',
+                    maxHeight: hasThread ? '72vh' : '82vh',
+                    objectFit: 'contain',
+                    display: 'block',
+                    borderRadius: 4,
+                  }}
+                />
+                <MediaTags mxc={current.mxc} />
+              </div>
             ) : (
               <span style={{ color: 'var(--cpd-color-text-secondary)' }}>Loading...</span>
             )}
-            {/* The lightbox is where a user actually reads the tag set, so no
-                cap and no chip. It cannot be a row member here -- the image is
-                sized in viewport units by the block above and the panel would
-                fight it for width -- so it keeps its own full-width band under
-                the picture and simply wraps. */}
-            <div style={{ maxWidth: '92vw', display: 'flex', justifyContent: 'center' }}>
-              <MediaTags mxc={current.mxc} max={40} />
-            </div>
           </div>
 
           {hasNav && (

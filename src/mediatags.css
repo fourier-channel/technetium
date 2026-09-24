@@ -1,107 +1,156 @@
-/* The media tag panel.
+/* The media tags: a line under each picture, and the whole list in a popup.
  *
  * A stylesheet rather than inline styles because three things here cannot be
  * expressed inline: @keyframes-driven animation, a ::after pseudo-element, and
- * color-mix recipes that have to resolve against a token. The rest of this
- * component stays inline like its neighbours.
+ * color-mix recipes that have to resolve against a token.
  *
- * LAYOUT. The panel stands BESIDE the image, top edges level, and it is
- * ABSOLUTELY POSITIONED against the image's own box.
+ * LAYOUT (launch-polish L5, operator 2026-09-24): "For all images, relocate
+ * the tag bubble to be underneath the image, with the bubble's top left
+ * anchored to the image's bottom left." The picture and the line are one
+ * column; the line carries the creator and character tags and the "expose
+ * tags" control, and the rest unfurls rightward as a popup (AnchoredPopup,
+ * .tc-anchored-pop in index.css) over whatever is beside it.
  *
- * That is not the first choice and it is worth saying why it is the right one.
- * A flex-row member is tidier -- it would take the width actually left over and
- * could not overlap anything. It also does not work: a wrapping COLUMN needs a
- * definite height to wrap against, a stretched row member contributes its own
- * content height to the line, and the two are circular. Rendered, it produced
- * one endless column straight past the bottom of the picture. min-height:0 did
- * not break the cycle either. Pinning to the image gives `max-height: 100%` a
- * real number -- the image's height -- for free.
- *
- * The cost is that the panel does not reserve layout width, so a very wide one
- * could reach past the message. That is bounded two ways: max-width here, and
- * the caller's `max` prop collapsing the tail into "+N more".
- *
- * Within the panel, a column-direction flex container that WRAPS. Items fill
- * the first column downward; when the next will not fit, a new column opens to
- * the RIGHT -- "spill down to the bottom of the image, then expand right" as
- * the layout mechanism itself rather than a measurement anyone maintains.
- *
- * Multicol (`columns:`) cannot do this: it balances a known number of columns
- * instead of growing them on demand.
+ * WHAT THIS REPLACED, AND WHY IT HAD TO GO. The tags used to stand beside
+ * the picture as an absolutely positioned column that wrapped at the
+ * picture's height, with a layout effect measuring its scrollWidth and
+ * writing it into the row's margin to reserve the room. In anything narrower
+ * than about 780px the row shrank below the picture's width, `left: 100%`
+ * landed INSIDE the picture, and the panel was painted over the image --
+ * the "spilling all over the place" the operator reported in the thread view.
+ * In the lightbox the same rule put the panel off-screen entirely. Nothing in
+ * flow can collide with the picture, and nothing in a popup can be clipped by
+ * the panel the picture lives in.
  */
 
-/* THE POSITIONED ANCESTOR is the ROW, and it shrink-wraps the image:
-   inline-flex, with the panel taken out of flow, means the row's box IS the
-   picture's box. So `left: 100%` lands on the image's right edge and
-   `max-height: 100%` is the image's height -- both for free.
-
-   THE PANEL RESERVES ITS WIDTH ANYWAY, and this is the 2026-09-20 fix for
-   "the reaction rail does need space". An out-of-flow box takes no width,
-   so the rail and timestamp that follow the picture were laid out under the
-   first column of tags. Two in-flow arrangements were tried and measured
-   first, and both failed for reasons worth keeping:
-     - a stretched flex item's hypothetical height is its content height, so
-       a column-wrap panel with no height put every pill in one column, the
-       row grew to that, and the panel stretched to the row -- circular.
-     - `contain: size` breaks that loop but zeroes the WIDTH contribution too;
-       the panel came out 42px wide and every pill clamped to max-width:100%
-       of it (measured, both engines).
-   So the panel stays out of flow for its height, and TagPanel's layout
-   effect reserves the width: it pins the panel to its own scrollWidth and
-   sets the row's margin-right to match. Margin is outside the padding box,
-   so `left: 100%` does not move.
-
-   WHY scrollWidth AND NOT INTRINSIC SIZING. Firefox sizes a column-wrap
-   container's max-content width to ONE column (measured: 172px drawn,
-   301px of content, second column entirely behind overflow:hidden). Both
-   engines report the true content width as scrollWidth even when they draw
-   the box too narrow, so that is what the effect reads. `max-content` below
-   is only the starting value it measures from. */
-.mtags-row {
-  position: relative;
-  display: inline-flex;
-  align-items: flex-start;
-  max-width: 100%;
-}
-/* line-height:0 stops the inline baseline gap adding phantom height below the
-   picture, which would make the panel taller than the image it is bounded by. */
-.mtags-row > .mtags-media {
-  flex: none;
-  min-width: 0;
-  line-height: 0;
-}
-.mtags-panel {
-  position: absolute;
-  top: 0;
-  left: 100%;
-  margin-left: 8px;
-  max-height: 100%;
-  width: max-content;
-  max-width: 34rem;
+/* The picture and its line. A BLOCK-level flex column, not inline-flex: an
+   inline box sits on the text baseline and added 7px of phantom height under
+   every picture row. */
+.mtags-stack {
   display: flex;
   flex-direction: column;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  gap: 3px 5px;
-  line-height: 1.2;
-  overflow: hidden;
+  align-items: flex-start;
+  min-width: 0;
+  max-width: 100%;
+}
+/* line-height:0 stops the inline baseline gap adding height below the image. */
+.mtags-stack > .mtags-media {
+  min-width: 0;
+  max-width: 100%;
+  line-height: 0;
 }
 
-.mtags-label {
-  font-family: var(--mono, ui-monospace, "SFMono-Regular", Menlo, monospace);
-  font-size: 0.62rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--mod-ink-dim);
-  margin: 0 2px 1px;
-}
-/* Under the character bucket, so it reads as its own shelf rather than as the
-   first few of one list. */
-.mtags-rule {
-  height: 1px;
+/* The line under the picture. EXACTLY the picture's width, never wider:
+   width 0 takes it out of the column's width calculation and min-width 100%
+   gives it the column's width back. Without that, a long creator tag widened
+   the column and pushed the reactions 300px off the picture's edge
+   (measured). One line, never wrapping: pills shrink and ellipsize, and the
+   control stays whole. Reserved as soon as the image has a tag set, so the
+   live read filling it moves nothing. */
+.mtags-bubble {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
   align-self: stretch;
-  background: var(--mod-line);
-  margin: 3px 2px;
+  width: 0;
+  min-width: 100%;
+  margin-top: 4px;
+  line-height: 1.2;
+}
+.mtags-bubble > .mod-pill {
+  align-self: center;
+  flex: 0 1 auto;
+  min-width: 2rem;
+}
+.mod-pill-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The control that unfurls the rest, and its counterpart at the head of the
+   popup. Reads as a control, not as a tag: no dot, a dashed edge. */
+.mtags-expose {
+  flex: none;
+  font: inherit;
+  font-size: 0.68rem;
+  line-height: 1.2;
+  letter-spacing: 0.03em;
+  padding: 0.14rem 0.5rem;
+  border-radius: var(--mod-pill-radius, 999px);
+  border: 1px dashed color-mix(in srgb, var(--mod-ink-dim) 55%, transparent);
+  background: transparent;
+  color: var(--mod-ink-dim);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mtags-expose:hover,
+.mtags-expose:focus-visible,
+.mtags-expose[aria-expanded='true'] {
+  color: var(--mod-ink);
+  border-color: color-mix(in srgb, var(--mod-ink) 55%, transparent);
+}
+
+/* The popup's contents. ROW-wrap, never column-wrap: Firefox sizes a
+   column-wrap box to one column and hides the rest. */
+.mtags-pop {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  line-height: 1.2;
+}
+.mtags-shelf,
+.mtags-flow,
+.mtags-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 5px;
+}
+/* Who made it and who is in it, set off from the rest as its own shelf. */
+.mtags-shelf {
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--mod-line);
+}
+.mtags-pop .mod-pill,
+.mtags-pop .mtags-tagrow {
+  align-self: center;
+}
+.mtags-ghost {
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.4;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  background: transparent;
+  color: var(--cpd-color-text-secondary);
+  cursor: pointer;
+}
+
+/* The chip on small surfaces: a count badge, bottom-left of the picture. */
+.mtags-chip-slot {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  z-index: 6;
+}
+.mtags-chip {
+  font: inherit;
+  font-size: 10px;
+  line-height: 1.3;
+  padding: 1px 5px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(0, 0, 0, 0.62);
+  color: var(--cpd-color-text-on-solid-primary);
+  cursor: pointer;
+  pointer-events: auto;
+  backdrop-filter: blur(2px);
+}
+.mtags-chip[aria-expanded='true'] {
+  background: var(--cpd-color-bg-action-primary-rest);
 }
 
 /* --- the pill: Modulation's recipe, so the booru and the client agree ------ */
@@ -125,8 +174,7 @@
      border, the tint and the dot -- never the words. Operator ruling
      2026-09-20; token --mod-tag-ink. */
   color: var(--mod-tag-ink);
-  /* The panel is a flex COLUMN: without this every pill stretches to the width
-     of the widest one in its column. */
+  /* Never stretched to its neighbours' height or width by a flex parent. */
   align-self: flex-start;
   max-width: 100%;
   overflow: hidden;
@@ -312,10 +360,8 @@
 }
 
 /* --- editing, from this side ---------------------------------------------- */
-/* The pill and its x are ONE flex item, so the x rides the column with the tag
-   it belongs to instead of wrapping to the next line on its own. align-self
-   repeats .mod-pill's, because the wrapper is now the column's child and would
-   otherwise stretch to the widest pill beside it. */
+/* The pill and its x are ONE flex item, so the x wraps with the tag it
+   belongs to instead of landing on the next line on its own. */
 .mtags-tagrow {
   display: inline-flex;
   align-items: center;
@@ -354,8 +400,7 @@
   background: var(--mod-surface);
   color: var(--mod-ink);
   align-self: flex-start;
-  /* The panel is a wrapping flex COLUMN: an input with no width is an input at
-     its browser default, which is wider than the whole panel. */
+  /* An input with no width is its browser default, wider than the popup. */
   width: 11rem;
   max-width: 100%;
 }
@@ -363,15 +408,7 @@
   opacity: 0.6;
 }
 
-/* The only place a user learns the booru refused them.
-   The panel is bounded by the PICTURE's height and clips what does not fit, so
-   on a short image the refusal is exactly the thing that would be cut off --
-   the failure would be silent, which is the one outcome this text exists to
-   prevent. While an error is up, the panel is allowed to outgrow the image;
-   there is at most one, and it is gone as soon as the next edit is tried. */
-.mtags-panel:has(.mtags-error) {
-  max-height: none;
-}
+/* The only place a user learns the booru refused them. */
 .mtags-error {
   align-self: stretch;
   max-width: 22rem;
@@ -385,8 +422,7 @@
   border: 1px solid color-mix(in srgb, var(--mod-tag-artist-fg) 30%, transparent);
 }
 
-/* The control row. One flex item, so the rating and the edit control ride
-   together at the head of column one and never wrap away from each other. */
+/* The control row: collapse, the rating, and the edit control, together. */
 .mtags-head {
   display: inline-flex;
   align-items: center;
