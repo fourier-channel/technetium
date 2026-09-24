@@ -1,7 +1,7 @@
 {
   "build_stamp": null,
-  "hydrated_at": "2026-09-11T05:06:09Z",
-  "hydrated_hash": "sha256c:2e76d412485e96de99b1e47972f90ae5bca9e74ad95cf23555725f64fbf99524",
+  "hydrated_at": "2026-09-24T04:13:44Z",
+  "hydrated_hash": "sha256c:0e4c83129853422f670342acb27f793ee9afe566e8cc1146eb863b7086598800",
   "pinned": null,
   "source": "coherence://brain/CLAUDE-HEADER.md"
 }
