@@ -2650,12 +2650,6 @@ code {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.tc-tcard-chip-new {
-  background: var(--cpd-color-bg-action-primary-rest, #3d7bfd);
-  color: var(--cpd-color-text-on-solid-primary, #fff);
-  font-weight: 700;
-  flex-shrink: 0;
-}
 .tc-tcard-chip-author {
   background: transparent;
   border: 1px solid rgba(128, 128, 128, 0.28);
@@ -2665,10 +2659,13 @@ code {
   min-width: 0;
 }
 
-/* Pin (launch-polish L4): right-aligned in the foot. Shown on a card under the
-   pointer or holding focus, and always on a card that IS pinned, so the state
-   is visible without hunting for it. */
+/* Pin (launch-polish L4): right-aligned in the foot. For whoever may pin in
+   the room it is a control, shown on a card under the pointer or holding
+   focus; on a pinned card everyone sees it, as a control or as a plain mark. */
 .tc-tcard-pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   margin-left: auto;
   flex-shrink: 0;
   font: inherit;
@@ -2688,8 +2685,14 @@ code {
 }
 .tc-carousel-card:hover .tc-tcard-pin,
 .tc-tcard-pin:focus-visible,
-.tc-tcard-pin[aria-pressed='true'] {
+.tc-tcard-pin[aria-pressed='true'],
+.tc-tcard-pin.is-mark {
   opacity: 1;
+}
+.tc-tcard-pin.is-mark {
+  cursor: default;
+  color: var(--mod-accent, #0ce92a);
+  border-color: rgba(56, 224, 138, 0.35);
 }
 .tc-tcard-pin:hover { color: var(--cpd-color-text-primary, #e6e9ef); border-color: rgba(160, 160, 160, 0.6); }
 .tc-tcard-pin[aria-pressed='true'] {

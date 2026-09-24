@@ -98,6 +98,11 @@ const LIST_REQUIRED_STATE: string[][] = [
   // Re-measure before assuming this stays cheap -- the ratio of current values
   // to writes is roughly 1:3 and only the numerator is paid here.
   ['net.41chan.media.tags', '*'],
+
+  // PINNED THREADS. One small state event per room, written by its moderators
+  // (client/threadPinState.ts). Without it here every client would see no pins
+  // and a moderator's pin would vanish the moment it was made.
+  ['net.41chan.thread.pins', ''],
 ]
 const TIMELINE_LIMIT = 1
 

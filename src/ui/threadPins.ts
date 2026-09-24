@@ -1,25 +1,18 @@
 // ---------------------------------------------------------------------------
 // Pinned threads: the ordering rule (launch-polish L4).
 //
-// Operator, 2026-09-24: "I need the ability to 'Pin' a thread to the list,
-// that maintains its position as leftmost/first thread on the list no matter
-// what sort method is chosen."
+// Operator, 2026-09-24: a pinned thread "maintains its position as
+// leftmost/first thread on the list no matter what sort method is chosen" --
+// "an admin-pinned thread that has priority over all others".
 //
 // So a pin is applied LAST, after whichever order produced the list -- a data
-// sort, the hover freeze that holds positions still under the pointer, or the
-// user's own drag-arranged order. Applied any earlier, one of those would get
-// the final word: a pin made while hovering (always, since the button is on a
-// card) would wait out the freeze, and a new thread in a custom order, which
-// goes to the front, would land ahead of it.
+// sort, or the hover freeze that holds positions still under the pointer.
+// Applied any earlier, the freeze would get the final word, and a pin made
+// while hovering (always, since the control is on a card) would wait it out.
 //
 // Several pins are an ordered list and a new pin is APPENDED, so a thread that
-// is already pinned never moves when another is pinned: every pinned thread
-// keeps the place it was given. With one pin that is exactly the ask.
-//
-// Pins are the user's, not the room's -- account data, never
-// m.room.pinned_events, which is shared room state that everyone sees. And
-// they are not per scope: "Here" shows this room's pinned threads first and
-// simply does not have the others, because "Here" means this room.
+// is already pinned never moves when another is pinned. Where the pins LIVE --
+// room state, written by moderators -- is client/threadPinState.ts.
 //
 // Pure, so the check suite can hold it without a DOM (O-tp9).
 // ---------------------------------------------------------------------------
@@ -84,33 +77,3 @@ export function applyPins<T extends { roomId: string; rootId: string }>(
   return [...first, ...items.filter((it) => !taken.has(flipIdOf(it.roomId, it.rootId)))]
 }
 
-/**
- * The order a drag produced, with each pinned thread put back where the
- * previous arrangement had it. Pinned cards sit first because of the pin, not
- * because of the arrangement, so saving the drag's order verbatim would record
- * the pin's position as the thread's place, and unpinning would leave it at
- * the front. A pinned thread the previous order never held goes last, as a
- * thread new to an arrangement would. Pinned threads are restored whether or
- * not the drag's list includes them (the drag does not measure them).
- */
-export function keepPinnedPlaces(
-  finalIds: readonly string[],
-  pins: readonly string[],
-  prev: readonly string[],
-): string[] {
-  if (pins.length === 0) return [...finalIds]
-  const pinned = new Set(pins)
-  const out = finalIds.filter((id) => !pinned.has(id))
-  // From the drag's list OR the previous order: the drag leaves pinned cards
-  // out of what it measures, so a pinned thread is usually absent from
-  // finalIds and would otherwise be dropped from the arrangement altogether.
-  const back = [...new Set([...finalIds, ...prev])]
-    .filter((id) => pinned.has(id))
-    .map((id) => ({ id, at: prev.indexOf(id) }))
-    .sort((a, b) => (a.at < 0 ? Infinity : a.at) - (b.at < 0 ? Infinity : b.at))
-  for (const { id, at } of back) {
-    if (at < 0) out.push(id)
-    else out.splice(Math.min(at, out.length), 0, id)
-  }
-  return out
-}

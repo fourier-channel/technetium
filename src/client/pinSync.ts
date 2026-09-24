@@ -2,10 +2,11 @@ import { NO_PINS, parsePins, togglePin } from '../ui/threadPins'
 import { reportAlways, reportIgnored } from './report'
 
 // ---------------------------------------------------------------------------
-// Keeping the pin list the user sees in step with the one the server holds
-// (launch-polish L4). No SDK here -- the caller hands in how to read the
-// stored content and how to write it -- so the check suite drives this with a
-// fake server that behaves like the real SDK, including its worst habit.
+// Keeping a list the user sees in step with the one the server holds -- the
+// pinned threads of a room (launch-polish L4). No SDK here: the caller hands
+// in how to read the stored content and how to write it, so the check suite
+// drives this with a fake server that behaves like the real SDK, including
+// its worst habit.
 //
 // OPTIMISTIC: a click shows at once, so the card moves under the pointer that
 // asked for it. The optimistic list is kept until the server has said the same
@@ -36,6 +37,8 @@ export interface PinPort {
   write: (pins: string[]) => Promise<unknown>
   /** For the echo deadline; setTimeout unless a test drives the clock. */
   later?: (fn: () => void, ms: number) => void
+  /** What the list is, for the failure report. */
+  subject?: string
 }
 
 export interface PinSync {
@@ -51,6 +54,7 @@ const same = (a: readonly string[], b: readonly string[]) =>
 
 export function makePinSync(port: PinPort): PinSync {
   const later = port.later ?? ((fn: () => void, ms: number) => void setTimeout(fn, ms))
+  const subject = port.subject ?? 'thread pins'
   const listeners = new Set<() => void>()
   // A snapshot must be the SAME array until something changes, or
   // useSyncExternalStore re-renders forever: parse once per content object.
@@ -69,8 +73,8 @@ export function makePinSync(port: PinPort): PinSync {
       const parsed = parsePins(content)
       if (parsed === null) {
         reportIgnored(
-          'thread pins: read',
-          new Error('the saved pin list is not a list of thread ids, so it was ignored; pinning or unpinning any thread rewrites it'),
+          `${subject}: read`,
+          new Error('the saved list is not a list of ids, so it was ignored; pinning or unpinning anything rewrites it'),
         )
         lastParsed = NO_PINS
       } else {
@@ -126,7 +130,7 @@ export function makePinSync(port: PinPort): PinSync {
         // Undo only if nothing newer was asked for; a newer wish is sent next.
         if (pending === next) pending = null
         notify()
-        reportAlways('thread pins: save (the pin was undone; try again once the connection is back)', err)
+        reportAlways(`${subject}: save (the change was undone; try again once the connection is back, or check you may still pin in this room)`, err)
         pump()
       },
     )

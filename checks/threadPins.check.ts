@@ -1,15 +1,15 @@
 // Checks for pinned threads (launch-polish L4).
 //
 // Operator, 2026-09-24: a pinned thread "maintains its position as
-// leftmost/first thread on the list no matter what sort method is chosen."
-// The rule is ui/threadPins.ts; the composition -- pins applied LAST, after
-// the custom arrangement and the hover freeze -- is asserted against
-// ThreadList.tsx, because the wrong order there is the likeliest way to break
-// the promise while every pure test still passes.
-import { applyPins, keepPinnedPlaces, parsePins, togglePin, NO_PINS } from '../src/ui/threadPins.ts'
-import { arrangeByCustom } from '../src/ui/threadOrder.ts'
+// leftmost/first thread on the list no matter what sort method is chosen" --
+// "an admin-pinned thread that has priority over all others". The rule is
+// ui/threadPins.ts; where pins live (room state, moderators only) is
+// client/threadPinState.ts; the composition -- pins applied LAST, after the
+// hover freeze -- is asserted against ThreadList.tsx, because the wrong order
+// there is the likeliest way to break the promise while every pure test
+// still passes.
+import { applyPins, parsePins, togglePin, NO_PINS } from '../src/ui/threadPins.ts'
 import { readFileSync } from 'node:fs'
-import type { ThreadListItem } from '../src/client/useThreadList.ts'
 
 let failures = 0
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -74,56 +74,35 @@ console.log('\n-- stored content is read loudly, never half-read --')
   check('an empty-string entry refuses the whole list', parsePins({ pins: [id(a), ''] }) === null)
 }
 
-console.log('\n-- composed with a custom (drag-arranged) order: the pin still wins --')
-{
-  // arrangeByCustom puts threads missing from the saved order FIRST, marked
-  // new (O3). A pin applied before it would lose to a brand-new thread.
-  const items = [a, b, c, d, e] as unknown as ThreadListItem[]
-  const saved = ids([a, b, c, d]) // e is new
-  const arranged = arrangeByCustom(items, saved).items
-  check('premise: a new thread leads a custom order', id(arranged[0]) === id(e), ids(arranged))
-  const out = applyPins(arranged, [id(c)])
-  check('pinned c still leads it', id(out[0]) === id(c), ids(out))
-}
-
-console.log('\n-- a drag with a pinned card saves the pinned thread back in its place --')
-{
-  // Arrangement A,B,C,D,P; P pinned so the strip shows P,A,B,C,D; the reader
-  // drags B to the end. The drag reports P,A,C,D,B.
-  const saved = keepPinnedPlaces(['P', 'A', 'C', 'D', 'B'], ['P'], ['A', 'B', 'C', 'D', 'P'])
-  check('the drag is kept and P goes back to its own place', saved.join() === 'A,C,D,B,P', saved)
-  const fresh = keepPinnedPlaces(['P', 'B', 'A'], ['P'], ['A', 'B'])
-  check('a pinned thread the arrangement never held goes last', fresh.join() === 'B,A,P', fresh)
-  const none = ['A', 'B']
-  check('no pins: the drag is saved as it is', keepPinnedPlaces(none, [], ['B', 'A']).join() === 'A,B')
-  const two = keepPinnedPlaces(['Q', 'P', 'A', 'B'], ['Q', 'P'], ['P', 'A', 'Q', 'B'])
-  check('two pinned threads each return to their own place', two.join() === 'P,A,Q,B', two)
-  // The drag does not measure pinned cards, so its list usually lacks them.
-  const absent = keepPinnedPlaces(['A', 'C', 'D', 'B'], ['P'], ['A', 'B', 'C', 'D', 'P'])
-  check('a pinned thread absent from the drag\'s list is restored, not dropped', absent.join() === 'A,C,D,B,P', absent)
-}
-
-console.log('\n-- ThreadList applies pins LAST, and every consumer reads the result --')
+console.log('\n-- ThreadList applies the room pins LAST, and every consumer reads the result --')
 {
   const ts = readFileSync('src/ui/ThreadList.tsx', 'utf8')
-  check('entries is applyPins over the arranged-or-frozen order',
-    /const ordered = arranged \? arranged\.items : frozenEntries/.test(ts) &&
-    /const entries = applyPins\(ordered, pins\)/.test(ts))
+  check('entries is applyPins over the frozen order and the rooms\' pins',
+    /const ordered = frozenEntries/.test(ts) && /const entries = applyPins\(ordered, pinned\)/.test(ts))
   check('nothing re-derives entries after the pins', (ts.match(/const entries = /g) ?? []).length === 1)
-  check('a pinned card is never offered to the drag', /\{\.\.\.\(pinned \? \{\} : getCardHandlers\(/.test(ts))
-  check('a pinned card is never labelled new', /&& !pinnedIds\.has\(/.test(ts))
-  check('a drag saves through keepPinnedPlaces', /const saved = keepPinnedPlaces\(finalIds, cur\.pins, prev\)/.test(ts) && /saveCustomOrder\(orderScopeKey\(scope, roomId\), saved\)/.test(ts))
-  const drag = readFileSync('src/ui/threadDrag.ts', 'utf8')
-  check('the drag leaves pinned cards out of the slots it measures', /\[data-flip-id\]:not\(\[data-pinned\]\)/.test(drag))
-  check('the tile memo compares the pin state', /a\.pinned !== b\.pinned/.test(ts) && /a\.onTogglePin !== b\.onTogglePin/.test(ts))
-  check('the pin button stops the card drag and the card click',
-    /onPointerDown=\{\(ev\) => ev\.stopPropagation\(\)\}/.test(ts) && /ev\.stopPropagation\(\)\s*\n\s*onTogglePin\(/.test(ts))
-  const store = readFileSync('src/client/threadPinStore.ts', 'utf8')
-  check('pins live in account data, never in room state',
-    /net\.41chan\.tc\.thread_pins/.test(store) && !/m\.room\.pinned_events/.test(store))
+  check('the pins are read from room state, not from the viewer\'s own data',
+    /threadPinsOf\(client, r\)/.test(ts) && !/useThreadPins\(/.test(ts))
+  check('only those the room allows get the control; everyone else sees a mark',
+    /canPin=\{canPinThreads\(client\?\.getRoom\(e\.roomId\), myUserId\)\}/.test(ts) &&
+    /\{canPin \? \(/.test(ts) && /className="tc-tcard-pin is-mark"/.test(ts))
+  check('the tile memo compares the pin state and the permission',
+    /a\.pinned !== b\.pinned/.test(ts) && /a\.canPin !== b\.canPin/.test(ts) && /a\.onTogglePin !== b\.onTogglePin/.test(ts))
+  check('the pin button stops the card click', /ev\.stopPropagation\(\)\s*\n\s*onTogglePin\(/.test(ts))
+  check('drag-to-reorder is gone from the thread list (operator, 2026-09-24)',
+    !/useThreadDrag|getCardHandlers|arrangeByCustom|customOrder|'custom'/.test(ts))
+
+  const state = readFileSync('src/client/threadPinState.ts', 'utf8')
+  check('pins are one room state event', /THREAD_PINS_EVENT = 'net\.41chan\.thread\.pins'/.test(state))
+  check('written as room state, through the one-at-a-time sync',
+    /makePinSync\(/.test(state) && /send\(roomId, THREAD_PINS_EVENT, \{ pins \}, ''\)/.test(state))
+  check('never the viewer\'s account data, never pinned MESSAGES',
+    !/setAccountData\(/.test(state) && !/'m\.room\.pinned_events'/.test(state))
+  check('who may pin is asked of the room\'s power levels', /maySendStateEvent/.test(state))
+  const sliding = readFileSync('src/client/slidingSync.ts', 'utf8')
+  check('sliding sync asks for the pin state, or no client would ever see a pin',
+    /\['net\.41chan\.thread\.pins', ''\]/.test(sliding))
   const sync = readFileSync('src/client/pinSync.ts', 'utf8')
-  check('a failed save is reported, not swallowed', /reportAlways\('thread pins: save/.test(sync) && !/catch\(\(\) => \{\}\)/.test(sync + store))
-  check('the store writes through the one-at-a-time sync, never directly', /makePinSync\(/.test(store) && (store.match(/setAccountData\(/g) ?? []).length === 1)
+  check('a failed save is reported, not swallowed', /reportAlways\(`\$\{subject\}: save/.test(sync) && !/catch\(\(\) => \{\}\)/.test(sync))
 }
 
 if (failures > 0) {

@@ -1,7 +1,7 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { axisFromKey, isTypingTarget, HORIZONTAL } from './axisKeys'
 import { useClient } from '../client/clientContextValue'
-import { useFlipList, flipIdOf, type FlipControl } from './flip'
+import { useFlipList, flipIdOf } from './flip'
 import { usePopOnIncrease } from './pop'
 import { useReducedMotion } from './reducedMotion'
 import {
@@ -14,11 +14,16 @@ import {
 } from './carousel'
 import { formatCardWhen, formatDuration, isRecent } from './threadCardFormat'
 import { useNow } from './useNow'
-import { useDeferredThreadOrder, arrangeByCustom } from './threadOrder'
-import { useThreadDrag } from './threadDrag'
-import { orderScopeKey, loadCustomOrder, saveCustomOrder } from './threadOrderStore'
-import { applyPins, keepPinnedPlaces, togglePin } from './threadPins'
-import { useThreadPins } from '../client/threadPinStore'
+import { useDeferredThreadOrder } from './threadOrder'
+import { applyPins } from './threadPins'
+import {
+  canPinThreads,
+  threadPinsOf,
+  toggleThreadPin,
+  useThreadPinsVersion,
+} from '../client/threadPinState'
+import { PushpinIcon } from './PushpinIcon'
+import type { MatrixClient } from 'matrix-js-sdk'
 import {
   useThreadList,
   threadListDefaults,
@@ -30,13 +35,22 @@ import { AuthedImage } from './AuthedImage'
 import { MediaTags } from './MediaTags'
 import { parseMxc } from '../client/media'
 
-// UI-level order mode: the three data sorts plus a user-arranged 'custom' order.
-// 'custom' is a presentation concern (persisted order + new-thread placement),
-// so it lives here, not in useThreadList's data-sort union.
-type SortMode = ThreadSort | 'custom'
-
-// Stable empty set so non-custom renders don't churn the memoized tiles.
-const EMPTY_NEW_IDS: ReadonlySet<string> = new Set()
+// The pinned threads of every room in the list, as flip ids, in the order they
+// lead it: the current room's first, then each other room's as the list first
+// meets it. Pure over its inputs, so the handler that pins can ask where a
+// card will land by calling it again.
+function pinnedFlipIds(
+  client: MatrixClient | null,
+  roomId: string | undefined,
+  items: readonly ThreadListItem[],
+): string[] {
+  const rooms: string[] = []
+  if (roomId) rooms.push(roomId)
+  for (const it of items) if (!rooms.includes(it.roomId)) rooms.push(it.roomId)
+  const out: string[] = []
+  for (const r of rooms) for (const root of threadPinsOf(client, r)) out.push(flipIdOf(r, root))
+  return out
+}
 
 // Thread inbox strip. Scoped to the current room by default (user-changeable
 // default eventually via account-data prefs); toggleable to all joined rooms.
@@ -71,108 +85,64 @@ export function ThreadList({
   const defaults = threadListDefaults()
   const initialScope: ThreadScope = roomId ? defaults.scope : 'all'
   const [scope, setScope] = useState<ThreadScope>(initialScope)
-  // Custom (drag-arranged) order as an ordered list of flip ids. Lazily loaded
-  // from localStorage for the initial scope so a reload restores the arrangement
-  // (O2: per-scope; D5: persisted order).
-  const [customOrder, setCustomOrder] = useState<string[] | null>(() =>
-    loadCustomOrder(orderScopeKey(initialScope, roomId)),
-  )
-  // If a saved custom order exists at mount, open in custom mode (order survives
-  // reload); otherwise the default sort.
-  const [sort, setSort] = useState<SortMode>(() =>
-    loadCustomOrder(orderScopeKey(initialScope, roomId)) ? 'custom' : defaults.sort,
-  )
-  // 'custom' isn't a data sort; feed useThreadList a stable base order under it.
-  const baseSort: ThreadSort = sort === 'custom' ? 'latest-activity' : sort
-  const dataEntries = useThreadList(client, { roomId, scope, sort: baseSort })
+  const [sort, setSort] = useState<ThreadSort>(defaults.sort)
+  const dataEntries = useThreadList(client, { roomId, scope, sort })
 
   // D3 auto-resort etiquette: while the pointer is over the list (or scrolling),
   // hold the on-screen order; adopt the live data order on idle. Stats/pops
   // still update in place during the hold -- only POSITION is deferred.
   const { entries: frozenEntries, handlers, release } = useDeferredThreadOrder(dataEntries)
 
-  // In custom mode the user's arrangement wins (auto-resort/freeze is moot);
-  // otherwise the sort+freeze pipeline drives order. New (unsaved) threads sort
-  // to the top and are marked "new" (O3).
-  const isCustom = sort === 'custom' && customOrder !== null
-  const arranged = isCustom ? arrangeByCustom(dataEntries, customOrder) : null
-  const ordered = arranged ? arranged.items : frozenEntries
-  // Pinned threads go first whatever produced the order above, so they are
-  // applied LAST (threadPins.ts says why). Every consumer below -- the FLIP
-  // key, the drag, the focus, the keyboard, the render -- reads `entries`, so
-  // they all agree on where a pinned card is without knowing pins exist.
-  const { pins, toggle: togglePinStored } = useThreadPins(client)
-  const entries = applyPins(ordered, pins)
-  const pinnedIds = new Set(pins)
-  const newIds = arranged ? arranged.newIds : EMPTY_NEW_IDS
+  const ordered = frozenEntries
 
-  // The order, the pins and the arrangement as of the last render, for the
-  // handlers below to read at click time: closing over them would hand every
-  // card a new function on every render (threadTileEqual compares them).
-  const pinOrderRef = useRef({ ordered, pins, customOrder })
+  // Pinned threads are the ROOM's, set by whoever its power levels allow
+  // (client/threadPinState.ts), and they go first whatever the sort, so they
+  // are applied LAST (threadPins.ts says why). Every consumer below -- the
+  // FLIP key, the focus, the keyboard, the render -- reads `entries`, so they
+  // all agree on where a pinned card is without knowing pins exist.
+  const pinsVersion = useThreadPinsVersion(client)
+  const pinned = useMemo(
+    () => pinnedFlipIds(client, roomId, ordered),
+    // pinsVersion is what moves when any room's pins change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [client, roomId, ordered, pinsVersion],
+  )
+  const entries = applyPins(ordered, pinned)
+  const pinnedIds = new Set(pinned)
+  const myUserId = client?.getUserId() ?? null
+
+  // The order as of the last render, for the pin handler to read at click
+  // time: closing over it would hand every card a new function on every render
+  // (threadTileEqual compares them).
+  const orderRef = useRef({ ordered, roomId })
   useEffect(() => {
-    pinOrderRef.current = { ordered, pins, customOrder }
+    orderRef.current = { ordered, roomId }
   })
 
-  // Switching scope loads that scope's saved order (O2). If the new scope has no
-  // saved custom order while in custom mode, fall back to the default sort.
-  // Both are deliberate acts, so the hover freeze is dropped and the new order
-  // shows at once rather than after the idle timer.
+  // Choosing a scope or a sort is a deliberate act, so the hover freeze is
+  // dropped and the new order shows at once rather than after the idle timer.
   const handleScope = (next: ThreadScope) => {
     release()
     setScope(next)
-    const loaded = loadCustomOrder(orderScopeKey(next, roomId))
-    setCustomOrder(loaded)
-    if (sort === 'custom' && !loaded) setSort(defaults.sort)
   }
-  const handleSort = (next: SortMode) => {
+  const handleSort = (next: ThreadSort) => {
     release()
     setSort(next)
   }
 
   // FLIP: any change to the ordered id list (sort switch, scope switch, an
-  // idle-released activity resort, or a drag commit) shuffles the surviving
-  // cards through one animation. The drag layer suppresses FLIP for its own
-  // gesture via flipControlRef.
-  const listRef = useRef<HTMLDivElement>(null)
-  const flipControlRef = useRef<FlipControl | null>(null)
-  const orderKey = entries.map((e) => flipIdOf(e.roomId, e.rootId)).join(',')
-  useFlipList(listRef, orderKey, flipControlRef)
-
-  // Drag-to-reorder (D4). Committing an order switches the list to custom mode
-  // (O1) and persists it for the current scope (O2).
+  // idle-released activity resort, a pin) shuffles the surviving cards
+  // through one animation.
   //
-  // Pinned cards are held first by the pin, not by the arrangement, so the
-  // order a drag produces is saved with each pinned thread back where the
-  // arrangement had it: unpinning then returns it to its place instead of
-  // leaving it wherever the pin happened to be during the drag.
-  const onReorder = useCallback(
-    (finalIds: string[]) => {
-      const cur = pinOrderRef.current
-      const prev = cur.customOrder ?? cur.ordered.map((e) => flipIdOf(e.roomId, e.rootId))
-      const saved = keepPinnedPlaces(finalIds, cur.pins, prev)
-      setCustomOrder(saved)
-      setSort('custom')
-      saveCustomOrder(orderScopeKey(scope, roomId), saved)
-    },
-    [scope, roomId],
-  )
-  const orderedIds = entries.map((e) => flipIdOf(e.roomId, e.rootId))
-  const { getCardHandlers, consumeClickSuppressed } = useThreadDrag({
-    containerRef: listRef,
-    orderedIds,
-    onReorder,
-    flipControlRef,
-  })
-
-  // A click that concludes an engaged drag must not also open the thread.
-  const handleSelect = useCallback(
-    (rid: string, rootId: string) => {
-      if (consumeClickSuppressed(flipIdOf(rid, rootId))) return
-      onSelect(rid, rootId)
-    },
-    [consumeClickSuppressed, onSelect],
-  )
+  // DRAG-TO-REORDER IS GONE (operator, 2026-09-24: "we can drop that
+  // functionality now"). The drag was one-dimensional and vertical inside a
+  // horizontal strip, so any press with 5px of vertical wobble threw a card to
+  // an end and switched the list to a custom order; pins now cover "keep this
+  // one first". threadDrag.ts stays for the room list, which still uses it.
+  const listRef = useRef<HTMLDivElement>(null)
+  const orderKey = entries.map((e) => flipIdOf(e.roomId, e.rootId)).join(',')
+  useFlipList(listRef, orderKey)
+  const handleSelect = onSelect
 
   // --- carousel state ------------------------------------------------------
   // One number: which card is under the reader. Everything else -- the track's
@@ -310,22 +280,25 @@ export function ThreadList({
 
   const onCardFocus = useCallback((i: number) => setFocus(i), [])
 
-  // Pin or unpin, and bring the card to the reader wherever it lands -- the
-  // results come to you, and a pinned card leaving from under the pointer for
-  // the far end of the strip would read as the card vanishing. Stable: it
-  // reads pinOrderRef rather than closing over the order.
+  // Pin or unpin -- for everyone in the room -- and bring the card to the
+  // reader wherever it lands: the results come to you, and a card leaving from
+  // under the pointer for the far end of the strip would read as the card
+  // vanishing. Stable: it reads orderRef rather than closing over the order.
   //
   const onTogglePin = useCallback(
     (rid: string, rootId: string) => {
+      if (!client) return
+      // The store updates optimistically and synchronously, so the list it
+      // will render next can be asked for here, the same way render asks.
+      toggleThreadPin(client, rid, rootId)
+      const cur = orderRef.current
       const id = flipIdOf(rid, rootId)
-      const cur = pinOrderRef.current
-      const landed = applyPins(cur.ordered, togglePin(cur.pins, id)).findIndex(
+      const landed = applyPins(cur.ordered, pinnedFlipIds(client, cur.roomId, cur.ordered)).findIndex(
         (e) => flipIdOf(e.roomId, e.rootId) === id,
       )
-      togglePinStored(id)
       if (carousel && landed >= 0) setFocus(landed)
     },
-    [togglePinStored, carousel],
+    [client, carousel],
   )
 
   return (
@@ -387,13 +360,11 @@ export function ThreadList({
             className="tc-threadlist-pill tc-threadlist-sort"
             aria-label="Sort threads by"
             value={sort}
-            onChange={(e) => handleSort(e.target.value as SortMode)}
+            onChange={(e) => handleSort(e.target.value as ThreadSort)}
           >
             <option value="latest-activity">Latest</option>
             <option value="created">Created</option>
             <option value="reply-count">Replies</option>
-            {/* Custom appears once the user has drag-arranged an order (O1). */}
-            {customOrder !== null && <option value="custom">Custom</option>}
           </select>
           {/* Present only where the host has no other way to dismiss the list.
               The strip has its tab, so it never passes one. */}
@@ -436,12 +407,11 @@ export function ThreadList({
               item={e}
               active={e.rootId === activeRootId}
               showRoom={scope === 'all'}
-              isNew={newIds.has(flipIdOf(e.roomId, e.rootId)) && !pinnedIds.has(flipIdOf(e.roomId, e.rootId))}
               pinned={pinnedIds.has(flipIdOf(e.roomId, e.rootId))}
+              canPin={canPinThreads(client?.getRoom(e.roomId), myUserId)}
               onTogglePin={onTogglePin}
               onCardFocus={onCardFocus}
               onSelect={onCardSelect}
-              getCardHandlers={getCardHandlers}
               index={i}
               now={now}
               carousel={carousel}
@@ -462,12 +432,11 @@ function threadTileEqual(a: ThreadTileProps, b: ThreadTileProps): boolean {
   if (
     a.active !== b.active ||
     a.showRoom !== b.showRoom ||
-    a.isNew !== b.isNew ||
     a.pinned !== b.pinned ||
+    a.canPin !== b.canPin ||
     a.onTogglePin !== b.onTogglePin ||
     a.onCardFocus !== b.onCardFocus ||
     a.onSelect !== b.onSelect ||
-    a.getCardHandlers !== b.getCardHandlers ||
     a.carousel !== b.carousel ||
     a.distance !== b.distance ||
     a.index !== b.index ||
@@ -491,26 +460,19 @@ function threadTileEqual(a: ThreadTileProps, b: ThreadTileProps): boolean {
   )
 }
 
-interface CardHandlers {
-  onPointerDown: (e: React.PointerEvent) => void
-  onPointerMove: (e: React.PointerEvent) => void
-  onPointerUp: (e: React.PointerEvent) => void
-  onPointerCancel: (e: React.PointerEvent) => void
-}
-
 interface ThreadTileProps {
   item: ThreadListItem
   active: boolean
   showRoom: boolean
-  isNew: boolean
-  // Held first whatever the sort (launch-polish L4). A pinned card is not
-  // draggable: its place is the pin's, and a drop would be overruled at once.
+  // Pinned by the room: first whatever the sort (launch-polish L4).
   pinned: boolean
+  // May this viewer pin in the card's room? Everyone sees that a thread is
+  // pinned; only those the room's power levels allow get the control.
+  canPin: boolean
   onTogglePin: (roomId: string, rootId: string) => void
   // A control inside the card took focus: bring the card to the reader.
   onCardFocus: (index: number) => void
   onSelect: (roomId: string, rootId: string, index: number) => void
-  getCardHandlers: (id: string) => CardHandlers
   index: number
   /** Ticking wall clock, passed in because a component may not read one. */
   now: number
@@ -524,12 +486,11 @@ const ThreadTile = memo(function ThreadTile({
   item,
   active,
   showRoom,
-  isNew,
   pinned,
+  canPin,
   onTogglePin,
   onCardFocus,
   onSelect,
-  getCardHandlers,
   index,
   now,
   carousel,
@@ -567,7 +528,6 @@ const ThreadTile = memo(function ThreadTile({
   return (
     <div
       data-flip-id={flipIdOf(roomId, rootId)}
-      {...(pinned ? {} : getCardHandlers(flipIdOf(roomId, rootId)))}
       className={carousel ? 'tc-carousel-card' : undefined}
       data-distance={carousel ? distance : undefined}
       data-pinned={pinned ? 'true' : undefined}
@@ -664,23 +624,36 @@ const ThreadTile = memo(function ThreadTile({
           </div>
 
           <div className="tc-tcard-foot">
-            {isNew && <span className="tc-tcard-chip tc-tcard-chip-new">new</span>}
             <span className="tc-tcard-chip tc-tcard-chip-author">{authorName}</span>
-            {/* Its own pointerdown and click stop here: the card's drag and
-                its focus-or-open must not also fire for a press on the pin. */}
-            <button
-              type="button"
-              className="tc-tcard-pin"
-              aria-pressed={pinned}
-              title={pinned ? 'Unpin: this thread sorts with the rest again' : 'Pin: keep this thread first, whatever the sort'}
-              onPointerDown={(ev) => ev.stopPropagation()}
-              onClick={(ev) => {
-                ev.stopPropagation()
-                onTogglePin(roomId, rootId)
-              }}
-            >
-              {pinned ? 'Pinned' : 'Pin'}
-            </button>
+            {/* The pin: a control for whoever may pin in this room, a plain
+                mark for everyone else. Its click stops here so the card's own
+                focus-or-open does not also fire. */}
+            {canPin ? (
+              <button
+                type="button"
+                className="tc-tcard-pin"
+                aria-pressed={pinned}
+                title={
+                  pinned
+                    ? `Unpin for everyone in ${roomName}: it sorts with the rest again`
+                    : `Pin for everyone in ${roomName}: first in the list, whatever the sort`
+                }
+                onClick={(ev) => {
+                  ev.stopPropagation()
+                  onTogglePin(roomId, rootId)
+                }}
+              >
+                <PushpinIcon />
+                {pinned ? 'Pinned' : 'Pin'}
+              </button>
+            ) : (
+              pinned && (
+                <span className="tc-tcard-pin is-mark" title={`Pinned by the moderators of ${roomName}`}>
+                  <PushpinIcon />
+                  Pinned
+                </span>
+              )
+            )}
           </div>
         </div>
       ) : (
@@ -693,23 +666,6 @@ const ThreadTile = memo(function ThreadTile({
           <div style={{ fontSize: 11, color: 'var(--cpd-color-text-secondary)', ...ell }}>{roomName}</div>
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
-          {isNew && (
-            <span
-              style={{
-                flexShrink: 0,
-                fontSize: 9,
-                fontWeight: 700,
-                letterSpacing: 0.3,
-                textTransform: 'uppercase',
-                padding: '1px 5px',
-                borderRadius: 8,
-                color: 'var(--cpd-color-text-on-solid-primary)',
-                background: 'var(--cpd-color-bg-action-primary-rest)',
-              }}
-            >
-              new
-            </span>
-          )}
           <span style={{ fontSize: 12, fontWeight: 600, ...ell }}>{author}</span>
         </div>
         {/* Placeholder for a future thread title (not yet a feature). */}
