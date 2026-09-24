@@ -4024,3 +4024,29 @@ PENDING OPERATOR VERIFICATION against a live homeserver: the wheel and
 trackpad feel, the pin round trip, the sort pill's list, the tag line
 filling on the live read, the popup over the member list and in the
 lightbox. Not deployed; the operator runs `./deploy.sh`.
+
+### 2026-09-24 (later) -- pins are the room's; drag-to-reorder dropped; replaced rules deleted
+
+The operator read the first pins as favourites, which they were: "My idea
+was more of an admin-pinned thread that has priority over all others ...
+the 'Welcome' thread in #chat. Pinned threads would start open by default,
+and hideable behind a Pushpin icon." Pins are now room state
+(`net.41chan.thread.pins`), written by whoever the room's power levels
+allow; asked where "start open" lives, the answer was the thread strip:
+entering the room pulls it down with the pinned threads first, and a
+pushpin at its left end folds them away per person. Drag-to-reorder in the
+strip is dropped, as ruled. Commits `f1391fa`, `385119f`.
+
+**draft-10 (gotcha) -- a new room-state type is invisible under sliding
+sync until `required_state` asks for it.** Added with the pins; the check
+that sweeps `getStateEvents` reads is what holds it.
+
+**draft-11 (decision, operator) -- a replaced rule is deleted, not marked
+superseded** (WORKING-RULES rule 7, fourier-basis `cb6da37`): "They stop
+reading after the first Allow." "One step per turn", a copy-paste-era rule,
+had outlived four months in CLAUDE files. An agent sweep of every canon
+CLAUDE file did most of it; its rewrite of fourier-sampling's was blocked by
+the permission classifier as self-modification and reworded current
+production gates, so it was reverted and only the two asked-for edits
+applied by hand. That file's struck-through production and merge gates wait
+for a ruling.

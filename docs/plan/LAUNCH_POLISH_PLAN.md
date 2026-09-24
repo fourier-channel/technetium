@@ -40,7 +40,7 @@ reading had to be chosen it is stated below.
 | L1 | The thread list has dead space above and below the thread cards; remove it | DONE `db9208f` |
 | L2 | Threads travel two positions per mouse-wheel tick; it should be one | DONE `58921de`, `906c73d` |
 | L3 | The thread list's title bar: the panel's label "Thread Listing" centred; left of centre "Show Threads: (Here) (Everywhere)"; right of centre "Sort By: (Replies)" | DONE `db9208f`, `d43f19a` |
-| L4 | Pin a thread: it keeps the leftmost/first position whatever sort is chosen. Clarified 2026-09-24: "an admin-pinned thread that has priority over all others. For example, I would pin the 'Welcome' thread in the one room everyone automatically lands in: #chat. Pinned threads would start open by default, and hideable behind a Pushpin icon." | Room pins DONE `f1391fa`; "start open / pushpin" OPEN, reading asked |
+| L4 | Pin a thread: it keeps the leftmost/first position whatever sort is chosen. Clarified 2026-09-24: "an admin-pinned thread that has priority over all others. For example, I would pin the 'Welcome' thread in the one room everyone automatically lands in: #chat. Pinned threads would start open by default, and hideable behind a Pushpin icon." | DONE `f1391fa`, `385119f` |
 | L8 | Drag-to-reorder in the thread strip: "we can drop that functionality now" | DONE `f1391fa` |
 | L5 | For ALL images, the tag bubble sits underneath the image, its top-left anchored to the image's bottom-left. Reuse chanbooru's Modulation preset: the creator tag ALWAYS shows, the character tag whenever present; the rest hide behind the "expose tags" button, which unfurls to the right as a true attached popup that may cover the user list -- not constrained to its own panel in thread view | DONE `6138231` |
 | L6 | Reactions own the first column on the right side of the image; the unfurled tag list may overlap them | DONE `6138231` |
@@ -79,6 +79,14 @@ this room's pinned threads first; "Everywhere" shows every room's pins first,
 the current room's leading. Not `m.room.pinned_events`, which is pinned
 MESSAGES and has its own panel.
 
+**L4, "start open, hideable behind a Pushpin icon".** Asked, and answered
+"out in the thread strip": entering a room whose pinned threads you have not
+folded away pulls the strip down, once per entry, with them at the front. The
+pushpin at the strip's left end folds them out of the strip (not back into the
+order) and brings them back, with a count. Folds are yours, per thread, in
+account data -- a thread pinned later starts out again -- and folded threads
+stop opening the strip. Closing the strip sticks for that visit.
+
 **L5, "the creator tag".** The ARTIST-category tag -- every upload mints the
 poster's tag as artist, and Modulation's creator axis is built from artist
 names. Never provenance 'creator', which is the private prompt bucket.
@@ -116,3 +124,4 @@ One line per landed step, appended as it lands.
 | review `d43f19a` | An adversarial review of the strip commits confirmed 12 defects; this fixes: pins lost a fast second click (the SDK skips a write equal to its stale store) -- now one write in flight, never ahead of its echo (client/pinSync.ts, checked against a fake SDK server); the DM tab covered the scope pills -- now on the strip, right of the title, clamped; the strip was a scroll container that a focused Pin could scroll -- now overflow:clip; header columns named; the freeze release resets the idle detector. | None beyond the browser feel. |
 | L2 second pass `906c73d` | A notch is known by its timing, not its size: the first rule stalled on small-notch mice (4px ticks) and let trackpad flings cross the list. Checked against the reviewers' streams; fails 12 ways against the first rule. Enter after clicking a Pin opens the card; a drag keeps pinned threads' places. | PENDING OPERATOR VERIFICATION: the feel under a real wheel and trackpad. |
 | L4 revised + L8 `f1391fa` | Pins are room state, moderators only, applied last; sliding sync requests the event. Drag-to-reorder, the Custom sort and the "new" chip are gone from the thread list; threadDrag.ts stays for the room list. | PENDING OPERATOR VERIFICATION: a moderator pinning and a member seeing it first. |
+| L4 start-out `385119f` | Pinned threads pull the strip down on entering their room, once per entry; a pushpin at the strip's left end folds them away and back, per person, in account data. | PENDING OPERATOR VERIFICATION: a newcomer landing in #chat. |
