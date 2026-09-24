@@ -1921,24 +1921,6 @@ code {
   opacity: 1;
 }
 
-/* The thread strip comes down across the top. */
-.tc-panel-top {
-  left: 0;
-  right: 0;
-  top: 0;
-  /* The header is one row now, and the card is the reason the strip exists, so
-     the card gets the rest. Budgeted for BOTH, which the first two attempts at
-     this number were not. */
-  height: 208px;
-  border-bottom: 1px solid rgba(128, 128, 128, 0.25);
-  transform: translateY(-100%);
-  opacity: 0.6;
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.34);
-}
-.tc-panel-top[data-shown='true'] {
-  transform: translateY(0);
-  opacity: 1;
-}
 
 @media (prefers-reduced-motion: reduce) {
   .tc-panel {
@@ -1965,29 +1947,144 @@ code {
   flex: 1;
   min-height: 0;
   display: flex;
-  align-items: center;
+  /* Top-aligned, with the air stated: the strip is exactly header + 8 + card +
+     16 (threadStrip.ts, compared by checks/threadStrip), so there is no
+     surplus to centre. The 16 below is the Hide-threads tab's lane. Top-aligned
+     also means that while the strip opens, its edge wipes down over a card that
+     stays put instead of the card sliding at half speed. */
+  align-items: flex-start;
+  padding: 8px 0 16px;
+  box-sizing: border-box;
   gap: 12px;
   /* No run-up padding here on purpose. trackOffset() already centres the
      focused card against the measured strip width, and a padding would be
      added on TOP of that translate -- every card centred, and every one of them
      off by the padding. The pure function is the only authority for where the
      track sits. The first and last cards simply translate past the edge, which
-     the strip's overflow hides. */
+     the strip's overflow hides. VERTICAL padding only, for the same reason. */
   will-change: transform;
 }
 
-/* Compact in the strip: the header is competing with the cards for 208px, and
-   the cards are the reason the strip exists. */
+/* The strip's title bar (launch-polish L3, operator 2026-09-24): the panel's
+   label CENTRED, "Show Threads: (Here) (Everywhere)" to its left, "Sort By:
+   (...)" to its right. Three columns, the outer two equal, so the label sits
+   on the true centre whatever the sides hold; the sides hug the edges.
+
+   Its height is DECLARED (32px, border-box, border included) and so is its
+   line-height, because the strip's height is arithmetic on it
+   (threadStrip.ts THREAD_HEAD_H, compared by checks/threadStrip). Left to
+   inherit, the root's 18px/145% made this a 36px bar that nobody chose.
+
+   One row at every width: as the strip narrows the captions go first, then
+   the label ellipsizes. It never wraps, because a second row would crop the
+   card below it. */
 .tc-carousel-head {
-  padding: 5px 10px 4px !important;
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 10px !important;
   font-size: 11px;
+  line-height: 20px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
+  container-type: inline-size;
+  container-name: tc-threadlist-head;
 }
-.tc-carousel-head select,
-.tc-carousel-head button {
+.tc-threadlist-side {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.tc-threadlist-side[data-side='left'] { justify-self: start; }
+.tc-threadlist-side[data-side='right'] { justify-self: end; }
+.tc-threadlist-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--cpd-color-text-primary);
+}
+.tc-threadlist-caption {
+  color: var(--cpd-color-text-secondary);
   font-size: 11px;
+  margin-right: 1px;
+}
+/* The pills: Here, Everywhere, and the sort -- one shape for all three, so
+   the bar reads as one set of controls. */
+.tc-threadlist-pill {
+  box-sizing: border-box;
+  height: 20px;
+  font: inherit;
+  font-size: 11px;
+  line-height: 18px;
+  padding: 0 9px;
+  border-radius: 10px;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  background: transparent;
+  color: var(--cpd-color-text-secondary);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease, background-color 120ms ease;
+}
+.tc-threadlist-pill:hover { color: var(--cpd-color-text-primary); border-color: rgba(160, 160, 160, 0.6); }
+.tc-threadlist-pill[aria-pressed='true'] {
+  color: var(--cpd-color-text-primary);
+  background: var(--cpd-color-bg-subtle-secondary);
+  border-color: rgba(56, 224, 138, 0.45);
+}
+@supports (color: rgb(from white r g b / 1)) {
+  .tc-threadlist-pill[aria-pressed='true'] {
+    border-color: rgb(from var(--mod-accent) r g b / 0.45);
+  }
+}
+/* The sort pill is a native select wearing the pill: its list is drawn by the
+   browser, OUTSIDE the strip, so the strip's overflow cannot clip it -- a
+   custom menu here would need a portal to escape the same clip. The caret is
+   two gradient triangles, so no glyph and no asset. */
+.tc-threadlist-sort {
+  appearance: none;
+  -webkit-appearance: none;
+  color: var(--cpd-color-text-primary);
+  padding-right: 20px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 11px) 55%, calc(100% - 7px) 55%;
+  background-size: 4px 4px;
+  background-repeat: no-repeat;
+}
+.tc-threadlist-sort option {
+  background: var(--cpd-color-bg-canvas-default, #16181d);
+  color: var(--cpd-color-text-primary, #e6e9ef);
+}
+.tc-threadlist-close {
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  background: transparent;
+  color: var(--cpd-color-text-primary);
+  cursor: pointer;
+}
+@container tc-threadlist-head (max-width: 560px) {
+  .tc-threadlist-caption { display: none; }
+}
+@container tc-threadlist-head (max-width: 300px) {
+  .tc-threadlist-title { display: none; }
 }
 
 .tc-carousel-card {
+  /* border-box: 348 x 124 is the whole card, border included. Content-box made
+     it 350 x 126, which put the strip's arithmetic 2px short and trackOffset's
+     pitch 2px long per card -- the focused card sat 7px off-centre by the
+     fourth one. */
+  box-sizing: border-box;
   flex: 0 0 348px;
   width: 348px;
   height: 124px;
@@ -2301,6 +2398,12 @@ code {
   flex-direction: column;
   gap: 6px;
   height: 100%;
+  /* border-box and a stated line-height: in content-box, height 100% plus the
+     padding was 142px inside a 124px card, and the root's inherited 26px line
+     box pushed the content to 155 -- so the foot row (the new chip and the
+     author) was clipped off every card and had never been seen. */
+  box-sizing: border-box;
+  line-height: 1.3;
   padding: 9px 10px;
   cursor: pointer;
   color: var(--cpd-color-text-primary, #e6e9ef);
@@ -2495,6 +2598,53 @@ code {
   letter-spacing: 0;
   font-size: 10px;
   min-width: 0;
+}
+
+/* Pin (launch-polish L4): right-aligned in the foot. Shown on a card under the
+   pointer or holding focus, and always on a card that IS pinned, so the state
+   is visible without hunting for it. */
+.tc-tcard-pin {
+  margin-left: auto;
+  flex-shrink: 0;
+  font: inherit;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 14px;
+  padding: 1px 7px;
+  border-radius: 4px;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  background: transparent;
+  color: var(--cpd-color-text-secondary, #9aa4b2);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.tc-carousel-card:hover .tc-tcard-pin,
+.tc-tcard-pin:focus-visible,
+.tc-tcard-pin[aria-pressed='true'] {
+  opacity: 1;
+}
+.tc-tcard-pin:hover { color: var(--cpd-color-text-primary, #e6e9ef); border-color: rgba(160, 160, 160, 0.6); }
+.tc-tcard-pin[aria-pressed='true'] {
+  color: var(--mod-accent, #0ce92a);
+  border-color: rgba(56, 224, 138, 0.45);
+}
+/* A pinned card carries the accent down its leading edge, at any distance. */
+.tc-carousel-card[data-pinned='true'] .tc-tcard::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--mod-accent, #0ce92a);
+  opacity: 0.8;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tc-tcard-pin { transition: none; }
 }
 
 .tc-tcard-reading {

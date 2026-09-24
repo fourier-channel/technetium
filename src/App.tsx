@@ -30,7 +30,7 @@ import { useReadMarker } from './client/useReadMarker'
 import { useMediaTagSync } from './client/useMediaTags'
 import { DomainView } from './ui/DomainView'
 import { domainEnabled } from './client/domainMode'
-import { threadStripCss } from './ui/threadStrip'
+import { threadStripCss, DM_TAB_BESIDE_TITLE } from './ui/threadStrip'
 import { AuthLanding } from './onboarding/AuthLanding'
 import { AlphaBanner } from './ui/AlphaBanner'
 import { AvatarDisc } from './ui/AvatarDisc'
@@ -83,22 +83,13 @@ function App() {
   // the chat's bottom): how the dock, thread list and domain divide it.
   const colTop = Math.min(...(['dock', 'threads', 'main'] as const).filter((k) => space.leaves[k].open).map((k) => space.leaves[k].y0))
   const colH = Math.max(1e-6, space.leaves.main.y1 - colTop)
-  const threadsShare = space.leaves.threads.open ? (space.leaves.threads.y1 - space.leaves.threads.y0) / colH : 0
   const domainWidth = Math.round((space.leaves.domain.x1 - space.leaves.domain.x0) * vw)
   const dockShareOfMain = space.leaves.dock.open ? (space.leaves.dock.y1 - space.leaves.dock.y0) / colH : 0
-  // The thread list tile and its tab live INSIDE the chat column, which starts
-  // below the dock, so a share of the whole column has to be restated as a
-  // share of that parent before it becomes a CSS percentage. Without this the
-  // discount is applied twice: with a 28% dock open, a list the model sizes at
-  // 22% of the column rendered at 15.9%, leaving a 55px gap between the list
-  // and the chat that the model does not have.
-  const chatColumnShare = Math.max(1e-6, 1 - dockShareOfMain)
-  const threadsShareOfChatColumn = threadsShare / chatColumnShare
   // The strip's bottom edge, as ONE expression. The tile's height and the tab
-  // that rides that edge both take it, because it is the same edge -- see
-  // threadStrip.ts for why the layout's share alone made the strip too tall
-  // for the cards in it.
-  const threadStripH = threadStripCss(threadsShareOfChatColumn)
+  // that rides that edge both take it, because it is the same edge. It is the
+  // height of what the strip holds, not a share of the layout -- see
+  // threadStrip.ts for the dead space a share left around the cards.
+  const threadStripH = threadStripCss()
   const [settingsOpen, setSettingsOpen] = useState(false)
   // Domain mode is not offered unless this build or this browser says so --
   // see client/domainMode.ts. Read ONCE per mount rather than per render: the
@@ -298,8 +289,11 @@ function App() {
         {/* The dock's tab: on the region's top border when a DM is hidden
             (pull it down), on the dock's bottom border when it is out (push
             it up). The dock still opens on its own when a DM arrives. */}
+        {/* With the thread strip open, this border is the strip's title bar,
+            whose label sits on the centre (launch-polish L3) -- so the tab
+            steps left, clear of the label, rather than hanging over it. */}
         {dockRoom && !space.leaves.dock.open && (
-          <PullTab pull="down" target="dock" label="Direct message" onClick={() => showInDock(dockRoom)} style={{ top: 0, left: 'calc(50% - 40px)' }} />
+          <PullTab pull="down" target="dock" label="Direct message" onClick={() => showInDock(dockRoom)} style={{ top: 0, left: selectedRoom && threadListOpen ? DM_TAB_BESIDE_TITLE : 'calc(50% - 40px)' }} />
         )}
         {dockRoom && space.leaves.dock.open && (
           <PullTab pull="up" target="dock" label="Hide the direct message" onClick={closeDock} style={{ top: `${Math.round(dockShareOfMain * 1000) / 10}%`, marginTop: -12, left: 'calc(50% - 40px)' }} />

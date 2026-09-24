@@ -17,6 +17,8 @@ import { useNow } from './useNow'
 import { useDeferredThreadOrder, arrangeByCustom } from './threadOrder'
 import { useThreadDrag } from './threadDrag'
 import { orderScopeKey, loadCustomOrder, saveCustomOrder } from './threadOrderStore'
+import { applyPins, togglePin } from './threadPins'
+import { useThreadPins } from '../client/threadPinStore'
 import {
   useThreadList,
   threadListDefaults,
@@ -87,23 +89,37 @@ export function ThreadList({
   // D3 auto-resort etiquette: while the pointer is over the list (or scrolling),
   // hold the on-screen order; adopt the live data order on idle. Stats/pops
   // still update in place during the hold -- only POSITION is deferred.
-  const { entries: frozenEntries, handlers } = useDeferredThreadOrder(dataEntries)
+  const { entries: frozenEntries, handlers, release } = useDeferredThreadOrder(dataEntries)
 
   // In custom mode the user's arrangement wins (auto-resort/freeze is moot);
   // otherwise the sort+freeze pipeline drives order. New (unsaved) threads sort
   // to the top and are marked "new" (O3).
   const isCustom = sort === 'custom' && customOrder !== null
   const arranged = isCustom ? arrangeByCustom(dataEntries, customOrder) : null
-  const entries = arranged ? arranged.items : frozenEntries
+  const ordered = arranged ? arranged.items : frozenEntries
+  // Pinned threads go first whatever produced the order above, so they are
+  // applied LAST (threadPins.ts says why). Every consumer below -- the FLIP
+  // key, the drag, the focus, the keyboard, the render -- reads `entries`, so
+  // they all agree on where a pinned card is without knowing pins exist.
+  const { pins, toggle: togglePinStored } = useThreadPins(client)
+  const entries = applyPins(ordered, pins)
+  const pinnedIds = new Set(pins)
   const newIds = arranged ? arranged.newIds : EMPTY_NEW_IDS
 
   // Switching scope loads that scope's saved order (O2). If the new scope has no
   // saved custom order while in custom mode, fall back to the default sort.
+  // Both are deliberate acts, so the hover freeze is dropped and the new order
+  // shows at once rather than after the idle timer.
   const handleScope = (next: ThreadScope) => {
+    release()
     setScope(next)
     const loaded = loadCustomOrder(orderScopeKey(next, roomId))
     setCustomOrder(loaded)
     if (sort === 'custom' && !loaded) setSort(defaults.sort)
+  }
+  const handleSort = (next: SortMode) => {
+    release()
+    setSort(next)
   }
 
   // FLIP: any change to the ordered id list (sort switch, scope switch, an
@@ -236,6 +252,10 @@ export function ThreadList({
     if (axis === 'next') { step(1); return }
     if (axis === 'prev') { step(-1); return }
     if (isTypingTarget(e.target)) return
+    // A control inside the strip (a scope pill, a card's pin) answers its own
+    // Enter and Space. Without this the strip opened the focused thread
+    // instead of pressing the button the reader was on.
+    if (e.target !== e.currentTarget && (e.target as HTMLElement | null)?.closest?.('button, a')) return
     if (e.key === 'Home') { e.preventDefault(); setFocus(0) }
     else if (e.key === 'End') { e.preventDefault(); setFocus(count - 1) }
     else if (e.key === 'Enter' || e.key === ' ') {
@@ -263,15 +283,29 @@ export function ThreadList({
     [carousel, focus, handleSelect],
   )
 
-  const chip = (active: boolean): React.CSSProperties => ({
-    fontSize: 11,
-    padding: '2px 8px',
-    borderRadius: 10,
-    border: '1px solid rgba(128,128,128,0.35)',
-    background: active ? 'var(--cpd-color-bg-subtle-secondary)' : 'transparent',
-    color: 'var(--cpd-color-text-primary)',
-    cursor: 'pointer',
+  // Pin or unpin, and bring the card to the reader wherever it lands -- the
+  // results come to you, and a pinned card leaving from under the pointer for
+  // the far end of the strip would read as the card vanishing.
+  //
+  // Stable, because every tile compares it (threadTileEqual): the order and
+  // the pins are read from a mirror at click time rather than closed over,
+  // which would hand every card a new function on every render.
+  const pinOrderRef = useRef({ ordered, pins })
+  useEffect(() => {
+    pinOrderRef.current = { ordered, pins }
   })
+  const onTogglePin = useCallback(
+    (rid: string, rootId: string) => {
+      const id = flipIdOf(rid, rootId)
+      const cur = pinOrderRef.current
+      const landed = applyPins(cur.ordered, togglePin(cur.pins, id)).findIndex(
+        (e) => flipIdOf(e.roomId, e.rootId) === id,
+      )
+      togglePinStored(id)
+      if (carousel && landed >= 0) setFocus(landed)
+    },
+    [togglePinStored, carousel],
+  )
 
   return (
     <aside
@@ -293,45 +327,46 @@ export function ThreadList({
             }
       }
     >
+      {/* The title bar (launch-polish L3): the label centred, the scope to its
+          left, the sort to its right. The column layout keeps the same parts
+          in a wrapping row; only the strip has the room for three columns. */}
       <div
         className={carousel ? 'tc-carousel-head tc-panel-head' : 'tc-panel-head'}
-        style={{ padding: '10px 12px 6px' }}
+        style={
+          carousel
+            ? undefined
+            : { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, padding: '10px 12px 6px' }
+        }
       >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            flexWrap: carousel ? 'nowrap' : 'wrap',
-            fontWeight: 600,
-            fontSize: 13,
-            marginBottom: carousel ? 0 : 6,
-          }}
-        >
-          <span style={{ flexShrink: 0 }}>Threads</span>
-          {/* The scope chips ride on the title's line rather than below it.
-              In the strip that is a whole row of height back, and the strip is
-              short enough that a row is the difference between a card fitting
-              and being clipped. */}
+        <div className="tc-threadlist-side" data-side="left">
+          <span className="tc-threadlist-caption">Show Threads:</span>
           {roomId && (
-            <button type="button" style={chip(scope === 'room')} onClick={() => handleScope('room')}>
+            <button
+              type="button"
+              className="tc-threadlist-pill"
+              aria-pressed={scope === 'room'}
+              onClick={() => handleScope('room')}
+            >
               Here
             </button>
           )}
-          <button type="button" style={chip(scope === 'all')} onClick={() => handleScope('all')}>
+          <button
+            type="button"
+            className="tc-threadlist-pill"
+            aria-pressed={scope === 'all'}
+            onClick={() => handleScope('all')}
+          >
             Everywhere
           </button>
+        </div>
+        <div className="tc-threadlist-title">Thread Listing</div>
+        <div className="tc-threadlist-side" data-side="right">
+          <span className="tc-threadlist-caption">Sort By:</span>
           <select
+            className="tc-threadlist-pill tc-threadlist-sort"
+            aria-label="Sort threads by"
             value={sort}
-            onChange={(e) => setSort(e.target.value as SortMode)}
-            style={{
-              fontSize: 11,
-              background: 'transparent',
-              color: 'var(--cpd-color-text-primary)',
-              border: '1px solid rgba(128,128,128,0.35)',
-              borderRadius: 10,
-              padding: '2px 4px',
-            }}
+            onChange={(e) => handleSort(e.target.value as SortMode)}
           >
             <option value="latest-activity">Latest</option>
             <option value="created">Created</option>
@@ -339,26 +374,15 @@ export function ThreadList({
             {/* Custom appears once the user has drag-arranged an order (O1). */}
             {customOrder !== null && <option value="custom">Custom</option>}
           </select>
-          <span style={{ flex: 1 }} />
-          {/* The strip covers the top of the timeline, and the timeline's own
-              Threads toggle is up there under it -- so opening the strip hid
-              the only way to close it. It carries its own. */}
+          {/* Present only where the host has no other way to dismiss the list.
+              The strip has its tab, so it never passes one. */}
           {onClose && (
             <button
               type="button"
+              className="tc-threadlist-close"
               onClick={onClose}
               title="Hide threads"
               aria-label="Hide threads"
-              style={{
-                fontSize: 14,
-                lineHeight: 1,
-                padding: '2px 7px',
-                borderRadius: 6,
-                border: '1px solid rgba(128,128,128,0.35)',
-                background: 'transparent',
-                color: 'var(--cpd-color-text-primary)',
-                cursor: 'pointer',
-              }}
             >
               {'\u00D7'}
             </button>
@@ -391,7 +415,9 @@ export function ThreadList({
               item={e}
               active={e.rootId === activeRootId}
               showRoom={scope === 'all'}
-              isNew={newIds.has(flipIdOf(e.roomId, e.rootId))}
+              isNew={newIds.has(flipIdOf(e.roomId, e.rootId)) && !pinnedIds.has(flipIdOf(e.roomId, e.rootId))}
+              pinned={pinnedIds.has(flipIdOf(e.roomId, e.rootId))}
+              onTogglePin={onTogglePin}
               onSelect={onCardSelect}
               getCardHandlers={getCardHandlers}
               index={i}
@@ -415,6 +441,8 @@ function threadTileEqual(a: ThreadTileProps, b: ThreadTileProps): boolean {
     a.active !== b.active ||
     a.showRoom !== b.showRoom ||
     a.isNew !== b.isNew ||
+    a.pinned !== b.pinned ||
+    a.onTogglePin !== b.onTogglePin ||
     a.onSelect !== b.onSelect ||
     a.getCardHandlers !== b.getCardHandlers ||
     a.carousel !== b.carousel ||
@@ -452,6 +480,10 @@ interface ThreadTileProps {
   active: boolean
   showRoom: boolean
   isNew: boolean
+  // Held first whatever the sort (launch-polish L4). A pinned card is not
+  // draggable: its place is the pin's, and a drop would be overruled at once.
+  pinned: boolean
+  onTogglePin: (roomId: string, rootId: string) => void
   onSelect: (roomId: string, rootId: string, index: number) => void
   getCardHandlers: (id: string) => CardHandlers
   index: number
@@ -468,6 +500,8 @@ const ThreadTile = memo(function ThreadTile({
   active,
   showRoom,
   isNew,
+  pinned,
+  onTogglePin,
   onSelect,
   getCardHandlers,
   index,
@@ -507,9 +541,10 @@ const ThreadTile = memo(function ThreadTile({
   return (
     <div
       data-flip-id={flipIdOf(roomId, rootId)}
-      {...getCardHandlers(flipIdOf(roomId, rootId))}
+      {...(pinned ? {} : getCardHandlers(flipIdOf(roomId, rootId)))}
       className={carousel ? 'tc-carousel-card' : undefined}
       data-distance={carousel ? distance : undefined}
+      data-pinned={pinned ? 'true' : undefined}
       // Being READ and being under the reader's eyes are different things now
       // that the carousel is free to scroll away from the open thread. The card
       // has to say which one is open on its own, at any distance.
@@ -601,6 +636,21 @@ const ThreadTile = memo(function ThreadTile({
           <div className="tc-tcard-foot">
             {isNew && <span className="tc-tcard-chip tc-tcard-chip-new">new</span>}
             <span className="tc-tcard-chip tc-tcard-chip-author">{authorName}</span>
+            {/* Its own pointerdown and click stop here: the card's drag and
+                its focus-or-open must not also fire for a press on the pin. */}
+            <button
+              type="button"
+              className="tc-tcard-pin"
+              aria-pressed={pinned}
+              title={pinned ? 'Unpin: this thread sorts with the rest again' : 'Pin: keep this thread first, whatever the sort'}
+              onPointerDown={(ev) => ev.stopPropagation()}
+              onClick={(ev) => {
+                ev.stopPropagation()
+                onTogglePin(roomId, rootId)
+              }}
+            >
+              {pinned ? 'Pinned' : 'Pin'}
+            </button>
           </div>
         </div>
       ) : (

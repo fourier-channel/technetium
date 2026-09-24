@@ -12,6 +12,7 @@ import {
   MAX_VISUAL_DISTANCE,
 } from '../src/ui/carousel.ts'
 import { readFileSync } from 'node:fs'
+import { threadStripHeight, THREAD_HEAD_H } from '../src/ui/threadStrip.ts'
 
 let failures = 0
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -107,12 +108,13 @@ console.log('\n-- the card and the strip must agree --')
   check('and they agree too', tsGap === cssGap, [tsGap, cssGap])
 
   // The strip has to hold a whole card plus its one-row header. This has been
-  // budgeted for one of the two twice now.
-  const stripBlock = /\.tc-panel-top \{[^}]*\}/.exec(css)?.[0] ?? ''
-  const stripH = Number(/height: (\d+)px/.exec(stripBlock)?.[1] ?? 0)
+  // budgeted for one of the two twice now. It used to read a `.tc-panel-top`
+  // rule that no component rendered, so it stayed green whatever the real
+  // strip did; it now asks the module the strip's height actually comes from.
   const cardH = Number(/height: (\d+)px/.exec(cardBlock)?.[1] ?? 0)
+  const stripH = threadStripHeight()
   check('the strip is taller than the card it holds', stripH > cardH, [stripH, cardH])
-  check('...with room for a header as well', stripH - cardH >= 60, stripH - cardH)
+  check('...with room for its header as well', stripH - cardH >= THREAD_HEAD_H, [stripH - cardH, THREAD_HEAD_H])
 }
 
 if (failures > 0) {

@@ -151,6 +151,9 @@ export function arrangeByCustom(
 export function useDeferredThreadOrder(items: ThreadListItem[]): {
   entries: ThreadListItem[]
   handlers: IdleHandlers
+  // Drop the freeze now. For a deliberate act -- choosing a sort or a scope --
+  // which should show its result at once rather than after the idle timer.
+  release: () => void
 } {
   const [frozen, setFrozen] = useState<string[] | null>(null)
   const dataRef = useRef(items)
@@ -170,5 +173,5 @@ export function useDeferredThreadOrder(items: ThreadListItem[]): {
     [items, frozen],
   )
 
-  return { entries, handlers }
+  return { entries, handlers, release }
 }

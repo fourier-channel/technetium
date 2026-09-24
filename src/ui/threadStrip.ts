@@ -7,56 +7,79 @@
 // the card. On a 1080px screen 0.22 is 238px for about 150px of content: the
 // operator's "too tall for the cards that occupy it".
 //
-// A FLOOR EXISTED AND A CEILING DID NOT. space.ts MIN_PX.threads.y stops the
-// strip being shorter than its content. Nothing stopped it being taller,
-// because nothing here knew how tall the content was. This module is that
-// number, in one place, the way dmStrip.ts is the one place the DM faces'
-// geometry lives.
+// A CEILING WAS NOT ENOUGH. The first fix capped the share at the content's
+// height with min(), and got the content's height wrong: the header was
+// budgeted at 25px and rendered at 36, and the card's 1px border was left out
+// of its 124. So the cap cropped the card, clipped its shadow, and put the
+// Hide-threads tab on top of it. The strip is now exactly the sum of parts
+// that the CSS DECLARES, and nothing else.
 //
-// THE CARD HEIGHT IS ALSO IN index.css, and that is allowed rather than
-// sloppy: a value used by both arithmetic and CSS may live in two files
-// PROVIDED a check reads both and compares (D-tc01). checks/threadStrip
-// does exactly that, so the two cannot drift in silence -- which matters
-// here, because if they drifted the strip would crop its own cards.
+// EVERY PART IS ALSO IN index.css -- the card height, the header height, the
+// track's padding, the tab's height -- and that is allowed rather than sloppy:
+// a value used by both arithmetic and CSS may live in two files PROVIDED a
+// check reads both and compares (D-tc01). checks/threadStrip does, so they
+// cannot drift in silence, which matters here because a drift crops the card.
 
-/** .tc-carousel-card height in index.css. The check asserts they agree. */
+/**
+ * .tc-carousel-card height in index.css, OUTER: the card is border-box, so
+ * this is the whole box, border included. The check asserts they agree.
+ */
 export const THREAD_CARD_H = 124
 
 /**
- * .tc-carousel-head: padding 5px top, 4px bottom, one line of 11px text.
+ * .tc-carousel-head height in index.css, border included (border-box).
  *
- * Measured from the rule rather than guessed, and deliberately a little
- * generous: too small here crops the header, which is worse than a pixel of
- * slack, and the whole point is to stop the slack being fifty.
+ * DECLARED, not estimated. The first version of this module budgeted 25px for
+ * "one line of 11px text" while the header actually rendered at 36px: the
+ * root's `font: 18px/145%` is inherited as a computed 26px line box by every
+ * element that does not set its own, so the header's real height was the
+ * font's business rather than anybody's decision. The CSS now states a
+ * height and a line-height, and the check compares the two numbers.
  */
-export const THREAD_HEAD_H = 5 + 16 + 4
+export const THREAD_HEAD_H = 32
+
+/** Air between the header and the card. */
+export const THREAD_TRACK_PAD_TOP = 8
 
 /**
- * Air around the card so it is not welded to the header and the border.
- * The strip's own border-bottom is 1px; the rest is breathing room.
+ * Air between the card and the strip's bottom edge. The "Hide threads" tab
+ * (12px) rides INSIDE that edge, so this is the tab's lane plus clearance --
+ * less than that and the tab sits on the focused card, which is centred
+ * under it by construction.
  */
-export const THREAD_STRIP_PAD = 10
+export const THREAD_TRACK_PAD_BOTTOM = 16
 
-/** What the strip needs, and past which extra height is only empty space. */
+/** The tab's height, index.css .tc-pulltab; the check compares them. */
+export const PULLTAB_H = 12
+
+/** What the strip is: its header, one card, and the air around it. */
 export function threadStripHeight(): number {
-  return THREAD_HEAD_H + THREAD_CARD_H + THREAD_STRIP_PAD
+  return THREAD_HEAD_H + THREAD_TRACK_PAD_TOP + THREAD_CARD_H + THREAD_TRACK_PAD_BOTTOM
 }
 
 /**
- * The strip's height as CSS: the layout's share, but never taller than the
- * content needs.
+ * The strip's height as CSS.
+ *
+ * A fixed number, and no longer a share of the layout. The share only ever
+ * produced one of two faults: taller than the card, and the surplus became
+ * dead space above and below it (operator, 2026-09-24: "Look at all that dead
+ * space above and below the thread cards"); shorter, and it cropped the card.
+ * Nothing in the interface resizes the strip, so there was never a size the
+ * user chose for it to honour.
  *
  * ONE STRING, USED TWICE. The tile's height and the pull-tab that rides the
- * tile's bottom edge both take this, because they are the same edge. They were
- * two expressions of one number before -- the tab read the raw percentage --
- * and capping only the tile would have left the tab floating in space below
- * it, which is the exact shape of bug dmStrip.ts was written to end.
- *
- * min() rather than a measured pixel height because both the percentage and
- * the cap resolve against the same containing block, so no JavaScript has to
- * know the viewport to keep them consistent.
+ * tile's bottom edge both take this, because they are the same edge.
  */
-export function threadStripCss(shareOfColumn: number): string {
-  const pct = Math.round(shareOfColumn * 1000) / 10
-  return `min(${pct}%, ${threadStripHeight()}px)`
+export function threadStripCss(): string {
+  return `${threadStripHeight()}px`
 }
+
+/**
+ * Where the DM dock's pull-down tab sits while the strip is open. The dock's
+ * closed-state tab hangs from the region's top border, and with the strip
+ * open that border is the strip's title bar, whose label is centred. At its
+ * usual 50% - 40px the 46px tab covers the label's left half; here its centre
+ * is the label's half-width (about 48px), a 12px gap and its own half-width
+ * (23px) left of centre, rounded out.
+ */
+export const DM_TAB_BESIDE_TITLE = 'calc(50% - 90px)'

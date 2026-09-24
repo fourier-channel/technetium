@@ -1,0 +1,91 @@
+<!doctype html><html><head>
+<!--#head-->
+<title>Thread strip -- header, cards, pins, tabs</title>
+<style>
+  /* Harness only. Reproduces App.tsx's column around the strip: <main> is the
+     positioned ancestor of the DM tab, the chat column of the threads tab.
+     Markup copied from ThreadList.tsx; if that markup changes, this page is
+     stale -- it proves what the stylesheet does with THIS markup, no more. */
+  .h-main { position: relative; overflow: hidden; display: flex; flex-direction: column; }
+  .h-col { position: relative; display: flex; flex-direction: column; }
+  .h-chat { height: 46px; padding: 8px 16px; font: 600 16px var(--tc-ui-font); opacity: .6; }
+  .h-card-hover .tc-tcard-pin { opacity: 1; }
+</style>
+</head><body><div id="root">
+<div class="h-main">
+  <!-- the DM tab, stepped clear of the title while the strip is open -->
+  <button type="button" class="tc-pulltab" data-pull="down" style="top:0;left:calc(50% - 90px)"><span class="tc-pulltab-chevron">v</span></button>
+  <div class="h-col">
+    <button type="button" class="tc-pulltab" data-pull="up" style="top:180px;margin-top:-12px;left:calc(50% + 40px)"><span class="tc-pulltab-chevron">^</span></button>
+    <div class="tc-threads-tile" style="height:180px">
+      <aside class="tc-carousel" style="display:flex;flex-direction:column;min-width:0">
+        <div class="tc-carousel-head tc-panel-head">
+          <div class="tc-threadlist-side" data-side="left">
+            <span class="tc-threadlist-caption">Show Threads:</span>
+            <button type="button" class="tc-threadlist-pill" aria-pressed="true">Here</button>
+            <button type="button" class="tc-threadlist-pill" aria-pressed="false">Everywhere</button>
+          </div>
+          <div class="tc-threadlist-title">Thread Listing</div>
+          <div class="tc-threadlist-side" data-side="right">
+            <span class="tc-threadlist-caption">Sort By:</span>
+            <select class="tc-threadlist-pill tc-threadlist-sort" aria-label="Sort threads by">
+              <option>Latest</option><option selected>Replies</option>
+            </select>
+          </div>
+        </div>
+        <div class="tc-carousel-track" id="track">
+          <div class="tc-carousel-card" data-distance="1" data-pinned="true">
+            <div class="tc-tcard"><div class="tc-tcard-top">
+              <div class="tc-tcard-cover" data-nocover="true">no
+image</div>
+              <div class="tc-tcard-main">
+                <div class="tc-tcard-idrow"><span class="tc-tcard-room">under construction (booru)</span><span class="tc-tcard-date">May 26, 21:06</span></div>
+                <div class="tc-tcard-title">Pinned thread, first whatever the sort</div>
+                <div class="tc-tcard-times"><div class="tc-tcard-tcol"><span>first</span><b>May 26, 21:06</b></div><div class="tc-tcard-tcol"><span>last</span><b>May 26, 21:06</b></div></div>
+                <div class="tc-tcard-meters"><span class="tc-stat"><span style="font-size:10px">2 . 1 . 1</span></span></div>
+              </div>
+              <div class="tc-tcard-life" data-live="false"><span class="tc-tcard-pulse"></span><b>120d</b></div>
+            </div>
+            <div class="tc-tcard-foot"><span class="tc-tcard-chip tc-tcard-chip-author">saber</span><button type="button" class="tc-tcard-pin" aria-pressed="true">Pinned</button></div></div>
+          </div>
+          <div class="tc-carousel-card h-card-hover" data-distance="0">
+            <div class="tc-tcard"><div class="tc-tcard-top">
+              <div class="tc-tcard-cover" data-nocover="true">no
+image</div>
+              <div class="tc-tcard-main">
+                <div class="tc-tcard-idrow"><span class="tc-tcard-room">modsmodsmods</span><span class="tc-tcard-date">May 25, 16:02</span></div>
+                <div class="tc-tcard-title">Master URL for the project index</div>
+                <div class="tc-tcard-times"><div class="tc-tcard-tcol"><span>first</span><b>May 25, 16:02</b></div><div class="tc-tcard-tcol"><span>last</span><b>May 25, 16:02</b></div></div>
+                <div class="tc-tcard-meters"><span class="tc-stat"><span style="font-size:10px">2 . 1</span></span></div>
+              </div>
+              <div class="tc-tcard-life" data-live="false"><span class="tc-tcard-pulse"></span><b>121d 5h</b></div>
+            </div>
+            <div class="tc-tcard-foot"><span class="tc-tcard-chip tc-tcard-chip-new">new</span><span class="tc-tcard-chip tc-tcard-chip-author">modsmodsmods</span><button type="button" class="tc-tcard-pin" aria-pressed="false">Pin</button></div></div>
+          </div>
+          <div class="tc-carousel-card" data-distance="1">
+            <div class="tc-tcard"><div class="tc-tcard-top">
+              <div class="tc-tcard-cover" data-nocover="true">no
+image</div>
+              <div class="tc-tcard-main">
+                <div class="tc-tcard-idrow"><span class="tc-tcard-room">general</span><span class="tc-tcard-date">May 24, 11:40</span></div>
+                <div class="tc-tcard-title">A third card</div>
+                <div class="tc-tcard-times"><div class="tc-tcard-tcol"><span>first</span><b>May 24, 11:40</b></div><div class="tc-tcard-tcol"><span>last</span><b>May 24, 12:02</b></div></div>
+                <div class="tc-tcard-meters"><span class="tc-stat"><span style="font-size:10px">5 . 2</span></span></div>
+              </div>
+              <div class="tc-tcard-life" data-live="true"><span class="tc-tcard-pulse"></span><b>4m</b></div>
+            </div>
+            <div class="tc-tcard-foot"><span class="tc-tcard-chip tc-tcard-chip-author">someone</span><button type="button" class="tc-tcard-pin" aria-pressed="false">Pin</button></div></div>
+          </div>
+        </div>
+      </aside>
+    </div>
+    <div class="h-chat">under construction (booru)</div>
+  </div>
+</div>
+<script>
+  // Centre the middle card the way trackOffset does: viewport/2 - centre(1).
+  const t = document.getElementById('track')
+  const w = t.parentElement.clientWidth
+  t.style.transform = `translateX(${w / 2 - (1 * (348 + 12) + 348 / 2)}px)`
+</script>
+</div></body></html>
