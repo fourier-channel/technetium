@@ -4,7 +4,14 @@ import { useClient } from '../client/clientContextValue'
 import { useFlipList, flipIdOf, type FlipControl } from './flip'
 import { usePopOnIncrease } from './pop'
 import { useReducedMotion } from './reducedMotion'
-import { stepFocus, trackOffset, visualDistance } from './carousel'
+import {
+  stepFocus,
+  trackOffset,
+  visualDistance,
+  wheelStep,
+  WHEEL_IDLE,
+  type WheelState,
+} from './carousel'
 import { formatCardWhen, formatDuration, isRecent } from './threadCardFormat'
 import { useNow } from './useNow'
 import { useDeferredThreadOrder, arrangeByCustom } from './threadOrder'
@@ -201,20 +208,19 @@ export function ThreadList({
     setFocus((f) => stepFocus(f, delta, count))
   }, [count])
 
-  // Wheel steps rather than scrolls. A trackpad emits a stream of small deltas,
-  // so they are accumulated to a threshold and then spent -- otherwise one
-  // flick crosses the entire list and the reader has no idea where they are.
-  const wheelAcc = useRef(0)
+  // Wheel steps rather than scrolls, one card per notch. The rule is wheelStep
+  // in carousel.ts, where the check suite can hold it; this only feeds it.
+  const wheelState = useRef<WheelState>(WHEEL_IDLE)
   const onWheel = useCallback((e: React.WheelEvent) => {
     if (!carousel) return
-    const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
-    wheelAcc.current += d
-    const THRESHOLD = 40
-    while (Math.abs(wheelAcc.current) >= THRESHOLD) {
-      const dir = wheelAcc.current > 0 ? 1 : -1
-      wheelAcc.current -= dir * THRESHOLD
-      step(dir)
-    }
+    const r = wheelStep(wheelState.current, {
+      dx: e.deltaX,
+      dy: e.deltaY,
+      mode: e.deltaMode,
+      t: e.timeStamp,
+    })
+    wheelState.current = r.state
+    if (r.step) step(r.step)
   }, [carousel, step])
 
   // Not memoized: it goes on a DOM element, so a stable identity buys nothing,
