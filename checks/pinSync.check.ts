@@ -176,6 +176,18 @@ console.log('\n-- another device changes the pins --')
   check('and nothing is written back', w.puts === 0, w.puts)
 }
 
+console.log('\n-- update: a whole-list change goes through the same one-at-a-time path --')
+{
+  const w = world(['A'])
+  const s = start(w)
+  s.update((cur) => [...cur, 'B', 'C'])
+  s.update((cur) => cur.filter((x) => x !== 'A'))
+  check('only one write in flight', w.queued() === 1, w.queued())
+  await w.land(); await w.echo()
+  while (w.queued()) { await w.land(); await w.echo() }
+  check('the server ends with the last wish', eq(w.server, ['B', 'C']), w.server)
+}
+
 console.log('\n-- the snapshot is stable while nothing changes --')
 {
   const w = world(['A'])

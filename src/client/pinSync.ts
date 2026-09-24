@@ -44,6 +44,8 @@ export interface PinPort {
 export interface PinSync {
   snapshot: () => readonly string[]
   toggle: (id: string) => void
+  /** Replace the list with what `fn` makes of the current one. */
+  update: (fn: (current: readonly string[]) => readonly string[]) => void
   /** The stored content changed (an echo, or another device). */
   onStored: () => void
   subscribe: (cb: () => void) => () => void
@@ -140,6 +142,11 @@ export function makePinSync(port: PinPort): PinSync {
     snapshot: () => pending ?? stored(),
     toggle(id) {
       pending = togglePin(pending ?? stored(), id)
+      notify()
+      pump()
+    },
+    update(fn) {
+      pending = fn(pending ?? stored())
       notify()
       pump()
     },

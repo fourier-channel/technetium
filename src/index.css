@@ -1991,10 +1991,44 @@ code {
    it, and every later step centred 1500px wrong because trackOffset assumes
    the strip never scrolls. `hidden` stays first for a browser without clip. */
 .tc-carousel {
+  position: relative;
   height: 100%;
   overflow: hidden;
   overflow: clip;
   outline: none;
+}
+/* The pushpin at the strip's left end (launch-polish L4): pinned threads are
+   out by default; this folds them away or brings them back. Over the track,
+   so the carousel can slide cards under it; its top is set from threadStrip's
+   numbers by ThreadList, centring it on the card row. */
+.tc-pinfold {
+  position: absolute;
+  left: 6px;
+  z-index: 4;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  min-width: 28px;
+  justify-content: center;
+  padding: 0 7px;
+  border-radius: 14px;
+  border: 1px solid rgba(128, 128, 128, 0.4);
+  background: var(--cpd-color-bg-canvas-default, #16181d);
+  color: var(--cpd-color-text-secondary, #9aa4b2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+.tc-pinfold:hover { color: var(--cpd-color-text-primary, #e6e9ef); border-color: rgba(160, 160, 160, 0.6); }
+/* Out: the pin is lit. Folded: it is quiet and carries the count it holds. */
+.tc-pinfold[aria-pressed='true'] {
+  color: var(--mod-accent, #0ce92a);
+  border-color: rgba(56, 224, 138, 0.45);
 }
 .tc-carousel:focus-visible {
   box-shadow: inset 0 0 0 2px var(--tc-link);

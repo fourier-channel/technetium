@@ -15,7 +15,9 @@ import {
 import { formatCardWhen, formatDuration, isRecent } from './threadCardFormat'
 import { useNow } from './useNow'
 import { useDeferredThreadOrder } from './threadOrder'
-import { applyPins } from './threadPins'
+import { arrangePinned, partitionPinned } from './threadPins'
+import { usePinnedFold } from '../client/pinnedFold'
+import { THREAD_CARD_H, THREAD_HEAD_H, THREAD_TRACK_PAD_TOP } from './threadStrip'
 import {
   canPinThreads,
   threadPinsOf,
@@ -107,16 +109,20 @@ export function ThreadList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [client, roomId, ordered, pinsVersion],
   )
-  const entries = applyPins(ordered, pinned)
+  // Pinned threads this person folded away behind the pushpin are out of the
+  // track altogether; the rest lead it.
+  const { folded, fold, unfold } = usePinnedFold(client)
+  const pinParts = partitionPinned(pinned, folded)
+  const entries = arrangePinned(ordered, pinned, folded)
   const pinnedIds = new Set(pinned)
   const myUserId = client?.getUserId() ?? null
 
   // The order as of the last render, for the pin handler to read at click
   // time: closing over it would hand every card a new function on every render
   // (threadTileEqual compares them).
-  const orderRef = useRef({ ordered, roomId })
+  const orderRef = useRef({ ordered, roomId, folded })
   useEffect(() => {
-    orderRef.current = { ordered, roomId }
+    orderRef.current = { ordered, roomId, folded }
   })
 
   // Choosing a scope or a sort is a deliberate act, so the hover freeze is
@@ -293,7 +299,7 @@ export function ThreadList({
       toggleThreadPin(client, rid, rootId)
       const cur = orderRef.current
       const id = flipIdOf(rid, rootId)
-      const landed = applyPins(cur.ordered, pinnedFlipIds(client, cur.roomId, cur.ordered)).findIndex(
+      const landed = arrangePinned(cur.ordered, pinnedFlipIds(client, cur.roomId, cur.ordered), cur.folded).findIndex(
         (e) => flipIdOf(e.roomId, e.rootId) === id,
       )
       if (carousel && landed >= 0) setFocus(landed)
@@ -381,6 +387,27 @@ export function ThreadList({
           )}
         </div>
       </div>
+      {/* The pushpin at the strip's left end: pinned threads are out by
+          default, and this folds them away (and they stop pulling the strip
+          down) or brings them back, with the count it is holding. Centred on
+          the card row from the strip's own numbers. */}
+      {carousel && pinned.length > 0 && (
+        <button
+          type="button"
+          className="tc-pinfold"
+          aria-pressed={pinParts.visible.length > 0}
+          style={{ top: THREAD_HEAD_H + THREAD_TRACK_PAD_TOP + THREAD_CARD_H / 2 }}
+          title={
+            pinParts.visible.length > 0
+              ? `Fold away ${pinParts.visible.length === 1 ? 'the pinned thread' : `the ${pinParts.visible.length} pinned threads`}: they wait behind this pin and stop opening the strip`
+              : `Show ${pinParts.folded.length === 1 ? 'the pinned thread' : `the ${pinParts.folded.length} pinned threads`}`
+          }
+          onClick={() => (pinParts.visible.length > 0 ? fold(pinParts.visible) : unfold(pinParts.folded))}
+        >
+          <PushpinIcon size={13} />
+          {pinParts.folded.length > 0 && <span className="tc-pinfold-n">{pinParts.folded.length}</span>}
+        </button>
+      )}
       <div
         ref={listRef}
         {...handlers}

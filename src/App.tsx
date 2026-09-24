@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Room } from 'matrix-js-sdk'
 import { useClient } from './client/clientContextValue'
 import { Sidebar } from './ui/Sidebar'
@@ -31,6 +31,10 @@ import { useMediaTagSync } from './client/useMediaTags'
 import { DomainView } from './ui/DomainView'
 import { domainEnabled } from './client/domainMode'
 import { threadStripCss, DM_TAB_BESIDE_TITLE } from './ui/threadStrip'
+import { threadPinsOf, useThreadPinsVersion } from './client/threadPinState'
+import { usePinnedFold } from './client/pinnedFold'
+import { partitionPinned, stripOpensForPins } from './ui/threadPins'
+import { flipIdOf } from './ui/flip'
 import { AuthLanding } from './onboarding/AuthLanding'
 import { AlphaBanner } from './ui/AlphaBanner'
 import { AvatarDisc } from './ui/AvatarDisc'
@@ -158,6 +162,31 @@ function App() {
   // Gated on the dock actually being OPEN, keeping useReadMarker's own rule
   // that nothing is cleared while nobody can see it.
   useReadMarker(client, space.leaves.dock.open ? dockRoom : null)
+  // Pinned threads start OUT (operator, 2026-09-24: "Pinned threads would
+  // start open by default, and hideable behind a Pushpin icon"): entering a
+  // room whose pinned threads this person has not folded away pulls the thread
+  // strip down, once per entry -- so a newcomer landing in #chat sees the
+  // Welcome thread at the front of it. Closing the strip is still theirs;
+  // folding the pins behind the strip's pushpin is what stops it opening.
+  // Re-run when pins or folds arrive, because both come with sync, a moment
+  // after the room does.
+  const pinsVersion = useThreadPinsVersion(client)
+  const { folded: foldedPins } = usePinnedFold(client)
+  const pinsOpenedFor = useRef<string | null>(null)
+  const pinsRoomSeen = useRef<string | null>(null)
+  const selectedRoomId = selectedRoom?.roomId ?? null
+  useEffect(() => {
+    if (selectedRoomId !== pinsRoomSeen.current) {
+      pinsRoomSeen.current = selectedRoomId
+      pinsOpenedFor.current = null
+    }
+    if (!selectedRoomId) return
+    const pinned = threadPinsOf(client, selectedRoomId).map((root) => flipIdOf(selectedRoomId, root))
+    const visible = partitionPinned(pinned, foldedPins).visible.length
+    if (!stripOpensForPins(selectedRoomId, pinsOpenedFor.current, visible)) return
+    pinsOpenedFor.current = selectedRoomId
+    if (!space.leaves.threads.open) queueMicrotask(() => openThreadList())
+  }, [client, selectedRoomId, pinsVersion, foldedPins, space.leaves.threads.open, openThreadList])
   // Ticker collapse follows the user via account data. Same hook-order rule.
   const [tickerCollapsed, setTickerCollapsed] = useTickerCollapsed(client)
   // Keep the media-tag store fed from room state for every room, so any image

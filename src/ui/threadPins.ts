@@ -77,3 +77,65 @@ export function applyPins<T extends { roomId: string; rootId: string }>(
   return [...first, ...items.filter((it) => !taken.has(flipIdOf(it.roomId, it.rootId)))]
 }
 
+
+/**
+ * Split the pinned threads into those shown and those this person has folded
+ * away behind the pushpin (operator, 2026-09-24: pinned threads "start open
+ * by default, and hideable behind a Pushpin icon"). A folded id that is no
+ * longer pinned folds nothing: unpinning returns a thread to the list.
+ */
+export function partitionPinned(
+  pinned: readonly string[],
+  folded: readonly string[],
+): { visible: string[]; folded: string[] } {
+  const hidden = new Set(folded)
+  return {
+    visible: pinned.filter((id) => !hidden.has(id)),
+    folded: pinned.filter((id) => hidden.has(id)),
+  }
+}
+
+/**
+ * The list with the folded pinned threads taken out entirely -- folded means
+ * behind the pushpin, not back in the ordinary order -- and the visible ones
+ * first. Returns the same array when nothing is folded or pinned.
+ */
+export function arrangePinned<T extends { roomId: string; rootId: string }>(
+  items: T[],
+  pinned: readonly string[],
+  folded: readonly string[],
+): T[] {
+  const part = partitionPinned(pinned, folded)
+  if (part.folded.length === 0) return applyPins(items, part.visible)
+  const gone = new Set(part.folded)
+  return applyPins(items.filter((it) => !gone.has(flipIdOf(it.roomId, it.rootId))), part.visible)
+}
+
+/** How many ids the fold list keeps; the oldest go first. */
+export const FOLD_KEEP = 200
+
+/** Fold these ids away (appended, de-duplicated, capped). */
+export function foldIds(current: readonly string[], ids: readonly string[]): string[] {
+  const out = current.filter((id) => !ids.includes(id))
+  out.push(...ids)
+  return out.slice(Math.max(0, out.length - FOLD_KEEP))
+}
+
+/** Bring these ids back. */
+export function unfoldIds(current: readonly string[], ids: readonly string[]): string[] {
+  return current.filter((id) => !ids.includes(id))
+}
+
+/**
+ * Should entering this room pull the thread strip down? Once per entry, and
+ * only when the room has pinned threads this person has not folded away.
+ * `openedFor` is the room it last opened for, so pins arriving a moment after
+ * the room (they come with sync) still open it, but only the once.
+ */
+export function stripOpensForPins(
+  roomId: string | null | undefined,
+  openedFor: string | null,
+  visiblePinned: number,
+): boolean {
+  return !!roomId && roomId !== openedFor && visiblePinned > 0
+}

@@ -8,7 +8,10 @@
 // hover freeze -- is asserted against ThreadList.tsx, because the wrong order
 // there is the likeliest way to break the promise while every pure test
 // still passes.
-import { applyPins, parsePins, togglePin, NO_PINS } from '../src/ui/threadPins.ts'
+import {
+  applyPins, arrangePinned, foldIds, partitionPinned, parsePins, stripOpensForPins, togglePin, unfoldIds,
+  FOLD_KEEP, NO_PINS,
+} from '../src/ui/threadPins.ts'
 import { readFileSync } from 'node:fs'
 
 let failures = 0
@@ -74,11 +77,61 @@ console.log('\n-- stored content is read loudly, never half-read --')
   check('an empty-string entry refuses the whole list', parsePins({ pins: [id(a), ''] }) === null)
 }
 
+console.log('\n-- pinned threads start out, and fold away behind the pushpin --')
+{
+  // Operator, 2026-09-24: "Pinned threads would start open by default, and
+  // hideable behind a Pushpin icon." Chosen reading: in the thread strip.
+  const pins = [id(c), id(e)]
+  const shown = arrangePinned(list, pins, NO_PINS)
+  check('unfolded: the pinned threads lead', ids(shown).slice(0, 2).join() === pins.join(), ids(shown))
+  const folded = arrangePinned(list, pins, [id(c)])
+  check('a folded pinned thread is out of the strip altogether, not back in the order',
+    !ids(folded).includes(id(c)) && ids(folded)[0] === id(e), ids(folded))
+  check('folding every pin leaves the ordinary list without them',
+    ids(arrangePinned(list, pins, pins)).join() === ids([a, b, d]).join(), ids(arrangePinned(list, pins, pins)))
+  check('a folded id that is no longer pinned folds nothing (unpinning returns it)',
+    ids(arrangePinned(list, [id(e)], [id(c)])).includes(id(c)))
+  const part = partitionPinned(pins, [id(e), id(T('!x', '$gone'))])
+  check('the partition counts only pinned threads', part.visible.join() === id(c) && part.folded.join() === id(e), part)
+  check('nothing pinned, nothing folded: the same array', arrangePinned(list, NO_PINS, [id(c)]) === list)
+}
+
+console.log('\n-- the fold list stays small and exact --')
+{
+  const f = foldIds(foldIds(NO_PINS, ['x', 'y']), ['y', 'z'])
+  check('folding appends, without duplicates', f.join() === 'x,y,z', f)
+  check('unfolding removes only those', unfoldIds(f, ['y']).join() === 'x,z', unfoldIds(f, ['y']))
+  const many = foldIds(NO_PINS, Array.from({ length: FOLD_KEEP + 50 }, (_, i) => 'id' + i))
+  check(`it keeps at most ${FOLD_KEEP}, dropping the oldest`, many.length === FOLD_KEEP && many[0] === 'id50', many.length)
+}
+
+console.log('\n-- entering a room with pins pulls the strip down, once per entry --')
+{
+  check('a room with unfolded pins opens it', stripOpensForPins('!chat', null, 1))
+  check('not again for the same entry (closing it sticks)', !stripOpensForPins('!chat', '!chat', 1))
+  check('not when every pin is folded away', !stripOpensForPins('!chat', null, 0))
+  check('not without a room', !stripOpensForPins(null, null, 3))
+  const app = readFileSync('src/App.tsx', 'utf8')
+  check('App asks the rule with the room\'s pins and this person\'s folds',
+    /partitionPinned\(pinned, foldedPins\)\.visible\.length/.test(app) &&
+    /stripOpensForPins\(selectedRoomId, pinsOpenedFor\.current, visible\)/.test(app))
+  check('a new room forgets the last entry, so returning to #chat opens it again',
+    /if \(selectedRoomId !== pinsRoomSeen\.current\) \{\s*\n\s*pinsRoomSeen\.current = selectedRoomId\s*\n\s*pinsOpenedFor\.current = null/.test(app))
+  const ts = readFileSync('src/ui/ThreadList.tsx', 'utf8')
+  check('the strip arranges through arrangePinned with this person\'s folds',
+    /const entries = arrangePinned\(ordered, pinned, folded\)/.test(ts))
+  check('the pushpin folds what is out and brings back what is folded',
+    /pinParts\.visible\.length > 0 \? fold\(pinParts\.visible\) : unfold\(pinParts\.folded\)/.test(ts))
+  const fold = readFileSync('src/client/pinnedFold.ts', 'utf8')
+  check('folds are this person\'s, in account data, written through pinSync',
+    /net\.41chan\.tc\.pinned_folded/.test(fold) && /makePinSync\(/.test(fold) && (fold.match(/setAccountData\(/g) ?? []).length === 1)
+}
+
 console.log('\n-- ThreadList applies the room pins LAST, and every consumer reads the result --')
 {
   const ts = readFileSync('src/ui/ThreadList.tsx', 'utf8')
-  check('entries is applyPins over the frozen order and the rooms\' pins',
-    /const ordered = frozenEntries/.test(ts) && /const entries = applyPins\(ordered, pinned\)/.test(ts))
+  check('entries is the frozen order with the rooms\' pins arranged in LAST',
+    /const ordered = frozenEntries/.test(ts) && /const entries = arrangePinned\(ordered, pinned, folded\)/.test(ts))
   check('nothing re-derives entries after the pins', (ts.match(/const entries = /g) ?? []).length === 1)
   check('the pins are read from room state, not from the viewer\'s own data',
     /threadPinsOf\(client, r\)/.test(ts) && !/useThreadPins\(/.test(ts))
