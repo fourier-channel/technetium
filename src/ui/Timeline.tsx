@@ -26,6 +26,7 @@ import { linkify } from './linkify'
 import { useChatBackground } from './chatBackground'
 import { ChatBackdrop, ChatBackgroundMenu } from './ChatBackground'
 import { MediaTags } from './MediaTags'
+import { roomCarriesTags } from '../client/useMediaTags'
 import { useMediaTagPrefs } from './mediaTagSettings'
 import { useMessageActions } from './messageActions'
 import { MessageActionBar } from './MessageActionBar'
@@ -636,7 +637,7 @@ export function Row({
               onClick={() => open([{ mxc, roomId, ...imageMeta(event) }], 0, thread)}
             />
           </div>
-          <MediaTags mxc={mxc} roomId={event.getRoomId()} />
+          <MediaTags mxc={mxc} roomId={event.getRoomId()} reserve={roomCarriesTags(client?.getRoom(roomId))} />
         </div>
       )
     } else {

@@ -50,8 +50,3 @@ export function placeUnfurl(anchor: AnchorRect, size: Size, vp: Size, margin = P
   y = Math.max(margin, y)
   return { x: Math.round(x), y: Math.round(y), maxH }
 }
-
-/** Is any part of the anchor inside the box it scrolls within? */
-export function anchorVisible(anchor: AnchorRect, within: AnchorRect): boolean {
-  return anchor.bottom > within.top && anchor.top < within.bottom && anchor.right > within.left && anchor.left < within.right
-}

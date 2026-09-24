@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
-import { anchorVisible, placeUnfurl } from './popupPlacement'
+import { placeUnfurl } from './popupPlacement'
 import { isTypingTarget } from './axisKeys'
 
 // ---------------------------------------------------------------------------
@@ -14,34 +14,28 @@ import { isTypingTarget } from './axisKeys'
 // portalled to <body> and placed in window coordinates by popupPlacement's
 // pure rule, and it may cover the user list or anything else beside it.
 //
-// ATTACHED, NOT DROPPED: it follows its control while the page scrolls or
-// resizes (the timeline re-pins itself whenever an image loads, so closing on
-// every scroll would close it spuriously), and it closes only when the control
-// is gone or scrolled out of its own scroller's view -- a popup floating over
-// the header, attached to nothing on screen, would be a lie about what it
-// belongs to.
+// ATTACHED, NOT DROPPED: it follows its control however the control moves --
+// a scroll, a resize, a carousel sliding its cards by transform -- and it
+// closes only when the control is gone or clipped out of view. A popup
+// floating over the header, attached to nothing on screen, would be a lie
+// about what it belongs to.
 //
 // Positioned IMPERATIVELY, from a layout effect and animation-frame
-// callbacks, never through React state: a scroll is dozens of events a second
-// and none of them should re-render the popup's contents (G-tc01 also forbids
+// callbacks, never through React state: it moves every frame the control does
+// and none of that should re-render the popup's contents (G-tc01 also forbids
 // setting state synchronously in the effect that measures).
 //
 // PORTAL EVENTS STILL BUBBLE THROUGH THE REACT TREE. A click inside the popup
 // would otherwise reach whatever the control lives in -- a thread card opens
 // its thread on click, the lightbox's backdrop closes on click, the thread
-// strip steps on arrow keys. The root stops click, pointerdown and keydown.
+// strip steps on arrow keys and on the wheel. The root stops them all.
 // ---------------------------------------------------------------------------
 
-/** The nearest ancestor that scrolls, whose visible box the anchor must be in. */
-function scrollParentOf(el: HTMLElement): HTMLElement | null {
-  let p = el.parentElement
-  while (p && p !== document.body) {
-    const s = getComputedStyle(p)
-    if (/(auto|scroll)/.test(s.overflowY + s.overflowX)) return p
-    p = p.parentElement
-  }
-  return null
-}
+// A press outside that lands on a CONTROL goes on to that control -- another
+// image's "expose tags", a link. A press on anything else only closes the
+// popup: one dismissal closes the innermost layer, so a click on the
+// lightbox's backdrop that closed the popup must not also close the lightbox.
+const CONTROL = 'button, a, input, select, textarea, [role="button"], [contenteditable]'
 
 export function AnchoredPopup({
   anchorRef,
@@ -70,7 +64,6 @@ export function AnchoredPopup({
     const pop = popRef.current
     const anchor = anchorRef.current
     if (!pop || !anchor) return
-    const scroller = scrollParentOf(anchor)
     let raf = 0
     let closed = false
     const close = () => {
@@ -87,37 +80,66 @@ export function AnchoredPopup({
     const nudgeX = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.borderLeftWidth) || 0)
     const nudgeY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.borderTopWidth) || 0)
 
+    // FOLLOWED EVERY FRAME, not on scroll events: the thread strip moves its
+    // cards by transform and the re-sort by FLIP, neither of which fires any
+    // event, and a popup left behind over the wrong card is the one outcome
+    // "attached" rules out. One rect read per frame, and a write only when
+    // something moved; it runs only while the popup is open.
+    let last = ''
     const place = () => {
-      raf = 0
       if (!anchor.isConnected) return close()
       const a = anchor.getBoundingClientRect()
-      if (scroller && !anchorVisible(a, scroller.getBoundingClientRect())) return close()
-      const p = placeUnfurl(
-        { left: a.left - nudgeX, top: a.top - nudgeY, right: a.right, bottom: a.bottom },
-        { w: pop.offsetWidth, h: pop.scrollHeight },
-        { w: window.innerWidth, h: window.innerHeight },
-      )
-      pop.style.left = `${p.x}px`
-      pop.style.top = `${p.y}px`
-      pop.style.maxHeight = `${p.maxH}px`
-      pop.dataset.placed = 'true'
+      const key = `${a.left},${a.top},${pop.offsetWidth},${pop.scrollHeight},${window.innerWidth},${window.innerHeight}`
+      if (key !== last) {
+        last = key
+        const p = placeUnfurl(
+          { left: a.left - nudgeX, top: a.top - nudgeY, right: a.right, bottom: a.bottom },
+          { w: pop.offsetWidth, h: pop.scrollHeight },
+          { w: window.innerWidth, h: window.innerHeight },
+        )
+        pop.style.left = `${p.x}px`
+        pop.style.top = `${p.y}px`
+        pop.style.maxHeight = `${p.maxH}px`
+        pop.dataset.placed = 'true'
+      }
+      raf = requestAnimationFrame(place)
     }
     place()
     // Into the popup, so a keyboard reader lands where the content is; the
     // portal puts it at the end of <body>, which Tab would never reach.
     pop.focus({ preventScroll: true })
 
-    const schedule = () => {
-      if (!raf) raf = requestAnimationFrame(place)
-    }
-    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(schedule)
-    ro?.observe(pop)
-    window.addEventListener('scroll', schedule, { capture: true, passive: true })
-    window.addEventListener('resize', schedule)
+    // Gone from view -- scrolled out, or slid past an edge that clips it --
+    // means gone: an IntersectionObserver with no root clips by EVERY
+    // overflow-clipping ancestor, which a nearest-scroller test missed for the
+    // thread strip, where nothing scrolls and everything clips.
+    const io =
+      typeof IntersectionObserver === 'undefined'
+        ? null
+        : new IntersectionObserver((entries) => {
+            if (entries.some((e) => !e.isIntersecting)) close()
+          })
+    io?.observe(anchor)
 
+    let swallowClick: ((e: MouseEvent) => void) | null = null
     const onPointerDown = (e: PointerEvent) => {
       const t = e.target as Node | null
       if (t && (pop.contains(t) || anchor.contains(t))) return
+      // A field inside is blurred FIRST, so its commit-on-blur runs while the
+      // popup is still mounted; closing first unmounted it mid-commit and the
+      // typed tags were dropped.
+      const active = document.activeElement
+      if (active instanceof HTMLElement && pop.contains(active)) active.blur()
+      if (!(t instanceof Element && t.closest(CONTROL))) {
+        swallowClick = (ev: MouseEvent) => {
+          ev.stopPropagation()
+          ev.preventDefault()
+        }
+        document.addEventListener('click', swallowClick, { capture: true, once: true })
+        // A press that never becomes a click must not eat a later one.
+        const armed = swallowClick
+        window.setTimeout(() => document.removeEventListener('click', armed, { capture: true }), 1000)
+      }
       close()
     }
     // Capture phase, and stopped: the lightbox also closes on Escape, and one
@@ -129,18 +151,21 @@ export function AnchoredPopup({
       e.stopPropagation()
       e.preventDefault()
       close()
-      anchor.focus({ preventScroll: true })
     }
     document.addEventListener('pointerdown', onPointerDown, true)
     document.addEventListener('keydown', onKeyDown, true)
 
     return () => {
-      if (raf) cancelAnimationFrame(raf)
-      ro?.disconnect()
-      window.removeEventListener('scroll', schedule, { capture: true })
-      window.removeEventListener('resize', schedule)
+      cancelAnimationFrame(raf)
+      io?.disconnect()
       document.removeEventListener('pointerdown', onPointerDown, true)
       document.removeEventListener('keydown', onKeyDown, true)
+      // However it closed -- Escape, "collapse", "hide" -- a keyboard reader
+      // goes back to the control that opened it, not to the top of the page.
+      const active = document.activeElement
+      if (anchor.isConnected && (active === document.body || active === null || pop.contains(active))) {
+        anchor.focus({ preventScroll: true })
+      }
     }
   }, [anchorRef])
 
@@ -153,8 +178,22 @@ export function AnchoredPopup({
       aria-label={label}
       tabIndex={-1}
       className={'tc-anchored-pop' + (className ? ' ' + className : '')}
+      // Every event a popup's contents produce stays in the popup. React sends
+      // a portal's events up the COMPONENT tree: a wheel over the popup
+      // stepped the thread strip, a right-click on a tag opened the canvas
+      // object's menu. Only propagation stops; the native link menu still
+      // shows.
       onClick={stop}
+      onDoubleClick={stop}
       onPointerDown={stop}
+      onPointerUp={stop}
+      onPointerMove={stop}
+      onMouseDown={stop}
+      onMouseUp={stop}
+      onWheel={stop}
+      onContextMenu={stop}
+      onFocus={stop}
+      onBlur={stop}
       onKeyDown={stop}
     >
       {children}

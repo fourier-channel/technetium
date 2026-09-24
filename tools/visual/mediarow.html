@@ -25,7 +25,7 @@
     <div class="mtags-bubble">
       <a class="mod-pill mod-pill--cat-artist"><i class="mod-pill-dot mod-pill-dot--manual"></i><span class="mod-pill-name">saber</span></a>
       <a class="mod-pill mod-pill--cat-character"><i class="mod-pill-dot mod-pill-dot--hydra"></i><span class="mod-pill-name">hatsune_miku</span></a>
-      <button type="button" class="mtags-expose" id="expose">expose tags (23)</button>
+      <button type="button" class="mtags-expose" id="expose"><span class="mtags-expose-label">expose tags</span><span class="mtags-expose-n">(23)</span></button>
     </div>
   </div></div>
   <div class="tc-reaction-rail">
@@ -46,7 +46,7 @@
     <div class="mtags-bubble">
       <a class="mod-pill mod-pill--cat-artist"><i class="mod-pill-dot"></i><span class="mod-pill-name">a_rather_long_creator_name_indeed</span></a>
       <a class="mod-pill mod-pill--cat-character"><i class="mod-pill-dot"></i><span class="mod-pill-name">kagamine_rin</span></a>
-      <button type="button" class="mtags-expose">expose tags (40)</button>
+      <button type="button" class="mtags-expose"><span class="mtags-expose-label">expose tags</span><span class="mtags-expose-n">(40)</span></button>
     </div>
   </div></div>
   <div class="tc-reaction-rail">
@@ -54,6 +54,28 @@
     <div class="tc-reactions"><button type="button" class="tc-reaction"><span class="tc-reaction-key">C</span><span class="tc-reaction-count">4</span></button></div>
   </div>
   <span class="h-time">21:07</span>
+</div></div>
+
+<div class="h-label">narrow pictures (a phone screenshot, 148px; a portrait photo, 180px) -- the line is cut at the edge, never over the time</div>
+<div class="shot"><div class="line">
+  <div style="min-width:0"><div class="mtags-stack">
+    <div class="mtags-media"><span class="fake-img" style="width:148px;height:200px"></span></div>
+    <div class="mtags-bubble">
+      <a class="mod-pill mod-pill--cat-artist"><i class="mod-pill-dot"></i><span class="mod-pill-name">saber</span></a>
+      <a class="mod-pill mod-pill--cat-character"><i class="mod-pill-dot"></i><span class="mod-pill-name">hatsune_miku</span></a>
+      <button type="button" class="mtags-expose"><span class="mtags-expose-label">expose tags</span><span class="mtags-expose-n">(23)</span></button>
+    </div>
+  </div></div>
+  <div class="tc-reaction-rail">
+    <span class="tc-reaction-add-slot"><button type="button" class="tc-reaction tc-reaction-add">+</button></span>
+    <div class="tc-reactions"><button type="button" class="tc-reaction"><span class="tc-reaction-key">F</span><span class="tc-reaction-count">1</span></button></div>
+  </div>
+  <span class="h-time">21:08</span>
+  <div style="min-width:0;margin-left:40px"><div class="mtags-stack">
+    <div class="mtags-media"><span class="fake-img" style="width:180px;height:200px"></span></div>
+    <div class="mtags-bubble" aria-hidden="true"></div>
+  </div></div>
+  <span class="h-time">reserved, set not yet here</span>
 </div></div>
 
 <div class="h-label">text row -- reactions in the footer at 2x, and the "+" does not grow the line</div>
@@ -104,6 +126,5 @@
   y = Math.max(m, y)
   pop.style.left = x + 'px'; pop.style.top = y + 'px'; pop.style.maxHeight = (vh - 2 * m) + 'px'
   pop.dataset.placed = 'true'
-  pop.style.animation = 'none'
 </script>
 </div></body></html>

@@ -5,7 +5,7 @@
 // 'expose tags' button." The creator tag is the ARTIST-category tag; the
 // provenance bucket called 'creator' means private prompt tags and must never
 // be what decides this.
-import { splitForBubble, BUBBLE_CATEGORIES } from '../src/client/tagBubble.ts'
+import { splitForBubble, BUBBLE_CATEGORIES, BUBBLE_MAX_PER_CATEGORY } from '../src/client/tagBubble.ts'
 import { sortTags, type MediaTag, type TagCategory } from '../src/client/mediaTags.ts'
 import { readFileSync } from 'node:fs'
 
@@ -38,6 +38,21 @@ console.log('\n-- character rides whenever it is present, after the creator --')
   // Whatever order they arrive in, the creator leads.
   const shuffled = split([t('rin', 'character'), t('saber', 'artist')])
   check('the creator leads even from an unsorted list', names(shuffled.always) === 'saber,rin', names(shuffled.always))
+}
+
+console.log('\n-- a crowded picture: the line holds a few, the rest fold and are counted --')
+{
+  const group = sortTags([
+    t('saber', 'artist'), t('yoi', 'artist'), t('neru', 'artist'),
+    t('a', 'character'), t('b', 'character'), t('c', 'character'), t('d', 'character'), t('e', 'character'),
+    t('sky', 'general'),
+  ])
+  const s = split(group)
+  check(`at most ${BUBBLE_MAX_PER_CATEGORY} creators and ${BUBBLE_MAX_PER_CATEGORY} characters in the line`,
+    s.always.filter((x) => x.category === 'artist').length === BUBBLE_MAX_PER_CATEGORY &&
+    s.always.filter((x) => x.category === 'character').length === BUBBLE_MAX_PER_CATEGORY, names(s.always))
+  check('the creators still lead', s.always[0].category === 'artist' && s.always[1].category === 'artist', names(s.always))
+  check('the rest are folded, so the control counts them', s.folded.length === group.length - 2 * BUBBLE_MAX_PER_CATEGORY, names(s.folded))
 }
 
 console.log('\n-- copyright, meta and general are folded (the operator named two) --')

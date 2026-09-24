@@ -4,7 +4,7 @@
 // the user list if needed -- don't constrain it to its own panel." So: the
 // popup's top-left sits on its control and it grows right and down; only the
 // WINDOW clamps it.
-import { placeUnfurl, anchorVisible, POPUP_MARGIN } from '../src/ui/popupPlacement.ts'
+import { placeUnfurl, POPUP_MARGIN } from '../src/ui/popupPlacement.ts'
 import { readFileSync } from 'node:fs'
 
 let failures = 0
@@ -46,27 +46,26 @@ console.log('\n-- whole pixels, always --')
   check('rounded', Number.isInteger(p.x) && Number.isInteger(p.y), p)
 }
 
-console.log('\n-- attached: it knows when its control has scrolled out of view --')
-{
-  const scroller = { left: 300, top: 100, right: 1100, bottom: 800 }
-  check('inside: visible', anchorVisible(btn(400, 300), scroller))
-  check('partly inside: still visible', anchorVisible(btn(400, 790), scroller))
-  check('scrolled above the scroller: gone', !anchorVisible(btn(400, 50), scroller))
-  check('scrolled below: gone', !anchorVisible(btn(400, 810), scroller))
-}
-
 console.log('\n-- the component uses the rule and escapes every clip --')
 {
   const src = readFileSync('src/ui/AnchoredPopup.tsx', 'utf8')
   check('portalled to <body>', /createPortal\([\s\S]*document\.body/.test(src))
   check('placed by placeUnfurl, from the control\'s rect less the popup\'s own inset',
     /placeUnfurl\(\s*\n?\s*\{ left: a\.left - nudgeX, top: a\.top - nudgeY/.test(src))
-  check('follows scroll in the capture phase, so every scroller counts',
-    /addEventListener\('scroll', schedule, \{ capture: true, passive: true \}\)/.test(src))
+  check('follows its control every frame (a carousel moves it by transform, which fires nothing)',
+    /raf = requestAnimationFrame\(place\)/.test(src))
+  check('closes when the control is clipped out of view by ANY ancestor, not just a scroller',
+    /new IntersectionObserver\(/.test(src) && /io\?\.observe\(anchor\)/.test(src))
+  check('an outside press blurs a field inside first, so its commit-on-blur runs',
+    /if \(active instanceof HTMLElement && pop\.contains\(active\)\) active\.blur\(\)/.test(src))
+  check('a dismissal that is not on a control closes only the innermost layer',
+    /document\.addEventListener\('click', swallowClick, \{ capture: true, once: true \}\)/.test(src))
+  check('focus goes back to the control however the popup closed', /anchor\.focus\(\{ preventScroll: true \}\)/.test(src))
   check('Escape is taken in the capture phase and stopped (the lightbox also closes on it)',
     /addEventListener\('keydown', onKeyDown, true\)/.test(src) && /e\.stopPropagation\(\)\s*\n\s*e\.preventDefault\(\)/.test(src))
-  check('portal events do not bubble to the card or backdrop behind it',
-    /onClick=\{stop\}/.test(src) && /onPointerDown=\{stop\}/.test(src) && /onKeyDown=\{stop\}/.test(src))
+  for (const ev of ['onClick', 'onDoubleClick', 'onPointerDown', 'onPointerUp', 'onPointerMove', 'onMouseDown', 'onMouseUp', 'onWheel', 'onContextMenu', 'onFocus', 'onBlur', 'onKeyDown']) {
+    check(`portal ${ev} does not bubble to the card, strip or backdrop behind it`, new RegExp(`${ev}=\\{stop\\}`).test(src))
+  }
   check('positioned imperatively, not through React state', !/useState/.test(src))
   const css = readFileSync('src/index.css', 'utf8')
   const block = /\.tc-anchored-pop \{([^}]*)\}/.exec(css)?.[1] ?? ''

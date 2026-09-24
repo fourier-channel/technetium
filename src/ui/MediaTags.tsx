@@ -46,10 +46,16 @@ export interface MediaTagsProps {
   // event is outside the loaded timeline. Pass it wherever it is known.
   roomId?: string
   variant?: 'bubble' | 'chip'
+  // Hold the line under the picture from the first paint, before the image's
+  // tag set has arrived. The caller passes it where tags are expected (a room
+  // the bridge tags), so the set landing fills a line that is already there
+  // instead of pushing the conversation down by a line -- and an image in a
+  // room that is never tagged gets no empty line under it.
+  reserve?: boolean
   onTagClick?: (tag: MediaTag) => void
 }
 
-export function MediaTags({ mxc, roomId, variant = 'bubble', onTagClick }: MediaTagsProps) {
+export function MediaTags({ mxc, roomId, variant = 'bubble', reserve = false, onTagClick }: MediaTagsProps) {
   const set = useMediaTags(mxc, roomId)
   const prefs = useMediaTagPrefs()
   const mediaId = mxc ? parseMxc(mxc)?.mediaId : undefined
@@ -69,8 +75,8 @@ export function MediaTags({ mxc, roomId, variant = 'bubble', onTagClick }: Media
   // bubble is what triggers the live read that fills it. Returning null there
   // would be a deadlock -- no bubble, so no read, so no tags, so no bubble.
   // Chips stay out of it: a "0" badge on every picture is worse than silence.
-  if (!set) return null
-  if (set.tags.length === 0 && (set.postId === undefined || variant === 'chip')) return null
+  const empty = !set || (set.tags.length === 0 && (set.postId === undefined || variant === 'chip'))
+  if (empty) return variant === 'bubble' && reserve ? <div className="mtags-bubble" aria-hidden="true" /> : null
 
   const meta: TagMeta = { rating: set.rating, postId: set.postId, updatedBy: set.updatedBy }
   const hide = () => prefs.setOverride(mediaId ?? '', 'hide')
@@ -145,6 +151,10 @@ function TagBubble({
   const [open, setOpen] = useState(false)
   const exposeRef = useRef<HTMLButtonElement>(null)
   const popId = useId()
+  // The booru's refusal of an edit lives HERE, on the line, not in the popup:
+  // the popup can close while an edit is still on its way, and a refusal that
+  // lands on an unmounted panel is a failure nobody is told about (G-tc05).
+  const [editError, setEditError] = useState<string | null>(null)
 
   // Hidden for this image (or globally): the line keeps its place and offers
   // the way back, so hiding is never a dead end and never moves the row.
@@ -169,10 +179,20 @@ function TagBubble({
         className="mtags-expose"
         aria-expanded={open}
         aria-controls={open ? popId : undefined}
-        title={foldedCount > 0 ? `Show all ${tags.length} tags` : 'Tag details'}
+        data-error={editError ? 'true' : undefined}
+        title={
+          editError
+            ? `The booru refused the last edit: ${editError}`
+            : foldedCount > 0
+              ? `Show all ${tags.length} tags`
+              : 'Tag details'
+        }
         onClick={() => setOpen((v) => !v)}
       >
-        expose tags{foldedCount > 0 ? ` (${foldedCount})` : ''}
+        {/* Two parts, so under a narrow picture the words give way before the
+            count does. */}
+        <span className="mtags-expose-label">expose tags</span>
+        {foldedCount > 0 && <span className="mtags-expose-n">({foldedCount})</span>}
       </button>
       {open && (
         <AnchoredPopup anchorRef={exposeRef} onClose={() => setOpen(false)} label="Tags" id={popId}>
@@ -181,6 +201,8 @@ function TagBubble({
             mediaId={mediaId}
             meta={meta}
             onTagClick={onTagClick}
+            error={editError}
+            onError={setEditError}
             onCollapse={() => setOpen(false)}
             onHide={() => {
               setOpen(false)
@@ -205,6 +227,8 @@ function TagPanel({
   mediaId,
   meta,
   onTagClick,
+  error,
+  onError,
   onCollapse,
   onHide,
 }: {
@@ -212,6 +236,9 @@ function TagPanel({
   mediaId?: string
   meta: TagMeta
   onTagClick?: (tag: MediaTag) => void
+  // Owned by the line or chip that opened this, which outlives it.
+  error: string | null
+  onError: (message: string | null) => void
   onCollapse: () => void
   onHide?: () => void
 }) {
@@ -226,17 +253,16 @@ function TagPanel({
   // somebody has said they are tagging.
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
-  const [error, setError] = useState<string | null>(null)
   // The booru's answer replaces the guess, so nothing here waits on the round
   // trip -- `busy` only dims the input, it does not gate the pill.
   const [busy, setBusy] = useState(false)
 
   const run = (edit: { add?: string[]; remove?: string[] }) => {
     if (!mediaId) return
-    setError(null)
+    onError(null)
     setBusy(true)
     editBooruTags(mediaId, edit)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)))
       .finally(() => setBusy(false))
   }
 
@@ -274,7 +300,7 @@ function TagPanel({
             className={'mtags-edit' + (editing ? ' is-on' : '')}
             onClick={() => {
               setEditing((v) => !v)
-              setError(null)
+              onError(null)
             }}
             title={editing ? 'Stop editing tags' : 'Add or remove tags on the booru'}
             aria-pressed={editing}
@@ -351,11 +377,16 @@ if (typeof document !== 'undefined') {
 // Is the pointer over the element's LAYOUT box -- where it sits on the page,
 // which a transform does not move? getBoundingClientRect would follow the
 // tumble and answer "no" twice a turn; offsetLeft/offsetTop do not.
+//
+// offsetLeft/Top are measured inside the offsetParent's padding box and do not
+// move when it scrolls, so its border and scroll are folded in: inside the tag
+// popup, which scrolls, a hovered pill was otherwise judged "away" and wound
+// down under the pointer.
 function overLayoutBox(el: HTMLElement): boolean {
   const op = (el.offsetParent as HTMLElement | null) ?? document.body
   const pr = op.getBoundingClientRect()
-  const l = pr.left + el.offsetLeft
-  const t = pr.top + el.offsetTop
+  const l = pr.left + op.clientLeft + el.offsetLeft - op.scrollLeft
+  const t = pr.top + op.clientTop + el.offsetTop - op.scrollTop
   const pad = 6
   return pointer.x >= l - pad && pointer.x <= l + el.offsetWidth + pad && pointer.y >= t - pad && pointer.y <= t + el.offsetHeight + pad
 }
@@ -557,6 +588,7 @@ function TagChip({
   const [open, setOpen] = useState(false)
   const chipRef = useRef<HTMLButtonElement>(null)
   const popId = useId()
+  const [editError, setEditError] = useState<string | null>(null)
   useEffect(() => {
     if (open && mediaId) refreshBooruTags(mediaId)
   }, [open, mediaId])
@@ -575,13 +607,22 @@ function TagChip({
           setOpen((v) => !v)
         }}
         onPointerDown={(e) => e.stopPropagation()}
-        title={`${tags.length} tag${tags.length === 1 ? '' : 's'}`}
+        data-error={editError ? 'true' : undefined}
+        title={editError ? `The booru refused the last edit: ${editError}` : `${tags.length} tag${tags.length === 1 ? '' : 's'}`}
       >
         {'\u{1F3F7}'} {tags.length}
       </button>
       {open && (
         <AnchoredPopup anchorRef={chipRef} onClose={() => setOpen(false)} label="Tags" id={popId}>
-          <TagPanel tags={tags} mediaId={mediaId} meta={meta} onTagClick={onTagClick} onCollapse={() => setOpen(false)} />
+          <TagPanel
+            tags={tags}
+            mediaId={mediaId}
+            meta={meta}
+            onTagClick={onTagClick}
+            error={editError}
+            onError={setEditError}
+            onCollapse={() => setOpen(false)}
+          />
         </AnchoredPopup>
       )}
     </div>

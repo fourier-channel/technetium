@@ -36,6 +36,21 @@ console.log('\n-- L5: the tags are UNDER the picture, and never wider than it --
   check('the line is out of the width calculation and then as wide as the picture',
     /width:\s*0/.test(bubble) && /min-width:\s*100%/.test(bubble), bubble)
   check('one line, never wrapping', /flex-wrap:\s*nowrap/.test(bubble), bubble)
+  check('a FIXED height, so an empty, a filled and a control-only line are the same row',
+    /\n\s*height:\s*[\d.]+rem/.test(bubble), bubble)
+  check('cut at the picture\'s edge, not painted over the time and reactions beside it',
+    /overflow:\s*clip/.test(bubble), bubble)
+  const expose = block(tagsCss, '.mtags-expose')
+  check('the control can shrink under a narrow picture', /flex:\s*0 1 auto/.test(expose) && /min-width:\s*0/.test(expose), expose)
+  check('and its words give way before its count',
+    /text-overflow:\s*ellipsis/.test(block(tagsCss, '.mtags-expose-label')) && /flex:\s*none/.test(block(tagsCss, '.mtags-expose-n')))
+  const tags = readFileSync('src/ui/MediaTags.tsx', 'utf8')
+  check('before the set arrives, a reserved empty line holds the space (no-forced-reflow)',
+    /variant === 'bubble' && reserve \? <div className="mtags-bubble" aria-hidden="true" \/>/.test(tags))
+  check('the timeline reserves it only in rooms that carry tags',
+    /reserve=\{roomCarriesTags\(client\?\.getRoom\(roomId\)\)\}/.test(timeline))
+  check('an edit refused after the popup closed is still shown, on the line',
+    /data-error=\{editError \? 'true' : undefined\}/.test(tags) && !/const \[error, setError\] = useState/.test(tags))
   // Declarations only: the file's own comment explains the rule it replaced.
   const rules = tagsCss.replace(/\/\*[\s\S]*?\*\//g, '')
   check('nothing positions a tag panel beside the picture any more',
@@ -50,6 +65,8 @@ console.log('\n-- L6: the reactions are the first column right of the picture --
   check('the rail is the next thing after the picture column', line)
   check('the unfurled list is a popup over the page, so it may cover the rail',
     /\.tc-anchored-pop \{[^}]*position:\s*fixed/.test(css))
+  check('its unfurl does not leave a clip-path behind that cuts its own shadow',
+    /\.tc-anchored-pop \{[^}]*animation:[^;]*\bbackwards;/.test(css) && !/\.tc-anchored-pop \{[^}]*animation:[^;]*\bboth;/.test(css))
 }
 
 console.log('\n-- L7: twice as big, from one set of sizes --')
@@ -72,6 +89,8 @@ console.log('\n-- L7: twice as big, from one set of sizes --')
     /width:\s*var\(--tc-react-emoji\)/.test(img) && /height:\s*var\(--tc-react-emoji\)/.test(img), img)
   check('and the pill wraps its picture in that box',
     /<span className="tc-reaction-img">\s*\n\s*<AuthedImage/.test(reactions))
+  check('contained, not cropped: a wide emoji shows whole',
+    /\.tc-reaction-img img \{\s*object-fit:\s*contain !important;/.test(css))
   const inline = block(css, '.tc-reaction-add-inline')
   check('the "+" inside a text line is taken out of the line box, so no message grows',
     /margin-block:\s*calc\(\(var\(--tc-react-add-inline-h\) - 16px\) \/ -2\)/.test(inline), inline)

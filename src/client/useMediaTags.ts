@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react'
-import { RoomEvent, RoomStateEvent, type MatrixClient, type MatrixEvent } from 'matrix-js-sdk'
+import { RoomEvent, RoomStateEvent, type MatrixClient, type MatrixEvent, type Room } from 'matrix-js-sdk'
 import { parseMxc } from './media'
 import { createLimiter } from './concurrency'
 import { reportIgnored } from './report'
@@ -141,6 +141,18 @@ const inFlight = new Set<string>()
 const missing = new Set<string>()
 
 let fetchClient: MatrixClient | null = null
+
+// Does this room carry image tags at all -- is it one the bridge tags? The
+// line under a picture is reserved only where the answer is yes, so a set
+// arriving there fills a line instead of pushing the conversation, and an
+// image in a room that is never tagged gets no empty line.
+export function roomCarriesTags(room: Room | null | undefined): boolean {
+  if (!room) return false
+  // getStateEvents is typed to known event names; the custom type goes through
+  // a loosely-typed, bound alias, as fetchTags does below (cf. G-bf03).
+  const get = room.currentState.getStateEvents.bind(room.currentState) as unknown as (type: string) => unknown[]
+  return get(MEDIA_TAGS_EVENT).length > 0
+}
 
 export function fetchTags(roomId: string, mxc: string): void {
   const mediaId = parseMxc(mxc)?.mediaId

@@ -29,6 +29,15 @@ import type { TagCategory } from './mediaTags'
 /** Shown in the bubble, in this order: who made it, then who is in it. */
 export const BUBBLE_CATEGORIES: readonly TagCategory[] = ['artist', 'character']
 
+/**
+ * At most this many of each ride in the line; the rest fold and are counted
+ * in "expose tags (N)". The line is one line exactly as wide as the picture,
+ * and a group picture with six characters under a 188px thumbnail (a thread
+ * view) pushed the control -- the only way to the rest, the rating and the
+ * editor -- out of sight.
+ */
+export const BUBBLE_MAX_PER_CATEGORY = 2
+
 export interface BubbleSplit<T> {
   always: T[]
   folded: T[]
@@ -45,7 +54,16 @@ export function splitForBubble<T>(
   categoryOf: (x: T) => TagCategory,
 ): BubbleSplit<T> {
   const always: T[] = []
-  for (const c of BUBBLE_CATEGORIES) for (const x of items) if (categoryOf(x) === c) always.push(x)
-  const folded = items.filter((x) => !BUBBLE_CATEGORIES.includes(categoryOf(x)))
+  const shown = new Set<T>()
+  for (const c of BUBBLE_CATEGORIES) {
+    let n = 0
+    for (const x of items) {
+      if (categoryOf(x) !== c || n >= BUBBLE_MAX_PER_CATEGORY) continue
+      always.push(x)
+      shown.add(x)
+      n++
+    }
+  }
+  const folded = items.filter((x) => !shown.has(x))
   return { always, folded }
 }

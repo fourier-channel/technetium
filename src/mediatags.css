@@ -55,14 +55,33 @@
   align-self: stretch;
   width: 0;
   min-width: 100%;
+  /* A FIXED height, the same whether it is empty (reserved before the set
+     arrives), holds pills, or holds only the control -- so nothing that
+     arrives in it can change the row. */
+  height: 1.3rem;
   margin-top: 4px;
   line-height: 1.2;
+  /* What does not fit under a narrow picture is cut at the picture's edge
+     rather than painted over the time and the reactions beside it; the
+     margin leaves room for a pill's hover raise. */
+  overflow: clip;
+  overflow-clip-margin: 6px;
 }
 .mtags-bubble > .mod-pill {
+  box-sizing: border-box;
   align-self: center;
   flex: 0 1 auto;
-  min-width: 2rem;
+  min-width: 1.75rem;
 }
+/* When the line is tight, what gives way first: the control's words (down to
+   its count, never below -- it is the only way to the rest), then the
+   character, and the creator -- the one tag always shown -- last. */
+/* Weights are whole numbers on purpose: when the factors left shrinking sum
+   to less than one, flexbox removes only that fraction of the overflow, and
+   the line spills (a 0.2 on the creator did exactly that). */
+.mtags-bubble > .mtags-expose { flex-shrink: 40; min-width: 3.3rem; }
+.mtags-bubble > .mod-pill--cat-character { flex-shrink: 8; min-width: 0; }
+.mtags-bubble > .mod-pill--cat-artist { flex-shrink: 1; }
 .mod-pill-name {
   min-width: 0;
   overflow: hidden;
@@ -72,7 +91,12 @@
 /* The control that unfurls the rest, and its counterpart at the head of the
    popup. Reads as a control, not as a tag: no dot, a dashed edge. */
 .mtags-expose {
-  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
   font: inherit;
   font-size: 0.68rem;
   line-height: 1.2;
@@ -90,6 +114,22 @@
 .mtags-expose[aria-expanded='true'] {
   color: var(--mod-ink);
   border-color: color-mix(in srgb, var(--mod-ink) 55%, transparent);
+}
+/* Under a narrow picture the words give way (ellipsis) before the count. */
+.mtags-expose-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mtags-expose-n {
+  flex: none;
+}
+/* The booru refused the last edit: said on the line, where it survives the
+   popup closing, and in full in the control's title and the popup. */
+.mtags-expose[data-error='true'],
+.mtags-chip[data-error='true'] {
+  color: var(--mod-tag-artist-fg);
+  border-color: color-mix(in srgb, var(--mod-tag-artist-fg) 60%, transparent);
 }
 
 /* The popup's contents. ROW-wrap, never column-wrap: Firefox sizes a
