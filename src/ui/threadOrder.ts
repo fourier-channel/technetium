@@ -37,7 +37,7 @@ function useInteractionIdle(
   onActivate: () => void,
   onIdle: () => void,
   idleMs = IDLE_MS,
-): IdleHandlers {
+): IdleHandlers & { reset: () => void } {
   const hoveringRef = useRef(false)
   const activeRef = useRef(false)
   const timerRef = useRef<number | undefined>(undefined)
@@ -73,7 +73,17 @@ function useInteractionIdle(
 
   useEffect(() => clearTimer, [clearTimer])
 
+  // Back to idle WITHOUT calling onIdle: the caller has just dropped the
+  // freeze itself. Without this the detector stayed "active", so the next
+  // pointer movement did not re-freeze and the list reordered under a parked
+  // pointer until it had left for the whole idle period.
+  const reset = useCallback(() => {
+    clearTimer()
+    activeRef.current = false
+  }, [clearTimer])
+
   return {
+    reset,
     onPointerEnter: () => {
       hoveringRef.current = true
       clearTimer()
@@ -164,9 +174,15 @@ export function useDeferredThreadOrder(items: ThreadListItem[]): {
   const freeze = useCallback(() => {
     setFrozen((prev) => prev ?? dataRef.current.map((it) => flipIdOf(it.roomId, it.rootId)))
   }, [])
-  const release = useCallback(() => setFrozen(null), [])
+  const unfreeze = useCallback(() => setFrozen(null), [])
 
-  const handlers = useInteractionIdle(freeze, release)
+  const { reset, ...handlers } = useInteractionIdle(freeze, unfreeze)
+  // A deliberate act (a sort, a scope): the new order shows now, and the next
+  // pointer movement freezes THAT order.
+  const release = useCallback(() => {
+    reset()
+    setFrozen(null)
+  }, [reset])
 
   const entries = useMemo(
     () => (frozen === null ? items : applyFrozenOrder(items, frozen)),

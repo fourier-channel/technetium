@@ -101,7 +101,9 @@ console.log('\n-- ThreadList applies pins LAST, and every consumer reads the res
   const store = readFileSync('src/client/threadPinStore.ts', 'utf8')
   check('pins live in account data, never in room state',
     /net\.41chan\.tc\.thread_pins/.test(store) && !/m\.room\.pinned_events/.test(store))
-  check('a failed save is reported, not swallowed', /reportAlways\('thread pins: save/.test(store) && !/catch\(\(\) => \{\}\)/.test(store))
+  const sync = readFileSync('src/client/pinSync.ts', 'utf8')
+  check('a failed save is reported, not swallowed', /reportAlways\('thread pins: save/.test(sync) && !/catch\(\(\) => \{\}\)/.test(sync + store))
+  check('the store writes through the one-at-a-time sync, never directly', /makePinSync\(/.test(store) && (store.match(/setAccountData\(/g) ?? []).length === 1)
 }
 
 if (failures > 0) {

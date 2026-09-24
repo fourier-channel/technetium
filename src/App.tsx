@@ -115,6 +115,10 @@ function App() {
   // The thread list descends from the dock's bottom edge (no sudden jumps):
   // mounted for the whole choreography, its height going 0 -> share -> 0.
   const threadListReveal = useReveal(threadListOpen, 380)
+  // The dock's closed-state tab rides the strip's title bar for as long as the
+  // strip is on screen -- its closing animation included, so the tab does not
+  // jump back over the title while the strip is still visible.
+  const dmTabOnStrip = !!(dockRoom && !space.leaves.dock.open && selectedRoom && threadListReveal.mounted)
   // The domain is a TILE that takes width from the chat column below the
   // dock; opening carves it out of the space, closing hands the width back.
   useEffect(() => {
@@ -289,11 +293,11 @@ function App() {
         {/* The dock's tab: on the region's top border when a DM is hidden
             (pull it down), on the dock's bottom border when it is out (push
             it up). The dock still opens on its own when a DM arrives. */}
-        {/* With the thread strip open, this border is the strip's title bar,
-            whose label sits on the centre (launch-polish L3) -- so the tab
-            steps left, clear of the label, rather than hanging over it. */}
-        {dockRoom && !space.leaves.dock.open && (
-          <PullTab pull="down" target="dock" label="Direct message" onClick={() => showInDock(dockRoom)} style={{ top: 0, left: selectedRoom && threadListOpen ? DM_TAB_BESIDE_TITLE : 'calc(50% - 40px)' }} />
+        {/* While the thread strip is on screen this border is the strip's
+            title bar, whose label sits on the centre (launch-polish L3), so
+            the tab moves onto the strip itself -- see dmTabOnStrip below. */}
+        {dockRoom && !space.leaves.dock.open && !dmTabOnStrip && (
+          <PullTab pull="down" target="dock" label="Direct message" onClick={() => showInDock(dockRoom)} style={{ top: 0, left: 'calc(50% - 40px)' }} />
         )}
         {dockRoom && space.leaves.dock.open && (
           <PullTab pull="up" target="dock" label="Hide the direct message" onClick={closeDock} style={{ top: `${Math.round(dockShareOfMain * 1000) / 10}%`, marginTop: -12, left: 'calc(50% - 40px)' }} />
@@ -314,6 +318,13 @@ function App() {
                 dock's, and its tab sits left of centre. Two tabs, side by side. */}
             {selectedRoom && !threadListOpen && (
               <PullTab pull="down" target="threads" label="Threads" onClick={() => setThreadListOpen(true)} style={{ top: 0, left: 'calc(50% + 40px)' }} />
+            )}
+            {/* The dock's tab, on the strip's title bar and in the STRIP's
+                coordinates: placed from <main> it drifted onto the scope pills
+                at ordinary widths, and onto the title whenever the domain made
+                <main> wider than the strip. */}
+            {dockRoom && dmTabOnStrip && (
+              <PullTab pull="down" target="dock" label="Direct message" onClick={() => showInDock(dockRoom)} style={{ top: 0, left: DM_TAB_BESIDE_TITLE }} />
             )}
             {selectedRoom && threadListOpen && (
               <PullTab pull="up" target="threads" label="Hide threads" onClick={() => setThreadListOpen(false)} style={{ top: threadStripH, marginTop: -12, left: 'calc(50% + 40px)' }} />

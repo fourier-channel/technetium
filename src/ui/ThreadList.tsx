@@ -283,6 +283,8 @@ export function ThreadList({
     [carousel, focus, handleSelect],
   )
 
+  const onCardFocus = useCallback((i: number) => setFocus(i), [])
+
   // Pin or unpin, and bring the card to the reader wherever it lands -- the
   // results come to you, and a pinned card leaving from under the pointer for
   // the far end of the strip would read as the card vanishing.
@@ -418,6 +420,7 @@ export function ThreadList({
               isNew={newIds.has(flipIdOf(e.roomId, e.rootId)) && !pinnedIds.has(flipIdOf(e.roomId, e.rootId))}
               pinned={pinnedIds.has(flipIdOf(e.roomId, e.rootId))}
               onTogglePin={onTogglePin}
+              onCardFocus={onCardFocus}
               onSelect={onCardSelect}
               getCardHandlers={getCardHandlers}
               index={i}
@@ -443,6 +446,7 @@ function threadTileEqual(a: ThreadTileProps, b: ThreadTileProps): boolean {
     a.isNew !== b.isNew ||
     a.pinned !== b.pinned ||
     a.onTogglePin !== b.onTogglePin ||
+    a.onCardFocus !== b.onCardFocus ||
     a.onSelect !== b.onSelect ||
     a.getCardHandlers !== b.getCardHandlers ||
     a.carousel !== b.carousel ||
@@ -484,6 +488,8 @@ interface ThreadTileProps {
   // draggable: its place is the pin's, and a drop would be overruled at once.
   pinned: boolean
   onTogglePin: (roomId: string, rootId: string) => void
+  // A control inside the card took focus: bring the card to the reader.
+  onCardFocus: (index: number) => void
   onSelect: (roomId: string, rootId: string, index: number) => void
   getCardHandlers: (id: string) => CardHandlers
   index: number
@@ -502,6 +508,7 @@ const ThreadTile = memo(function ThreadTile({
   isNew,
   pinned,
   onTogglePin,
+  onCardFocus,
   onSelect,
   getCardHandlers,
   index,
@@ -545,6 +552,10 @@ const ThreadTile = memo(function ThreadTile({
       className={carousel ? 'tc-carousel-card' : undefined}
       data-distance={carousel ? distance : undefined}
       data-pinned={pinned ? 'true' : undefined}
+      // Tabbing onto a card's control brings the card to the middle, the way
+      // an arrow key would: the results come to the reader, and a focused
+      // control out past the strip's edge is one nobody can see.
+      onFocus={carousel ? () => onCardFocus(index) : undefined}
       // Being READ and being under the reader's eyes are different things now
       // that the carousel is free to scroll away from the open thread. The card
       // has to say which one is open on its own, at any distance.

@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { ClientEvent, type MatrixClient, type MatrixEvent } from 'matrix-js-sdk'
-import { NO_PINS, parsePins, togglePin } from '../ui/threadPins'
-import { reportAlways, reportIgnored } from './report'
+import { NO_PINS } from '../ui/threadPins'
+import { makePinSync } from './pinSync'
 
 // ---------------------------------------------------------------------------
 // Pinned threads, held in ACCOUNT DATA (launch-polish L4).
@@ -14,13 +14,9 @@ import { reportAlways, reportIgnored } from './report'
 // A store for useSyncExternalStore rather than useState + a listener, so every
 // surface reading pins agrees within the same render.
 //
-// OPTIMISTIC, WITH AN HONEST ECHO. A pin shows the moment it is clicked, not a
-// round trip later, so the card moves under the pointer that asked for it. The
-// optimistic list is held until the server's copy says the same thing -- an
-// echo of an EARLIER write, arriving after a second quick toggle, must not
-// flip the card back (the layout store paid for that lesson). Once our write
-// has settled, whatever the server says next is the truth, including a change
-// made on another device.
+// How the list on screen stays in step with the server's -- optimistic, one
+// write at a time, never ahead of its echo -- is client/pinSync.ts, which has
+// no SDK in it so the check suite can drive it against a fake server.
 // ---------------------------------------------------------------------------
 
 const TYPE = 'net.41chan.tc.thread_pins'
@@ -37,92 +33,26 @@ interface PinStore {
   toggle: (id: string) => void
 }
 
-const same = (a: readonly string[], b: readonly string[]) =>
-  a.length === b.length && a.every((v, i) => v === b[i])
-
 function makeStore(client: MatrixClient): PinStore {
-  const listeners = new Set<() => void>()
-  // The content object last parsed, and what it parsed to: a snapshot must be
-  // the SAME array until something changes, or useSyncExternalStore re-renders
-  // forever.
-  let lastContent: unknown = undefined
-  let lastParsed: readonly string[] = NO_PINS
-  // The optimistic list, and whether the write that carries it has settled.
-  let pending: readonly string[] | null = null
-  let settled = false
-
-  const stored = (): readonly string[] => {
-    const content = client.getAccountData(TYPE)?.getContent()
-    if (content !== lastContent) {
-      lastContent = content
-      const parsed = parsePins(content)
-      if (parsed === null) {
-        reportIgnored(
-          'thread pins: read',
-          new Error('the saved pin list is not a list of thread ids, so it was ignored; pinning or unpinning any thread rewrites it'),
-        )
-        lastParsed = NO_PINS
-      } else {
-        lastParsed = parsed
-      }
-    }
-    return lastParsed
-  }
-
-  const notify = () => {
-    for (const cb of listeners) cb()
-  }
-
+  const sync = makePinSync({
+    read: () => client.getAccountData(TYPE)?.getContent(),
+    write: (pins) => client.setAccountData(TYPE, { pins }),
+  })
   const onAccountData = (ev: MatrixEvent) => {
-    if (ev.getType() !== TYPE) return
-    if (pending && (settled || same(stored(), pending))) pending = null
-    notify()
+    if (ev.getType() === TYPE) sync.onStored()
   }
-
-  let attached = false
+  let users = 0
   return {
     subscribe(cb) {
-      listeners.add(cb)
-      if (!attached) {
-        client.on(ClientEvent.AccountData, onAccountData)
-        attached = true
-      }
+      const off = sync.subscribe(cb)
+      if (users++ === 0) client.on(ClientEvent.AccountData, onAccountData)
       return () => {
-        listeners.delete(cb)
-        if (listeners.size === 0 && attached) {
-          client.removeListener(ClientEvent.AccountData, onAccountData)
-          attached = false
-        }
+        off()
+        if (--users === 0) client.removeListener(ClientEvent.AccountData, onAccountData)
       }
     },
-    snapshot() {
-      return pending ?? stored()
-    },
-    toggle(id) {
-      const next = togglePin(pending ?? stored(), id)
-      pending = next
-      settled = false
-      notify()
-      client.setAccountData(TYPE, { pins: next }).then(
-        () => {
-          if (pending !== next) return
-          settled = true
-          // The echo may already have landed before the write resolved.
-          if (same(stored(), next)) {
-            pending = null
-            notify()
-          }
-        },
-        (err: unknown) => {
-          // Undo only if nothing newer was asked for in the meantime.
-          if (pending === next) {
-            pending = null
-            notify()
-          }
-          reportAlways('thread pins: save (the pin was undone; try again once the connection is back)', err)
-        },
-      )
-    },
+    snapshot: sync.snapshot,
+    toggle: sync.toggle,
   }
 }
 

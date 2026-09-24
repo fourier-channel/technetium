@@ -75,11 +75,21 @@ export function threadStripCss(): string {
 }
 
 /**
- * Where the DM dock's pull-down tab sits while the strip is open. The dock's
- * closed-state tab hangs from the region's top border, and with the strip
- * open that border is the strip's title bar, whose label is centred. At its
- * usual 50% - 40px the 46px tab covers the label's left half; here its centre
- * is the label's half-width (about 48px), a 12px gap and its own half-width
- * (23px) left of centre, rounded out.
+ * Where the DM dock's pull-down tab sits while the strip is on screen, in the
+ * STRIP's coordinates. The dock's closed-state tab hangs from the region's top
+ * border, and with the strip open that border is the strip's title bar, whose
+ * label is centred. The free lane is RIGHT of the label: the scope pills fill
+ * the left side from the edge and reach the centre on ordinary screens, the
+ * sort pill sits at the far right. Its centre is the label's half-width + a
+ * gap + the tab's own half-width right of centre -- but never so far right
+ * that it reaches the sort pill, which on a narrow strip it would.
+ * checks/threadStrip computes where everything lands at several widths.
  */
-export const DM_TAB_BESIDE_TITLE = 'calc(50% - 90px)'
+export const TITLE_HALF_W = 55 // "Thread Listing", 13px semibold: 110px, measured
+export const PULLTAB_HALF_W = 23
+export const SORT_PILL_W = 80 // "Replies" pill with its caret, captions hidden
+export const HEAD_PAD_X = 10
+export const DM_TAB_GAP = 12
+export const DM_TAB_BESIDE_TITLE =
+  `min(calc(50% + ${TITLE_HALF_W + DM_TAB_GAP + PULLTAB_HALF_W}px), ` +
+  `calc(100% - ${HEAD_PAD_X + SORT_PILL_W + DM_TAB_GAP + PULLTAB_HALF_W}px))`

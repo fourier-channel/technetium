@@ -16,7 +16,7 @@
 import { readFileSync } from 'node:fs'
 import {
   THREAD_CARD_H, THREAD_HEAD_H, THREAD_TRACK_PAD_TOP, THREAD_TRACK_PAD_BOTTOM, PULLTAB_H,
-  DM_TAB_BESIDE_TITLE, threadStripHeight, threadStripCss,
+  DM_TAB_BESIDE_TITLE, TITLE_HALF_W, PULLTAB_HALF_W, SORT_PILL_W, HEAD_PAD_X, threadStripHeight, threadStripCss,
 } from '../src/ui/threadStrip.ts'
 
 let failures = 0
@@ -73,15 +73,53 @@ check('the tab uses it', new RegExp(`top: threadStripH, marginTop: -${PULLTAB_H}
 check('no share of the layout survives in App to be reached for',
   !/threadsShareOfChatColumn|threadsShare\b/.test(app))
 
-console.log('== the DM tab steps clear of the centred title while the strip is open')
+console.log('== the DM tab rides the strip, in the strip\'s coordinates, in the free lane')
 {
-  // The title is centred; the tab is 46px wide and centred on its `left`.
-  const m = /calc\(50% - (\d+)px\)/.exec(DM_TAB_BESIDE_TITLE)
-  const off = m ? Number(m[1]) : 0
-  const TITLE_HALF = 48 // "Thread Listing", 13px semibold, measured in the harness
-  check('the tab\'s right edge clears the title\'s left edge', off - 23 >= TITLE_HALF + 8, off)
-  check('App uses it only while the strip is open',
-    /selectedRoom && threadListOpen \? DM_TAB_BESIDE_TITLE : 'calc\(50% - 40px\)'/.test(app))
+  // Evaluate the CSS expression at real strip widths and check what it lands
+  // on. Widths: a wide screen, 1440 with a thread open (598), and the narrow
+  // end where the title hides (<= 390) and the chat column's floor (320).
+  const m = /^min\(calc\(50% \+ (\d+)px\), calc\(100% - (\d+)px\)\)$/.exec(DM_TAB_BESIDE_TITLE)
+  check('the tab position is min(right of the title, left of the sort pill)', !!m, DM_TAB_BESIDE_TITLE)
+  const right = m ? Number(m[1]) : 0
+  const fromEnd = m ? Number(m[2]) : 0
+  check('right of the title by at least a gap', right - PULLTAB_HALF_W >= TITLE_HALF_W + 8, right)
+  // The container is the header's content box: the strip less its padding.
+  const capMax = Number(/@container tc-threadlist-head \(max-width: (\d+)px\) \{\s*\.tc-threadlist-caption/.exec(css)?.[1] ?? NaN)
+  const titleMax = Number(/@container tc-threadlist-head \(max-width: (\d+)px\) \{\s*\.tc-threadlist-title/.exec(css)?.[1] ?? NaN)
+  for (const W of [1048, 700, 598, 582, 480, 440, 431, 420, 360, 320]) {
+    const c = Math.min(W / 2 + right, W - fromEnd)
+    const tab: [number, number] = [c - PULLTAB_HALF_W, c + PULLTAB_HALF_W]
+    const inner = W - 2 * HEAD_PAD_X
+    const captions = inner > capMax
+    const titleShown = inner > titleMax
+    const title: [number, number] = [W / 2 - TITLE_HALF_W, W / 2 + TITLE_HALF_W]
+    const left: [number, number] = [HEAD_PAD_X, HEAD_PAD_X + 127 + (captions ? 80 : 0)]
+    const sort: [number, number] = [W - HEAD_PAD_X - SORT_PILL_W - (captions ? 50 : 0), W - HEAD_PAD_X]
+    const hit = (x: [number, number], y: [number, number]) => x[0] < y[1] && y[0] < x[1]
+    check(`at ${W}px it touches neither the title, the scope pills nor the sort`,
+      !(titleShown && hit(tab, title)) && !hit(tab, left) && !hit(tab, sort),
+      { tab, title: titleShown ? title : 'hidden', left, sort })
+  }
+  check('App places it on the strip only while the strip is on screen (closing included)',
+    /const dmTabOnStrip = !!\(dockRoom && !space\.leaves\.dock\.open && selectedRoom && threadListReveal\.mounted\)/.test(app))
+  check('and there, in the chat column rather than in <main>',
+    /\{dockRoom && dmTabOnStrip && \(\s*\n\s*<PullTab pull="down" target="dock"[^\n]*left: DM_TAB_BESIDE_TITLE/.test(app))
+  check('and never both at once', /\{dockRoom && !space\.leaves\.dock\.open && !dmTabOnStrip && \(/.test(app))
+}
+
+console.log('== the strip is not a scroll container, and the header keeps its columns')
+{
+  const carousel = rule('.tc-carousel')
+  check('overflow: clip, so focusing a control off to the side cannot scroll the strip',
+    /overflow:\s*clip/.test(carousel), carousel)
+  const titleRule = rule('.tc-threadlist-title')
+  check('the title names column 2', /grid-column:\s*2/.test(titleRule), titleRule)
+  check('the sides name columns 1 and 3',
+    /\[data-side='left'\] \{ grid-column: 1;/.test(css) && /\[data-side='right'\] \{ grid-column: 3;/.test(css))
+  const cap = /@container tc-threadlist-head \(max-width: (\d+)px\) \{\s*\.tc-threadlist-caption/.exec(css)
+  const tit = /@container tc-threadlist-head \(max-width: (\d+)px\) \{\s*\.tc-threadlist-title/.exec(css)
+  check('captions go first, the title only when the controls alone no longer fit beside it',
+    !!cap && !!tit && Number(cap[1]) > Number(tit[1]) && Number(tit[1]) + 2 * 10 >= 2 * 127 + 110 + 24, [cap?.[1], tit?.[1]])
 }
 
 if (failures) { console.log(`\n${failures} check(s) failed`); process.exit(1) }

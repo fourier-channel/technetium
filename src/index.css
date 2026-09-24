@@ -1980,9 +1980,15 @@ code {
    reading position never moves, which is the point -- a scrollbar asks the
    reader to go to the results.
    --------------------------------------------------------------------------- */
+/* overflow: CLIP, not hidden. A hidden box is still a scroll container, so
+   focusing a control on a card the track had moved off-screen (every card
+   carries a Pin) scrolled the strip to reveal it -- the title bar went with
+   it, and every later step centred 1500px wrong because trackOffset assumes
+   the strip never scrolls. `hidden` stays first for a browser without clip. */
 .tc-carousel {
   height: 100%;
   overflow: hidden;
+  overflow: clip;
   outline: none;
 }
 .tc-carousel:focus-visible {
@@ -2043,9 +2049,12 @@ code {
   min-width: 0;
   white-space: nowrap;
 }
-.tc-threadlist-side[data-side='left'] { justify-self: start; }
-.tc-threadlist-side[data-side='right'] { justify-self: end; }
+/* Each part names its column, so hiding the title cannot pull the sort into
+   the middle one. */
+.tc-threadlist-side[data-side='left'] { grid-column: 1; justify-self: start; }
+.tc-threadlist-side[data-side='right'] { grid-column: 3; justify-self: end; }
 .tc-threadlist-title {
+  grid-column: 2;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2117,10 +2126,16 @@ code {
   color: var(--cpd-color-text-primary);
   cursor: pointer;
 }
+/* The breakpoints come from the parts (container width = the strip less its
+   20px of padding): with captions, both sides plus the 110px title need about
+   560px; without them, the title must also leave the DM tab its lane between
+   the title and the sort pill, which takes about 410px. Below that the title
+   goes, not the controls. checks/threadStrip lays the parts out at several
+   widths from these numbers. */
 @container tc-threadlist-head (max-width: 560px) {
   .tc-threadlist-caption { display: none; }
 }
-@container tc-threadlist-head (max-width: 300px) {
+@container tc-threadlist-head (max-width: 410px) {
   .tc-threadlist-title { display: none; }
 }
 
@@ -3198,6 +3213,7 @@ code {
 .tc-threads-tile {
   flex-shrink: 0;
   overflow: hidden;
+  overflow: clip;
   border-bottom: 1px solid rgba(128, 128, 128, 0.25);
   background: var(--cpd-color-bg-canvas-default);
   transition: height 380ms cubic-bezier(0.22, 0.61, 0.36, 1);
