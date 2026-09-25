@@ -45,6 +45,9 @@ reading had to be chosen it is stated below.
 | L5 | For ALL images, the tag bubble sits underneath the image, its top-left anchored to the image's bottom-left. Reuse chanbooru's Modulation preset: the creator tag ALWAYS shows, the character tag whenever present; the rest hide behind the "expose tags" button, which unfurls to the right as a true attached popup that may cover the user list -- not constrained to its own panel in thread view | DONE `6138231` |
 | L6 | Reactions own the first column on the right side of the image; the unfurled tag list may overlap them | DONE `6138231` |
 | L7 | Emoji about twice as big as they are now, in general | DONE `6138231` |
+| L9 | Operator, 2026-09-25: the room, DM and thread title bars are "too thick" -- shrink them about 50% -- "and restyle the buttons so they're not all Windows 3.1" | DONE `62f5cfc` |
+| L10 | "the space between status update lines and date changes": about 50% less | DONE `62f5cfc` |
+| L11 | "I regret that we are going back to the old Discord-style 'avatar on the left, name on the top right, text under name'"; avatar on the first message of a run only (asked, answered) | DONE `62f5cfc` |
 
 ---
 
@@ -110,6 +113,21 @@ everywhere reactions show. Not emoji inside message text (that would undo
 the U4 bubble height), and not the "+" inside a text line, which is a
 control and keeps its size.
 
+**L9, "title bars".** Asked which headers, answered: the room, DM and thread
+title bars. Their buttons were the browser's own grey bevelled buttons; they
+now wear the thread strip's pill -- the one header-control shape already built
+for that bar (L3) -- rather than a second style. The DM dock stacked its own
+bar over the room header of the timeline inside it; it is now one bar.
+
+**L10, "status update lines".** The membership lines (joins, leaves, name
+changes) and the date dividers between days.
+
+**L11, "the old Discord-style".** Avatar at the left of the FIRST message of a
+run only, the name on the top line to its right, the text under the name;
+follow-up lines keep the text column and carry no avatar. The narrow thread
+panel keeps its one-line user line, which is already that shape without a
+gutter. Bubbles and the trailing timestamp are unchanged.
+
 ---
 
 ## Ledger
@@ -125,3 +143,4 @@ One line per landed step, appended as it lands.
 | L2 second pass `906c73d` | A notch is known by its timing, not its size: the first rule stalled on small-notch mice (4px ticks) and let trackpad flings cross the list. Checked against the reviewers' streams; fails 12 ways against the first rule. Enter after clicking a Pin opens the card; a drag keeps pinned threads' places. | PENDING OPERATOR VERIFICATION: the feel under a real wheel and trackpad. |
 | L4 revised + L8 `f1391fa` | Pins are room state, moderators only, applied last; sliding sync requests the event. Drag-to-reorder, the Custom sort and the "new" chip are gone from the thread list; threadDrag.ts stays for the room list. | PENDING OPERATOR VERIFICATION: a moderator pinning and a member seeing it first. |
 | L4 start-out `385119f` | Pinned threads pull the strip down on entering their room, once per entry; a pushpin at the strip's left end folds them away and back, per person, in account data. | PENDING OPERATOR VERIFICATION: a newcomer landing in #chat. |
+| L9 + L10 + L11 `62f5cfc` | Title bars a declared 24px (room 51 -> 24, thread 47 -> 24, DM 88 -> 24, one bar in the dock); buttons are the thread strip pill, one rule. Date dividers and membership lines at half their spacing. Rows in the Discord shape, avatar and name on the first message of a run. | PENDING OPERATOR VERIFICATION: all three in the browser. |

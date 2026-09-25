@@ -4050,3 +4050,64 @@ the permission classifier as self-modification and reworded current
 production gates, so it was reverted and only the two asked-for edits
 applied by hand. That file's struck-through production and merge gates wait
 for a ruling.
+
+## 2026-09-25 -- thinner title bars, the Discord row, and images a new account could not load
+
+Deployed on the operator's word on 2026-09-24: production now serves
+`ba90733`, the launch-polish work through the pinned threads.
+
+**Images on a new account.** Some pictures never loaded for a fresh
+account, and only some. The cause was in the media authority, not this
+client: it remembered a viewer's joined rooms for minutes and an image's
+rooms for hours, and refused from that memory. A new account joins rooms in
+its first minutes, so images in rooms joined after its first image were
+refused; an image posted again in a second room was refused there to anyone
+not also in the first -- invisible to an account that is in every room.
+Fixed in fourier-auth (`d2068f4`: a refusal is re-asked of the source before
+it is given; an allow is unchanged), deployed by the operator, and confirmed
+by them: "It works."
+
+**draft-12 (gotcha) -- a refusal outlives this client's retries.**
+`AuthedImage` spends its four retries in about twelve seconds and then shows
+"[image unavailable]" until the room is reopened, so any server-side refusal
+that corrects itself later still reads as permanent here. That is right for a
+real denial; it is why a stale one looked like a broken image rather than a
+slow one.
+
+**draft-13 (finding) -- the console "spam" was two kinds of logging, not a
+loop.** Every request prints the SDK's own debug lines (`FetchHttpApi:
+-->`), which this client never turned down, and a report-only
+Content-Security-Policy that this site does not send -- most likely added at
+the edge to a sample of page loads -- which logs a would-be violation per
+request and blocks nothing. By the code, the initial scrollback runs once per
+room open and a read receipt once per new event.
+
+**L9, L10, L11 -- `62f5cfc`.** The operator: the room, DM and thread title
+bars were "too thick" and their buttons "all Windows 3.1"; the space around
+status lines and date changes about half; and "going back to the old
+Discord-style 'avatar on the left, name on the top right, text under name'",
+the avatar on a run's first message only.
+
+- Title bars are a declared 24px (room 51 -> 24, thread 47 -> 24, DM 88 ->
+  24), measured in `tools/visual/titlebars.html` against a literal copy of
+  the old ones. Their buttons wear the thread strip's pill -- one rule for
+  both, not a second style. The DM dock no longer stacks its own bar over the
+  room header; its label and edit chrome ride in the one bar.
+- Date dividers and membership lines at half their spacing.
+- The name line sits beside the avatar at the top of the text column; a
+  follow-up line has no picture and no avatar-height floor, and keeps its
+  interaction anchor. The narrow thread panel keeps its user line.
+
+**draft-14 (decision) -- reuse the header control that exists.** The title
+bar buttons could have been a new "icon button" style; the thread strip's
+pill was already the header-control shape (L3), so `.tc-head-pill` shares its
+rule. Org ruling the same day: plan on existing routes and purpose-built
+modules, never a new route (memory `reuse-existing-routes-sender-receiver-agnostic`).
+
+Checks: `panelHeaders` rewritten for the one-bar dock and the pill (8 fail
+against the previous commit), `rowShape` new (13 fail against it). Gate
+passing at `62f5cfc`. Seen in the harness only: PENDING OPERATOR
+VERIFICATION in the browser for L9-L11. Not deployed.
+
+The fourier-sampling CLAUDE file's struck-through gates, left for a ruling
+in the previous entry, were cleaned by another session (`046898f`).
