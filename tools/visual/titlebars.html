@@ -1,0 +1,90 @@
+<!doctype html><html><head>
+<!--#head-->
+<title>Title bars -- before and after L9</title>
+<style>
+  /* Launch-polish L9: the room, DM and thread title bars, before and after.
+     BEFORE is a literal copy of the inline styles and native buttons the bars
+     carried on 2026-09-25 -- a frozen record of one moment, not a second
+     source of truth; delete it once nobody needs the comparison. AFTER is the
+     live stylesheet. The script prints each bar's measured height. */
+  .h-wrap { width: 760px; padding: 6px 14px 14px; }
+  .h-panel { background: var(--cpd-color-bg-canvas-default); margin-bottom: 14px;
+             border: 1px solid var(--mod-line); border-radius: 6px; overflow: hidden; }
+  .h-body { height: 26px; }
+  .h-h { font: 11px var(--tc-ui-font); opacity: .6; padding: 2px 4px; }
+</style>
+</head><body>
+<div class="h-wrap">
+
+<div class="h-label">Room -- before</div>
+<div class="h-panel">
+  <header class="tc-panel-head" data-measure style="padding:10px 16px;font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:12px;min-width:0;flex-shrink:0">
+    <div class="tc-room-header-info"><span class="tc-room-header-name">general</span><span class="tc-room-header-count">41</span><span class="tc-room-header-topic">Anything goes, within the rules</span></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button type="button" style="font-size:12px;font-weight:400">Load older</button>
+      <button type="button" style="font-size:12px;font-weight:400">&#x1F50D;</button>
+      <button type="button" style="font-size:12px;font-weight:400">Threads</button>
+      <button type="button" style="font-size:13px;font-weight:400;line-height:1;padding:2px 4px">&#x1F3F7;</button>
+      <button type="button" style="font-size:13px;font-weight:400;line-height:1;padding:2px 4px">&#x1F5BC;</button>
+    </div>
+  </header>
+  <div class="h-body"></div>
+</div>
+
+<div class="h-label">Room -- after</div>
+<div class="h-panel">
+  <header class="tc-panel-head tc-titlebar" data-measure>
+    <div class="tc-room-header-info"><span class="tc-room-header-name">general</span><span class="tc-room-header-count">41</span><span class="tc-room-header-topic">Anything goes, within the rules</span></div>
+    <div class="tc-titlebar-tools">
+      <button type="button" class="tc-head-pill">Load older</button>
+      <button type="button" class="tc-head-pill" data-icon="true" aria-pressed="false">&#x1F50D;</button>
+      <button type="button" class="tc-head-pill" aria-pressed="true">Threads</button>
+      <button type="button" class="tc-head-pill" data-icon="true" aria-pressed="true">&#x1F3F7;</button>
+      <button type="button" class="tc-head-pill" data-icon="true" aria-pressed="false">&#x1F5BC;</button>
+    </div>
+  </header>
+  <div class="h-body"></div>
+</div>
+
+<div class="h-label">DM -- before (the dock's bar over the room header)</div>
+<div class="h-panel">
+  <div data-measure>
+    <div class="tc-panel-head" style="display:flex;align-items:center;gap:10px;padding:5px 10px;font-size:12.5px"><span style="font-weight:700">nobu</span><span style="opacity:.6;font-size:11px">Direct message</span></div>
+    <header class="tc-panel-head" style="padding:10px 16px;font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:12px">
+      <div class="tc-room-header-info"><span class="tc-room-header-name">nobu</span><span class="tc-room-header-count">2</span></div>
+      <div style="display:flex;gap:8px;align-items:center"><button type="button" style="font-size:12px;font-weight:400">&#x1F50D;</button><button type="button" style="font-size:13px;font-weight:400;line-height:1;padding:2px 4px">&#x1F5BC;</button></div>
+    </header>
+  </div>
+  <div class="h-body"></div>
+</div>
+
+<div class="h-label">DM -- after</div>
+<div class="h-panel">
+  <header class="tc-panel-head tc-titlebar" data-measure>
+    <span class="tc-dmdock-hint">Direct message</span>
+    <div class="tc-room-header-info"><span class="tc-room-header-name">nobu</span><span class="tc-room-header-count">2</span></div>
+    <div class="tc-titlebar-tools"><button type="button" class="tc-head-pill" data-icon="true" aria-pressed="false">&#x1F50D;</button><button type="button" class="tc-head-pill" data-icon="true" aria-pressed="false">&#x1F5BC;</button></div>
+  </header>
+  <div class="h-body"></div>
+</div>
+
+<div class="h-label">Thread -- before / after</div>
+<div class="h-panel" style="width:380px">
+  <div class="tc-panel-head" data-measure style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px"><strong style="font-size:13px">Thread</strong></div>
+  <div class="h-body"></div>
+</div>
+<div class="h-panel" style="width:380px">
+  <div class="tc-panel-head tc-titlebar" data-measure><strong class="tc-titlebar-name">Thread</strong></div>
+  <div class="h-body"></div>
+</div>
+
+</div>
+<script>
+  for (const el of document.querySelectorAll('[data-measure]')) {
+    const tag = document.createElement('div')
+    tag.className = 'h-h'
+    tag.textContent = Math.round(el.getBoundingClientRect().height) + 'px'
+    el.parentElement.insertBefore(tag, el.nextSibling)
+  }
+</script>
+</body></html>

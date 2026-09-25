@@ -42,14 +42,19 @@ export function DmDock() {
     >
       {dockRoom && (
         <div className="tc-dmdock-inner">
-          <div className="tc-dmdock-head tc-panel-head">
-            <span className="tc-dmdock-title">{title}</span>
-            <span className="tc-dmdock-hint">Direct message</span>
-            {editMode && <PanelChrome id="dock" inline />}
-          </div>
+          {/* ONE title bar (launch-polish L9). The dock used to stack its own
+              bar -- the person's name and "Direct message" -- over the room
+              header of the timeline inside it, which named the same person a
+              second time. What only the dock knows now rides in that header:
+              what this panel is, and its edit-mode chrome. The person is named
+              by the header's own label, which also carries the shield. */}
           <ComposerModeProvider>
             <div className="tc-dmdock-body">
-              <Timeline room={dockRoom as Room} />
+              <Timeline
+                room={dockRoom as Room}
+                headLead={<span className="tc-dmdock-hint" title={title}>Direct message</span>}
+                headTrail={editMode ? <PanelChrome id="dock" inline /> : undefined}
+              />
             </div>
             <Composer room={dockRoom as Room} />
           </ComposerModeProvider>

@@ -1,23 +1,18 @@
 import { displayDecoration, decoratedName } from './displayDecoration'
 
 // ---------------------------------------------------------------------------
-// The identity block above the first message of a cluster: the decorated name,
-// and the guild tag centred beneath it. Nothing else.
+// The name line of the first message of a run: the decorated name, and the
+// guild tag after it on the same line. Nothing else.
 //
-// The avatar is NOT here -- it belongs to the message line below, where it
-// repeats for every message in the run. Neither is the TIMESTAMP: a time is a
-// property of a message, and a cluster is many messages, so hanging one off the
-// name only ever labelled the first of them. It now sits beside each line's own
-// avatar instead.
+// The Discord shape (launch-polish L11, operator 2026-09-25): this sits at the
+// top of the text column, beside the avatar on the run's first message, with
+// the text under it. It used to be a block ABOVE the run with the avatar under
+// it, built as a provisional layout in its own file so it could be reverted
+// cleanly; the operator saw it and ruled it back.
 //
-// Its own file rather than a branch inside Timeline, because this layout is
-// provisional: the operator wants to see it before deciding to keep it, and a
-// self-contained component is a clean revert rather than an archaeology
-// exercise.
-//
-// The guild is centred on the NAME, not on the row, which is why the name and
-// the tag are wrapped in an inline-block: the wrapper is exactly as wide as the
-// name, so centring inside it centres under the name however long that name is.
+// The avatar is NOT here -- it belongs to the message line, where the row
+// renders it. Neither is the TIMESTAMP: a time is a property of a message, and
+// a run is many messages, so it trails each line's own text instead.
 // ---------------------------------------------------------------------------
 
 export function SenderIdentity({

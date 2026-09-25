@@ -1027,7 +1027,9 @@ code {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 10px 0 6px;
+  /* Half what it was (launch-polish L10, operator 2026-09-25: "the space
+     between status update lines and date changes"). */
+  margin: 5px 0 3px;
   font-size: 11px;
   font-weight: 600;
   color: var(--cpd-color-text-secondary, #a8b0bd);
@@ -1048,8 +1050,10 @@ code {
   padding-top: 0 !important;
 }
 /* ---------------------------------------------------------------------------
-   Row layout: an identity block on the first message of a cluster, and an
-   avatar on every line of it.
+   Row layout: the Discord shape (launch-polish L11, operator 2026-09-25). The
+   first message of a run carries the avatar at the left and the name on the
+   top line beside it, the text under the name; the rest of the run keeps the
+   text column and carries neither.
 
    The avatar column is a FIXED width whether or not its image has loaded, and
    the two things that share it -- the avatar and a grouped row's timestamp --
@@ -1061,11 +1065,13 @@ code {
 .tc-row-line {
   position: relative;
   min-width: 0;
-  /* The avatar is out of flow, so the line's height would otherwise be the
-     text's alone and a one-line message would let the avatar hang into the row
-     below it. */
-  min-height: var(--tc-av-w);
   padding-left: var(--tc-body-x);
+}
+/* The avatar is out of flow, so the head line's height would otherwise be the
+   text's alone and a one-line message would let the avatar hang into the row
+   below it. A follow-up line has no avatar and no such floor. */
+.tc-row:not([data-grouped='true']) > .tc-row-line {
+  min-height: var(--tc-av-w);
 }
 /* Left-justified and out of flow. Out of flow because the row's height must be
    the text's, not the avatar's -- and because nothing to its right may ever
@@ -1120,34 +1126,35 @@ code {
 .tc-row:focus-within .tc-row-time {
   opacity: 0.9;
 }
+/* A follow-up line's avatar box holds no picture: it stays as the line's
+   interaction anchor, as tall as the line rather than as the picture was. */
+.tc-row[data-grouped='true'] .tc-row-av {
+  height: 100%;
+  cursor: default;
+}
 .tc-row-av:focus-visible {
   outline: 2px solid var(--tc-link);
   outline-offset: 2px;
   border-radius: 50%;
 }
 
-/* The identity block: name, and the guild tag centred beneath it -- the pair
-   centred over the AVATAR rather than aligned to the row's left edge.
-
-   It is a ZERO-WIDTH flex box parked on the avatar's centre line. A zero-width
-   centred container puts its child's midpoint exactly on that line and lets the
-   child overflow equally both ways, so the name stays centred at any length
-   instead of being pushed right by the gutter or clipped to fit it. Long names
-   spill, which is the intended behaviour here and not an oversight. */
-/* Left-aligned, because the avatar is now at x=0: centring a name over a
-   left-justified avatar would push half of every name off the left edge of the
-   timeline. The guild tag stays centred UNDER THE NAME, which still works and
-   is the part of that decision worth keeping. */
+/* The name line, now the top line of the text column beside the avatar
+   (L11), with the guild tag after the name on the same line -- Discord's
+   place for a role tag. The narrow thread line (.tc-ident-row-narrow) has its
+   own markup and is untouched. */
 .tc-ident-row {
   display: flex;
   min-width: 0;
 }
 .tc-ident {
-  /* Exactly as wide as the name -- which is what makes "centred under the name"
-     mean centred under the NAME rather than under anything else, for a name of
-     any length. */
-  display: inline-block;
-  text-align: center;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  margin-bottom: 2px;
+}
+.tc-ident .tc-ident-guild {
+  display: inline;
 }
 .tc-ident-name {
   display: block;
@@ -1204,7 +1211,9 @@ code {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  padding: 3px 0 3px 16px;
+  /* 1.5px a side, half the 3px it was (launch-polish L10): a run of joins is
+     a list, and read as one. */
+  padding: 1.5px 0 1.5px 16px;
 }
 .tc-member-phrase {
   font-size: 13px;
@@ -2109,8 +2118,11 @@ code {
   margin-right: 1px;
 }
 /* The pills: Here, Everywhere, and the sort -- one shape for all three, so
-   the bar reads as one set of controls. */
-.tc-threadlist-pill {
+   the bar reads as one set of controls. The title bars' buttons wear the same
+   rule as .tc-head-pill (launch-polish L9): one header-control shape in this
+   client, not a second one drawn to look like it. */
+.tc-threadlist-pill,
+.tc-head-pill {
   box-sizing: border-box;
   height: 20px;
   font: inherit;
@@ -2124,14 +2136,17 @@ code {
   cursor: pointer;
   transition: border-color 120ms ease, color 120ms ease, background-color 120ms ease;
 }
-.tc-threadlist-pill:hover { color: var(--cpd-color-text-primary); border-color: rgba(160, 160, 160, 0.6); }
-.tc-threadlist-pill[aria-pressed='true'] {
+.tc-threadlist-pill:hover,
+.tc-head-pill:hover { color: var(--cpd-color-text-primary); border-color: rgba(160, 160, 160, 0.6); }
+.tc-threadlist-pill[aria-pressed='true'],
+.tc-head-pill[aria-pressed='true'] {
   color: var(--cpd-color-text-primary);
   background: var(--cpd-color-bg-subtle-secondary);
   border-color: rgba(56, 224, 138, 0.45);
 }
 @supports (color: rgb(from white r g b / 1)) {
-  .tc-threadlist-pill[aria-pressed='true'] {
+  .tc-threadlist-pill[aria-pressed='true'],
+  .tc-head-pill[aria-pressed='true'] {
     border-color: rgb(from var(--mod-accent) r g b / 0.45);
   }
 }
@@ -2948,13 +2963,9 @@ code {
   transition: transform 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 .tc-dmdock[data-shown='true'] .tc-dmdock-inner { transform: translateX(0); }
-.tc-dmdock-head {
-  display: flex; align-items: center; gap: 10px;
-  padding: 5px 10px; font-size: 12.5px;
-}
-.tc-dmdock-title { font-weight: 700; }
-.tc-dmdock-hint { opacity: 0.6; font-size: 11px; }
-.tc-dmdock-close { margin-left: auto; font-size: 11px; padding: 2px 8px; }
+/* The dock's own bar is gone (launch-polish L9): this label rides in the
+   timeline's title bar, ahead of the room's name. */
+.tc-dmdock-hint { flex-shrink: 0; opacity: 0.6; font-size: 11px; font-weight: 400; }
 .tc-dmdock-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .tc-dmdock-grip { height: 7px; flex-shrink: 0; display: flex; }
 @media (prefers-reduced-motion: reduce) {
@@ -3416,6 +3427,59 @@ code {
    above it for the lip to describe. */
 .tc-panel-head[data-inset='true'] {
   box-shadow: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Title bars (launch-polish L9): the room, DM and thread headers.
+
+   Operator, 2026-09-25: "too thick" -- about half -- "and restyle the buttons
+   so they're not all Windows 3.1". The bar is a DECLARED height, not padding
+   around whatever its tallest child is, so no control can thicken it again;
+   its buttons are the header pill above, whose 20px fits inside it. The
+   browser's own button -- grey, bevelled, a different size in every engine --
+   was the Windows 3.1.
+   --------------------------------------------------------------------------- */
+:root {
+  --tc-titlebar-h: 24px;
+}
+.tc-titlebar {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: var(--tc-titlebar-h);
+  padding: 0 8px 0 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+}
+.tc-titlebar-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.tc-titlebar-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A bar's weight is for its NAME; the controls in it read as controls. */
+.tc-head-pill { font-weight: 400; }
+/* An emoji wears the pill a little squarer; one that is off reads as off. */
+.tc-head-pill[data-icon='true'] {
+  padding: 0 5px;
+  font-size: 12px;
+}
+.tc-head-pill[data-icon='true'][aria-pressed='false'] { opacity: 0.7; }
+.tc-head-pill[data-icon='true']:hover { opacity: 1; }
+.tc-head-pill:disabled { opacity: 0.55; cursor: default; }
+.tc-head-pill:focus-visible {
+  outline: 2px solid var(--tc-link);
+  outline-offset: 1px;
 }
 
 /* ---------------------------------------------------------------------------

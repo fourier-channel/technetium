@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ThreadEvent, type IContent, type Room, type MatrixEvent } from 'matrix-js-sdk'
 import { useClient } from '../client/clientContextValue'
 import { explainUnreadable } from '../client/decryptionState'
@@ -128,7 +128,10 @@ function onSpoilerKey(e: React.KeyboardEvent) {
 // Read-only timeline. Message bodies render sanitized rich HTML (via DOMPurify)
 // when present, else plaintext. Events we could not decrypt render the REASON
 // they are unreadable, not a bare padlock (see client/decryptionState).
-export function Timeline({ room, onOpenThread, onOpenRoom, threadListOpen, onToggleThreadList }: { room: Room; onOpenThread?: (roomId: string, rootId: string) => void; onOpenRoom?: (roomId: string) => void; threadListOpen?: boolean; onToggleThreadList?: () => void }) {
+// headLead / headTrail: what a host puts in the ONE title bar rather than
+// stacking a second bar over it -- the DM dock's "Direct message" and its
+// edit-mode chrome (launch-polish L9).
+export function Timeline({ room, onOpenThread, onOpenRoom, threadListOpen, onToggleThreadList, headLead, headTrail }: { room: Room; onOpenThread?: (roomId: string, rootId: string) => void; onOpenRoom?: (roomId: string) => void; threadListOpen?: boolean; onToggleThreadList?: () => void; headLead?: ReactNode; headTrail?: ReactNode }) {
   const { client } = useClient()
   const { items, loadOlder, loadingOlder, atStart, skipped } = useTimeline(client, room)
   // The lightbox's vertical axis for this room: every image in the loaded
@@ -262,30 +265,19 @@ export function Timeline({ room, onOpenThread, onOpenRoom, threadListOpen, onTog
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <header
-        className="tc-panel-head"
-        style={{
-          padding: '10px 16px',
-          fontWeight: 600,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: 12,
-          minWidth: 0,
-          flexShrink: 0,
-        }}
-      >
+      <header className="tc-panel-head tc-titlebar">
+        {headLead}
         <RoomHeaderInfo client={client} room={room} />
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className="tc-titlebar-tools">
           {!atStart && (
             <button
               type="button"
+              className="tc-head-pill"
               onClick={() => {
                 prependHeightRef.current = scrollRef.current?.scrollHeight ?? null
                 void loadOlder()
               }}
               disabled={loadingOlder}
-              style={{ fontSize: 12, fontWeight: 400 }}
             >
               {loadingOlder
                 ? 'Loading...'
@@ -299,20 +291,24 @@ export function Timeline({ room, onOpenThread, onOpenRoom, threadListOpen, onTog
           )}
           <button
             type="button"
+            className="tc-head-pill"
+            data-icon="true"
             onClick={() => setSearchOpen((o) => !o)}
             title="Search messages"
+            aria-label="Search messages"
             aria-expanded={searchOpen}
-            style={{ fontSize: 12, fontWeight: 400 }}
+            aria-pressed={searchOpen}
           >
             {'\u{1F50D}'}
           </button>
           {pins.pinned.length > 0 && (
             <button
               type="button"
+              className="tc-head-pill"
               onClick={() => setPinnedOpen((o) => !o)}
               title="Pinned messages"
               aria-expanded={pinnedOpen}
-              style={{ fontSize: 12, fontWeight: 400 }}
+              aria-pressed={pinnedOpen}
             >
               {'\u{1F4CC}'} {pins.pinned.length}
             </button>
@@ -320,14 +316,17 @@ export function Timeline({ room, onOpenThread, onOpenRoom, threadListOpen, onTog
           {onToggleThreadList && (
             <button
               type="button"
+              className="tc-head-pill"
               onClick={onToggleThreadList}
-              style={{ fontSize: 12, fontWeight: 400 }}
+              aria-pressed={!!threadListOpen}
             >
-              {threadListOpen ? 'Threads X' : 'Threads'}
+              Threads
             </button>
           )}
           <button
             type="button"
+            className="tc-head-pill"
+            data-icon="true"
             onClick={tagPrefs.toggleGlobal}
             title={
               tagPrefs.enabled
@@ -336,23 +335,19 @@ export function Timeline({ room, onOpenThread, onOpenRoom, threadListOpen, onTog
             }
             aria-label="Toggle image tags"
             aria-pressed={tagPrefs.enabled}
-            style={{
-              fontSize: 13,
-              fontWeight: 400,
-              lineHeight: 1,
-              padding: '2px 4px',
-              opacity: tagPrefs.enabled ? 1 : 0.45,
-            }}
           >
             {'\u{1F3F7}'}
           </button>
           <div style={{ position: 'relative' }}>
             <button
               type="button"
+              className="tc-head-pill"
+              data-icon="true"
               onClick={() => setBgMenuOpen((o) => !o)}
               title="Chat background"
               aria-label="Chat background"
-              style={{ fontSize: 13, fontWeight: 400, lineHeight: 1, padding: '2px 4px' }}
+              aria-expanded={bgMenuOpen}
+              aria-pressed={bgMenuOpen}
             >
               🖼
             </button>
@@ -374,6 +369,7 @@ export function Timeline({ room, onOpenThread, onOpenRoom, threadListOpen, onTog
             )}
           </div>
         </div>
+        {headTrail}
       </header>
       {/* Under the header and above the timeline, because it is about the whole
           conversation rather than any message in it. Renders null unless this
@@ -696,13 +692,16 @@ export function Row({
     )
   }
 
+  // The first message of a run: the one that carries the avatar and the name.
+  const head = item.showHeader !== false
+
   return (
     // data-event-id is what click-to-jump searches for; keeping it on the row
     // means no separate index has to stay in sync with the timeline.
     <div
       className="tc-row"
       data-event-id={item.id}
-      data-grouped={item.showHeader === false ? 'true' : undefined}
+      data-grouped={head ? undefined : 'true'}
       data-narrow={narrow ? 'true' : undefined}
       style={{ padding: '4px 0' }}
     >
@@ -712,54 +711,50 @@ export function Row({
       {/* Overlays the row's top-right; revealed by CSS on hover/focus-within so
           no React state churns per pointer crossing. */}
       <MessageActionBar actions={actions} />
-      {/* Grouping hides the IDENTITY BLOCK only -- the name and its guild tag.
-          The avatar repeats on every line of the run, and every decoration
+      {/* THE DISCORD SHAPE (launch-polish L11, operator 2026-09-25): the
+          first message of a run carries the avatar at the left and the name
+          on the top line beside it, the text under the name; the rest of the
+          run keeps the text column and carries neither. Every decoration
           below (reply pill, body, edited marker, reactions, receipts, thread
-          chip) is untouched either way. */}
-      {item.showHeader !== false &&
-        (narrow ? (
-          // The whole identity on ONE line, which is the point: a 34px avatar
-          // gutter on every message of a 380px panel is a tenth of its width,
-          // repeated down the thread, to repeat what the header already said.
-          // Said once, as a user line, the pictures get the rest.
-          <SenderUserLine
-            userId={senderId}
-            name={senderName}
-            avatarMxc={senderAvatar}
-            presence={presence}
-            powerLevel={senderMember?.powerLevel}
-            onOpenProfile={openProfile}
-            onOpenInteractions={openInteractions}
-          />
-        ) : (
-          <SenderIdentity
-            userId={senderId}
-            name={senderName}
-            onOpenProfile={openProfile}
-            onOpenInteractions={openInteractions}
-          />
-        ))}
+          chip) is the same on every line either way. */}
+      {head && narrow && (
+        // The whole identity on ONE line, which is the point: a 34px avatar
+        // gutter on every message of a 380px panel is a tenth of its width,
+        // repeated down the thread, to repeat what the header already said.
+        // Said once, as a user line, the pictures get the rest.
+        <SenderUserLine
+          userId={senderId}
+          name={senderName}
+          avatarMxc={senderAvatar}
+          presence={presence}
+          powerLevel={senderMember?.powerLevel}
+          onOpenProfile={openProfile}
+          onOpenInteractions={openInteractions}
+        />
+      )}
       <div className="tc-row-line">
         {/* The avatar column, left-justified and out of flow, so its width is
             fixed whether or not the image has loaded and nothing shifts when
             it does.
 
-            EVERY message row is an interaction anchor, not just the lead one.
-            resolveAnchor takes the LAST match on screen, so anchoring only the
-            cluster head meant a slap aimed at somebody whose latest line was
-            directly above you flew to the TOP of their run instead -- which is
-            further the more they had said. Their most recent line is where you
-            think of them as being, and now that is what it is. */}
+            EVERY message row is an interaction anchor, not just the lead one,
+            with or without the picture in it. resolveAnchor takes the LAST
+            match on screen, so anchoring only the cluster head meant a slap
+            aimed at somebody whose latest line was directly above you flew to
+            the TOP of their run instead -- which is further the more they had
+            said. Their most recent line is where you think of them as being,
+            and it stays that. Only the head's box is a control. */}
         {!narrow && (
         <span
           className="tc-row-av"
           data-user-anchor={senderId}
-          role={openProfile ? 'button' : undefined}
-          tabIndex={openProfile ? 0 : undefined}
-          title={senderName}
-          onClick={openProfile ? (e) => openProfile(senderId, e.clientX, e.clientY) : undefined}
+          aria-hidden={head ? undefined : true}
+          role={head && openProfile ? 'button' : undefined}
+          tabIndex={head && openProfile ? 0 : undefined}
+          title={head ? senderName : undefined}
+          onClick={head && openProfile ? (e) => openProfile(senderId, e.clientX, e.clientY) : undefined}
           onKeyDown={
-            openProfile
+            head && openProfile
               ? (e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault()
@@ -770,7 +765,7 @@ export function Row({
               : undefined
           }
           onContextMenu={
-            openInteractions
+            head && openInteractions
               ? (e) => {
                   e.preventDefault()
                   openInteractions(senderId, e.clientX, e.clientY)
@@ -778,7 +773,7 @@ export function Row({
               : undefined
           }
         >
-          <AvatarDisc userId={senderId} name={senderName} avatarMxc={senderAvatar} size={34} />
+          {head && <AvatarDisc userId={senderId} name={senderName} avatarMxc={senderAvatar} size={34} />}
           {face && <FaceFlash face={face} seed={item.id} />}
         </span>
         )}
@@ -794,6 +789,14 @@ export function Row({
             flex: 1,
           }}
         >
+        {head && !narrow && (
+          <SenderIdentity
+            userId={senderId}
+            name={senderName}
+            onOpenProfile={openProfile}
+            onOpenInteractions={openInteractions}
+          />
+        )}
         {item.replyTo && <ReplyPill replyTo={item.replyTo} />}
         <div
           ref={bubble ? fx.ref : undefined}

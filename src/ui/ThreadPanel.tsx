@@ -125,15 +125,7 @@ export function ThreadPanel({
         minWidth: 0,
       }}
     >
-      <div
-        className="tc-panel-head"
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '10px 12px',
-        }}
-      >
+      <div className="tc-panel-head tc-titlebar">
         {/* THE ROOM'S NAME ONLY WHEN NOTHING ELSE IS SAYING IT.
             This read "Thread - <room>" always, and the timeline it sits beside
             carries the same name in its own header two inches to the left --
@@ -145,7 +137,7 @@ export function ThreadPanel({
             On a one-slot screen the thread can be the sole occupant
             (space.ts present/singleSlot), and then nothing else names the
             room -- so it is said there, from the SAME source. */}
-        <strong style={{ fontSize: 13 }}>
+        <strong className="tc-titlebar-name">
           Thread{alone && room ? ` \u00b7 ${roomLabel}` : ''}
         </strong>
 
