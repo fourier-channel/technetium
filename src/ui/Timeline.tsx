@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ThreadEvent, type IContent, type Room, type MatrixEvent } from 'matrix-js-sdk'
 import { useClient } from '../client/clientContextValue'
 import { explainUnreadable } from '../client/decryptionState'
@@ -65,6 +65,10 @@ const MAX_JUMP_PAGES = 8
 
 // Stable empty array: a fresh [] per render would re-render every footer.
 const EMPTY_SEEN: string[] = []
+
+// Which line of each run the avatar is speaking, keyed by the run's first
+// message: what a row taking the avatar over reads to find where it came from.
+const speakerByRun = new Map<string, string>()
 
 // Distance from the bottom, in px, within which the view counts as "at the
 // bottom" for follow mode.
@@ -579,6 +583,30 @@ export function Row({
   const reducedMotion = useReducedMotion()
   const { animationsEnabled } = useRoomListSettings()
   const fx = useBubbleFx(bubble, animationsEnabled && !reducedMotion)
+  // The avatar SPEAKS the run's newest line (launch-polish L12, operator
+  // 2026-09-26: "the avatar moves down each time to 'speak' the new line").
+  // When a line takes it over, it travels down from the line that had it --
+  // measured, both boxes in the same frame, so scrolling cannot skew it --
+  // rather than blinking out of one row and into another.
+  const speaks = item.runTail !== false
+  const avRef = useRef<HTMLSpanElement | null>(null)
+  useLayoutEffect(() => {
+    const runHead = item.runHead
+    if (!speaks || !runHead || narrow) return
+    const was = speakerByRun.get(runHead)
+    speakerByRun.set(runHead, item.id)
+    if (!was || was === item.id || reducedMotion) return
+    const el = avRef.current
+    const list = el?.closest('.tc-row')?.parentElement
+    const from = list?.querySelector(`[data-event-id="${CSS.escape(was)}"] .tc-row-av`)
+    if (!el || !from) return
+    const dy = from.getBoundingClientRect().top - el.getBoundingClientRect().top
+    if (dy === 0) return
+    el.animate([{ transform: `translateY(${dy}px)` }, { transform: 'translateY(0)' }], {
+      duration: 280,
+      easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)',
+    })
+  }, [speaks, item.id, item.runHead, narrow, reducedMotion])
 
   let body: React.ReactNode
   if (kind === 'gallery' && cells) {
@@ -702,6 +730,7 @@ export function Row({
       className="tc-row"
       data-event-id={item.id}
       data-grouped={head ? undefined : 'true'}
+      data-speaker={speaks && !narrow ? 'true' : undefined}
       data-narrow={narrow ? 'true' : undefined}
       style={{ padding: '4px 0' }}
     >
@@ -711,12 +740,13 @@ export function Row({
       {/* Overlays the row's top-right; revealed by CSS on hover/focus-within so
           no React state churns per pointer crossing. */}
       <MessageActionBar actions={actions} />
-      {/* THE DISCORD SHAPE (launch-polish L11, operator 2026-09-25): the
-          first message of a run carries the avatar at the left and the name
-          on the top line beside it, the text under the name; the rest of the
-          run keeps the text column and carries neither. Every decoration
-          below (reply pill, body, edited marker, reactions, receipts, thread
-          chip) is the same on every line either way. */}
+      {/* THE DISCORD SHAPE (launch-polish L11, operator 2026-09-25), with the
+          avatar SPEAKING (L12, 2026-09-26): the name stays on the first line
+          of a run, the avatar sits beside the run's NEWEST line and travels
+          down as the run grows, and only that line's bubble points at it.
+          Every other decoration (reply pill, body, edited marker, reactions,
+          receipts, thread chip, the bubble's tone and effects) is the same on
+          every line. */}
       {head && narrow && (
         // The whole identity on ONE line, which is the point: a 34px avatar
         // gutter on every message of a 380px panel is a tenth of its width,
@@ -746,15 +776,16 @@ export function Row({
             and it stays that. Only the head's box is a control. */}
         {!narrow && (
         <span
+          ref={avRef}
           className="tc-row-av"
           data-user-anchor={senderId}
-          aria-hidden={head ? undefined : true}
-          role={head && openProfile ? 'button' : undefined}
-          tabIndex={head && openProfile ? 0 : undefined}
-          title={head ? senderName : undefined}
-          onClick={head && openProfile ? (e) => openProfile(senderId, e.clientX, e.clientY) : undefined}
+          aria-hidden={speaks ? undefined : true}
+          role={speaks && openProfile ? 'button' : undefined}
+          tabIndex={speaks && openProfile ? 0 : undefined}
+          title={speaks ? senderName : undefined}
+          onClick={speaks && openProfile ? (e) => openProfile(senderId, e.clientX, e.clientY) : undefined}
           onKeyDown={
-            head && openProfile
+            speaks && openProfile
               ? (e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault()
@@ -765,7 +796,7 @@ export function Row({
               : undefined
           }
           onContextMenu={
-            head && openInteractions
+            speaks && openInteractions
               ? (e) => {
                   e.preventDefault()
                   openInteractions(senderId, e.clientX, e.clientY)
@@ -773,7 +804,7 @@ export function Row({
               : undefined
           }
         >
-          {head && <AvatarDisc userId={senderId} name={senderName} avatarMxc={senderAvatar} size={34} />}
+          {speaks && <AvatarDisc userId={senderId} name={senderName} avatarMxc={senderAvatar} size={34} />}
           {face && <FaceFlash face={face} seed={item.id} />}
         </span>
         )}
@@ -802,6 +833,9 @@ export function Row({
           ref={bubble ? fx.ref : undefined}
           className={bubble ? 'tc-bubble' : 'tc-row-body'}
           data-bubble={bubble ?? undefined}
+          // Only the line the avatar is speaking points at it; the lines above
+          // keep their tone and effects and lose the arrow (L12).
+          data-tail={bubble && !speaks && !narrow ? 'off' : undefined}
           data-phase={bubble ? fx.phase : undefined}
           style={{ fontSize: 14, wordBreak: 'break-word', minWidth: 0 }}
         >

@@ -70,6 +70,14 @@ export interface TimelineItem {
   // receipts, edited marker, reply pill) is unaffected -- grouping collapses
   // the HEADER, never the footer.
   showHeader?: boolean
+  // False when a later message continues this run: the avatar "speaks" the
+  // run's NEWEST line and moves down as the run grows, so only the last line
+  // carries it and its bubble's arrow (launch-polish L12). Absent on day and
+  // membership rows, which are not in runs.
+  runTail?: boolean
+  // The id of the run's first message, which carries the name. Lets the row
+  // that takes the avatar over find the one that had it.
+  runHead?: string
   // kind 'day' only: the timestamp the separator labels.
   dayTs?: number
 }
@@ -141,6 +149,19 @@ export function applyLayout(items: TimelineItem[]): TimelineItem[] {
     out.push({ ...item, showHeader: !continues })
     prev = item
     anchor = item
+  }
+
+  // Which line of each run the avatar sits on: the newest. A run only ever
+  // continues from the item directly before it (a day break or a membership
+  // row ends it), so a line is the tail unless the very next item continues.
+  let head: string | undefined
+  for (let i = 0; i < out.length; i++) {
+    const it = out[i]
+    if (it.kind === 'day' || it.kind === 'member') continue
+    if (it.showHeader !== false) head = it.id
+    const next = out[i + 1]
+    it.runTail = !(next && next.kind !== 'day' && next.kind !== 'member' && next.showHeader === false)
+    it.runHead = head
   }
 
   return out

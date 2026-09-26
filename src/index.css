@@ -1067,10 +1067,10 @@ code {
   min-width: 0;
   padding-left: var(--tc-body-x);
 }
-/* The avatar is out of flow, so the head line's height would otherwise be the
-   text's alone and a one-line message would let the avatar hang into the row
-   below it. A follow-up line has no avatar and no such floor. */
-.tc-row:not([data-grouped='true']) > .tc-row-line {
+/* The avatar is out of flow, so the speaking line's height would otherwise be
+   the text's alone and a one-line message would let the avatar hang into the
+   row below it. A line the avatar has moved on from has no such floor. */
+.tc-row[data-speaker='true'] > .tc-row-line {
   min-height: var(--tc-av-w);
 }
 /* Left-justified and out of flow. Out of flow because the row's height must be
@@ -1126,9 +1126,9 @@ code {
 .tc-row:focus-within .tc-row-time {
   opacity: 0.9;
 }
-/* A follow-up line's avatar box holds no picture: it stays as the line's
-   interaction anchor, as tall as the line rather than as the picture was. */
-.tc-row[data-grouped='true'] .tc-row-av {
+/* A line the avatar is not speaking holds no picture: its box stays as the
+   line's interaction anchor, as tall as the line rather than the picture. */
+.tc-row:not([data-speaker='true']) .tc-row-av {
   height: 100%;
   cursor: default;
 }
@@ -1914,17 +1914,28 @@ code {
   background: var(--tc-bub-bg);
   border: 1px solid var(--tc-bub-line);
 }
+/* Both circles live in the 12px gap between the avatar and the bubble: with
+   the avatar beside the line it speaks (L12), the old -21px circle landed
+   inside the avatar's disc. */
 .tc-bubble[data-bubble='thinking']::before {
-  left: -12px;
+  left: -10px;
   top: 10px;
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
 }
 .tc-bubble[data-bubble='thinking']::after {
-  left: -21px;
-  top: 19px;
-  width: 5px;
-  height: 5px;
+  left: -14px;
+  top: 21px;
+  width: 4px;
+  height: 4px;
+}
+
+/* Only the line the avatar is speaking points at it (L12). The lines above it
+   keep their tone, outline and effects and lose the arrow -- for a thought,
+   the two circles drifting back toward the speaker. */
+.tc-bubble[data-tail='off']::before,
+.tc-bubble[data-tail='off']::after {
+  content: none;
 }
 
 /* Yelling opens as an ordinary pill and POPS into the burst; the shape, the
