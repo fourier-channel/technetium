@@ -48,6 +48,15 @@ check('the lines the avatar has left lose their arrow, not their bubble',
 check('the avatar travels from the line that had it, by transform, and not under reduced motion',
   /speakerByRun\.get\(runHead\)/.test(timeline) && /if \(!was \|\| was === item\.id \|\| reducedMotion\) return/.test(timeline) &&
   /el\.animate\(\[\{ transform: `translateY\(\$\{dy\}px\)` \}/.test(timeline))
+check('the avatar rides the bubble, not the row: it sits in the bubble\'s own block, after the name and reply pill',
+  (() => {
+    const speak = row.indexOf('className="tc-row-speak"')
+    const av = row.indexOf('className="tc-row-av"')
+    return speak > ident && speak > row.indexOf('<ReplyPill') && av > speak && av < row.indexOf("className={bubble ? 'tc-bubble' : 'tc-row-body'}")
+  })())
+check('and hangs into the gutter from that block, level with its top',
+  /\.tc-row-speak \{\s*position: relative;/.test(css) &&
+  /\.tc-row-av \{\s*position: absolute;\s*left: calc\(-1 \* var\(--tc-body-x\)\);\s*top: 0;/.test(css))
 check('the narrow thread panel keeps its one-line user line', /\{head && narrow && \(\s*[\s\S]*?<SenderUserLine/.test(row))
 
 console.log('== a line the avatar has left is as tall as its text')

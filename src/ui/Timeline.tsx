@@ -763,51 +763,6 @@ export function Row({
         />
       )}
       <div className="tc-row-line">
-        {/* The avatar column, left-justified and out of flow, so its width is
-            fixed whether or not the image has loaded and nothing shifts when
-            it does.
-
-            EVERY message row is an interaction anchor, not just the lead one,
-            with or without the picture in it. resolveAnchor takes the LAST
-            match on screen, so anchoring only the cluster head meant a slap
-            aimed at somebody whose latest line was directly above you flew to
-            the TOP of their run instead -- which is further the more they had
-            said. Their most recent line is where you think of them as being,
-            and it stays that. Only the head's box is a control. */}
-        {!narrow && (
-        <span
-          ref={avRef}
-          className="tc-row-av"
-          data-user-anchor={senderId}
-          aria-hidden={speaks ? undefined : true}
-          role={speaks && openProfile ? 'button' : undefined}
-          tabIndex={speaks && openProfile ? 0 : undefined}
-          title={speaks ? senderName : undefined}
-          onClick={speaks && openProfile ? (e) => openProfile(senderId, e.clientX, e.clientY) : undefined}
-          onKeyDown={
-            speaks && openProfile
-              ? (e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    const r = e.currentTarget.getBoundingClientRect()
-                    openProfile(senderId, r.left, r.bottom)
-                  }
-                }
-              : undefined
-          }
-          onContextMenu={
-            speaks && openInteractions
-              ? (e) => {
-                  e.preventDefault()
-                  openInteractions(senderId, e.clientX, e.clientY)
-                }
-              : undefined
-          }
-        >
-          {speaks && <AvatarDisc userId={senderId} name={senderName} avatarMxc={senderAvatar} size={34} />}
-          {face && <FaceFlash face={face} seed={item.id} />}
-        </span>
-        )}
         {/* A face flash still has to land somewhere when the avatar column is
             gone, or a squirt aimed at a thread would silently do nothing. */}
         {narrow && face && <FaceFlash face={face} seed={item.id} />}
@@ -829,67 +784,114 @@ export function Row({
           />
         )}
         {item.replyTo && <ReplyPill replyTo={item.replyTo} />}
-        <div
-          ref={bubble ? fx.ref : undefined}
-          className={bubble ? 'tc-bubble' : 'tc-row-body'}
-          data-bubble={bubble ?? undefined}
-          // Only the line the avatar is speaking points at it; the lines above
-          // keep their tone and effects and lose the arrow (L12).
-          data-tail={bubble && !speaks && !narrow ? 'off' : undefined}
-          data-phase={bubble ? fx.phase : undefined}
-          style={{ fontSize: 14, wordBreak: 'break-word', minWidth: 0 }}
-        >
-          {/* The shape layer and the question marks. Nothing at all for a
-              plain pill, and nothing for a row with no bubble. */}
-          {bubble && <BubbleFx tone={bubble} phase={fx.phase} seed={item.id} />}
-          {/* Everything the reader actually reads, one positioned block above
-              the shape layer. Without it the layer paints over the words. */}
-          <span className={bubble ? 'tc-bubble-ink' : undefined}>
-          {isMediaRow && roomId ? (
-            // The picture and its rail sit side by side. The picture is FIRST,
-            // so the rail appearing on hover cannot shift it.
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, minWidth: 0 }}>
-              <div style={{ minWidth: 0 }}>{body}</div>
-              <ReactionRail item={item} client={client} roomId={roomId} />
-              {/* Bottom-aligned beside the picture rather than under it: a
-                  trailing line of its own would give every image row 12px of
-                  height that the text rows just got back. */}
-              <span className="tc-row-time tc-row-time-rail">{time}</span>
-            </div>
-          ) : (
-            <>
-              {body}
-              {item.editedTs !== undefined && (
-                <span
-                  className="tc-edited-marker"
-                  title={`Edited ${new Date(item.editedTs).toLocaleString()}`}
-                >
-                  (edited)
-                </span>
-              )}
-              {canReact && roomId && (
-                <ReactionAdd item={item} client={client} roomId={roomId} inline />
-              )}
-              {/* TRAILING the words, not stacked above them. It used to be its
-                  own 14px line at the top of the body column, which pushed
-                  every bubble down by a full line to say something nobody
-                  reads first. Inline-block, so a line with room keeps it and a
-                  full line wraps it -- the shape every chat client has. */}
-              <span className="tc-row-time">{time}</span>
-            </>
-          )}
-          {previewUrl && (
-            <LinkPreview client={client} url={previewUrl} enabled={linkPreviewsEnabled} />
-          )}
-          {isMediaRow && item.editedTs !== undefined && (
-            <span
-              className="tc-edited-marker"
-              title={`Edited ${new Date(item.editedTs).toLocaleString()}`}
-            >
-              (edited)
-            </span>
-          )}
+        {/* The avatar rides the BUBBLE, not the row (L12, operator
+            2026-09-26: "even with the bubble"). On a run's first line the
+            name and any reply pill sit above the bubble, so an avatar pinned
+            to the row's top stood level with the name instead.
+
+            The avatar box is out of flow, in the gutter, so its width is
+            fixed whether or not the image has loaded and nothing shifts when
+            it does. EVERY message row keeps one as its interaction anchor,
+            picture or not: resolveAnchor takes the LAST match on screen, and a
+            person's most recent line is where you think of them as being.
+            Only the speaking line's box is a control. */}
+        <div className="tc-row-speak">
+          {!narrow && (
+          <span
+            ref={avRef}
+            className="tc-row-av"
+            data-user-anchor={senderId}
+            aria-hidden={speaks ? undefined : true}
+            role={speaks && openProfile ? 'button' : undefined}
+            tabIndex={speaks && openProfile ? 0 : undefined}
+            title={speaks ? senderName : undefined}
+            onClick={speaks && openProfile ? (e) => openProfile(senderId, e.clientX, e.clientY) : undefined}
+            onKeyDown={
+              speaks && openProfile
+                ? (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      const r = e.currentTarget.getBoundingClientRect()
+                      openProfile(senderId, r.left, r.bottom)
+                    }
+                  }
+                : undefined
+            }
+            onContextMenu={
+              speaks && openInteractions
+                ? (e) => {
+                    e.preventDefault()
+                    openInteractions(senderId, e.clientX, e.clientY)
+                  }
+                : undefined
+            }
+          >
+            {speaks && <AvatarDisc userId={senderId} name={senderName} avatarMxc={senderAvatar} size={34} />}
+            {face && <FaceFlash face={face} seed={item.id} />}
           </span>
+          )}
+          <div
+            ref={bubble ? fx.ref : undefined}
+            className={bubble ? 'tc-bubble' : 'tc-row-body'}
+            data-bubble={bubble ?? undefined}
+            // Only the line the avatar is speaking points at it; the lines above
+            // keep their tone and effects and lose the arrow (L12).
+            data-tail={bubble && !speaks && !narrow ? 'off' : undefined}
+            data-phase={bubble ? fx.phase : undefined}
+            style={{ fontSize: 14, wordBreak: 'break-word', minWidth: 0 }}
+          >
+            {/* The shape layer and the question marks. Nothing at all for a
+                plain pill, and nothing for a row with no bubble. */}
+            {bubble && <BubbleFx tone={bubble} phase={fx.phase} seed={item.id} />}
+            {/* Everything the reader actually reads, one positioned block above
+                the shape layer. Without it the layer paints over the words. */}
+            <span className={bubble ? 'tc-bubble-ink' : undefined}>
+            {isMediaRow && roomId ? (
+              // The picture and its rail sit side by side. The picture is FIRST,
+              // so the rail appearing on hover cannot shift it.
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, minWidth: 0 }}>
+                <div style={{ minWidth: 0 }}>{body}</div>
+                <ReactionRail item={item} client={client} roomId={roomId} />
+                {/* Bottom-aligned beside the picture rather than under it: a
+                    trailing line of its own would give every image row 12px of
+                    height that the text rows just got back. */}
+                <span className="tc-row-time tc-row-time-rail">{time}</span>
+              </div>
+            ) : (
+              <>
+                {body}
+                {item.editedTs !== undefined && (
+                  <span
+                    className="tc-edited-marker"
+                    title={`Edited ${new Date(item.editedTs).toLocaleString()}`}
+                  >
+                    (edited)
+                  </span>
+                )}
+                {canReact && roomId && (
+                  <ReactionAdd item={item} client={client} roomId={roomId} inline />
+                )}
+                {/* TRAILING the words, not stacked above them. It used to be its
+                    own 14px line at the top of the body column, which pushed
+                    every bubble down by a full line to say something nobody
+                    reads first. Inline-block, so a line with room keeps it and a
+                    full line wraps it -- the shape every chat client has. */}
+                <span className="tc-row-time">{time}</span>
+              </>
+            )}
+            {previewUrl && (
+              <LinkPreview client={client} url={previewUrl} enabled={linkPreviewsEnabled} />
+            )}
+            {isMediaRow && item.editedTs !== undefined && (
+              <span
+                className="tc-edited-marker"
+                title={`Edited ${new Date(item.editedTs).toLocaleString()}`}
+              >
+                (edited)
+              </span>
+            )}
+            </span>
+          </div>
         </div>
           <RowFooter item={item} onOpenThread={onOpenThread} pillsInRail={isMediaRow} />
         </div>

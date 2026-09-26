@@ -1076,9 +1076,18 @@ code {
 /* Left-justified and out of flow. Out of flow because the row's height must be
    the text's, not the avatar's -- and because nothing to its right may ever
    move it sideways. */
+/* The block the avatar rides: the bubble (or bare body) of a line. The
+   avatar hangs off its left into the gutter, level with the bubble's top
+   (L12), whatever -- name, reply pill -- sits above it in the column. */
+.tc-row-speak {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
 .tc-row-av {
   position: absolute;
-  left: 0;
+  left: calc(-1 * var(--tc-body-x));
   top: 0;
   width: var(--tc-av-w);
   height: var(--tc-av-w);
@@ -1914,18 +1923,20 @@ code {
   background: var(--tc-bub-bg);
   border: 1px solid var(--tc-bub-line);
 }
-/* Both circles live in the 12px gap between the avatar and the bubble: with
-   the avatar beside the line it speaks (L12), the old -21px circle landed
-   inside the avatar's disc. */
+/* Both circles live in the 12px gap between the avatar and the bubble,
+   stepping down toward the avatar's centre: with the avatar beside the line
+   it speaks (L12), the old -21px circle landed inside the avatar's disc. */
 .tc-bubble[data-bubble='thinking']::before {
-  left: -10px;
+  left: -9px;
   top: 10px;
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
 }
+/* Level with the avatar's centre (17px below the bubble's top, now that the
+   avatar rides the bubble), just clear of its disc. */
 .tc-bubble[data-bubble='thinking']::after {
-  left: -14px;
-  top: 21px;
+  left: -12px;
+  top: 15px;
   width: 4px;
   height: 4px;
 }
