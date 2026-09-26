@@ -48,6 +48,7 @@ reading had to be chosen it is stated below.
 | L9 | Operator, 2026-09-25: the room, DM and thread title bars are "too thick" -- shrink them about 50% -- "and restyle the buttons so they're not all Windows 3.1" | DONE `62f5cfc` |
 | L10 | "the space between status update lines and date changes": about 50% less | DONE `62f5cfc` |
 | L11 | "I regret that we are going back to the old Discord-style 'avatar on the left, name on the top right, text under name'"; avatar on the first message of a run only (asked, answered) | DONE `62f5cfc` |
+| L12 | Operator, 2026-09-26: "the avatar travel down the gutter to match each new line ... the NAME stays at the top ... the previous lines then lose their speech arrows, while keeping the other effects" | DONE `d226e73` |
 
 ---
 
@@ -144,3 +145,4 @@ One line per landed step, appended as it lands.
 | L4 revised + L8 `f1391fa` | Pins are room state, moderators only, applied last; sliding sync requests the event. Drag-to-reorder, the Custom sort and the "new" chip are gone from the thread list; threadDrag.ts stays for the room list. | PENDING OPERATOR VERIFICATION: a moderator pinning and a member seeing it first. |
 | L4 start-out `385119f` | Pinned threads pull the strip down on entering their room, once per entry; a pushpin at the strip's left end folds them away and back, per person, in account data. | PENDING OPERATOR VERIFICATION: a newcomer landing in #chat. |
 | L9 + L10 + L11 `62f5cfc` | Title bars a declared 24px (room 51 -> 24, thread 47 -> 24, DM 88 -> 24, one bar in the dock); buttons are the thread strip pill, one rule. Date dividers and membership lines at half their spacing. Rows in the Discord shape, avatar and name on the first message of a run. | PENDING OPERATOR VERIFICATION: all three in the browser. |
+| L12 `d226e73` | The avatar sits beside a run's newest line and travels down to each new one (transform, skipped under reduced motion); the name stays on the first line; earlier lines keep their bubble and lose the arrow. | PENDING OPERATOR VERIFICATION: the travel in the browser. |
