@@ -6,17 +6,19 @@ import { hasImage, type Asset } from './assets'
 // "Image TBD" slot -- until the art lands it shows a signal monogram, never the
 // line text (that would double up with the speech bubble). Her line IS the
 // slot's caption text, so one variable serves the spoken line now and the image
-// caption later. A quote (master-doc/devlog, TBD) rides along when present, and
-// simply isn't there when it's null (silent-null, CD-9).
+// caption later.
+//
+// No quote under the bubble (operator, 2026-09-27): only two steps ever
+// promised one and both stayed "Quote TBD", and the Fourier-chan sign-in on
+// the auth pages is now the onboarding's voice, so the mechanic is gone.
 // ---------------------------------------------------------------------------
 
-export function FourierChan({ asset, quote }: { asset: Asset; quote?: string | null }) {
+export function FourierChan({ asset }: { asset: Asset }) {
   return (
     <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
       <Portrait asset={asset} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <SpeechBubble>{asset.text}</SpeechBubble>
-        {quote ? <Quote>{quote}</Quote> : null}
       </div>
     </div>
   )
@@ -65,22 +67,5 @@ function SpeechBubble({ children }: { children: ReactNode }) {
     >
       {children}
     </div>
-  )
-}
-
-function Quote({ children }: { children: ReactNode }) {
-  return (
-    <blockquote
-      style={{
-        margin: '10px 0 0',
-        padding: '2px 0 2px 12px',
-        borderLeft: '2px solid var(--cpd-color-bg-accent-rest, #3390ff)',
-        fontSize: 12.5,
-        fontStyle: 'italic',
-        color: 'var(--cpd-color-text-secondary)',
-      }}
-    >
-      {children}
-    </blockquote>
   )
 }

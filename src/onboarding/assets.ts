@@ -56,12 +56,3 @@ export const ONBOARDING_ASSETS = {
 } satisfies Record<string, Asset>
 
 export type OnboardingAssetKey = keyof typeof ONBOARDING_ASSETS
-
-// Quote slots: placeholder text NOW, real 41chan master-doc / devlog quotes
-// LATER (same var, both uses). `null` means "no quote on this step yet" -- the
-// step just renders without one (silent-null, CD-9), never a broken blank.
-export const ONBOARDING_QUOTES: Record<string, string | null> = {
-  what: 'Quote TBD — a line from the 41chan master document on what the community is.',
-  rooms: 'Quote TBD — a devlog line on public rooms being open by design.',
-}
-

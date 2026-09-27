@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react'
 import { FourierChan } from './FourierChan'
-import { ONBOARDING_ASSETS, ONBOARDING_QUOTES, type Asset } from './assets'
+import { ONBOARDING_ASSETS, type Asset } from './assets'
 
 // ---------------------------------------------------------------------------
 // The guided walkthrough: Fourier-chan teaches a newcomer the shape of things,
@@ -14,15 +14,14 @@ interface Step {
   key: string
   heading: string
   asset: Asset
-  quote: string | null
 }
 
 const STEPS: Step[] = [
-  { key: 'welcome', heading: 'Welcome', asset: ONBOARDING_ASSETS.fourierWelcome, quote: null },
-  { key: 'what', heading: 'What this is', asset: ONBOARDING_ASSETS.fourierWhat, quote: ONBOARDING_QUOTES.what },
-  { key: 'account', heading: 'Your account', asset: ONBOARDING_ASSETS.fourierAccount, quote: null },
-  { key: 'rooms', heading: 'Joining rooms', asset: ONBOARDING_ASSETS.fourierRooms, quote: ONBOARDING_QUOTES.rooms },
-  { key: 'ready', heading: "You're set", asset: ONBOARDING_ASSETS.fourierReady, quote: null },
+  { key: 'welcome', heading: 'Welcome', asset: ONBOARDING_ASSETS.fourierWelcome },
+  { key: 'what', heading: 'What this is', asset: ONBOARDING_ASSETS.fourierWhat },
+  { key: 'account', heading: 'Your account', asset: ONBOARDING_ASSETS.fourierAccount },
+  { key: 'rooms', heading: 'Joining rooms', asset: ONBOARDING_ASSETS.fourierRooms },
+  { key: 'ready', heading: "You're set", asset: ONBOARDING_ASSETS.fourierReady },
 ]
 
 export function GuidedFlow({
@@ -69,7 +68,7 @@ export function GuidedFlow({
         </div>
 
         <h2 style={heading}>{step.heading}</h2>
-        <FourierChan asset={step.asset} quote={step.quote} />
+        <FourierChan asset={step.asset} />
 
         <div style={footer}>
           <button type="button" style={ghostBtn} onClick={back}>
