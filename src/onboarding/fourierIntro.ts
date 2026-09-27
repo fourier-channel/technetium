@@ -5,5 +5,5 @@
 export const FOURIER_INTRO: readonly string[] = [
   "Hi, I'm Fourier, 41chan's resident signal-processing spirit!",
   "Matrix can be a bit confusing, but don't worry, I'm here to help.",
-  "New here? There's a link to create a new account on the next page.",
+  "New here?  Click \"Create Account\" below and I'll walk you through it.",
 ]
