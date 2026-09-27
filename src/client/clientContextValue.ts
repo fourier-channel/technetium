@@ -36,7 +36,9 @@ export interface ClientContextValue {
   // (E8). Null means we could not find out -- which callers must NOT render as
   // "no backup", since that tells a protected user they are at risk.
   keyBackup: KeyBackupFacts | null
-  login: (homeserver?: string) => Promise<void>
+  // 'create' opens MAS on its register page (OIDC prompt=create) rather than
+  // its login page; MAS links between the two either way.
+  login: (intent?: 'create') => Promise<void>
   logout: () => void
 }
 

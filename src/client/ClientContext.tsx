@@ -285,7 +285,8 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const login = async (homeserver: string = DEFAULT_HOMESERVER) => {
+  const login = async (intent?: 'create') => {
+    const homeserver = DEFAULT_HOMESERVER
     try {
       const discovery = await sdk.AutoDiscovery.findClientConfig(homeserver)
       const hsResult = discovery['m.homeserver']
@@ -307,6 +308,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
         clientId: CLIENT_ID,
         homeserverUrl: baseUrl,
         nonce,
+        prompt: intent,
       })
       window.location.href = authUrl
     } catch (err: unknown) {

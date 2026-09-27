@@ -194,9 +194,9 @@ function App() {
   useMediaTagSync(client)
 
   if (status === 'awaiting_login') {
-    // Every door (log in, advanced create, or finishing the guided walkthrough)
-    // begins the same OIDC/MAS sign-in; MAS presents login-or-register.
-    return <AuthLanding onProceed={() => login()} />
+    // Both doors begin the OIDC/MAS sign-in; Create account asks MAS to open
+    // on its register page. Fourier-chan's guidance lives on those pages.
+    return <AuthLanding onProceed={(intent) => login(intent)} />
   }
 
   if (status === 'error') {

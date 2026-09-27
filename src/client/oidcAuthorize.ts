@@ -36,6 +36,9 @@ export async function generateLoginUrl(opts: {
   clientId: string
   homeserverUrl: string
   nonce: string
+  // 'create' asks MAS to open on registration (it advertises
+  // prompt_values_supported: login, create).
+  prompt?: 'create'
 }): Promise<string> {
   const client = new OidcClient({
     ...opts.metadata,
@@ -55,6 +58,7 @@ export async function generateLoginUrl(opts: {
   const request = await client.createSigninRequest({
     state: { homeserverUrl: opts.homeserverUrl, nonce: opts.nonce },
     nonce: opts.nonce,
+    ...(opts.prompt ? { prompt: opts.prompt } : {}),
   })
   return request.url
 }
