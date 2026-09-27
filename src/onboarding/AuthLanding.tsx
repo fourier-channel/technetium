@@ -2,6 +2,8 @@ import { type CSSProperties, type ReactNode } from 'react'
 import { SilentBoundary } from './SilentBoundary'
 import { AssetImage } from './AssetImage'
 import { ONBOARDING_ASSETS } from './assets'
+import { FourierSay } from './FourierSay'
+import { FOURIER_INTRO } from './fourierIntro'
 
 // ---------------------------------------------------------------------------
 // The first thing a visitor sees: logo, then two clear doors -- Create account
@@ -10,10 +12,15 @@ import { ONBOARDING_ASSETS } from './assets'
 // There is no walkthrough here any more (operator, 2026-09-27): "Tc's
 // onboarding is *replaced* with these MAS changes. It's moving Fourier's
 // instructions from before the login flow, onto the login flow itself."
-// Fourier-chan now speaks on the sign-in pages themselves (synapse-deploy's
-// MAS templates), where each line sits beside the thing it explains, so this
+// Fourier now speaks on the sign-in pages themselves (synapse-deploy's MAS
+// templates), where each line sits beside the thing it explains, so this
 // screen only opens the right door: Create account asks MAS for its register
 // page, Log in for its login page. Nothing is on rails (onboarding-ux-law).
+//
+// Except her intro. Both doors go straight to MAS's login or register page
+// and skip its start page, so the intro she says there is said HERE, or her
+// later lines would follow nothing (operator, 2026-09-27). It is the same
+// line from the same map, generated into fourierIntro.ts.
 // ---------------------------------------------------------------------------
 
 export function AuthLanding({ onProceed }: { onProceed: (intent?: 'create') => void }) {
@@ -28,6 +35,7 @@ export function AuthLanding({ onProceed }: { onProceed: (intent?: 'create') => v
       <div aria-hidden style={grid} />
 
       <div className="tc-rise" style={column}>
+        <FourierSay lines={FOURIER_INTRO} />
         <SilentBoundary>
           <AssetImage
             asset={ONBOARDING_ASSETS.logo}
@@ -105,7 +113,11 @@ function Button({
 
 const shell: CSSProperties = {
   position: 'relative',
-  height: '100vh',
+  // At least the screen, and taller when her intro and the doors need it: a
+  // short phone scrolls rather than clipping the doors.
+  minHeight: '100vh',
+  boxSizing: 'border-box',
+  paddingBlock: 24,
   width: '100%',
   display: 'grid',
   placeItems: 'center',

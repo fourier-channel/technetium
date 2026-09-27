@@ -1,0 +1,62 @@
+/* Fourier's run of bubbles on the sign-in landing (FourierSay.tsx). The same
+   rules as the MAS pages' components/fourier.css.html in synapse-deploy, so
+   she looks the same on both sides of the sign-in; formant by NAME only. The
+   one difference is the sequence: React drives data-fc-pending here, where
+   the MAS page's inline script does it there. */
+.fc-say {
+  --fc-av: 52px;
+  --fc-gutter: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  box-sizing: border-box;
+  padding-left: var(--fc-gutter);
+  text-align: left;
+}
+.fc-line { position: relative; max-width: 100%; }
+.fc-line:last-child { min-height: var(--fc-av); }
+.fc-av {
+  position: absolute;
+  top: 0;
+  left: calc(-1 * var(--fc-gutter));
+  width: var(--fc-av);
+  height: var(--fc-av);
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--mod-surface-2);
+  box-shadow: 0 0 0 2px var(--mod-accent);
+}
+.fc-mono { color: var(--mod-auto-fg); font-size: 28px; font-weight: 700; line-height: 1; }
+.fc-bubble {
+  position: relative;
+  margin: 0;
+  padding: 10px 13px;
+  border-radius: var(--mod-radius);
+  border: 1px solid var(--mod-line-strong);
+  background: var(--mod-surface-2);
+  color: var(--mod-ink);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.fc-line[data-speaks] .fc-bubble::before,
+.fc-line[data-speaks] .fc-bubble::after {
+  content: '';
+  position: absolute;
+  top: 12px;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+}
+.fc-line[data-speaks] .fc-bubble::before { left: -11px; border-right: 11px solid var(--mod-line-strong); }
+.fc-line[data-speaks] .fc-bubble::after { left: -9px; border-right: 11px solid var(--mod-surface-2); }
+.fc-line,
+.fc-av { transition: opacity 220ms ease-out, transform 220ms ease-out; }
+.fc-av { transition-property: opacity; }
+.fc-say [data-fc-pending] { opacity: 0; }
+.fc-say .fc-line[data-fc-pending] { transform: translateY(6px); }
+@media (prefers-reduced-motion: reduce) {
+  .fc-line, .fc-av { transition: none; }
+}
