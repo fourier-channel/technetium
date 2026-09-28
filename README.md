@@ -44,8 +44,8 @@ use [Element](https://element.io).
   backgrounds and moderation controls.
 - **Chat interactions** between users, rendered in the timeline, and
   **media tags** on images from the community's tagger.
-- **Onboarding**: a guided walkthrough with the mascot before sign-in, with
-  Back and Skip on every screen.
+- **Onboarding**: the mascot says a short intro on the landing, then speaks
+  on the sign-in and sign-up pages themselves, beside what each line explains.
 - **Egress consent**: before the client hands your information to any
   surface it does not control, it tells you plainly and you can decline;
   every ambiguous state resolves to blocked.
