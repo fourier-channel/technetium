@@ -65,6 +65,18 @@ npm run check:derived  # the derived-facts check alone
 npm run gate           # lint + check + build: the pre-merge gate
 ```
 
+To log in to 41chan from a local copy, serve it at exactly
+`http://127.0.0.1:5173/` (or `http://localhost:5173/`) -- the addresses the
+development client is registered for -- and sign in with a 41chan account:
+
+```
+npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
+```
+
+Any other address is refused by the sign-in service ("redirect_uri is not
+allowed for this client"). The image board panel may not sign in from a local
+copy, since it relies on a cookie set by another site.
+
 Configuration is by `VITE_*` variables at build time. Without them the
 client falls back to in-repo development defaults, which is the wrong
 homeserver for anyone but the developer, so set them for any real build:
