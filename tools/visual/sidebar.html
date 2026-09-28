@@ -1,0 +1,100 @@
+<!doctype html><html><head>
+<!--#head-->
+<title>Sidebar -- L13 to L16</title>
+<style>
+  /* Launch-polish L13-L16 (operator, 2026-09-28): the status bar, the room
+     list's left edge, the pull tabs, the chat log's scrollbar. BEFORE is a
+     frozen copy of the markup and inline styles on 2026-09-28, for the
+     comparison only; AFTER uses the live stylesheet and mirrors the markup
+     App.tsx and NavTree.tsx now emit. The avatar is a stand-in disc. */
+  .h-wrap { display: flex; gap: 28px; padding: 8px 16px 16px; align-items: flex-start; flex-wrap: wrap; }
+  .h-col { width: 250px; background: var(--cpd-color-bg-canvas-default); border: 1px solid var(--mod-line); }
+  .h-av { width: 30px; height: 30px; border-radius: 50%; background: #3a6; display: grid; place-items: center;
+          font: 700 14px var(--tc-ui-font); color: #fff; }
+  .h-ico { width: 20px; height: 20px; border-radius: 6px; background: var(--cpd-color-bg-subtle-primary);
+           display: grid; place-items: center; font: 700 12px var(--tc-ui-font); flex-shrink: 0; }
+  .h-row { display: flex; align-items: center; gap: 6px; height: 26px; margin: 1px 4px; border-radius: 6px;
+           font: 13px var(--tc-ui-font); padding-right: 6px; white-space: nowrap; overflow: hidden; }
+  .h-row.sp { font-weight: 600; }
+  .h-chev { width: 10px; flex-shrink: 0; text-align: center; font-size: 10px; opacity: .7; }
+  .h-dm { margin: 2px 4px 6px; border: 1px solid var(--tc-pill-line); border-radius: var(--tc-pill-radius); }
+  .h-dm button { display: flex; align-items: center; gap: 6px; width: 100%; padding: 4px 10px; border: none;
+                 background: transparent; color: var(--cpd-color-text-secondary); font-size: 11px; font-weight: 700;
+                 letter-spacing: .4px; text-transform: uppercase; }
+  .h-tabs { position: relative; width: 520px; height: 200px; border: 1px solid var(--mod-line); }
+  .h-edge { position: absolute; background: var(--mod-line-strong); }
+  .h-log { width: 300px; height: 200px; overflow-y: auto; padding: 8px 12px; border: 1px solid var(--mod-line);
+           font: 13px var(--tc-ui-font); }
+</style>
+</head><body>
+<div class="h-label">L13 status bar and L14 room list -- before / after</div>
+<div class="h-wrap">
+  <div class="h-col">
+    <div class="tc-panel-head"><div style="padding:4px 8px 8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;min-width:0">
+        <strong style="font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@saber:41chan.net</strong>
+        <button type="button" style="font-size:11px;flex-shrink:0">Settings</button>
+        <button type="button" style="font-size:11px;flex-shrink:0">Edit layout</button>
+        <button type="button" style="font-size:12px;flex-shrink:0">Log out</button>
+      </div>
+      <div style="margin-top:6px"><div class="h-av" style="width:34px;height:34px">S</div></div>
+    </div></div>
+    <div style="padding:8px 4px">
+      <div class="h-dm"><button>&#9656; Direct Messages <span style="margin-left:auto;opacity:.7">3</span></button></div>
+      <div class="h-row" style="padding-left:6px"><span class="h-chev"></span><span class="h-ico">b</span>chanbooru</div>
+      <div class="h-row sp" style="padding-left:6px"><span class="h-chev">&#9662;</span><span class="h-ico">4</span>41chan</div>
+      <div class="h-row" style="padding-left:18px"><span class="h-chev"></span><span class="h-ico">#</span>general</div>
+      <div class="h-row" style="padding-left:18px"><span class="h-chev"></span><span class="h-ico">#</span>anime-and-manga-discussion</div>
+      <div class="h-row sp" style="padding-left:18px"><span class="h-chev">&#9662;</span><span class="h-ico">v</span>/v/ boards</div>
+      <div class="h-row" style="padding-left:30px"><span class="h-chev"></span><span class="h-ico">#</span>vidya-general</div>
+    </div>
+  </div>
+
+  <div class="h-col">
+    <div class="tc-panel-head"><div class="tc-me">
+      <div class="tc-me-card"><span class="tc-me-av"><span class="h-av">S</span></span><span class="tc-me-name">@saber:41chan.net</span></div>
+      <div class="tc-me-actions">
+        <button type="button" class="tc-pill">Settings</button>
+        <button type="button" class="tc-pill">Layout</button>
+        <button type="button" class="tc-pill">Log out</button>
+      </div>
+    </div></div>
+    <div style="padding:8px 4px">
+      <div class="h-dm"><button>&#9656; Direct Messages <span style="margin-left:auto;opacity:.7">3</span></button></div>
+      <div class="h-row" style="padding-left:4px"><span class="h-ico">b</span>chanbooru</div>
+      <div class="h-row sp" style="padding-left:4px"><span class="h-chev">&#9662;</span><span class="h-ico">4</span>41chan</div>
+      <div class="h-row" style="padding-left:20px"><span class="h-ico">#</span>general</div>
+      <div class="h-row" style="padding-left:20px"><span class="h-ico">#</span>anime-and-manga-discussion</div>
+      <div class="h-row sp" style="padding-left:20px"><span class="h-chev">&#9662;</span><span class="h-ico">v</span>/v/ boards</div>
+      <div class="h-row" style="padding-left:36px"><span class="h-ico">#</span>vidya-general</div>
+    </div>
+  </div>
+</div>
+
+<div class="h-label">L15 pull tabs -- collapsed (green) / expanded (orange), across and sideways</div>
+<div class="h-wrap">
+  <div class="h-tabs">
+    <div class="h-edge" style="left:0;right:0;top:0;height:1px"></div>
+    <button type="button" class="tc-pulltab" data-pull="down" style="top:0;left:25%"><span class="tc-pulltab-tip">Threads</span><span class="tc-pulltab-chevron">v</span></button>
+    <div class="h-edge" style="left:0;right:0;top:120px;height:1px"></div>
+    <button type="button" class="tc-pulltab" data-pull="up" style="top:120px;margin-top:-20px;left:50%"><span class="tc-pulltab-tip">Hide threads</span><span class="tc-pulltab-chevron">v</span></button>
+    <div class="h-edge" style="top:0;bottom:0;right:160px;width:1px"></div>
+    <button type="button" class="tc-pulltab" data-pull="left" style="right:160px"><span class="tc-pulltab-tip">Thread</span><span class="tc-pulltab-chevron">v</span></button>
+    <div class="h-edge" style="top:0;bottom:0;right:60px;width:1px"></div>
+    <button type="button" class="tc-pulltab" data-pull="right" style="right:60px;margin-right:-20px"><span class="tc-pulltab-tip">Close thread</span><span class="tc-pulltab-chevron">v</span></button>
+  </div>
+</div>
+
+<div class="h-label">L16 the chat log's scrollbar -- before / after</div>
+<div class="h-wrap">
+  <div class="h-log" id="before"></div>
+  <div class="h-log tc-log-scroll" id="after"></div>
+</div>
+<script>
+  for (const id of ['before', 'after']) {
+    const el = document.getElementById(id)
+    for (let i = 0; i < 60; i++) { const p = document.createElement('div'); p.textContent = 'message ' + i + ' -- lorem of a chat line'; el.appendChild(p) }
+    el.scrollTop = el.scrollHeight * 0.4
+  }
+</script>
+</body></html>

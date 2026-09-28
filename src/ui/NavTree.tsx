@@ -25,6 +25,11 @@ import { isDirect } from '../client/roomClass'
 // Tightened 2026-08-13 (32px -> 28px) to fit more of the tree on screen.
 const ROW_HEIGHT = 26
 const ROW_MARGIN_Y = 1
+/** A row's own left padding at the top level. */
+const NAV_PAD_X = 4
+/** A space's chevron, and the row gap after it (the row's flex gap, 6). */
+const NAV_CHEVRON_W = 10
+const NAV_CHEVRON_SLOT = NAV_CHEVRON_W + 6
 
 // Stable empty set for the no-client case, so the prop identity does not churn.
 const EMPTY_ROOM_IDS: ReadonlySet<string> = new Set()
@@ -109,7 +114,9 @@ function computeDefaultPanelWidth(tree: ReturnType<typeof useNavTree>['tree']): 
   const widest = widths[0]
   const second = widths[1] ?? widest
   const chosen = widest <= 1.5 * second ? widest : second
-  const BASE = 100 // icon + chevron + indent + padding + count badge
+  // icon + chevron + indent + padding + count badge. 86, from 100: L14 took
+  // the empty chevron slot off every room row and 2px off the first indent.
+  const BASE = 86
   return Math.round(Math.max(200, Math.min(460, BASE + chosen)))
 }
 
@@ -441,8 +448,10 @@ export function NavTree({
             // it stays a rounded container, which is the same shape grown
             // rather than a new one. overflow:hidden keeps the header's
             // corners from squaring off against the border.
-            border: '1px solid rgba(128,128,128,0.3)',
-            borderRadius: 14,
+            // The pill's line and radius are .tc-pill's (index.css), so the
+            // header's Settings / Layout / Log out pills are this pill's kin.
+            border: '1px solid var(--tc-pill-line)',
+            borderRadius: 'var(--tc-pill-radius)',
             // Deliberately NOT overflow:hidden. The waiting glow reaches ~16px
             // past a face, and a face near the pill's edge would have had its
             // glow sliced off by the corner -- clipping the one thing the strip
@@ -701,7 +710,15 @@ function TreeRow({
   const label = getRename(node.roomId) ?? node.name ?? node.roomId
   const isCollapsed = collapsed.has(node.roomId)
   const isSelected = !node.isSpace && node.roomId === selectedRoomId
-  const indent = 6 + depth * 12
+  // Launch-polish L14 (operator 2026-09-28: "Reclaim dead space to the left
+  // of the roomlist so the roomlist does not have to be so wide"). Every row
+  // used to reserve a 10px chevron slot and its 6px gap -- a room has no
+  // chevron, so on every room row that was 16px of nothing -- and stepped
+  // 12px a level on top. Now only a space draws the slot, and a level is
+  // exactly that slot: a child's icon sits under its parent's icon, and a
+  // child space's chevron under its parent's icon. A room one level down
+  // starts 14px further left than it did.
+  const indent = NAV_PAD_X + depth * NAV_CHEVRON_SLOT
   const mode = nodeMode(node)
   const [busy, setBusy] = useState(false)
   const [knocked, setKnocked] = useState(false)
@@ -859,9 +876,11 @@ function TreeRow({
           if (!isSelected) e.currentTarget.style.background = 'transparent'
         }}
       >
-        <span style={{ width: 10, flexShrink: 0, textAlign: 'center', fontSize: 10, opacity: 0.7 }}>
-          {node.isSpace ? (isCollapsed ? '\u25B8' : '\u25BE') : ''}
-        </span>
+        {node.isSpace && (
+          <span style={{ width: NAV_CHEVRON_W, flexShrink: 0, textAlign: 'center', fontSize: 10, opacity: 0.7 }}>
+            {isCollapsed ? '\u25B8' : '\u25BE'}
+          </span>
+        )}
         <EpicycleReveal seed={node.roomId} play={animate && shown}>
           <RoomIcon node={node} />
         </EpicycleReveal>
@@ -1330,7 +1349,7 @@ function BooruRow({ active, onSelect }: { active: boolean; onSelect: () => void 
         display: 'flex',
         alignItems: 'center',
         gap: 6,
-        paddingLeft: 6,
+        paddingLeft: NAV_PAD_X,
         paddingRight: 6,
         height: ROW_HEIGHT,
         cursor: 'pointer',

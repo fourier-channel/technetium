@@ -15,7 +15,7 @@
 // compared here against the stylesheet that draws it.
 import { readFileSync } from 'node:fs'
 import {
-  THREAD_CARD_H, THREAD_HEAD_H, THREAD_TRACK_PAD_TOP, THREAD_TRACK_PAD_BOTTOM, PULLTAB_H,
+  THREAD_CARD_H, THREAD_HEAD_H, THREAD_TRACK_PAD_TOP, THREAD_TRACK_PAD_BOTTOM, PULLTAB_W, PULLTAB_CLOSED_H, PULLTAB_OPEN_H,
   DM_TAB_BESIDE_TITLE, TITLE_HALF_W, PULLTAB_HALF_W, SORT_PILL_W, HEAD_PAD_X, threadStripHeight, threadStripCss,
 } from '../src/ui/threadStrip.ts'
 
@@ -37,7 +37,12 @@ console.log('== every part of the strip is one number in two files, and they agr
 const card = rule('.tc-carousel-card')
 const head = rule('.tc-carousel-head')
 const track = rule('.tc-carousel-track')
-const tab = /\.tc-pulltab\[data-pull='down'\], \.tc-pulltab\[data-pull='up'\] \{([^}]*)\}/.exec(css)?.[1] ?? ''
+// Every block the selector opens, joined: a tab's size and its colour are
+// separate rules on the same selector.
+const tabRule = (sel: string) =>
+  [...css.matchAll(new RegExp(`${sel.replace(/[.[\]]/g, (c) => '\\' + c)}\\s*\\{([^}]*)\\}`, 'g'))].map((m) => m[1]).join(';')
+const across = tabRule(".tc-pulltab[data-pull='down'], .tc-pulltab[data-pull='up']")
+const sideways = tabRule(".tc-pulltab[data-pull='left'], .tc-pulltab[data-pull='right']")
 check(`card height ${THREAD_CARD_H}px in the CSS`, px(card, 'height') === THREAD_CARD_H, px(card, 'height'))
 check('and it is the WHOLE card (border-box), or the sum is 2px short', /box-sizing:\s*border-box/.test(card))
 check(`header height ${THREAD_HEAD_H}px in the CSS`, px(head, 'height') === THREAD_HEAD_H, px(head, 'height'))
@@ -52,15 +57,31 @@ check('the header states its line-height, so the root 145% cannot grow it',
   check('border-box, so the padding is inside the track and not added to the strip',
     /box-sizing:\s*border-box/.test(track))
 }
-check(`the pull tab is ${PULLTAB_H}px, as the module says`, px(tab, 'height') === PULLTAB_H, px(tab, 'height'))
+// L15: collapsed (down, left) 56 x 16; expanded (up, right) 56 x 20; the
+// sideways pair is the same boxes turned 90 degrees.
+check(`a tab across a border is ${PULLTAB_W}px long, and a sideways one is the same length`,
+  px(across, 'width') === PULLTAB_W && px(sideways, 'height') === PULLTAB_W, [px(across, 'width'), px(sideways, 'height')])
+check(`collapsed tabs are ${PULLTAB_CLOSED_H}px deep, expanded ${PULLTAB_OPEN_H}px, as the module says`,
+  px(tabRule(".tc-pulltab[data-pull='down']"), 'height') === PULLTAB_CLOSED_H &&
+  px(tabRule(".tc-pulltab[data-pull='left']"), 'width') === PULLTAB_CLOSED_H &&
+  px(tabRule(".tc-pulltab[data-pull='up']"), 'height') === PULLTAB_OPEN_H &&
+  px(tabRule(".tc-pulltab[data-pull='right']"), 'width') === PULLTAB_OPEN_H)
+check('an expanded tab is deeper than a collapsed one', PULLTAB_OPEN_H > PULLTAB_CLOSED_H)
+check('collapsed is formant green, expanded formant orange, border and chevron alike',
+  /\.tc-pulltab \{\s*--tc-pulltab-ink: var\(--mod-accent\);/.test(css) &&
+  /\.tc-pulltab\[data-pull='up'\], \.tc-pulltab\[data-pull='right'\] \{ --tc-pulltab-ink: var\(--mod-active-fg\); \}/.test(css) &&
+  /border: 1\.5px solid var\(--tc-pulltab-ink\);/.test(css) && /color: var\(--tc-pulltab-ink\);/.test(css))
 
 console.log('== the height is the sum of its parts, with no surplus to become dead space')
 check('it is header + pad + card + pad',
   threadStripHeight() === THREAD_HEAD_H + THREAD_TRACK_PAD_TOP + THREAD_CARD_H + THREAD_TRACK_PAD_BOTTOM)
-check('the air around the card is small -- under 30px in total',
-  THREAD_TRACK_PAD_TOP + THREAD_TRACK_PAD_BOTTOM < 30, THREAD_TRACK_PAD_TOP + THREAD_TRACK_PAD_BOTTOM)
+// The Hide-threads tab's lane is not dead space -- the tab rides in it -- so
+// it is left out; what remains is air, and it stays small. (L15 made the
+// expanded tab 20px deep, and the lane grew with it.)
+check('the air around the card, the tab\'s lane aside, is small -- under 16px in total',
+  THREAD_TRACK_PAD_TOP + (THREAD_TRACK_PAD_BOTTOM - PULLTAB_OPEN_H) < 16, THREAD_TRACK_PAD_TOP + THREAD_TRACK_PAD_BOTTOM - PULLTAB_OPEN_H)
 check('the Hide-threads tab has its own lane below the card, with clearance',
-  THREAD_TRACK_PAD_BOTTOM >= PULLTAB_H + 4, [THREAD_TRACK_PAD_BOTTOM, PULLTAB_H])
+  THREAD_TRACK_PAD_BOTTOM >= PULLTAB_OPEN_H + 4, [THREAD_TRACK_PAD_BOTTOM, PULLTAB_OPEN_H])
 check('the CSS value is that number in px, not a share of the layout',
   threadStripCss() === `${threadStripHeight()}px`, threadStripCss())
 
@@ -69,7 +90,7 @@ console.log('== the tile and the tab take the SAME expression')
 // dmStrip.ts exists to end.
 check('one value is computed', /const threadStripH = threadStripCss\(\)/.test(app))
 check('the tile uses it', /height: threadListReveal\.shown \? threadStripH : 0/.test(app))
-check('the tab uses it', new RegExp(`top: threadStripH, marginTop: -${PULLTAB_H}`).test(app))
+check('the tab uses it', /top: threadStripH, marginTop: -PULLTAB_OPEN_H/.test(app))
 check('no share of the layout survives in App to be reached for',
   !/threadsShareOfChatColumn|threadsShare\b/.test(app))
 

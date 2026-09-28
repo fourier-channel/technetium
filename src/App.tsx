@@ -30,7 +30,7 @@ import { useReadMarker } from './client/useReadMarker'
 import { useMediaTagSync } from './client/useMediaTags'
 import { DomainView } from './ui/DomainView'
 import { domainEnabled } from './client/domainMode'
-import { threadStripCss, DM_TAB_BESIDE_TITLE } from './ui/threadStrip'
+import { threadStripCss, DM_TAB_BESIDE_TITLE, PULLTAB_OPEN_H } from './ui/threadStrip'
 import { threadPinsOf, useThreadPinsVersion } from './client/threadPinState'
 import { usePinnedFold } from './client/pinnedFold'
 import { partitionPinned, stripOpensForPins } from './ui/threadPins'
@@ -247,56 +247,43 @@ function App() {
         booruActive={!selectedRoom}
         onSelectBooru={() => setSelectedRoom(null)}
         header={
-          <div style={{ padding: '4px 8px 8px' }}>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                gap: 8,
-                minWidth: 0,
-              }}
-            >
-              {/* Smaller than the old <strong> default: the name must fit the
-                  width most people leave the room list at, and it ellipsizes
-                  rather than wrapping the header. */}
-              <strong
-                style={{
-                  fontSize: 12.5,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-                title={userId ?? undefined}
-              >
-                {userId}
-              </strong>
-              <button
-                type="button"
-                onClick={() => setSettingsOpen(true)}
-                style={{ fontSize: 11, flexShrink: 0 }}
-                title="Settings"
-              >
+          // Who you are, then the three things you do to the client itself
+          // (launch-polish L13, operator 2026-09-28): the avatar, framed, with
+          // the name to its RIGHT, in a panel of their own; Settings, Layout
+          // and Log out as pills in the Direct Messages pill's language. The
+          // head pads 8px sideways -- the same gutter the room list's rows and
+          // its Direct Messages pill sit on -- and the panel pads its content
+          // by the minimum, so nothing floats in its container.
+          <div className="tc-me">
+            <div className="tc-me-card" title={userId ?? undefined}>
+              <span className="tc-me-av">
+                <AvatarDisc
+                  userId={userId ?? ''}
+                  name={client?.getUser(userId ?? '')?.displayName ?? userId ?? ''}
+                  avatarMxc={client?.getUser(userId ?? '')?.avatarUrl ?? null}
+                  size={30}
+                />
+              </span>
+              {/* Ellipsizes rather than wrapping: the name must fit the width
+                  most people leave the room list at. */}
+              <span className="tc-me-name">{userId}</span>
+            </div>
+            <div className="tc-me-actions">
+              <button type="button" className="tc-pill" onClick={() => setSettingsOpen(true)} title="Settings">
                 Settings
               </button>
               <button
                 type="button"
+                className="tc-pill"
+                aria-pressed={editMode}
                 onClick={() => setEditMode(!editMode)}
-                style={{ fontSize: 11, flexShrink: 0 }}
                 title="Resize, lock and pin the panels; export your layout as a number"
               >
-                {editMode ? 'Done' : 'Edit layout'}
+                {editMode ? 'Done' : 'Layout'}
               </button>
-              <button type="button" onClick={logout} style={{ fontSize: 12, flexShrink: 0 }}>Log out</button>
-            </div>
-            {/* The user's own avatar, under the name at the panel's top left. */}
-            <div style={{ marginTop: 6 }}>
-              <AvatarDisc
-                userId={userId ?? ''}
-                name={client?.getUser(userId ?? '')?.displayName ?? userId ?? ''}
-                avatarMxc={client?.getUser(userId ?? '')?.avatarUrl ?? null}
-                size={34}
-              />
+              <button type="button" className="tc-pill" onClick={logout}>
+                Log out
+              </button>
             </div>
           </div>
         }
@@ -329,7 +316,7 @@ function App() {
           <PullTab pull="down" target="dock" label="Direct message" onClick={() => showInDock(dockRoom)} style={{ top: 0, left: 'calc(50% - 40px)' }} />
         )}
         {dockRoom && space.leaves.dock.open && (
-          <PullTab pull="up" target="dock" label="Hide the direct message" onClick={closeDock} style={{ top: `${Math.round(dockShareOfMain * 1000) / 10}%`, marginTop: -12, left: 'calc(50% - 40px)' }} />
+          <PullTab pull="up" target="dock" label="Hide the direct message" onClick={closeDock} style={{ top: `${Math.round(dockShareOfMain * 1000) / 10}%`, marginTop: -PULLTAB_OPEN_H, left: 'calc(50% - 40px)' }} />
         )}
         {/* Below the dock: the chat column and, to its right, the domain --
             a tile that takes width from the column, so the thread list and
@@ -356,7 +343,7 @@ function App() {
               <PullTab pull="down" target="dock" label="Direct message" onClick={() => showInDock(dockRoom)} style={{ top: 0, left: DM_TAB_BESIDE_TITLE }} />
             )}
             {selectedRoom && threadListOpen && (
-              <PullTab pull="up" target="threads" label="Hide threads" onClick={() => setThreadListOpen(false)} style={{ top: threadStripH, marginTop: -12, left: 'calc(50% + 40px)' }} />
+              <PullTab pull="up" target="threads" label="Hide threads" onClick={() => setThreadListOpen(false)} style={{ top: threadStripH, marginTop: -PULLTAB_OPEN_H, left: 'calc(50% + 40px)' }} />
             )}
             {threadListReveal.mounted && selectedRoom && (
               <div
@@ -472,7 +459,7 @@ function App() {
         <PullTab pull="left" target="thread" label="Thread" onClick={() => setOpenThread(lastThread)} style={{ right: membersWidth + DIVIDER_PX }} />
       )}
       {openThread && (
-        <PullTab pull="right" target="thread" label="Close thread" onClick={() => setOpenThread(null)} style={{ right: membersWidth + DIVIDER_PX + threadPanelWidth, marginRight: -12 }} />
+        <PullTab pull="right" target="thread" label="Close thread" onClick={() => setOpenThread(null)} style={{ right: membersWidth + DIVIDER_PX + threadPanelWidth, marginRight: -PULLTAB_OPEN_H }} />
       )}
       {/* Closed by reflow when the screen cannot hold it (space.ts). The
           handle goes with it: a divider for a panel that is not there is a

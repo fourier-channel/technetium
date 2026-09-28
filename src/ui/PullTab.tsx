@@ -22,9 +22,12 @@ export function PullTab({
   // For tests and tooling: which panel this tab pulls.
   target: string
 }) {
-  // ASCII on purpose (org ruling: committed content is ASCII-only); the
-  // domain tab uses the same < and >.
-  const chevron = pull === 'down' ? 'v' : pull === 'up' ? '^' : pull === 'left' ? '<' : '>'
+  // ONE "v", turned by the stylesheet to point where the panel moves: the
+  // sideways tabs are the same tab rotated 90 degrees (launch-polish L15).
+  // Down and left pull a collapsed panel out (green); up and right put an
+  // expanded one back (orange). ASCII on purpose (committed content is
+  // ASCII-only).
+  const chevron = 'v'
   return (
     <button
       type="button"

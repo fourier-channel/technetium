@@ -42,15 +42,22 @@ export const THREAD_HEAD_H = 32
 export const THREAD_TRACK_PAD_TOP = 8
 
 /**
- * Air between the card and the strip's bottom edge. The "Hide threads" tab
- * (12px) rides INSIDE that edge, so this is the tab's lane plus clearance --
- * less than that and the tab sits on the focused card, which is centred
- * under it by construction.
+ * The pull tabs, index.css .tc-pulltab; the check compares them (launch-polish
+ * L15). A tab that pulls a collapsed panel OUT is 56 x 16; one that puts an
+ * expanded panel BACK is the same length and 20 deep. The sideways tabs are
+ * the same boxes turned 90 degrees.
  */
-export const THREAD_TRACK_PAD_BOTTOM = 16
+export const PULLTAB_W = 56
+export const PULLTAB_CLOSED_H = 16
+export const PULLTAB_OPEN_H = 20
 
-/** The tab's height, index.css .tc-pulltab; the check compares them. */
-export const PULLTAB_H = 12
+/**
+ * Air between the card and the strip's bottom edge. The "Hide threads" tab
+ * (an EXPANDED tab, PULLTAB_OPEN_H) rides INSIDE that edge, so this is the
+ * tab's lane plus clearance -- less than that and the tab sits on the focused
+ * card, which is centred under it by construction.
+ */
+export const THREAD_TRACK_PAD_BOTTOM = PULLTAB_OPEN_H + 4
 
 /** What the strip is: its header, one card, and the air around it. */
 export function threadStripHeight(): number {
@@ -86,7 +93,7 @@ export function threadStripCss(): string {
  * checks/threadStrip computes where everything lands at several widths.
  */
 export const TITLE_HALF_W = 55 // "Thread Listing", 13px semibold: 110px, measured
-export const PULLTAB_HALF_W = 23
+export const PULLTAB_HALF_W = PULLTAB_W / 2
 export const SORT_PILL_W = 80 // "Replies" pill with its caret, captions hidden
 export const HEAD_PAD_X = 10
 export const DM_TAB_GAP = 12

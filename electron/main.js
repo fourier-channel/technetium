@@ -102,10 +102,10 @@ function createWindow(s) {
 
   if (s.window.maximized) mainWindow.maximize()
 
-  // The deployed page still carries its pre-rename <title> ("matrix-client"),
-  // and a remote document should not be naming the desktop window regardless of
-  // what it says. Hold the title we set; the taskbar and the window list are
-  // ours, not the page's.
+  // A remote document should not be naming the desktop window, whatever its
+  // <title> says (it read "matrix-client" until 2026-09-28 and says
+  // "Technetium - tc.41chan.net" now). Hold the title we set; the taskbar and
+  // the window list are ours, not the page's.
   mainWindow.on('page-title-updated', (event) => event.preventDefault())
 
   mainWindow.loadURL(APP_ORIGIN)

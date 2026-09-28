@@ -383,6 +383,7 @@ export function Timeline({ room, onOpenThread, onOpenRoom, threadListOpen, onTog
         {bg && client && <ChatBackdrop bg={bg} roomId={room.roomId} />}
         <div
           ref={scrollRef}
+          className="tc-log-scroll"
           style={{
             position: 'relative',
             zIndex: 1,
