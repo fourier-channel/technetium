@@ -23,22 +23,29 @@ import { MAS_GRAPHQL_PATH, type TokenSource } from './masSessions'
 //   implied the data were protected. Anything that must actually be restricted
 //   is restricted by the homeserver, not by which tab a client draws.
 //
-// UNDER DELEGATED AUTH A 403 IS NOT A NO (found 2026-09-28, never seen live
-// before then). This server runs MSC3861: MAS owns sign-in, and Synapse's
-// MasDelegatedAuth.is_server_admin is `"urn:synapse:admin:*" in
-// requester.scope` -- a property of the TOKEN, not of the account. Technetium
-// does not ask for that scope and must not (MAS refuses it at sign-in to
-// anyone without can_request_admin, so asking would break every other
-// account's login). So Synapse answers 403 to the operator exactly as it does
-// to anyone, and the admin tabs never appeared for the one account they were
-// built for.
+// UNDER DELEGATED AUTH, SYNAPSE CANNOT ANSWER THIS AT ALL (found 2026-09-28;
+// the admin tabs had never once appeared for the operator). This server runs
+// MSC3861, where MAS owns sign-in, and two things follow:
+//
+//   - Synapse does not register the endpoint asked below: rest/admin/__init__
+//     wraps UserAdminServlet in `if not auth_delegated`. It answers 404 --
+//     measured live, matrix.41chan.net -- which reads as 'unknown'.
+//   - Even where an admin endpoint exists, MasDelegatedAuth.is_server_admin is
+//     `"urn:synapse:admin:*" in requester.scope`: a property of the TOKEN, not
+//     of the account. Technetium does not ask for that scope and must not (MAS
+//     refuses it at sign-in to anyone without can_request_admin, so asking
+//     would break every other account's login).
 //
 // The account-level fact lives in MAS: `canRequestAdmin` on the viewer, which
-// is what MAS consults before it will issue the admin scope, and what syn2mas
-// fills from Synapse's own users.admin when a server migrates. The token
-// already carries the GraphQL scope (masSessions.ts), so a 403 from Synapse is
-// followed by asking MAS -- when there is a MAS to ask. With no issuer (a
-// server without delegated auth), the 403 means what it always meant.
+// MAS consults before it will issue the admin scope, and which syn2mas fills
+// from Synapse's own users.admin when a server migrates. The token already
+// carries the GraphQL scope (masSessions.ts). So a session that signed in
+// through an issuer is asked about at MAS, and Synapse is not asked; one
+// without an issuer (a server without delegated auth) asks Synapse as before.
+//
+// The first fix (aad9190) fell back to MAS only on a 403, on a reviewer's
+// reading of the source. The live endpoint said 404. One unauthenticated curl
+// would have shown it before the deploy.
 //
 // Three outcomes, and the third is not the second. 'unknown' means the question
 // could not be put -- no network, a homeserver that is not Synapse, an admin
@@ -64,9 +71,11 @@ export async function observeServerAdmin(
   // Injectable so a check can drive it; defaults to the real one.
   doFetch: typeof fetch = fetch,
   // The OIDC issuer this session signed in through, if any. Present means the
-  // server delegates auth, and a 403 below is asked again of MAS.
+  // server delegates auth, and the question goes to MAS instead.
   masIssuer: string | null = null,
 ): Promise<AdminFacts> {
+  if (masIssuer) return observeMasAdmin(masIssuer, source, doFetch)
+
   const userId = client.getUserId()
   const base = client.baseUrl
   if (!userId || !base) {
@@ -95,11 +104,9 @@ export async function observeServerAdmin(
     if (res.status === 401) {
       return { verdict: 'unknown', because: 'The homeserver would not accept this session to ask with.' }
     }
-    // Without delegated auth, the clean no: Synapse answers 403 M_FORBIDDEN to
-    // a non-administrator. With it, only "this token cannot administer" --
-    // see the top of this file -- so the account is asked about at MAS.
+    // The clean no. Synapse answers 403 M_FORBIDDEN to a non-administrator.
+    // (Only reached without delegated auth -- see the top of this file.)
     if (res.status === 403) {
-      if (masIssuer) return observeMasAdmin(masIssuer, source, doFetch)
       return { verdict: 'not-admin', because: 'The homeserver says this account is not a server administrator.' }
     }
     // Not Synapse, or the admin API is not exposed on this listener. That is

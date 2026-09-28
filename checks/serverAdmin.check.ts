@@ -78,41 +78,59 @@ async function main() {
     check('500 is unknown, not a no', boom.verdict === 'unknown')
   }
 
-  console.log('\n-- under delegated auth, a 403 is asked again of MAS --')
+  console.log('\n-- under delegated auth, the question goes to MAS --')
   {
-    // Synapse under MSC3861 decides admin by the TOKEN's scope, which this
-    // client never holds, so it answers 403 to the operator too. The account's
-    // flag is at MAS. Each stub answers the Synapse probe with 403 and the MAS
-    // GraphQL POST with the given body.
+    // Under MSC3861 Synapse does not register /users/<id>/admin at all (404,
+    // measured live 2026-09-28) and would decide admin by the TOKEN's scope
+    // anyway. The account's flag is at MAS. These stubs answer Synapse as it
+    // does live -- 404 -- and MAS with the given body, and record who was asked.
     const ISSUER = 'https://auth.example/'
-    const seen: string[] = []
+    let seen: string[] = []
     const both = (masStatus: number, masBody: unknown) => (async (url: string) => {
       seen.push(String(url))
       return String(url).startsWith(ISSUER)
         ? { status: masStatus, ok: masStatus >= 200 && masStatus < 300, json: async () => masBody }
-        : { status: 403, ok: false, json: async () => ({ errcode: 'M_FORBIDDEN' }) }
+        : { status: 404, ok: false, json: async () => ({ errcode: 'M_UNRECOGNIZED' }) }
     }) as unknown as typeof fetch
     const user = (canRequestAdmin: unknown) => ({ data: { viewer: { __typename: 'User', canRequestAdmin } } })
 
     const yes = await observeServerAdmin(stubClient(), stubToken(), both(200, user(true)), ISSUER)
-    check('403 then MAS canRequestAdmin true is admin', yes.verdict === 'admin', yes)
+    check('with an issuer, MAS canRequestAdmin true is admin', yes.verdict === 'admin', yes)
     check('and it asked MAS at <issuer>graphql', seen.includes('https://auth.example/graphql'), seen)
+    check('and did not ask Synapse, which has no such endpoint there',
+      !seen.some((u) => u.includes('/_synapse/')), seen)
+    seen = []
     const no = await observeServerAdmin(stubClient(), stubToken(), both(200, user(false)), ISSUER)
-    check('403 then MAS canRequestAdmin false is not-admin', no.verdict === 'not-admin', no)
+    check('with an issuer, MAS canRequestAdmin false is not-admin', no.verdict === 'not-admin', no)
     const anon = await observeServerAdmin(stubClient(), stubToken(),
       both(200, { data: { viewer: { __typename: 'Anonymous' } } }), ISSUER)
     check('a token MAS answers as Anonymous is unknown, not a no', anon.verdict === 'unknown', anon)
     const masDown = await observeServerAdmin(stubClient(), stubToken(), both(502, {}), ISSUER)
     check('MAS failing is unknown, not a no', masDown.verdict === 'unknown', masDown)
-    // No issuer: a server without delegated auth, where 403 is the real no.
+    // No issuer: a server without delegated auth asks Synapse, as before --
+    // here the 404 it gives under delegation, which is unknown.
+    seen = []
     const plain = await observeServerAdmin(stubClient(), stubToken(), both(200, user(true)))
-    check('without an issuer a 403 stays a no, and MAS is not asked', plain.verdict === 'not-admin', plain)
+    check('without an issuer Synapse is asked and MAS is not',
+      plain.verdict === 'unknown' && !seen.some((u) => u.startsWith(ISSUER)), { plain, seen })
 
     check('MAS body: canRequestAdmin true is admin', readMasAdminBody(user(true)).verdict === 'admin')
     check('MAS body: a string "true" is unknown', readMasAdminBody(user('true')).verdict === 'unknown')
     check('MAS body: missing field is unknown', readMasAdminBody({ data: { viewer: { __typename: 'User' } } }).verdict === 'unknown')
     check('MAS body: graphql errors are unknown', readMasAdminBody({ errors: [{ message: 'x' }] }).verdict === 'unknown')
     check('MAS body: null is unknown', readMasAdminBody(null).verdict === 'unknown')
+
+    // The retry rule holds at MAS too: one refresh on 401, never a loop.
+    let calls = 0
+    let refreshed = 0
+    const flakyMas = (async () => {
+      calls++
+      return calls === 1
+        ? { status: 401, ok: false, json: async () => ({}) }
+        : { status: 200, ok: true, json: async () => user(true) }
+    }) as unknown as typeof fetch
+    const r = await observeServerAdmin(stubClient(), { get: () => 'tok', refresh: async () => { refreshed++ } }, flakyMas, ISSUER)
+    check('MAS: an expired token is refreshed once and retried', r.verdict === 'admin' && refreshed === 1 && calls === 2, { r, refreshed, calls })
   }
 
   console.log('\n-- an expired token is retried once, and only once --')
