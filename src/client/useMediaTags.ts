@@ -214,6 +214,39 @@ const booruReads = newBooruReadState()
  * Silent when the image has no post_id -- that is an image the booru does not
  * know about, and there is nothing to ask it.
  */
+/**
+ * Run a booru request only once the booru session cookie exists.
+ *
+ * Every booru read and write is credentialed, and the booru answers one only
+ * if it carries `fourier_session` (or the booru's own session): anything else
+ * is met by Cloudflare's challenge -- a 403 with no CORS headers, which the
+ * browser reports as a CORS error, not as a refusal. The cookie is minted by
+ * the exchange (ensureBooruSession), and it is a SESSION cookie, so it is
+ * gone after every browser restart, in a private window and in a fresh
+ * Firefox container. Page load fired the first tag reads before the exchange
+ * had answered -- scanAll runs before the exchange is even asked -- so those
+ * users met a burst of CORS errors on every load (2026-09-28).
+ *
+ * So nothing goes to the booru until the exchange has answered for the
+ * current token, and nothing at all when it refused: a refused exchange
+ * (a local copy on 127.0.0.1, whose SameSite=Lax cookie the browser will not
+ * accept cross-site) means every request would only be challenged. The
+ * exchange is memoised per token, so this costs nothing after the first.
+ */
+async function withBooruSession<T>(run: () => Promise<T>): Promise<T> {
+  const ok = await ensureBooruSession(fetchClient?.getAccessToken() ?? null)
+  if (!ok) {
+    throw new Error(
+      'no booru session, so the booru was not asked (it would only answer with a ' +
+        'Cloudflare challenge, which the browser reports as a CORS error). Fix: the ' +
+        'exchange at booru.41chan.net/fourier/exchange refused this token or was ' +
+        'unreachable; it is retried on the next token refresh. A local copy on ' +
+        '127.0.0.1 never gets one, because the cookie is for .41chan.net.',
+    )
+  }
+  return run()
+}
+
 export function refreshBooruTags(mediaId: string, force = false): void {
   const postId = sets.get(mediaId)?.postId
   if (postId === undefined) return
@@ -239,7 +272,7 @@ export function refreshBooruTags(mediaId: string, force = false): void {
       // It also narrows what this client holds: the tag_string here is the
       // union of the buckets the VIEWER may see, where /posts/:id.json hands
       // out the denormalised one, private creator tags included.
-      fetchBooruPool(postId),
+      withBooruSession(() => fetchBooruPool(postId)),
     )
     .then((live) => {
       if (!live) return
@@ -308,7 +341,7 @@ export async function editBooruTags(mediaId: string, edit: TagEdit): Promise<voi
   // never seen the server, so read once -- and only in that case.
   let seen = before.tagString
   if (seen === undefined) {
-    const live = await booruLimiter.run(() => fetchBooruPool(postId))
+    const live = await booruLimiter.run(() => withBooruSession(() => fetchBooruPool(postId)))
     if (!live) {
       throw new Error(
         `could not read post ${postId} from the booru, so an edit would overwrite ` +
@@ -327,7 +360,7 @@ export async function editBooruTags(mediaId: string, edit: TagEdit): Promise<voi
   ingestSet(optimisticSet(base, edit, Date.now()), mediaId)
 
   try {
-    await booruLimiter.run(() => writeBooruTags(postId, seen, edit))
+    await booruLimiter.run(() => withBooruSession(() => writeBooruTags(postId, seen, edit)))
     // RE-READ RATHER THAN TRUST THE WRITE'S OWN ANSWER. The write replies with
     // Danbooru's post JSON, which knows nothing about buckets or lamps and
     // carries the denormalised tag_string. Ingesting it stripped every lamp

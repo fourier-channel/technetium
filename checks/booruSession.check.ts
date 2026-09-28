@@ -31,6 +31,20 @@ async function main() {
   const c = await ensureBooruSession('tok-d', throwingFetch, 'https://x/exchange')
   check('a network failure is false, never a throw', c === false)
 
+  // 2026-09-28: Firefox users met a burst of CORS errors on every load. The
+  // first tag reads went out before the exchange had answered, carried no
+  // session cookie, and Cloudflare challenged them (403, no CORS headers).
+  // Every booru request in the store now waits on the exchange, and none is
+  // sent when it refused. Read from source: the store imports the SDK.
+  const { readFileSync } = await import('node:fs')
+  const store = readFileSync(new URL('../src/client/useMediaTags.ts', import.meta.url), 'utf8')
+  const storeCalls = [...store.matchAll(/\b(fetchBooruPool|writeBooruTags|booruCsrfToken)\(/g)]
+  const gated = [...store.matchAll(/withBooruSession\(\(\) => (fetchBooruPool|writeBooruTags)\(/g)]
+  check('every booru request in the tag store waits for the session exchange first',
+    storeCalls.length > 0 && storeCalls.length === gated.length, { calls: storeCalls.length, gated: gated.length })
+  check('and a refused exchange sends nothing, naming the remedy instead',
+    /const ok = await ensureBooruSession\(fetchClient\?\.getAccessToken\(\) \?\? null\)\s*\n\s*if \(!ok\) \{\s*\n\s*throw new Error\(/.test(store))
+
   console.log(failures ? `booruSession: ${failures} FAILED` : 'booruSession: all ok')
   if (failures) process.exit(1)
 }
