@@ -49,6 +49,11 @@ reading had to be chosen it is stated below.
 | L10 | "the space between status update lines and date changes": about 50% less | DONE `62f5cfc` |
 | L11 | "I regret that we are going back to the old Discord-style 'avatar on the left, name on the top right, text under name'"; avatar on the first message of a run only (asked, answered) | DONE `62f5cfc` |
 | L12 | Operator, 2026-09-26: "the avatar travel down the gutter to match each new line ... the NAME stays at the top ... the previous lines then lose their speech arrows, while keeping the other effects" | DONE `d226e73` |
+| L13 | Operator, 2026-09-28: "Pretty up the top left status bar" -- avatar right onto the column's gutter, the name to its right, Settings/Layout/Log out as pills like "Direct Messages", a border round the avatar, avatar and name in their own panel, minimum margins | DONE `279e237` |
+| L14 | "Reclaim dead space to the left of the roomlist so the roomlist does not have to be so wide" | DONE `279e237` |
+| L15 | The expand/collapse tabs: collapsed a bit wider and taller, border and "V" formant green; expanded the same width but taller, formant orange; the sideways ones rotated 90 degrees | DONE `279e237` |
+| L16 | "Chat panel's scrollbar is too chonky and out of place" -- sleeker, still showing where in the buffer you are | DONE `279e237` |
+| L17 | The browser tab: "matrix-client" and Vite's purple bolt become "Technetium - tc.41chan.net" with 41chan's icon as a placeholder | DONE `279e237` |
 
 ---
 
@@ -146,3 +151,4 @@ One line per landed step, appended as it lands.
 | L4 start-out `385119f` | Pinned threads pull the strip down on entering their room, once per entry; a pushpin at the strip's left end folds them away and back, per person, in account data. | PENDING OPERATOR VERIFICATION: a newcomer landing in #chat. |
 | L9 + L10 + L11 `62f5cfc` | Title bars a declared 24px (room 51 -> 24, thread 47 -> 24, DM 88 -> 24, one bar in the dock); buttons are the thread strip pill, one rule. Date dividers and membership lines at half their spacing. Rows in the Discord shape, avatar and name on the first message of a run. | PENDING OPERATOR VERIFICATION: all three in the browser. |
 | L12 `d226e73` | The avatar sits beside a run's newest line and travels down to each new one (transform, skipped under reduced motion); the name stays on the first line; earlier lines keep their bubble and lose the arrow. | PENDING OPERATOR VERIFICATION: the travel in the browser. |
+| L13-L17 `279e237` | Header: a bordered card holding the framed avatar and the name to its right, on the room list's 8px gutter; one row of three equal pills sharing the DM pill's line and radius. Room list: only spaces draw the chevron slot, and a level of indent is that slot, so a child's icon sits under its parent's (a room one level down 14px further left; width budget 100 -> 86). Pull tabs 56 x 16 green collapsed, 56 x 20 orange expanded, one "v" rotated; the thread strip's tab lane grew 16 -> 24. Chat log and thread panel: thin trackless scrollbar in formant ink, green under the pointer. Tab title "Technetium - tc.41chan.net", 41chan.png icon. | Seen in tools/visual/sidebar.html (headless Chromium, scrollbars shown). PENDING OPERATOR VERIFICATION: the real sidebar against a live account, and the scrollbar in Firefox. |
