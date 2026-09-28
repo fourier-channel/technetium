@@ -152,7 +152,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     let cancelled = false
     queueMicrotask(() => {
       void (async () => {
-        const facts = await observeServerAdmin(client, clientTokenSource(client))
+        const facts = await observeServerAdmin(client, clientTokenSource(client), fetch, loadSession()?.oidc.issuer ?? null)
         if (!cancelled) setAdmin(facts)
       })()
     })

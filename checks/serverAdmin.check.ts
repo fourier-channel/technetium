@@ -6,7 +6,7 @@
 // 'no' would make an unmeasured axis indistinguishable from a measured one,
 // which is rule 8 of the doctrine, and it would do it on the axis that decides
 // whether a panel exists.
-import { observeServerAdmin, readAdminBody } from '../src/client/serverAdmin.ts'
+import { observeServerAdmin, readAdminBody, readMasAdminBody } from '../src/client/serverAdmin.ts'
 
 let failures = 0
 const check = (name: string, cond: boolean, extra?: unknown) => {
@@ -76,6 +76,43 @@ async function main() {
     check('400 is unknown, not a no', bad.verdict === 'unknown')
     const boom = await observeServerAdmin(stubClient(), stubToken(), reply(500))
     check('500 is unknown, not a no', boom.verdict === 'unknown')
+  }
+
+  console.log('\n-- under delegated auth, a 403 is asked again of MAS --')
+  {
+    // Synapse under MSC3861 decides admin by the TOKEN's scope, which this
+    // client never holds, so it answers 403 to the operator too. The account's
+    // flag is at MAS. Each stub answers the Synapse probe with 403 and the MAS
+    // GraphQL POST with the given body.
+    const ISSUER = 'https://auth.example/'
+    const seen: string[] = []
+    const both = (masStatus: number, masBody: unknown) => (async (url: string) => {
+      seen.push(String(url))
+      return String(url).startsWith(ISSUER)
+        ? { status: masStatus, ok: masStatus >= 200 && masStatus < 300, json: async () => masBody }
+        : { status: 403, ok: false, json: async () => ({ errcode: 'M_FORBIDDEN' }) }
+    }) as unknown as typeof fetch
+    const user = (canRequestAdmin: unknown) => ({ data: { viewer: { __typename: 'User', canRequestAdmin } } })
+
+    const yes = await observeServerAdmin(stubClient(), stubToken(), both(200, user(true)), ISSUER)
+    check('403 then MAS canRequestAdmin true is admin', yes.verdict === 'admin', yes)
+    check('and it asked MAS at <issuer>graphql', seen.includes('https://auth.example/graphql'), seen)
+    const no = await observeServerAdmin(stubClient(), stubToken(), both(200, user(false)), ISSUER)
+    check('403 then MAS canRequestAdmin false is not-admin', no.verdict === 'not-admin', no)
+    const anon = await observeServerAdmin(stubClient(), stubToken(),
+      both(200, { data: { viewer: { __typename: 'Anonymous' } } }), ISSUER)
+    check('a token MAS answers as Anonymous is unknown, not a no', anon.verdict === 'unknown', anon)
+    const masDown = await observeServerAdmin(stubClient(), stubToken(), both(502, {}), ISSUER)
+    check('MAS failing is unknown, not a no', masDown.verdict === 'unknown', masDown)
+    // No issuer: a server without delegated auth, where 403 is the real no.
+    const plain = await observeServerAdmin(stubClient(), stubToken(), both(200, user(true)))
+    check('without an issuer a 403 stays a no, and MAS is not asked', plain.verdict === 'not-admin', plain)
+
+    check('MAS body: canRequestAdmin true is admin', readMasAdminBody(user(true)).verdict === 'admin')
+    check('MAS body: a string "true" is unknown', readMasAdminBody(user('true')).verdict === 'unknown')
+    check('MAS body: missing field is unknown', readMasAdminBody({ data: { viewer: { __typename: 'User' } } }).verdict === 'unknown')
+    check('MAS body: graphql errors are unknown', readMasAdminBody({ errors: [{ message: 'x' }] }).verdict === 'unknown')
+    check('MAS body: null is unknown', readMasAdminBody(null).verdict === 'unknown')
   }
 
   console.log('\n-- an expired token is retried once, and only once --')

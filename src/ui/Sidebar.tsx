@@ -113,10 +113,10 @@ export function Sidebar({
         {/* No "New room or space" here (operator ruling 2026-09-05): users do
             not create rooms or spaces on this server. DMs are unaffected --
             they are created through the people pickers, never through this
-            entry. Client-side removal only; the server itself still honours
-            createRoom for any logged-in user (Synapse has no vanilla switch
-            for "rooms no, DMs yes" -- that would take a small module -- so
-            this is presentation, not enforcement, and is recorded as such). */}
+            entry. The SERVER enforces it since 2026-09-07 (fourier-basis
+            ops/hetzner/synapse/modules/room_creation_policy.py: DMs and server
+            admins only), so the one entry point is where only an admin
+            reaches -- Settings, Server permissions, "+ New room or space". */}
         <NavTree selectedRoomId={selectedRoomId} onSelectRoom={onSelectRoom} onDefaultWidth={onDefaultWidth} booruActive={booruActive} onSelectBooru={onSelectBooru} />
       </aside>
 

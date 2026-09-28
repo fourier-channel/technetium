@@ -14,6 +14,7 @@ import {
 import { powerEdit, requiredToSetPower, TIERS } from '../client/powerLevels'
 import { describeInviteError } from '../client/userDirectory'
 import { standingLabel, splitUserId } from '../client/members'
+import { CreateRoomDialog } from './CreateRoomDialog'
 
 // ---------------------------------------------------------------------------
 // The Server Permissions panel (ui-depth-v1 U8).
@@ -32,6 +33,11 @@ import { standingLabel, splitUserId } from '../client/members'
 //
 // Nothing here is fetched. It is the state the client already syncs, which is
 // also why this is a VIEW and not a privilege: see client/serverAdmin.ts.
+//
+// The one thing it DOES is create rooms and spaces, because this is the only
+// surface an admin reaches and an admin is the only account the homeserver
+// lets create one (room_creation_policy.py, operator ruling 2026-09-07). The
+// panel being admin-only is not what stops anybody else; the server is.
 // ---------------------------------------------------------------------------
 
 export function ServerPermissions({ client }: { client: MatrixClient }) {
@@ -41,6 +47,7 @@ export function ServerPermissions({ client }: { client: MatrixClient }) {
   const [reload, setReload] = useState(0)
   const [notice, setNotice] = useState<string | null>(null)
   const [onlyFindings, setOnlyFindings] = useState(false)
+  const [creating, setCreating] = useState(false)
 
   // Re-read on demand rather than subscribing to every room's state: this is a
   // settings panel somebody opens to look at, not a live surface, and a
@@ -95,7 +102,23 @@ export function ServerPermissions({ client }: { client: MatrixClient }) {
         <button type="button" className="tc-perm-chip" onClick={() => setReload((n) => n + 1)}>
           Re-read
         </button>
+        <button type="button" className="tc-perm-chip" onClick={() => setCreating(true)}>
+          + New room or space
+        </button>
       </div>
+      {creating && (
+        <CreateRoomDialog
+          client={client}
+          onClose={() => setCreating(false)}
+          onCreated={(_roomId, name) => {
+            setCreating(false)
+            // The request has returned; the room reaches this list when the
+            // next sync delivers it, which is not yet. Said, not hidden.
+            setNotice(`Created ${name}. It appears here once the server sends it -- press Re-read in a moment.`)
+            setReload((n) => n + 1)
+          }}
+        />
+      )}
 
       <div className="tc-perm-summary">
         {/* Both numbers, always, and the denominator with them. "0 faults" on
