@@ -55,21 +55,25 @@ console.log('== L18 on a phone, the room list and the member list can be reached
 // ... user list, room list, nothing shows". The routes are proven in
 // checks/spaceOverflow; these hold that the tabs exist and use them.
 check('a closed room list shows a Rooms tab on the left edge, and it opens the room list',
-  /\{!space\.leaves\.sidebar\.open && \(\s*<PullTab pull="right" open=\{false\} target="sidebar" label="Rooms" onClick=\{openSidebar\} style=\{\{ left: 0 \}\} \/>/.test(app))
+  /<PullTab pull="right" open=\{false\} target="sidebar" label="Rooms" onClick=\{openSidebar\} style=\{\{ left: 0, top: ROOMS_TAB_TOP \}\} \/>/.test(app))
 check('a closed member list shows a Members tab on the right edge, while a room is open',
-  /\{selectedRoom && !space\.leaves\.members\.open && \(\s*<PullTab pull="left" open=\{false\} target="members" label="Members" onClick=\{openMembers\}/.test(app))
-check('each has a way back when it is the whole screen',
-  /\{sidebarAlone && \(\s*<PullTab pull="left" open target="sidebar"[^>]*onClick=\{closeSidebar\}/.test(app) &&
-  /\{membersAlone && \(\s*<PullTab pull="right" open target="members"[^>]*onClick=\{closeMembers\}/.test(app))
-check('the Back tabs sit above the middle, clear of the Rooms and Members tabs on the same edge',
-  /target="sidebar" label="Back" onClick=\{closeSidebar\} style=\{\{ right: 0, top: BACK_TAB_TOP \}\}/.test(app) &&
-  /target="members" label="Back" onClick=\{closeMembers\} style=\{\{ left: 0, top: BACK_TAB_TOP \}\}/.test(app))
+  /\{selectedRoom && !space\.leaves\.members\.open && [^\n]*\(\s*<PullTab pull="left" open=\{false\} target="members" label="Members" onClick=\{openMembers\} style=\{\{ right: 0, top: MEMBERS_TAB_TOP \}\}/.test(app))
+check('each has a way back when it is the whole screen, at its own list\'s height',
+  /\{sidebarAlone && \(\s*<PullTab pull="left" open target="sidebar" label="Back" onClick=\{closeSidebar\} style=\{\{ right: 0, top: ROOMS_TAB_TOP \}\}/.test(app) &&
+  /\{membersAlone && \(\s*<PullTab pull="right" open target="members" label="Back" onClick=\{closeMembers\} style=\{\{ left: 0, top: MEMBERS_TAB_TOP \}\}/.test(app))
 {
-  const { BACK_TAB_LIFT, PULLTAB_W } = await import('../src/ui/threadStrip.ts')
-  // Both are centred on their `top` (translateY(-50%)), so they clear when
-  // the centres are more than one tab length apart.
-  check('and the lift clears a whole tab, with a gap', BACK_TAB_LIFT >= PULLTAB_W + 8, { BACK_TAB_LIFT, PULLTAB_W })
+  // "Room List has the upper position, user list has the lower position, in
+  // both states." Tabs are centred on their top (translateY(-50%)), so the
+  // two spots clear each other when they are more than a tab length apart.
+  const { SIDE_TAB_SPREAD, PULLTAB_W, ROOMS_TAB_TOP, MEMBERS_TAB_TOP } = await import('../src/ui/threadStrip.ts')
+  check('the room list rides above the middle, the member list below, a whole tab and a gap apart',
+    /50% - /.test(ROOMS_TAB_TOP) && /50% \+ /.test(MEMBERS_TAB_TOP) && SIDE_TAB_SPREAD >= PULLTAB_W + 8, { ROOMS_TAB_TOP, MEMBERS_TAB_TOP })
 }
+check('a thread filling the phone has its own Back on the left edge (its panel-edge tab was off screen)',
+  /\{openThread && upAlone === 'thread' && \(\s*<PullTab pull="right" open target="thread" label="Back" onClick=\{\(\) => setOpenThread\(null\)\} style=\{\{ left: 0 \}\}/.test(app) &&
+  /\{openThread && upAlone !== 'thread' && \(/.test(app))
+check('while a thread or a DM fills the screen, the list tabs stand aside',
+  /!space\.leaves\.sidebar\.open && \(!upAlone \|\| membersAlone\)/.test(app) && /!space\.leaves\.members\.open && \(!upAlone \|\| sidebarAlone\)/.test(app))
 check('choosing a room (or the booru) on the phone\'s room list puts the list away',
   (app.match(/if \(sidebarAlone\) closeSidebar\(\)/g) ?? []).length === 2)
 

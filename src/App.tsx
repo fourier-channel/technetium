@@ -31,7 +31,8 @@ import { useReadMarker } from './client/useReadMarker'
 import { useMediaTagSync } from './client/useMediaTags'
 import { DomainView } from './ui/DomainView'
 import { domainEnabled } from './client/domainMode'
-import { threadStripCss, DM_TAB_BESIDE_TITLE, PULLTAB_OPEN_H, BACK_TAB_TOP } from './ui/threadStrip'
+import { threadStripCss, DM_TAB_BESIDE_TITLE, PULLTAB_OPEN_H, ROOMS_TAB_TOP, MEMBERS_TAB_TOP } from './ui/threadStrip'
+import { useBackButton } from './ui/backButton'
 import { threadPinsOf, useThreadPinsVersion } from './client/threadPinState'
 import { usePinnedFold } from './client/pinnedFold'
 import { partitionPinned, stripOpensForPins } from './ui/threadPins'
@@ -49,19 +50,50 @@ function App() {
   const { client, status, error, userId, login, logout } = useClient()
   const { space, pushEdge, editMode, setEditMode, showInDock, openThreadPane, closeThreadPane, openThreadList, closeThreadList, openDomain, closeDomain, dockRoom, closeDock, openSidebar, closeSidebar, openMembers, closeMembers } = useSpace()
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
+  // The panel filling a one-slot screen, or null when the chat is up (or the
+  // screen holds more than one panel).
+  const upAlone = openLeaves(space).length === 1 && !space.leaves.main.open ? openLeaves(space)[0].id : null
+  const sidebarAlone = upAlone === 'sidebar'
+  const membersAlone = upAlone === 'members'
   // DMs live in the dock, rooms in the main pane. Choosing a person opens
-  // them across the top; the room being read stays where it is.
-  // On a phone the room list is the one panel on screen while it is up
-  // (operator, 2026-09-29); choosing where to go puts it away, as picking an
-  // item from a phone menu does. Beside the chat it stays where it is.
-  const sidebarAlone = openLeaves(space).length === 1 && space.leaves.sidebar.open
-  const membersAlone = openLeaves(space).length === 1 && space.leaves.members.open
+  // them across the top; the room being read stays where it is. On a phone
+  // the room list is the one panel on screen while it is up (operator,
+  // 2026-09-29); choosing where to go puts it away, as picking an item from a
+  // phone menu does. Beside the chat it stays where it is.
   const selectRoom = (room: Room) => {
     if (client && directRoomIds(client).has(room.roomId)) showInDock(room)
     else setSelectedRoom(room)
     if (sidebarAlone) closeSidebar()
   }
   const [openThread, setOpenThread] = useState<{ roomId: string; rootId: string } | null>(null)
+  // Back walks back through the rooms, threads and phone panels the user has
+  // been to, and stays at the first (ui/backButton.ts, operator 2026-09-29).
+  // The thread is its own part of the view, so a phone's thread panel is not
+  // also counted as a panel.
+  const backView = {
+    room: selectedRoom?.roomId ?? null,
+    panel: upAlone && upAlone !== 'thread' && upAlone !== 'main' ? upAlone : null,
+    thread: openThread ? `${openThread.roomId} ${openThread.rootId}` : null,
+  }
+  useBackButton(!!client, backView, (v) => {
+    const room = v.room ? client?.getRoom(v.room) ?? null : null
+    if (v.room === null || room) setSelectedRoom(room)
+    if (v.thread) {
+      const [roomId, rootId] = v.thread.split(' ')
+      setOpenThread({ roomId, rootId })
+    } else setOpenThread(null)
+    if (v.panel !== backView.panel) {
+      if (v.panel === 'sidebar') openSidebar()
+      else if (v.panel === 'members') openMembers()
+      else if (v.panel === 'dock' && dockRoom) showInDock(dockRoom)
+      else if (v.panel === 'threads') openThreadList()
+      else if (backView.panel === 'sidebar') closeSidebar()
+      else if (backView.panel === 'members') closeMembers()
+      else if (backView.panel === 'dock') closeDock()
+      else if (backView.panel === 'threads') closeThreadList()
+      else if (backView.panel === 'domain') closeDomain()
+    }
+  })
 
   // Open a room the caller knows only by id -- the just-created-DM case.
   // createRoom answers before the room reaches the client store via sync, so
@@ -468,8 +500,16 @@ function App() {
       {lastThread && !openThread && (
         <PullTab pull="left" open={false} target="thread" label="Thread" onClick={() => setOpenThread(lastThread)} style={{ right: membersWidth + DIVIDER_PX }} />
       )}
-      {openThread && (
+      {/* Beside the chat, the close tab rides the thread panel's left edge.
+          Alone on a phone the thread IS the screen, and that edge (computed
+          from a member list that is not there) was off the screen's left --
+          no way out of a thread (operator, 2026-09-29). There it is on the
+          screen's own left edge. */}
+      {openThread && upAlone !== 'thread' && (
         <PullTab pull="right" open target="thread" label="Close thread" onClick={() => setOpenThread(null)} style={{ right: membersWidth + DIVIDER_PX + threadPanelWidth, marginRight: -PULLTAB_OPEN_H }} />
+      )}
+      {openThread && upAlone === 'thread' && (
+        <PullTab pull="right" open target="thread" label="Back" onClick={() => setOpenThread(null)} style={{ left: 0 }} />
       )}
       {/* Closed by reflow when the screen cannot hold it (space.ts). The
           handle goes with it: a divider for a panel that is not there is a
@@ -496,22 +536,22 @@ function App() {
           list, room list, nothing shows"). Each shows its tab on the edge it
           comes in from; while one is the whole screen, its tab on the far
           edge puts it back. On a desktop both are open and none of these
-          draw. The Back tabs sit BACK_TAB_LIFT above the middle: a Back on
-          the right edge shares that edge with the Members tab, one on the
-          left with the Rooms tab, and at the same height each covered the
-          other -- Back from the room list landed on Members, and round again
-          (operator, 2026-09-29). */}
-      {!space.leaves.sidebar.open && (
-        <PullTab pull="right" open={false} target="sidebar" label="Rooms" onClick={openSidebar} style={{ left: 0 }} />
+          draw. The room list's tabs ride above the middle and the member
+          list's below it, in both states: at one height a Back covered the
+          other list's tab -- Back from the room list landed on Members, and
+          round again (operator, 2026-09-29). While a thread or a DM fills the
+          screen, only its own Back shows. */}
+      {!space.leaves.sidebar.open && (!upAlone || membersAlone) && (
+        <PullTab pull="right" open={false} target="sidebar" label="Rooms" onClick={openSidebar} style={{ left: 0, top: ROOMS_TAB_TOP }} />
       )}
       {sidebarAlone && (
-        <PullTab pull="left" open target="sidebar" label="Back" onClick={closeSidebar} style={{ right: 0, top: BACK_TAB_TOP }} />
+        <PullTab pull="left" open target="sidebar" label="Back" onClick={closeSidebar} style={{ right: 0, top: ROOMS_TAB_TOP }} />
       )}
-      {selectedRoom && !space.leaves.members.open && (
-        <PullTab pull="left" open={false} target="members" label="Members" onClick={openMembers} style={{ right: 0 }} />
+      {selectedRoom && !space.leaves.members.open && (!upAlone || sidebarAlone) && (
+        <PullTab pull="left" open={false} target="members" label="Members" onClick={openMembers} style={{ right: 0, top: MEMBERS_TAB_TOP }} />
       )}
       {membersAlone && (
-        <PullTab pull="right" open target="members" label="Back" onClick={closeMembers} style={{ left: 0, top: BACK_TAB_TOP }} />
+        <PullTab pull="right" open target="members" label="Back" onClick={closeMembers} style={{ left: 0, top: MEMBERS_TAB_TOP }} />
       )}
       </div>
     </div>
