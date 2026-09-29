@@ -1,7 +1,7 @@
 // One-slot screens: REPLACE swaps the panel that is up, LAYER covers it and
 // remembers what was underneath (operator ruling 2026-09-06). This is stage
 // two's "crossing" restricted to a screen that can hold exactly one thing.
-import { defaultSpace, setViewport, singleSlot, present, dismiss, reflow, fits, validTiling, serialize, PANEL_IDS } from '../src/ui/space.ts'
+import { defaultSpace, setViewport, singleSlot, present, dismiss, reflow, fits, validTiling, serialize, PANEL_IDS, bringBackPanel, putAwayPanel } from '../src/ui/space.ts'
 import type { PanelId, Space } from '../src/ui/space.ts'
 
 let failures = 0
@@ -19,6 +19,39 @@ const DESKTOP = { w: 1440, h: 900 }
   check('a phone is a one-slot screen', singleSlot(setViewport(defaultSpace(), PHONE)))
   check('a desktop is not', !singleSlot(setViewport(defaultSpace(), DESKTOP)))
   check('a tablet-width screen is not either', !singleSlot(setViewport(defaultSpace(), { w: 900, h: 1200 })))
+}
+
+// --- the room list and the member list come back (2026-09-29) -------------
+// Operator: "When loading tc on mobile, only chanbooru shows up. there is no
+// way to get to the other pages ... user list, room list, nothing shows."
+// Reflow sheds both on a phone; these are the routes their tabs take.
+{
+  const phone = reflow(setViewport(defaultSpace(), PHONE))
+  check('a phone sheds the room list and the member list', !phone.leaves.sidebar.open && !phone.leaves.members.open, open(phone))
+  for (const mode of ['replace', 'layer'] as const) {
+    for (const id of ['sidebar', 'members'] as const) {
+      const up = bringBackPanel(phone, id, mode)
+      check(`${mode}: the ${id} comes back as the one panel up, filling the screen`,
+        open(up).join() === id && fits(up) && validTiling(up), open(up))
+      const back = putAwayPanel(up, id, mode)
+      check(`${mode}: putting it away returns to the chat`, open(back).join() === 'main', open(back))
+    }
+  }
+  const desk = reflow(setViewport(defaultSpace(), DESKTOP))
+  check('on a desktop both are open, so bringing them back changes nothing',
+    bringBackPanel(desk, 'sidebar', 'replace') === desk && bringBackPanel(desk, 'members', 'replace') === desk)
+  // Between the two: a screen that shed the member list but holds two panels.
+  // The tab must never do nothing -- carve it back beside the chat if it
+  // fits, present it alone if not.
+  for (const w of [520, 600, 700]) {
+    const mid = reflow(setViewport(defaultSpace(), { w, h: 900 }))
+    for (const id of ['sidebar', 'members'] as const) {
+      if (mid.leaves[id].open) continue
+      const up = bringBackPanel(mid, id, 'replace')
+      check(`at ${w}px a shed ${id} comes back (beside the chat or alone) and the layout still fits`,
+        up.leaves[id].open && fits(up) && validTiling(up), open(up))
+    }
+  }
 }
 
 // --- REPLACE ---------------------------------------------------------------

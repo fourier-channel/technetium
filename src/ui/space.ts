@@ -681,6 +681,28 @@ export function dismiss(s: Space, id: PanelId, mode: OverflowMode = DEFAULT_OVER
   return n
 }
 
+// The room list and the member list come back the way the reflow took them
+// (operator, 2026-09-29: on a phone "user list, room list, nothing shows").
+// A one-slot screen presents them as the one panel up. A wider screen that
+// shed them first tries to carve their old place out of the chat; if that
+// does not fit -- the reason reflow shed them -- they are presented alone
+// rather than the tab doing nothing.
+export function bringBackPanel(s: Space, id: 'sidebar' | 'members', mode: OverflowMode): Space {
+  if (s.leaves[id].open) return s
+  if (singleSlot(s)) return present(s, id, mode)
+  const n = id === 'sidebar' ? openPanel(s, 'sidebar', 'main', 'x', 0.22) : openPanel(s, 'members', 'main', 'x', 0.2, true)
+  return n === s ? present(s, id, mode) : n
+}
+
+// Put one back. Alone on screen it dismisses to what it covered (or the
+// chat); beside the chat it closes like any panel.
+export function putAwayPanel(s: Space, id: 'sidebar' | 'members', mode: OverflowMode): Space {
+  if (!s.leaves[id].open) return s
+  const open = openLeaves(s)
+  if (open.length === 1) return dismiss(s, id, mode)
+  return closePanel(s, id)
+}
+
 // --- the number -----------------------------------------------------------
 // Per leaf: x0,y0,x1,y1 at 10 bits each (1/1023), flags open|pinned|locked
 // (3 bits), min at 6 bits (1/63), last axis+dir (3 bits: none/x-/x+/y-/y+).

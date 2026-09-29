@@ -10,12 +10,18 @@ import type { CSSProperties } from 'react'
 // positioned ancestor) because only the caller knows which border this is.
 export function PullTab({
   pull,
+  open,
   label,
   onClick,
   style,
   target,
 }: {
   pull: 'down' | 'up' | 'left' | 'right'
+  // Whether the panel this tab controls is OPEN now: a closed one's tab pulls
+  // it out (green, shallower), an open one's puts it back (orange, deeper).
+  // Stated, not read off `pull`: a tab on the screen's left edge pulls the
+  // room list out rightwards, where the thread's close tab also points right.
+  open: boolean
   label: string
   onClick: () => void
   style?: CSSProperties
@@ -24,15 +30,14 @@ export function PullTab({
 }) {
   // ONE "v", turned by the stylesheet to point where the panel moves: the
   // sideways tabs are the same tab rotated 90 degrees (launch-polish L15).
-  // Down and left pull a collapsed panel out (green); up and right put an
-  // expanded one back (orange). ASCII on purpose (committed content is
-  // ASCII-only).
+  // ASCII on purpose (committed content is ASCII-only).
   const chevron = 'v'
   return (
     <button
       type="button"
       className="tc-pulltab"
       data-pull={pull}
+      data-open={open ? 'true' : 'false'}
       data-target={target}
       onClick={onClick}
       aria-label={label}

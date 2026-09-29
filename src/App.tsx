@@ -20,6 +20,7 @@ import { IncomingVerification } from './ui/IncomingVerification'
 import { PullTab } from './ui/PullTab'
 import { BooruFrame } from './ui/BooruFrame'
 import { useSpace } from './ui/spaceContext'
+import { openLeaves } from './ui/space'
 import { ThreadPanel } from './ui/ThreadPanel'
 import { ThreadList } from './ui/ThreadList'
 import { useReveal } from './ui/useReveal'
@@ -46,13 +47,19 @@ import { BootScreen } from './onboarding/BootScreen'
 // mounts the three-pane layout (nav tree | timeline+composer | member list).
 function App() {
   const { client, status, error, userId, login, logout } = useClient()
-  const { space, pushEdge, editMode, setEditMode, showInDock, openThreadPane, closeThreadPane, openThreadList, closeThreadList, openDomain, closeDomain, dockRoom, closeDock } = useSpace()
+  const { space, pushEdge, editMode, setEditMode, showInDock, openThreadPane, closeThreadPane, openThreadList, closeThreadList, openDomain, closeDomain, dockRoom, closeDock, openSidebar, closeSidebar, openMembers, closeMembers } = useSpace()
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   // DMs live in the dock, rooms in the main pane. Choosing a person opens
   // them across the top; the room being read stays where it is.
+  // On a phone the room list is the one panel on screen while it is up
+  // (operator, 2026-09-29); choosing where to go puts it away, as picking an
+  // item from a phone menu does. Beside the chat it stays where it is.
+  const sidebarAlone = openLeaves(space).length === 1 && space.leaves.sidebar.open
+  const membersAlone = openLeaves(space).length === 1 && space.leaves.members.open
   const selectRoom = (room: Room) => {
     if (client && directRoomIds(client).has(room.roomId)) showInDock(room)
     else setSelectedRoom(room)
+    if (sidebarAlone) closeSidebar()
   }
   const [openThread, setOpenThread] = useState<{ roomId: string; rootId: string } | null>(null)
 
@@ -245,7 +252,10 @@ function App() {
         selectedRoomId={selectedRoom?.roomId}
         onSelectRoom={selectRoom}
         booruActive={!selectedRoom}
-        onSelectBooru={() => setSelectedRoom(null)}
+        onSelectBooru={() => {
+          setSelectedRoom(null)
+          if (sidebarAlone) closeSidebar()
+        }}
         header={
           // Who you are, then the three things you do to the client itself
           // (launch-polish L13, operator 2026-09-28): the avatar, framed, with
@@ -313,10 +323,10 @@ function App() {
             title bar, whose label sits on the centre (launch-polish L3), so
             the tab moves onto the strip itself -- see dmTabOnStrip below. */}
         {dockRoom && !space.leaves.dock.open && !dmTabOnStrip && (
-          <PullTab pull="down" target="dock" label="Direct message" onClick={() => showInDock(dockRoom)} style={{ top: 0, left: 'calc(50% - 40px)' }} />
+          <PullTab pull="down" open={false} target="dock" label="Direct message" onClick={() => showInDock(dockRoom)} style={{ top: 0, left: 'calc(50% - 40px)' }} />
         )}
         {dockRoom && space.leaves.dock.open && (
-          <PullTab pull="up" target="dock" label="Hide the direct message" onClick={closeDock} style={{ top: `${Math.round(dockShareOfMain * 1000) / 10}%`, marginTop: -PULLTAB_OPEN_H, left: 'calc(50% - 40px)' }} />
+          <PullTab pull="up" open target="dock" label="Hide the direct message" onClick={closeDock} style={{ top: `${Math.round(dockShareOfMain * 1000) / 10}%`, marginTop: -PULLTAB_OPEN_H, left: 'calc(50% - 40px)' }} />
         )}
         {/* Below the dock: the chat column and, to its right, the domain --
             a tile that takes width from the column, so the thread list and
@@ -333,17 +343,17 @@ function App() {
             {/* Right of centre: with the dock closed this border is also the
                 dock's, and its tab sits left of centre. Two tabs, side by side. */}
             {selectedRoom && !threadListOpen && (
-              <PullTab pull="down" target="threads" label="Threads" onClick={() => setThreadListOpen(true)} style={{ top: 0, left: 'calc(50% + 40px)' }} />
+              <PullTab pull="down" open={false} target="threads" label="Threads" onClick={() => setThreadListOpen(true)} style={{ top: 0, left: 'calc(50% + 40px)' }} />
             )}
             {/* The dock's tab, on the strip's title bar and in the STRIP's
                 coordinates: placed from <main> it drifted onto the scope pills
                 at ordinary widths, and onto the title whenever the domain made
                 <main> wider than the strip. */}
             {dockRoom && dmTabOnStrip && (
-              <PullTab pull="down" target="dock" label="Direct message" onClick={() => showInDock(dockRoom)} style={{ top: 0, left: DM_TAB_BESIDE_TITLE }} />
+              <PullTab pull="down" open={false} target="dock" label="Direct message" onClick={() => showInDock(dockRoom)} style={{ top: 0, left: DM_TAB_BESIDE_TITLE }} />
             )}
             {selectedRoom && threadListOpen && (
-              <PullTab pull="up" target="threads" label="Hide threads" onClick={() => setThreadListOpen(false)} style={{ top: threadStripH, marginTop: -PULLTAB_OPEN_H, left: 'calc(50% + 40px)' }} />
+              <PullTab pull="up" open target="threads" label="Hide threads" onClick={() => setThreadListOpen(false)} style={{ top: threadStripH, marginTop: -PULLTAB_OPEN_H, left: 'calc(50% + 40px)' }} />
             )}
             {threadListReveal.mounted && selectedRoom && (
               <div
@@ -456,10 +466,10 @@ function App() {
       {/* The thread view's tab: on the user list's left border when a thread
           can be pulled back out, on the view's left border when it is out. */}
       {lastThread && !openThread && (
-        <PullTab pull="left" target="thread" label="Thread" onClick={() => setOpenThread(lastThread)} style={{ right: membersWidth + DIVIDER_PX }} />
+        <PullTab pull="left" open={false} target="thread" label="Thread" onClick={() => setOpenThread(lastThread)} style={{ right: membersWidth + DIVIDER_PX }} />
       )}
       {openThread && (
-        <PullTab pull="right" target="thread" label="Close thread" onClick={() => setOpenThread(null)} style={{ right: membersWidth + DIVIDER_PX + threadPanelWidth, marginRight: -PULLTAB_OPEN_H }} />
+        <PullTab pull="right" open target="thread" label="Close thread" onClick={() => setOpenThread(null)} style={{ right: membersWidth + DIVIDER_PX + threadPanelWidth, marginRight: -PULLTAB_OPEN_H }} />
       )}
       {/* Closed by reflow when the screen cannot hold it (space.ts). The
           handle goes with it: a divider for a panel that is not there is a
@@ -471,8 +481,33 @@ function App() {
             tone={dividerTone(space, 'members')}
             label="Member list width"
           />
-          <MemberList room={selectedRoom} onOpenRoom={openRoomById} width={membersWidth} />
+          <MemberList
+            room={selectedRoom}
+            onOpenRoom={(roomId) => {
+              openRoomById(roomId)
+              if (membersAlone) closeMembers()
+            }}
+            width={membersWidth}
+          />
         </>
+      )}
+      {/* The room list and the member list, when the layout has closed them
+          -- a phone, where only one panel fits (operator, 2026-09-29: "user
+          list, room list, nothing shows"). Each shows its tab on the edge it
+          comes in from; while one is the whole screen, its tab on the far
+          edge puts it back. On a desktop both are open and none of these
+          draw. */}
+      {!space.leaves.sidebar.open && (
+        <PullTab pull="right" open={false} target="sidebar" label="Rooms" onClick={openSidebar} style={{ left: 0 }} />
+      )}
+      {sidebarAlone && (
+        <PullTab pull="left" open target="sidebar" label="Back" onClick={closeSidebar} style={{ right: 0 }} />
+      )}
+      {selectedRoom && !space.leaves.members.open && (
+        <PullTab pull="left" open={false} target="members" label="Members" onClick={openMembers} style={{ right: 0 }} />
+      )}
+      {membersAlone && (
+        <PullTab pull="right" open target="members" label="Back" onClick={closeMembers} style={{ left: 0 }} />
       )}
       </div>
     </div>

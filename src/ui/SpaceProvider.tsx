@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { RoomEvent, type MatrixEvent, type Room } from 'matrix-js-sdk'
 import { useClient } from '../client/clientContextValue'
 import { directRoomIds } from '../client/dm'
-import { clampMemberScale, closeDomain, closeInColumn, closeThreadView, defaultSpace, deserialize, dismiss, moveDivider, openDomain, openInColumn, openThreadView, present, pushEdge, reflow, serialize, setFlag, setMin, setViewport, singleSlot, type PanelId, type Space } from './space'
+import { bringBackPanel, clampMemberScale, closeDomain, closeInColumn, closeThreadView, defaultSpace, deserialize, dismiss, moveDivider, openDomain, openInColumn, openThreadView, present, pushEdge, putAwayPanel, reflow, serialize, setFlag, setMin, setViewport, singleSlot, type PanelId, type Space } from './space'
 import { currentViewport, useStoredSpace } from './spaceState'
 import { dropPreset, putPreset, setDefaultPreset, setMobilePreset, setOverflow as setStoreOverflow } from './presets'
 import { SpaceCtx, type SpaceApi } from './spaceContext'
@@ -90,6 +90,16 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     // a phone. Insurance against a future caller, not a fix for a live bug.
     openDomain: () => { if (domainEnabled()) show('domain', (prev) => openDomain(prev, 0.45)) },
     closeDomain: () => hide('domain', (prev) => closeDomain(prev)),
+    // Operator, 2026-09-29: "When loading tc on mobile, only chanbooru shows up.
+    // there is no way to get to the other pages ... user list, room list,
+    // nothing shows." Reflow sheds both on a phone, and nothing could bring
+    // them back. On a one-slot screen these present() them as the one panel
+    // up; on a wider screen that shed them, they carve their old place back
+    // out of the chat (a no-op if it would not fit, which reflow allows).
+    openSidebar: () => setSpace((prev) => bringBackPanel(prev, 'sidebar', store.overflow)),
+    closeSidebar: () => setSpace((prev) => putAwayPanel(prev, 'sidebar', store.overflow)),
+    openMembers: () => setSpace((prev) => bringBackPanel(prev, 'members', store.overflow)),
+    closeMembers: () => setSpace((prev) => putAwayPanel(prev, 'members', store.overflow)),
     presets: {
       list: store.presets,
       defaultName: store.defaultPreset,
@@ -123,3 +133,4 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
 
   return <SpaceCtx.Provider value={api}>{children}</SpaceCtx.Provider>
 }
+

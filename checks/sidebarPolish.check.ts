@@ -50,5 +50,19 @@ check('the icon is 41chan\'s, and the Vite bolt is gone',
   /<link rel="icon" type="image\/png" href="\/41chan\.png" \/>/.test(html) &&
   existsSync(new URL('../public/41chan.png', import.meta.url)) && !existsSync(new URL('../public/favicon.svg', import.meta.url)))
 
+console.log('== L18 on a phone, the room list and the member list can be reached')
+// Operator, 2026-09-29: "When loading tc on mobile, only chanbooru shows up
+// ... user list, room list, nothing shows". The routes are proven in
+// checks/spaceOverflow; these hold that the tabs exist and use them.
+check('a closed room list shows a Rooms tab on the left edge, and it opens the room list',
+  /\{!space\.leaves\.sidebar\.open && \(\s*<PullTab pull="right" open=\{false\} target="sidebar" label="Rooms" onClick=\{openSidebar\} style=\{\{ left: 0 \}\} \/>/.test(app))
+check('a closed member list shows a Members tab on the right edge, while a room is open',
+  /\{selectedRoom && !space\.leaves\.members\.open && \(\s*<PullTab pull="left" open=\{false\} target="members" label="Members" onClick=\{openMembers\}/.test(app))
+check('each has a way back when it is the whole screen',
+  /\{sidebarAlone && \(\s*<PullTab pull="left" open target="sidebar"[^>]*onClick=\{closeSidebar\}/.test(app) &&
+  /\{membersAlone && \(\s*<PullTab pull="right" open target="members"[^>]*onClick=\{closeMembers\}/.test(app))
+check('choosing a room (or the booru) on the phone\'s room list puts the list away',
+  (app.match(/if \(sidebarAlone\) closeSidebar\(\)/g) ?? []).length === 2)
+
 if (failures) { console.log(`\n${failures} check(s) failed`); process.exit(1) }
 console.log('\nsidebar polish: all checks passed')

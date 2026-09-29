@@ -62,14 +62,13 @@ check('the header states its line-height, so the root 145% cannot grow it',
 check(`a tab across a border is ${PULLTAB_W}px long, and a sideways one is the same length`,
   px(across, 'width') === PULLTAB_W && px(sideways, 'height') === PULLTAB_W, [px(across, 'width'), px(sideways, 'height')])
 check(`collapsed tabs are ${PULLTAB_CLOSED_H}px deep, expanded ${PULLTAB_OPEN_H}px, as the module says`,
-  px(tabRule(".tc-pulltab[data-pull='down']"), 'height') === PULLTAB_CLOSED_H &&
-  px(tabRule(".tc-pulltab[data-pull='left']"), 'width') === PULLTAB_CLOSED_H &&
-  px(tabRule(".tc-pulltab[data-pull='up']"), 'height') === PULLTAB_OPEN_H &&
-  px(tabRule(".tc-pulltab[data-pull='right']"), 'width') === PULLTAB_OPEN_H)
+  px(across, 'height') === PULLTAB_CLOSED_H && px(sideways, 'width') === PULLTAB_CLOSED_H &&
+  px(tabRule(".tc-pulltab[data-open='true'][data-pull='down'], .tc-pulltab[data-open='true'][data-pull='up']"), 'height') === PULLTAB_OPEN_H &&
+  px(tabRule(".tc-pulltab[data-open='true'][data-pull='left'], .tc-pulltab[data-open='true'][data-pull='right']"), 'width') === PULLTAB_OPEN_H)
 check('an expanded tab is deeper than a collapsed one', PULLTAB_OPEN_H > PULLTAB_CLOSED_H)
-check('collapsed is formant green, expanded formant orange, border and chevron alike',
+check('collapsed is formant green, expanded formant orange, border and chevron alike -- by state, not direction',
   /\.tc-pulltab \{\s*--tc-pulltab-ink: var\(--mod-accent\);/.test(css) &&
-  /\.tc-pulltab\[data-pull='up'\], \.tc-pulltab\[data-pull='right'\] \{ --tc-pulltab-ink: var\(--mod-active-fg\); \}/.test(css) &&
+  /\.tc-pulltab\[data-open='true'\] \{ --tc-pulltab-ink: var\(--mod-active-fg\); \}/.test(css) &&
   /border: 1\.5px solid var\(--tc-pulltab-ink\);/.test(css) && /color: var\(--tc-pulltab-ink\);/.test(css))
 
 console.log('== the height is the sum of its parts, with no surplus to become dead space')
@@ -124,7 +123,7 @@ console.log('== the DM tab rides the strip, in the strip\'s coordinates, in the 
   check('App places it on the strip only while the strip is on screen (closing included)',
     /const dmTabOnStrip = !!\(dockRoom && !space\.leaves\.dock\.open && selectedRoom && threadListReveal\.mounted\)/.test(app))
   check('and there, in the chat column rather than in <main>',
-    /\{dockRoom && dmTabOnStrip && \(\s*\n\s*<PullTab pull="down" target="dock"[^\n]*left: DM_TAB_BESIDE_TITLE/.test(app))
+    /\{dockRoom && dmTabOnStrip && \(\s*\n\s*<PullTab pull="down" open=\{false\} target="dock"[^\n]*left: DM_TAB_BESIDE_TITLE/.test(app))
   check('and never both at once', /\{dockRoom && !space\.leaves\.dock\.open && !dmTabOnStrip && \(/.test(app))
 }
 

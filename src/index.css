@@ -3383,11 +3383,14 @@ code {
    state but taller, with green changing to formant orange. (remember to
    rotate this 90 degrees for the sideways buttons)".
 
-   COLLAPSED is a tab that pulls a panel out (down, left): 56 x 16, green.
-   EXPANDED is a tab that puts one back (up, right): 56 x 20, orange. The
-   sideways pair is the same two boxes turned 90 degrees, and the chevron is
-   one "v" rotated to point the way the panel moves. threadStrip.ts holds the
-   three numbers; checks/threadStrip compares them with these. */
+   COLLAPSED is a tab whose panel is closed, and it pulls the panel out:
+   56 x 16, green. EXPANDED is a tab whose panel is open, and it puts it back:
+   56 x 20, orange. Which one is data-open (PullTab's `open`), never the
+   direction: the room list's tab on a phone's left edge pulls right and is
+   collapsed. The sideways pair is the same two boxes turned 90 degrees, and
+   the chevron is one "v" rotated to point the way the panel moves.
+   threadStrip.ts holds the three numbers; checks/threadStrip compares them
+   with these. */
 .tc-pulltab {
   --tc-pulltab-ink: var(--mod-accent);
   position: absolute;
@@ -3403,7 +3406,7 @@ code {
   cursor: pointer;
   transition: box-shadow 150ms ease;
 }
-.tc-pulltab[data-pull='up'], .tc-pulltab[data-pull='right'] { --tc-pulltab-ink: var(--mod-active-fg); }
+.tc-pulltab[data-open='true'] { --tc-pulltab-ink: var(--mod-active-fg); }
 .tc-pulltab-chevron { font-size: 12px; font-weight: 700; line-height: 1; }
 .tc-pulltab[data-pull='up'] .tc-pulltab-chevron { transform: rotate(180deg); }
 .tc-pulltab[data-pull='left'] .tc-pulltab-chevron { transform: rotate(90deg); }
@@ -3411,17 +3414,20 @@ code {
 /* Horizontal tabs hang off a top or bottom border, centred. */
 .tc-pulltab[data-pull='down'], .tc-pulltab[data-pull='up'] {
   left: 50%; transform: translateX(-50%);
-  width: 56px;
+  width: 56px; height: 16px;
 }
-.tc-pulltab[data-pull='down'] { height: 16px; border-top: none; border-radius: 0 0 8px 8px; }
-.tc-pulltab[data-pull='up'] { height: 20px; border-bottom: none; border-radius: 8px 8px 0 0; }
+.tc-pulltab[data-pull='down'] { border-top: none; border-radius: 0 0 8px 8px; }
+.tc-pulltab[data-pull='up'] { border-bottom: none; border-radius: 8px 8px 0 0; }
 /* Vertical tabs sit on a left border, centred. */
 .tc-pulltab[data-pull='left'], .tc-pulltab[data-pull='right'] {
   top: 50%; transform: translateY(-50%);
-  height: 56px;
+  width: 16px; height: 56px;
 }
-.tc-pulltab[data-pull='left'] { width: 16px; border-right: none; border-radius: 8px 0 0 8px; }
-.tc-pulltab[data-pull='right'] { width: 20px; border-left: none; border-radius: 0 8px 8px 0; }
+.tc-pulltab[data-pull='left'] { border-right: none; border-radius: 8px 0 0 8px; }
+.tc-pulltab[data-pull='right'] { border-left: none; border-radius: 0 8px 8px 0; }
+/* Expanded is deeper: 20px, across or sideways. */
+.tc-pulltab[data-open='true'][data-pull='down'], .tc-pulltab[data-open='true'][data-pull='up'] { height: 20px; }
+.tc-pulltab[data-open='true'][data-pull='left'], .tc-pulltab[data-open='true'][data-pull='right'] { width: 20px; }
 .tc-pulltab:hover { box-shadow: 0 0 10px 1px color-mix(in srgb, var(--tc-pulltab-ink) 55%, transparent); }
 .tc-pulltab-tip {
   position: absolute; white-space: nowrap; font-size: 11px; padding: 2px 8px;
@@ -3431,7 +3437,8 @@ code {
 }
 .tc-pulltab[data-pull='down'] .tc-pulltab-tip { top: 100%; margin-top: 4px; left: 50%; transform: translateX(-50%); }
 .tc-pulltab[data-pull='up'] .tc-pulltab-tip { bottom: 100%; margin-bottom: 4px; left: 50%; transform: translateX(-50%); }
-.tc-pulltab[data-pull='left'] .tc-pulltab-tip, .tc-pulltab[data-pull='right'] .tc-pulltab-tip { right: 100%; margin-right: 6px; top: 50%; transform: translateY(-50%); }
+.tc-pulltab[data-pull='left'] .tc-pulltab-tip { right: 100%; margin-right: 6px; top: 50%; transform: translateY(-50%); }
+.tc-pulltab[data-pull='right'] .tc-pulltab-tip { left: 100%; margin-left: 6px; top: 50%; transform: translateY(-50%); }
 .tc-pulltab:hover .tc-pulltab-tip { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .tc-pulltab { transition: none; } }
 

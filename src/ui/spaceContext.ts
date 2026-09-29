@@ -33,6 +33,13 @@ export interface SpaceApi {
   closeThreadList: () => void
   openDomain: () => void
   closeDomain: () => void
+  // The room list and the member list. The layout closes them when the screen
+  // cannot hold them beside the chat (a phone); these bring them back, as the
+  // one panel on screen when only one fits.
+  openSidebar: () => void
+  closeSidebar: () => void
+  openMembers: () => void
+  closeMembers: () => void
   // Named layouts. `apply` swaps the live layout to one of them and can be
   // undone once with `revert`; `save` stores the CURRENT layout under a name.
   presets: {
