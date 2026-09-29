@@ -61,6 +61,15 @@ check('a closed member list shows a Members tab on the right edge, while a room 
 check('each has a way back when it is the whole screen',
   /\{sidebarAlone && \(\s*<PullTab pull="left" open target="sidebar"[^>]*onClick=\{closeSidebar\}/.test(app) &&
   /\{membersAlone && \(\s*<PullTab pull="right" open target="members"[^>]*onClick=\{closeMembers\}/.test(app))
+check('the Back tabs sit above the middle, clear of the Rooms and Members tabs on the same edge',
+  /target="sidebar" label="Back" onClick=\{closeSidebar\} style=\{\{ right: 0, top: BACK_TAB_TOP \}\}/.test(app) &&
+  /target="members" label="Back" onClick=\{closeMembers\} style=\{\{ left: 0, top: BACK_TAB_TOP \}\}/.test(app))
+{
+  const { BACK_TAB_LIFT, PULLTAB_W } = await import('../src/ui/threadStrip.ts')
+  // Both are centred on their `top` (translateY(-50%)), so they clear when
+  // the centres are more than one tab length apart.
+  check('and the lift clears a whole tab, with a gap', BACK_TAB_LIFT >= PULLTAB_W + 8, { BACK_TAB_LIFT, PULLTAB_W })
+}
 check('choosing a room (or the booru) on the phone\'s room list puts the list away',
   (app.match(/if \(sidebarAlone\) closeSidebar\(\)/g) ?? []).length === 2)
 

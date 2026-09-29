@@ -59,6 +59,16 @@ export const PULLTAB_OPEN_H = 20
  */
 export const THREAD_TRACK_PAD_BOTTOM = PULLTAB_OPEN_H + 4
 
+/**
+ * On a phone the room list's and member list's tabs share the screen's side
+ * edges: Rooms (left) and Members (right) at the middle, and each list's Back
+ * tab on the FAR edge while it fills the screen -- the edge the other list's
+ * tab is on. Back rides this far above the middle, so the two never cover
+ * each other: one tab length plus a 16px gap.
+ */
+export const BACK_TAB_LIFT = PULLTAB_W + 16
+export const BACK_TAB_TOP = `calc(50% - ${BACK_TAB_LIFT}px)`
+
 /** What the strip is: its header, one card, and the air around it. */
 export function threadStripHeight(): number {
   return THREAD_HEAD_H + THREAD_TRACK_PAD_TOP + THREAD_CARD_H + THREAD_TRACK_PAD_BOTTOM

@@ -31,7 +31,7 @@ import { useReadMarker } from './client/useReadMarker'
 import { useMediaTagSync } from './client/useMediaTags'
 import { DomainView } from './ui/DomainView'
 import { domainEnabled } from './client/domainMode'
-import { threadStripCss, DM_TAB_BESIDE_TITLE, PULLTAB_OPEN_H } from './ui/threadStrip'
+import { threadStripCss, DM_TAB_BESIDE_TITLE, PULLTAB_OPEN_H, BACK_TAB_TOP } from './ui/threadStrip'
 import { threadPinsOf, useThreadPinsVersion } from './client/threadPinState'
 import { usePinnedFold } from './client/pinnedFold'
 import { partitionPinned, stripOpensForPins } from './ui/threadPins'
@@ -496,18 +496,22 @@ function App() {
           list, room list, nothing shows"). Each shows its tab on the edge it
           comes in from; while one is the whole screen, its tab on the far
           edge puts it back. On a desktop both are open and none of these
-          draw. */}
+          draw. The Back tabs sit BACK_TAB_LIFT above the middle: a Back on
+          the right edge shares that edge with the Members tab, one on the
+          left with the Rooms tab, and at the same height each covered the
+          other -- Back from the room list landed on Members, and round again
+          (operator, 2026-09-29). */}
       {!space.leaves.sidebar.open && (
         <PullTab pull="right" open={false} target="sidebar" label="Rooms" onClick={openSidebar} style={{ left: 0 }} />
       )}
       {sidebarAlone && (
-        <PullTab pull="left" open target="sidebar" label="Back" onClick={closeSidebar} style={{ right: 0 }} />
+        <PullTab pull="left" open target="sidebar" label="Back" onClick={closeSidebar} style={{ right: 0, top: BACK_TAB_TOP }} />
       )}
       {selectedRoom && !space.leaves.members.open && (
         <PullTab pull="left" open={false} target="members" label="Members" onClick={openMembers} style={{ right: 0 }} />
       )}
       {membersAlone && (
-        <PullTab pull="right" open target="members" label="Back" onClick={closeMembers} style={{ left: 0 }} />
+        <PullTab pull="right" open target="members" label="Back" onClick={closeMembers} style={{ left: 0, top: BACK_TAB_TOP }} />
       )}
       </div>
     </div>
