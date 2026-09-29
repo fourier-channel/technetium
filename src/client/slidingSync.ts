@@ -27,8 +27,19 @@ export function slidingSyncEnabled(): boolean {
   return !!import.meta.env.VITE_SLIDING_SYNC
 }
 
-// Long-poll timeout for a sliding-sync request.
-const SLIDING_SYNC_TIMEOUT_MS = 30_000
+// Long-poll timeout for a sliding-sync request: how long the server may hold
+// one open with nothing to say.
+//
+// 20s, from 30s (operator, 2026-09-29). A Firefox user's sync long-polls died
+// mid-wait -- "CORS request did not succeed ... Status code: (null)", which in
+// Firefox means the CONNECTION was cut, not a header and not our own abort
+// (measured; memory firefox-cors-null-is-a-dropped-connection). Nothing on our
+// side closes a request that young, and matrix.41chan.net offers HTTP/3: a
+// request idle over UDP for 30s meets the common 30s home-router UDP NAT
+// timeout exactly. Under it, the wait ends before the mapping does. The cost
+// is one extra empty round trip per client every minute. The client's own
+// deadline stays this plus the SDK's 10s buffer.
+const SLIDING_SYNC_TIMEOUT_MS = 20_000
 
 // Two explicit lists (tunables named, not inline). Native MSC4186 does NOT honor
 // the proxy-era `slow_get_all_rooms`, so we cover the nav with real ranges:
