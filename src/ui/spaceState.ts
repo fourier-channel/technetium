@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ClientEvent, type MatrixClient, type MatrixEvent } from 'matrix-js-sdk'
-import { DEFAULT_VIEWPORT, defaultSpace, deserialize, reflow, serialize, setViewport, type Space, type Viewport } from './space'
+import { DEFAULT_VIEWPORT, damagedByPhone, defaultSpace, deserialize, isMomentary, reflow, serialize, setViewport, type Space, type Viewport } from './space'
 import { isMobileBrowser, readStore, startingCode, writeStore, type LayoutStore } from './presets'
 
 // The space, held in ACCOUNT DATA as its number, so it follows the user
@@ -45,7 +45,12 @@ export function readStored(client: MatrixClient | null, vp: Viewport = currentVi
   // layout: the default is a known-good screen and a corrupt code is not.
   // A v1 number (the earlier one-axis model) is refused by deserialize and
   // reads as the default, which is the honest answer to a superseded shape.
-  return (typeof code === 'string' && deserialize(code, vp)) || setViewport(defaultSpace(), vp)
+  const stored = typeof code === 'string' ? deserialize(code, vp) : null
+  // One panel open means a phone saved its momentary view (space.ts
+  // damagedByPhone, 2026-09-29): on a screen that holds more, open the
+  // default instead. Not written back -- the next real edit saves over it.
+  if (stored && damagedByPhone(stored)) return setViewport(defaultSpace(), vp)
+  return stored || setViewport(defaultSpace(), vp)
 }
 
 // What THIS screen can show of it. A layout designed on a desktop routinely
@@ -58,8 +63,15 @@ export type SpaceUpdate = Space | ((prev: Space) => Space)
 
 export interface StoredSpace {
   space: Space
+  // A change to the layout. Saved -- unless it is only this screen's view
+  // (space.ts isMomentary: a phone's one panel up, and back), which shows
+  // and is never written.
   setSpace: (u: SpaceUpdate) => void
   adaptSpace: (u: SpaceUpdate) => void
+  // A whole layout the user picked (import, preset, reset, revert): THAT is
+  // saved, and this screen shows what it can of it. Saving the reflowed
+  // result instead handed a phone's shed layout to every other device.
+  chooseSpace: (s: Space) => void
   store: LayoutStore
   // Change the named layouts / device defaults / overflow mode. The live
   // layout's own number is filled in on save, so callers never touch `code`.
@@ -122,10 +134,24 @@ export function useStoredSpace(client: MatrixClient | null): StoredSpace {
   }, [client])
 
   const setLayout = (u: SpaceUpdate) => {
-    const l = typeof u === 'function' ? u(latest.current) : u
+    const prev = latest.current
+    const l = typeof u === 'function' ? u(prev) : u
     latest.current = l
-    chosen.current = l
     setLayoutState(l)
+    // A phone's view of the layout, not a change to it: shown, never saved,
+    // and the layout the user chose stays what it was.
+    if (isMomentary(prev, l)) return
+    chosen.current = l
+    save()
+  }
+  const chooseLayout = (s: Space) => {
+    chosen.current = s
+    const l = reflow(setViewport(s, currentViewport()))
+    latest.current = l
+    setLayoutState(l)
+    save()
+  }
+  const save = () => {
     if (!client) return
     // Saved once the changes stop, not on every step of a drag: a drag is
     // dozens of changes a second and one number at the end. Optimistic; the
@@ -187,5 +213,5 @@ export function useStoredSpace(client: MatrixClient | null): StoredSpace {
     })
   }
 
-  return { space: layout, setSpace: setLayout, adaptSpace: adaptLayout, store, setStore }
+  return { space: layout, setSpace: setLayout, adaptSpace: adaptLayout, chooseSpace: chooseLayout, store, setStore }
 }

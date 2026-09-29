@@ -703,6 +703,40 @@ export function putAwayPanel(s: Space, id: 'sidebar' | 'members', mode: Overflow
   return closePanel(s, id)
 }
 
+// --- what is a layout, and what is only this screen's view of one ---------
+// Operator, 2026-09-29: "toggling a panel left and right while on mobile also
+// hides it permanently on desktop." The layout is ONE number in account data,
+// shared by every device. On a phone, putting the room list or the member
+// list up as the whole screen (present) and back (dismiss) is which panel is
+// showing right now -- a view, not a layout anyone chose -- and saving it
+// handed the desktop a layout with one panel open, which reflow (it only
+// ever sheds) could never widen again.
+
+/** One panel open, and it is not the chat: a phone's momentary view. */
+export function loneAside(s: Space): boolean {
+  return openLeaves(s).length === 1 && !s.leaves.main.open
+}
+
+/**
+ * Is moving from `prev` to `next` only this screen's view -- never saved?
+ * Anything on a one-slot screen; putting a panel up alone; and coming back
+ * from one (dismiss lands on the chat alone, which on a wide screen would
+ * otherwise read as a choice).
+ */
+export function isMomentary(prev: Space, next: Space): boolean {
+  return singleSlot(next) || loneAside(next) || loneAside(prev)
+}
+
+/**
+ * A stored layout with one panel open was saved by a phone before the rule
+ * above existed. Read on a screen that holds more, it is not the user's
+ * layout -- it is the damage -- and the default stands in for it. On a
+ * one-slot screen it is harmless and is left alone.
+ */
+export function damagedByPhone(stored: Space): boolean {
+  return openLeaves(stored).length === 1 && !singleSlot(stored)
+}
+
 // --- the number -----------------------------------------------------------
 // Per leaf: x0,y0,x1,y1 at 10 bits each (1/1023), flags open|pinned|locked
 // (3 bits), min at 6 bits (1/63), last axis+dir (3 bits: none/x-/x+/y-/y+).

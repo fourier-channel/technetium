@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { RoomEvent, type MatrixEvent, type Room } from 'matrix-js-sdk'
 import { useClient } from '../client/clientContextValue'
 import { directRoomIds } from '../client/dm'
-import { bringBackPanel, clampMemberScale, closeDomain, closeInColumn, closeThreadView, defaultSpace, deserialize, dismiss, moveDivider, openDomain, openInColumn, openThreadView, present, pushEdge, putAwayPanel, reflow, serialize, setFlag, setMin, setViewport, singleSlot, type PanelId, type Space } from './space'
+import { bringBackPanel, clampMemberScale, closeDomain, closeInColumn, closeThreadView, defaultSpace, deserialize, dismiss, moveDivider, openDomain, openInColumn, openThreadView, present, pushEdge, putAwayPanel, serialize, setFlag, setMin, setViewport, singleSlot, type PanelId, type Space } from './space'
 import { currentViewport, useStoredSpace } from './spaceState'
 import { dropPreset, putPreset, setDefaultPreset, setMobilePreset, setOverflow as setStoreOverflow } from './presets'
 import { SpaceCtx, type SpaceApi } from './spaceContext'
@@ -15,7 +15,7 @@ import { SpaceCtx, type SpaceApi } from './spaceContext'
 // whatever they are clicking on.
 export function SpaceProvider({ children }: { children: ReactNode }) {
   const { client } = useClient()
-  const { space, setSpace, store, setStore } = useStoredSpace(client)
+  const { space, setSpace, chooseSpace, store, setStore } = useStoredSpace(client)
   // One step of undo for applying a preset, importing a number, or resetting:
   // the layout as it was immediately before. STATE rather than a ref, because
   // the Revert button's enabled-ness is read during render and a ref would
@@ -67,12 +67,12 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       const s = deserialize(code, currentViewport())
       if (!s) return false
       setUndoCode(serialize(space))
-      setSpace(reflow(s))
+      chooseSpace(s)
       return true
     },
     resetSpace: () => {
       setUndoCode(serialize(space))
-      setSpace(reflow(setViewport(defaultSpace(), currentViewport())))
+      chooseSpace(setViewport(defaultSpace(), currentViewport()))
     },
     dockRoom,
     showInDock: (room) => {
@@ -110,7 +110,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
         const s = deserialize(p.code, currentViewport())
         if (!s) return false
         setUndoCode(serialize(space))
-        setSpace(reflow(s))
+        chooseSpace(s)
         return true
       },
       save: (name) => setStore(putPreset(store, name, serialize(space))),
@@ -122,14 +122,14 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
         if (!undoCode) return
         const s = deserialize(undoCode, currentViewport())
         setUndoCode(null)
-        if (s) setSpace(reflow(s))
+        if (s) chooseSpace(s)
       },
     },
     overflow: store.overflow,
     setOverflow: (mode) => setStore(setStoreOverflow(store, mode)),
     singleSlot: oneSlot,
   })
-  }, [space, editMode, dockRoom, setSpace, store, setStore, oneSlot, undoCode])
+  }, [space, editMode, dockRoom, setSpace, chooseSpace, store, setStore, oneSlot, undoCode])
 
   return <SpaceCtx.Provider value={api}>{children}</SpaceCtx.Provider>
 }

@@ -1,7 +1,7 @@
 // One-slot screens: REPLACE swaps the panel that is up, LAYER covers it and
 // remembers what was underneath (operator ruling 2026-09-06). This is stage
 // two's "crossing" restricted to a screen that can hold exactly one thing.
-import { defaultSpace, setViewport, singleSlot, present, dismiss, reflow, fits, validTiling, serialize, PANEL_IDS, bringBackPanel, putAwayPanel } from '../src/ui/space.ts'
+import { defaultSpace, setViewport, singleSlot, present, dismiss, reflow, fits, validTiling, serialize, PANEL_IDS, bringBackPanel, putAwayPanel, isMomentary, damagedByPhone, deserialize, moveDivider } from '../src/ui/space.ts'
 import type { PanelId, Space } from '../src/ui/space.ts'
 
 let failures = 0
@@ -52,6 +52,37 @@ const DESKTOP = { w: 1440, h: 900 }
         up.leaves[id].open && fits(up) && validTiling(up), open(up))
     }
   }
+}
+
+// --- a phone's view is never saved as the layout (2026-09-29) --------------
+// Operator: "toggling a panel left and right while on mobile also hides it
+// permanently on desktop." The layout is one number shared by every device.
+{
+  const phone = reflow(setViewport(defaultSpace(), PHONE))
+  const up = bringBackPanel(phone, 'sidebar', 'replace')
+  check('a phone putting the room list up is only a view', isMomentary(phone, up))
+  check('and putting it away again', isMomentary(up, putAwayPanel(up, 'sidebar', 'replace')))
+  const desk = reflow(setViewport(defaultSpace(), DESKTOP))
+  const dragged = moveDivider(desk, 'x', desk.leaves.sidebar.x1, 0.02)
+  check('a desktop drag is a real change to the layout, and saves', dragged !== desk && !isMomentary(desk, dragged))
+  for (const w of [520, 600, 700]) {
+    const mid = reflow(setViewport(defaultSpace(), { w, h: 900 }))
+    for (const id of ['sidebar', 'members'] as const) {
+      if (mid.leaves[id].open) continue
+      const back = bringBackPanel(mid, id, 'replace')
+      const alone = PANEL_IDS.filter((k) => back.leaves[k].open).length === 1
+      if (alone) {
+        check(`at ${w}px a list brought back ALONE is a view, and so is putting it away`,
+          isMomentary(mid, back) && isMomentary(back, putAwayPanel(back, id, 'replace')))
+      }
+    }
+  }
+  // The damage already in account data: a layout with one panel open.
+  const lone = serialize(bringBackPanel(phone, 'sidebar', 'replace'))
+  const onDesk = deserialize(lone, DESKTOP)!
+  check('a saved one-panel layout read on a desktop is recognised as the damage', damagedByPhone(onDesk))
+  check('the ordinary desktop layout is not', !damagedByPhone(desk))
+  check('on a phone a one-panel layout is harmless and left alone', !damagedByPhone(deserialize(lone, PHONE)!))
 }
 
 // --- REPLACE ---------------------------------------------------------------

@@ -77,5 +77,17 @@ check('while a thread or a DM fills the screen, the list tabs stand aside',
 check('choosing a room (or the booru) on the phone\'s room list puts the list away',
   (app.match(/if \(sidebarAlone\) closeSidebar\(\)/g) ?? []).length === 2)
 
+console.log('== a phone does not rewrite the desktop\'s layout (2026-09-29)')
+{
+  const state = read('src/ui/spaceState.ts')
+  const prov = read('src/ui/SpaceProvider.tsx')
+  check('a change that is only this screen\'s view returns before the layout the user chose, or the save',
+    /if \(isMomentary\(prev, l\)\) return\s*\n\s*chosen\.current = l\s*\n\s*save\(\)/.test(state))
+  check('a stored one-panel layout opens the default on a screen that holds more',
+    /if \(stored && damagedByPhone\(stored\)\) return setViewport\(defaultSpace\(\), vp\)/.test(state))
+  check('import, preset, reset and revert save the layout picked, not what this screen shows of it',
+    (prov.match(/chooseSpace\(/g) ?? []).length >= 4 && !/setSpace\(reflow\(/.test(prov))
+}
+
 if (failures) { console.log(`\n${failures} check(s) failed`); process.exit(1) }
 console.log('\nsidebar polish: all checks passed')
