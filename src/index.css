@@ -632,6 +632,7 @@ code {
 .tc-receipt-avatar:last-of-type {
   margin-right: 0;
 }
+.tc-receipt-avatar[data-person='true'] { cursor: pointer; }
 .tc-receipt-more {
   margin-left: 8px;
   font-size: 10px;

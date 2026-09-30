@@ -41,8 +41,9 @@ import { useReducedMotion } from './reducedMotion'
 // interaction with nobody visible to receive it is not worth faking.
 // ---------------------------------------------------------------------------
 
-// Marks an element as "this is where user X currently is on screen". Set by
-// AvatarPill, so every sender pill and membership row is an anchor for free.
+// Marks an element as "this is where user X currently is on screen". Set on
+// every message row's avatar box and on the thread panel's user line
+// (Timeline.tsx); a membership line's pill does not carry it.
 export const USER_ANCHOR_ATTR = 'data-user-anchor'
 
 // The centre of the LAST on-screen anchor for a user, in the LAYER's coordinate

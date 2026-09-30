@@ -46,8 +46,9 @@ import { useLinkPreviewPref } from './linkPreviewPref'
 import { RoomHeaderInfo } from './RoomHeaderInfo'
 import { DmEncryptionNotice } from './DmEncryptionNotice'
 import { ProfileOpenerContext, useProfileOpener } from './profileOpener'
-import { ProfileCard } from './ProfileCard'
-import { ProfileActions } from './ProfileActions'
+import { PersonCard } from './PersonCard'
+import { personGestures } from './personGesture'
+import { usePersonRouter } from './personRouter'
 import { usePresence } from '../client/usePresence'
 import { useRoomReceipts } from '../client/useReceipts'
 import { ReceiptsContext, useReceipts } from './receiptsContext'
@@ -153,6 +154,18 @@ export function Timeline({ room, onOpenThread, onOpenRoom, threadListOpen, onTog
   // One menu for the whole timeline, owned here so two rows cannot each open
   // their own -- the same reason the profile card is owned here (W4.2).
   const [ixMenu, setIxMenu] = useState<{ userId: string; x: number; y: number } | null>(null)
+  // Both openers, offered to the other panels drawing this room's people (the
+  // member list, the thread panel) so a click there opens THIS menu and card
+  // rather than a second of each (L23, personRouter.ts). State setters are
+  // stable, so this registers once per room.
+  const personRouter = usePersonRouter()
+  useEffect(() => {
+    if (!personRouter) return
+    return personRouter.register(room.roomId, {
+      act: (userId, x, y) => setIxMenu({ userId, x, y }),
+      look: (userId, x, y) => setProfile({ userId, x, y }),
+    })
+  }, [personRouter, room.roomId])
   const chatBg = useChatBackground()
   const tagPrefs = useMediaTagPrefs()
   const [bgMenuOpen, setBgMenuOpen] = useState(false)
@@ -459,21 +472,12 @@ export function Timeline({ room, onOpenThread, onOpenRoom, threadListOpen, onTog
             />
           )}
           {profile && client && (
-            <ProfileCard
-              x={profile.x}
-              y={profile.y}
-              userId={profile.userId}
+            <PersonCard
+              client={client}
+              target={profile}
               room={room}
               presence={profilePresence.get(profile.userId)}
-              actions={
-                <ProfileActions
-                  client={client}
-                  userId={profile.userId}
-                  room={room}
-                  onOpenRoom={onOpenRoom}
-                  onClose={() => setProfile(null)}
-                />
-              }
+              onOpenRoom={onOpenRoom}
               onClose={() => setProfile(null)}
             />
           )}
@@ -803,29 +807,8 @@ export function Row({
             className="tc-row-av"
             data-user-anchor={senderId}
             aria-hidden={speaks ? undefined : true}
-            role={speaks && openProfile ? 'button' : undefined}
-            tabIndex={speaks && openProfile ? 0 : undefined}
             title={speaks ? senderName : undefined}
-            onClick={speaks && openProfile ? (e) => openProfile(senderId, e.clientX, e.clientY) : undefined}
-            onKeyDown={
-              speaks && openProfile
-                ? (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      const r = e.currentTarget.getBoundingClientRect()
-                      openProfile(senderId, r.left, r.bottom)
-                    }
-                  }
-                : undefined
-            }
-            onContextMenu={
-              speaks && openInteractions
-                ? (e) => {
-                    e.preventDefault()
-                    openInteractions(senderId, e.clientX, e.clientY)
-                  }
-                : undefined
-            }
+            {...(speaks ? personGestures(senderId, openInteractions, openProfile) : {})}
           >
             {speaks && <AvatarDisc userId={senderId} name={senderName} avatarMxc={senderAvatar} size={34} />}
             {face && <FaceFlash face={face} seed={item.id} />}
@@ -1257,28 +1240,7 @@ function SenderUserLine({
     <div
       className="tc-ident-row tc-ident-row-narrow"
       data-user-anchor={userId}
-      role={onOpenProfile ? 'button' : undefined}
-      tabIndex={onOpenProfile ? 0 : undefined}
-      onClick={onOpenProfile ? (e) => onOpenProfile(userId, e.clientX, e.clientY) : undefined}
-      onKeyDown={
-        onOpenProfile
-          ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                const r = e.currentTarget.getBoundingClientRect()
-                onOpenProfile(userId, r.left, r.bottom)
-              }
-            }
-          : undefined
-      }
-      onContextMenu={
-        onOpenInteractions
-          ? (e) => {
-              e.preventDefault()
-              onOpenInteractions(userId, e.clientX, e.clientY)
-            }
-          : undefined
-      }
+      {...personGestures(userId, onOpenInteractions, onOpenProfile)}
     >
       <UserLine
         userId={userId}

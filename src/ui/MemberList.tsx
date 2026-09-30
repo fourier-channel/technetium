@@ -6,8 +6,9 @@ import { recordDmNotice } from '../client/dmNotice'
 import { describeInviteError } from '../client/userDirectory'
 import { UserPicker } from './UserPicker'
 import { findExistingDm } from '../client/dm'
-import { ProfileCard } from './ProfileCard'
-import { ProfileActions } from './ProfileActions'
+import { PersonCard } from './PersonCard'
+import { personGestures, type PersonOpener } from './personGesture'
+import { usePersonOpeners } from './personRouter'
 import { usePresence, type PresenceState } from '../client/usePresence'
 import { useMembers } from '../client/useMembers'
 import { useMemberBackfill } from '../client/useMemberBackfill'
@@ -79,6 +80,9 @@ export function MemberList({
   const [notice, setNotice] = useState<string | null>(null)
   // W4.2 -- the open profile card, anchored where the row was clicked.
   const [profile, setProfile] = useState<{ x: number; y: number; userId: string } | null>(null)
+  // The chat actions for the room being viewed live with its timeline; the
+  // list borrows them rather than growing its own (L23, personRouter.ts).
+  const roomOpeners = usePersonOpeners(room?.roomId)
   const listRef = useRef<HTMLDivElement>(null)
 
   // Background-hydrate the community roster so All / Nearby fill in (sliding sync
@@ -270,22 +274,13 @@ export function MemberList({
       )}
 
       {profile && client && (
-        <ProfileCard
-          x={profile.x}
-          y={profile.y}
-          userId={profile.userId}
+        <PersonCard
+          client={client}
+          target={profile}
           room={room}
           member={members.find((m) => m.id === profile.userId)}
           presence={presence.get(profile.userId)}
-          actions={
-            <ProfileActions
-              client={client}
-              userId={profile.userId}
-              room={room}
-              onOpenRoom={onOpenRoom}
-              onClose={() => setProfile(null)}
-            />
-          }
+          onOpenRoom={onOpenRoom}
           onClose={() => setProfile(null)}
         />
       )}
@@ -374,7 +369,8 @@ export function MemberList({
             mode={mode}
             density={density}
             presence={presence.get(m.id)}
-            onOpenProfile={(x, y) => setProfile({ x, y, userId: m.id })}
+            onAct={roomOpeners?.act}
+            onLook={(userId, x, y) => setProfile({ x, y, userId })}
           />
         ))}
       </div>
@@ -385,7 +381,8 @@ export function MemberList({
 function MemberRow({
   member,
   presence,
-  onOpenProfile,
+  onAct,
+  onLook,
   room,
   mode,
   density,
@@ -393,7 +390,11 @@ function MemberRow({
 }: {
   member: MergedMember
   presence: PresenceState | undefined
-  onOpenProfile: (x: number, y: number) => void
+  // Left click: the chat actions -- only for someone in the room being
+  // viewed, since that is where they are performed. Right click, and left
+  // for anyone else: the profile preview (L23, personGesture.ts).
+  onAct: PersonOpener
+  onLook: PersonOpener
   room: Room | null
   mode: Mode
   density: MemberDensity
@@ -441,16 +442,7 @@ function MemberRow({
   return (
     <div
       data-flip-id={member.id}
-      role="button"
-      tabIndex={0}
-      onClick={(e) => onOpenProfile(e.clientX, e.clientY)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          const r = e.currentTarget.getBoundingClientRect()
-          onOpenProfile(r.left, r.bottom)
-        }
-      }}
+      {...personGestures(member.id, presentHere ? onAct : undefined, onLook)}
       style={{
         display: 'flex',
         alignItems: 'center',

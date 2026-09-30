@@ -8,6 +8,7 @@ import {
 } from '../client/memberEvents'
 import { AvatarPill } from './AvatarPill'
 import { useProfileOpener } from './profileOpener'
+import { useInteractionTarget } from './interactionTarget'
 import { useReducedMotion } from './reducedMotion'
 import { useReplayOnView } from './useReplayOnView'
 
@@ -32,6 +33,7 @@ import { useReplayOnView } from './useReplayOnView'
 export function MemberEvent({ event }: { event: MatrixEvent }) {
   const { client } = useClient()
   const openProfile = useProfileOpener()
+  const openActions = useInteractionTarget()
   const reduced = useReducedMotion()
 
   const description = describeMemberEvent({
@@ -77,7 +79,8 @@ export function MemberEvent({ event }: { event: MatrixEvent }) {
           userId={description.userId}
           name={name}
           avatarMxc={avatarMxc}
-          onOpen={openProfile}
+          onAct={openActions}
+          onLook={openProfile}
         />
       </span>
       <span className="tc-member-phrase">{phrase}</span>

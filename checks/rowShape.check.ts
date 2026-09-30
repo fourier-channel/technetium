@@ -39,9 +39,9 @@ check('the avatar picture is only on the line it is speaking -- the run\'s newes
   /\{speaks && <AvatarDisc /.test(row) && !/\n\s*<AvatarDisc /.test(row))
 check('every line keeps its interaction anchor, picture or not',
   /className="tc-row-av"\s*\n\s*data-user-anchor=\{senderId\}/.test(row))
-check('only the speaking line\'s avatar box is a control',
-  /role=\{speaks && openProfile \? 'button' : undefined\}/.test(row) &&
-  /tabIndex=\{speaks && openProfile \? 0 : undefined\}/.test(row))
+check('only the speaking line\'s avatar box is a control -- the person gestures, and only there (L23)',
+  /\{\.\.\.\(speaks \? personGestures\(senderId, openInteractions, openProfile\) : \{\}\)\}/.test(row) &&
+  !/role=\{/.test(row.slice(row.indexOf('className="tc-row-av"'), row.indexOf('<AvatarDisc'))))
 check('the lines the avatar has left lose their arrow, not their bubble',
   /data-tail=\{bubble && !speaks && !narrow \? 'off' : undefined\}/.test(row) &&
   /\.tc-bubble\[data-tail='off'\]::before,\s*\n\.tc-bubble\[data-tail='off'\]::after \{\s*content: none;/.test(css))

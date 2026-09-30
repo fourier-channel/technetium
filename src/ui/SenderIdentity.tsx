@@ -1,4 +1,5 @@
 import { displayDecoration, decoratedName } from './displayDecoration'
+import { personGestures } from './personGesture'
 
 // ---------------------------------------------------------------------------
 // The name line of the first message of a run: the decorated name, and the
@@ -23,6 +24,8 @@ export function SenderIdentity({
 }: {
   userId: string
   name: string
+  // Right click: the profile preview. Left click: the chat actions (L23,
+  // personGesture.ts).
   onOpenProfile?: (userId: string, x: number, y: number) => void
   onOpenInteractions?: (userId: string, x: number, y: number) => void
 }) {
@@ -32,28 +35,7 @@ export function SenderIdentity({
       <span className="tc-ident">
         <span
           className="tc-ident-name"
-          role={onOpenProfile ? 'button' : undefined}
-          tabIndex={onOpenProfile ? 0 : undefined}
-          onClick={onOpenProfile ? (e) => onOpenProfile(userId, e.clientX, e.clientY) : undefined}
-          onKeyDown={
-            onOpenProfile
-              ? (e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    const r = e.currentTarget.getBoundingClientRect()
-                    onOpenProfile(userId, r.left, r.bottom)
-                  }
-                }
-              : undefined
-          }
-          onContextMenu={
-            onOpenInteractions
-              ? (e) => {
-                  e.preventDefault()
-                  onOpenInteractions(userId, e.clientX, e.clientY)
-                }
-              : undefined
-          }
+          {...personGestures(userId, onOpenInteractions, onOpenProfile)}
           title={userId}
         >
           {/* Concatenated with no separator of any kind. The whitespace, if

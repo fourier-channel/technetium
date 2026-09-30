@@ -1,4 +1,5 @@
 import { AvatarDisc } from './AvatarDisc'
+import { personGestures } from './personGesture'
 
 // ---------------------------------------------------------------------------
 // The long rounded pill carrying a person's avatar and display name together.
@@ -18,42 +19,22 @@ export function AvatarPill({
   userId,
   name,
   avatarMxc,
-  onOpen,
-  onContext,
+  onAct,
+  onLook,
 }: {
   userId: string
   name: string
   avatarMxc: string | null
-  onOpen?: (userId: string, x: number, y: number) => void
-  // Right-click. Separate from onOpen because left- and right-click mean
-  // different things here: look at them, versus do something to them.
-  onContext?: (userId: string, x: number, y: number) => void
+  // Left click: the chat actions. Right click: the profile preview. The same
+  // two as every other place a person is drawn (L23, personGesture.ts).
+  onAct?: (userId: string, x: number, y: number) => void
+  onLook?: (userId: string, x: number, y: number) => void
 }) {
+  const clickable = !!(onAct ?? onLook)
   return (
     <span
-      role={onOpen ? 'button' : undefined}
-      tabIndex={onOpen ? 0 : undefined}
-      onClick={onOpen ? (e) => onOpen(userId, e.clientX, e.clientY) : undefined}
-      onKeyDown={
-        onOpen
-          ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                const r = e.currentTarget.getBoundingClientRect()
-                onOpen(userId, r.left, r.bottom)
-              }
-            }
-          : undefined
-      }
-      onContextMenu={
-        onContext
-          ? (e) => {
-              e.preventDefault()
-              onContext(userId, e.clientX, e.clientY)
-            }
-          : undefined
-      }
-      title={onOpen ? name : undefined}
+      {...personGestures(userId, onAct, onLook)}
+      title={clickable ? name : undefined}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -63,7 +44,7 @@ export function AvatarPill({
         borderRadius: 999,
         background: 'var(--cpd-color-bg-subtle-secondary)',
         border: '1px solid rgba(128,128,128,0.18)',
-        cursor: onOpen ? 'pointer' : undefined,
+        cursor: clickable ? 'pointer' : undefined,
       }}
     >
       <AvatarDisc userId={userId} name={name} avatarMxc={avatarMxc} size={22} />

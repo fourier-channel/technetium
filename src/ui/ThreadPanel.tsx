@@ -12,6 +12,10 @@ import { TypingBar } from './TypingBar'
 import { usePresence } from '../client/usePresence'
 import { useSpace } from './spaceContext'
 import { useRoomListSettings } from './roomListSettings'
+import { ProfileOpenerContext } from './profileOpener'
+import { InteractionTargetContext } from './interactionTarget'
+import { usePersonOpeners } from './personRouter'
+import { PersonCard, type PersonCardTarget } from './PersonCard'
 
 // Thread panel: a thread's root + replies, resolved by (roomId, rootId) so it
 // stays open and correct even when the user navigates to other rooms. Renders via
@@ -29,13 +33,22 @@ export function ThreadPanel({
   roomId,
   rootId,
   width = 380,
+  onOpenRoom,
 }: {
   roomId: string
   rootId: string
   width?: number
+  // Opens a room by id -- how the profile preview's Message opens the DM.
+  onOpenRoom?: (roomId: string) => void
 }) {
   const { client } = useClient()
   const [, forceRefresh] = useState(0)
+  // The people in a thread answer the same two clicks as everywhere else (L23):
+  // left, the chat actions -- borrowed from the room's timeline, where they are
+  // sent and played; right, the profile preview, hosted here so it works on a
+  // phone where the thread is the only panel on screen.
+  const [profile, setProfile] = useState<PersonCardTarget | null>(null)
+  const roomOpeners = usePersonOpeners(roomId)
 
   const room = client?.getRoom(roomId) ?? null
   const thread = room?.getThread(rootId) ?? null
@@ -151,6 +164,8 @@ export function ThreadPanel({
         ) : (
           // The thread panel paginates its whole thread to exhaustion on open,
           // so the default DOM-only jump is sufficient here -- no JumpContext.
+          <ProfileOpenerContext.Provider value={(userId, x, y) => setProfile({ userId, x, y })}>
+          <InteractionTargetContext.Provider value={roomOpeners?.act}>
           <MessageVerbsProvider room={room}>
             {items.map((item) =>
               item.kind === 'member' ? (
@@ -168,6 +183,18 @@ export function ThreadPanel({
               ),
             )}
           </MessageVerbsProvider>
+          </InteractionTargetContext.Provider>
+          </ProfileOpenerContext.Provider>
+        )}
+        {profile && client && (
+          <PersonCard
+            client={client}
+            target={profile}
+            room={room}
+            presence={presence.get(profile.userId)}
+            onOpenRoom={onOpenRoom}
+            onClose={() => setProfile(null)}
+          />
         )}
       </div>
 

@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react'
 
-// W4.2 -- how a message row asks for a profile card.
+// W4.2 -- how a message row asks for a profile card: the profile preview a
+// RIGHT click on a person opens (L23, personGesture.ts).
 //
 // Through a context rather than a Row prop: Row is shared by the timeline and
 // the thread panel, and the card has to be owned above BOTH so only one is

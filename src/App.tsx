@@ -22,6 +22,7 @@ import { BooruFrame } from './ui/BooruFrame'
 import { useSpace } from './ui/spaceContext'
 import { openLeaves } from './ui/space'
 import { ThreadPanel } from './ui/ThreadPanel'
+import { PersonRouterContext, createPersonRouter } from './ui/personRouter'
 import { ThreadList } from './ui/ThreadList'
 import { useReveal } from './ui/useReveal'
 import { TTD_DEFAULT } from './client/useDomainMedia'
@@ -134,6 +135,9 @@ function App() {
   // threadStrip.ts for the dead space a share left around the cards.
   const threadStripH = threadStripCss()
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // Which timeline hosts each room's chat actions and profile preview, so the
+  // member list and the thread panel open the same ones (L23).
+  const [personRouter] = useState(createPersonRouter)
   // Domain mode is not offered unless this build or this browser says so --
   // see client/domainMode.ts. Read ONCE per mount rather than per render: the
   // answer cannot change without a reload (the opt-in is storage, the flag is
@@ -262,6 +266,7 @@ function App() {
 
   // status === 'ready' or 'syncing' (with client) -- three-pane layout.
   return (
+    <PersonRouterContext.Provider value={personRouter}>
     <LightboxProvider>
     <RoomListSettingsProvider>
     {booting && (
@@ -491,6 +496,7 @@ function App() {
             roomId={shownThread.roomId}
             rootId={shownThread.rootId}
             width={Math.max(120, threadPanelWidth - DIVIDER_PX)}
+            onOpenRoom={openRoomById}
           />
         </div>
       )}
@@ -562,6 +568,7 @@ function App() {
       <IncomingVerification />
     </RoomListSettingsProvider>
     </LightboxProvider>
+    </PersonRouterContext.Provider>
   )
 }
 

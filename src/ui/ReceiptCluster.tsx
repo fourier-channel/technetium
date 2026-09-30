@@ -1,6 +1,9 @@
 import type { Room } from 'matrix-js-sdk'
 import { AuthedImage } from './AuthedImage'
 import { initials } from '../client/members'
+import { personGestures } from './personGesture'
+import { useInteractionTarget } from './interactionTarget'
+import { useProfileOpener } from './profileOpener'
 
 // W2.6 -- the "seen by" cluster at the right of the row footer.
 //
@@ -10,6 +13,10 @@ import { initials } from '../client/members'
 const MAX_SHOWN = 5
 
 export function ReceiptCluster({ room, userIds }: { room: Room | null; userIds: string[] }) {
+  // The faces here are people like any other (L23): left click, their chat
+  // actions; right click, their profile. Pointer only -- see personGesture.
+  const act = useInteractionTarget()
+  const look = useProfileOpener()
   if (userIds.length === 0) return null
 
   const shown = userIds.slice(0, MAX_SHOWN)
@@ -27,7 +34,13 @@ export function ReceiptCluster({ room, userIds }: { room: Room | null; userIds: 
         const name = member?.name || userId
         const mxc = member?.getMxcAvatarUrl() ?? null
         return (
-          <span key={userId} className="tc-receipt-avatar" aria-hidden="true">
+          <span
+            key={userId}
+            className="tc-receipt-avatar"
+            aria-hidden="true"
+            data-person={act || look ? 'true' : undefined}
+            {...personGestures(userId, act, look, { focusable: false })}
+          >
             {mxc ? (
               <AuthedImage
                 mxc={mxc}
