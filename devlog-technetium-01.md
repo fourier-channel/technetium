@@ -4111,3 +4111,67 @@ VERIFICATION in the browser for L9-L11. Not deployed.
 
 The fourier-sampling CLAUDE file's struck-through gates, left for a ruling
 in the previous entry, were cleaned by another session (`046898f`).
+
+
+## 2026-09-30 -- Settings and Server permissions, one click for people, the Profile panel, mentions
+
+Not deployed: a new line of work, and a deploy waits for the operator's word.
+Everything below is on `main`, each ask its own gated commit; the ledger
+(LAUNCH_POLISH_PLAN L19-L25) carries the readings chosen and the pendings.
+
+**L19 + L22 -- `65c6b27`.** Server permissions gained "Set a level in many
+rooms" (who, a tier or any whole number, which rooms; every row says what
+would happen before anything is written; the run room by room, rate limits
+waited out, one failed room never stopping the rest). DMs are off the tab,
+one filter feeding the list and the count.
+
+**L21 -- `73b21c6`, L20 -- `043f246`.** Settings is one 880x720 box for every
+tab, header and tabs fixed; and formant throughout, held by a check that
+walks every rule naming a piece of it.
+
+**L23 -- `d2ba5c3`.** On a person: left click performs a chat action where
+one applies (else previews), right click previews -- the reverse of the first
+convention, which the operator's ruling replaced. One function
+(`ui/personGesture.ts`); timelines lend their menu and card to the member
+list and thread panel per room (`personRouter.ts`).
+
+**L24 -- `9bcd4a8` (begun, as asked).** The Profile panel and a look -- mask,
+edge, animation, name face and colour -- published as the custom profile
+field `net.41chan.look`, which everyone reads. The homeserver advertises
+stable custom profile fields, measured this day, so O-in6 is closed; canon's
+2026-08-23 "still off" line was stale.
+
+**L25 -- `f04e0e3`.** A click on an @mention opens the person's preview; any
+other link in a formatted message opens a new tab.
+
+**draft-15 (gotcha) -- the SDK's setPowerLevel writes from its cache.** It
+builds the PUT from the client's own copy of the power-levels event, and the
+event is replaced whole, so whatever that copy had not caught up with is
+deleted -- another admin's promotion, a script's `events` grant. For a room
+with no power-levels event it writes one naming only the target, taking the
+creator's implicit 100 away. Every level write here now goes through
+`client/powerWrite.ts` (read fresh, change one entry). Memory
+`sdk-setpowerlevel-writes-from-cache`. This is a candidate cause for a bot
+losing its tag-write grant after someone set its level by hand from a client
+whose copy predated the grant.
+
+**draft-16 (finding) -- Settings rendered a colour no Fourier surface uses.**
+The dialog drew from `--tc-panel` and `--tc-line`, defined nowhere, so their
+literal fallbacks (a cool #14171c) were what showed. The same undefined names
+(and `--tc-mono`) remain OUTSIDE Settings: the DM notice's rule, the send-error
+bar, code blocks. Not fixed; out of this brief.
+
+**draft-17 (gotcha) -- a harness page must load what the component loads.**
+A look rendered in `tools/visual/profile.html` showed an absent member's name
+in its chosen colour; the app dims it. The page lacked `userline.css`, which
+`UserLine.tsx` imports itself. Rendering proves the stylesheets it was given.
+
+**draft-18 (finding) -- formatted-message links navigated the client away.**
+Sanitized anchors carry no target, so any link in an HTML body replaced
+Technetium in its own tab; only the plaintext path opened a new one.
+
+**Not done.** An adversarial review of the L19-L24 commits was started and
+stopped at the operator's usage limit before any finding completed: re-run it.
+Nothing was exercised in a browser or against the live server: the bulk run,
+a look saved and seen from a second account, the clicks, the animations, a
+phone -- all PENDING OPERATOR VERIFICATION.
