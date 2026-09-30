@@ -78,7 +78,14 @@ console.log('\n-- URL shape --')
   check('a thumbnail carries width, height and method',
     thumb.includes('width=180') && thumb.includes('height=180') && thumb.includes('method=scale'))
   const full = mediaUrl(clientWith(false), MXC)!
-  check('the unsized request uses download', full.includes('/media/download/') && !full.includes('?'))
+  check('the unsized request uses download', full.includes('/media/download/'))
+  check('a download carries no thumbnail parameters',
+    !/[?&](width|height|method)=/.test(full), full)
+  // The cache key that retired every browser's pre-canon copy (media.ts,
+  // DOWNLOAD_CANON). Losing it would hand those browsers their stale,
+  // unstripped originals again.
+  check('a download carries the canon cache key', new URL(full).searchParams.get('canon') === '1', full)
+  check('a thumbnail does not', !thumb.includes('canon='), thumb)
 
   // A malformed mxc must be refused rather than turned into a URL that 404s.
   check('a malformed mxc yields null', mediaUrl(clientWith(false), 'not-an-mxc', 320) === null)

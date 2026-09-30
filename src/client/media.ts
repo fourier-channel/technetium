@@ -44,6 +44,20 @@ export function parseMxc(mxc: string): ParsedMxc | null {
   return { serverName: m[1], mediaId: m[2] }
 }
 
+// The browser's cache key for a full-size download, and nothing else: the
+// server ignores it (the media Worker passes only w, h and room_id on to the
+// gate). It exists because the bytes behind a download URL changed ONCE, on
+// 2026-09-30, when every Matrix image became its one stripped file (fourier-
+// tunnel canon.js). Those URLs had been served `immutable` for a year, so a
+// browser that fetched one before then kept the unstripped original, prompt
+// and all, and never asked again -- the operator saved booru post 464914 from
+// Technetium and got the prompt while the server was serving the stripped file.
+// A new key is the only thing that reaches a cache the server cannot see.
+// Thumbnails do not carry it: none held generation data, so none changed.
+// Change it only if a download's bytes are ever rewritten again, which canon's
+// design forbids -- an image's one file is final from its first serve.
+const DOWNLOAD_CANON = '1'
+
 // Build the media URL for an mxc. With `width`, a thumbnail; without, the full
 // download. Returns null for a malformed mxc.
 //
@@ -69,6 +83,8 @@ export function mediaUrl(
     q.set('width', String(width))
     q.set('height', String(width))
     q.set('method', 'scale')
+  } else {
+    q.set('canon', DOWNLOAD_CANON)
   }
   // The room hint, sent ONLY when the room is actually encrypted -- which is
   // what this comment always claimed and the code did not do.
