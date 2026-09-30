@@ -44,5 +44,74 @@ console.log('== L21 one size for every tab')
     ["{tab === 'server' &&", "{tab === 'features' &&", "{tab === 'encryption' &&"].every((t) => dialog.indexOf(t) > body))
 }
 
+console.log('== L20 formant throughout')
+{
+  // Operator, 2026-09-30: "bring the entire settings menu into formant
+  // compliance." Formant's rule: names, not values, cross a boundary -- a
+  // colour is a --mod-* NAME, never the hex it holds today.
+  //
+  // Every rule whose selector names a piece of the dialog, or of the two
+  // modals it opens, or of the pill and field it is built from.
+  const SCOPE = /\.tc-(settings|perm|bulk|verify|reset|device|trust|tone|modal|picker|pill|input)\b/
+  const blocks: { sel: string; body: string; line: number }[] = []
+  {
+    // Flat walk over the stylesheet: nested @media blocks keep their inner
+    // rules' selectors, which is all this needs.
+    const re = /([^{}]+)\{([^{}]*)\}/g
+    for (const m of css.matchAll(re)) {
+      const sel = m[1].trim().split('\n').filter((l) => !/^\s*(\/\*|\*)/.test(l)).join(' ').replace(/\/\*[\s\S]*?\*\//g, '').trim()
+      blocks.push({ sel, body: m[2], line: css.slice(0, m.index).split('\n').length })
+    }
+  }
+  const scoped = blocks.filter((b) => SCOPE.test(b.sel) && !/^:root$/.test(b.sel))
+  check('the scope is found (not an empty pass)', scoped.length > 60, scoped.length)
+  const bad = (re: RegExp) =>
+    scoped.flatMap((b) => b.body.replace(/\/\*[\s\S]*?\*\//g, '').split(';')
+      .filter((decl) => re.test(decl)).map((decl) => `${b.line}: ${b.sel.slice(0, 50)} { ${decl.trim()} }`))
+  const literals = bad(/#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(/)
+  check('no literal colour in any of them', literals.length === 0, literals)
+  const fallbacks = bad(/var\(--[\w-]+,\s*(#|rgb|hsl|\d)/)
+  check('no var() carrying a literal fallback -- a fallback is a copy of a value', fallbacks.length === 0, fallbacks)
+  // The value, not the declaration: `border-radius:\s*(?!var\()` lets the
+  // space before a var() satisfy the lookahead and passes everything.
+  const radii = bad(/border-radius:/).filter((d) => !/border-radius:\s*(var\(|0\b|50%)/.test(d))
+  check('every radius is a formant (or the pill\'s) radius', radii.length === 0, radii)
+  const mono = bad(/font-family:[^;]*monospace/)
+  check('monospace is --mod-mono', mono.length === 0, mono)
+  const cpd = bad(/--cpd-/)
+  check('no Compound names: formant names directly', cpd.length === 0, cpd)
+  check('the two names that were defined nowhere are gone from it',
+    !scoped.some((b) => /var\(--tc-(panel|line|mono)\b/.test(b.body.replace(/\/\*[\s\S]*?\*\//g, ''))))
+  check('the box is formant surface, line, radius and lift',
+    /background: var\(--mod-surface\);/.test(rules('.tc-settings')) && /border: 1px solid var\(--mod-line-strong\);/.test(rules('.tc-settings')) &&
+    /border-radius: var\(--mod-radius\);/.test(rules('.tc-settings')) && /box-shadow: var\(--mod-raise-lift\);/.test(rules('.tc-settings')))
+  check('tones are formant semantics: green ok, amber warn, the alarm\'s readable ink for bad, orange for work',
+    /color: var\(--mod-ok-fg\)/.test(rules('.tc-tone-ok')) && /color: var\(--mod-warn-fg\)/.test(rules('.tc-tone-warn')) &&
+    /color: var\(--mod-alarm-ink\)/.test(rules('.tc-tone-bad')) && /color: var\(--mod-active-fg\)/.test(rules('.tc-tone-active')))
+  // A toned note must take the tone: the note rule sets a colour too, so the
+  // tones have to come after it in the file.
+  check('a toned note takes its tone', css.indexOf('.tc-tone-warn {') > css.indexOf('.tc-settings-note {'))
+
+  // The markup: no control drawn by the browser ("Windows 3.1", operator
+  // 2026-09-25), and no colour written into an inline style.
+  const FILES = ['src/ui/SettingsDialog.tsx', 'src/ui/ServerPermissions.tsx', 'src/ui/BulkLevels.tsx',
+    'src/ui/CreateRoomDialog.tsx', 'src/ui/UserPicker.tsx', 'src/ui/IncomingVerification.tsx']
+  for (const f of FILES) {
+    const src = read(f)
+    // A tag ends at a > that is not an arrow's: onChange={(e) => ...} would
+    // otherwise end the tag at its first handler.
+    const tags = [...src.matchAll(/<(button|input|select|textarea)\b([\s\S]*?)(?<!=)(\/>|>)/g)]
+    const loose = tags.filter((m) => {
+      const attrs = m[2]
+      if (/type="checkbox"/.test(attrs)) return false
+      if (m[1] === 'button' && /role="tab"/.test(attrs)) return false
+      return !/className=|\{\.\.\.field\}/.test(attrs)
+    }).map((m) => `${src.slice(0, m.index).split('\n').length}: <${m[1]}`)
+    check(`${f}: every control wears a class`, loose.length === 0, loose)
+    const inline = [...src.matchAll(/#[0-9a-fA-F]{3,8}\b|rgba?\(|var\(--cpd-/g)].map((m) => `${src.slice(0, m.index).split('\n').length}: ${m[0]}`)
+    check(`${f}: no literal colour or Compound name`, inline.length === 0, inline)
+  }
+}
+
 if (failures) { console.log(`\n${failures} check(s) failed`); process.exit(1) }
 console.log('\nsettings dialog: all checks passed')

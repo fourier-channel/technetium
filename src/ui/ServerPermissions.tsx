@@ -94,6 +94,7 @@ export function ServerPermissions({ client }: { client: MatrixClient }) {
           Power from
           <input
             type="number"
+            className="tc-input"
             value={low}
             min={0}
             max={100}
@@ -103,6 +104,7 @@ export function ServerPermissions({ client }: { client: MatrixClient }) {
           to
           <input
             type="number"
+            className="tc-input"
             value={high}
             min={0}
             max={100}
@@ -112,16 +114,16 @@ export function ServerPermissions({ client }: { client: MatrixClient }) {
         </label>
         <button
           type="button"
-          className="tc-perm-chip"
+          className="tc-pill"
           aria-pressed={onlyFindings}
           onClick={() => setOnlyFindings((o) => !o)}
         >
           {onlyFindings ? 'Showing only flagged' : 'Show only flagged'}
         </button>
-        <button type="button" className="tc-perm-chip" onClick={() => setReload((n) => n + 1)}>
+        <button type="button" className="tc-pill" onClick={() => setReload((n) => n + 1)}>
           Re-read
         </button>
-        <button type="button" className="tc-perm-chip" onClick={() => setCreating(true)}>
+        <button type="button" className="tc-pill" onClick={() => setCreating(true)}>
           + New room or space
         </button>
       </div>
@@ -331,7 +333,7 @@ function RoomId({ roomId }: { roomId: string }) {
     <div className="tc-perm-id">
       <span className="tc-perm-dim">id</span>
       <code className="tc-perm-idtext">{roomId}</code>
-      <button type="button" className="tc-perm-chip" onClick={() => void copy()}>
+      <button type="button" className="tc-pill" onClick={() => void copy()}>
         {state === 'copied' ? 'Copied' : 'Copy'}
       </button>
       {state === 'refused' && (
@@ -383,13 +385,14 @@ function Promote({
 
   return (
     <div className="tc-perm-promote">
-      <button type="button" className="tc-perm-chip" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <button type="button" className="tc-pill" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         {open ? 'Done promoting' : 'Give someone a rank'}
       </button>
       {open && (
         <>
           <input
             type="text"
+            className="tc-input"
             value={q}
             placeholder={`Search the ${room.isSpace ? 'space' : 'room'}`}
             aria-label="Search members"
@@ -484,6 +487,7 @@ function HolderRow({
             <button
               key={t.level}
               type="button"
+              className="tc-pill"
               disabled={busy || t.level === level}
               data-armed={armed === t.level ? 'true' : 'false'}
               onClick={() => (armed === t.level ? void apply(t.level) : setArmed(t.level))}

@@ -1,0 +1,54 @@
+<!doctype html><html><head>
+<!--#head-->
+<title>Settings modals</title>
+<style>
+  /* Both portals are fixed over the page in the app; here they stand side by
+     side on a scrim-coloured page so both are in one shot. */
+  .tc-modal-scrim { position: static !important; display: flex !important; gap: 24px; align-items: flex-start; justify-content: center; padding: 16px; flex-wrap: wrap; }
+</style>
+</head><body>
+<div class="h-label">Create a room, and pick a person (from Server permissions)</div>
+<div class="tc-modal-scrim">
+  <div class="tc-modal">
+    <div class="tc-modal-title">Create a room</div>
+    <div style="display:flex;gap:6px;margin-bottom:12px">
+      <button type="button" class="tc-pill" aria-pressed="true" style="flex:1">Room</button>
+      <button type="button" class="tc-pill" aria-pressed="false" style="flex:1">Space</button>
+    </div>
+    <label class="tc-modal-label">Name</label>
+    <input type="text" class="tc-input" data-wide="true" value="botsbotsbots" style="margin-bottom:10px">
+    <label class="tc-modal-label">Topic (optional)</label>
+    <input type="text" class="tc-input" data-wide="true" style="margin-bottom:10px">
+    <label class="tc-modal-label">Put it inside (optional)</label>
+    <select class="tc-input" data-wide="true" style="margin-bottom:10px"><option>Community</option></select>
+    <label class="tc-modal-label">Who can join</label>
+    <select class="tc-input" data-wide="true" style="margin-bottom:10px"><option>Members of its space</option></select>
+    <div class="tc-modal-hint" style="margin-top:-6px;margin-bottom:10px">Anyone in the space it goes in can join -- how every room in a space here works.</div>
+    <label class="tc-modal-label">Other servers</label>
+    <label style="display:flex;align-items:flex-start;gap:8px;margin-bottom:4px"><input type="checkbox" checked style="margin-top:2px"><span style="font-size:13px">Allow people from other Matrix servers to join</span></label>
+    <div class="tc-modal-hint" data-tone="warn" style="margin-bottom:12px">Cannot be undone later. Every server a member joins from receives a permanent copy of everything posted here.</div>
+    <div class="tc-modal-error" style="margin-bottom:10px">The homeserver refused: only server administrators may create rooms here.</div>
+    <div class="tc-modal-actions">
+      <button type="button" class="tc-pill">Cancel</button>
+      <button type="button" class="tc-pill" data-tone="go">Create</button>
+    </div>
+  </div>
+
+  <div class="tc-modal" style="display:flex;flex-direction:column">
+    <div class="tc-modal-title" style="margin-bottom:10px">Whose level?</div>
+    <input type="text" class="tc-input" data-wide="true" value="kes" style="margin-bottom:8px">
+    <div>
+      <button type="button" class="tc-modal-row"><span class="tc-modal-av">KE</span><span style="min-width:0"><span class="tc-modal-name">kestrel</span><span class="tc-modal-sub">@kestrel:41chan.net</span>
+        <span style="display:flex;gap:6px;margin-top:2px"><span class="tc-picker-note" data-tone="good">in your rooms</span></span></span></button>
+      <button type="button" class="tc-modal-row" style="background:var(--mod-surface-2)"><span class="tc-modal-av">KS</span><span style="min-width:0"><span class="tc-modal-name">kestrel-alt</span><span class="tc-modal-sub">@kestrel-alt:41chan.net</span>
+        <span style="display:flex;gap:6px;margin-top:2px"><span class="tc-picker-note" data-tone="plain">found on the directory</span></span></span></button>
+      <button type="button" class="tc-modal-row"><span class="tc-modal-av">@K</span><span style="min-width:0"><span class="tc-modal-name">@kes:example.org</span><span class="tc-modal-sub">@kes:example.org</span>
+        <span style="display:flex;gap:6px;margin-top:2px"><span class="tc-picker-note" data-tone="warn">typed by you -- not verified to exist</span></span></span></button>
+    </div>
+    <div class="tc-modal-actions" style="justify-content:space-between;align-items:center;margin-top:10px">
+      <span class="tc-modal-hint">3 matches</span>
+      <button type="button" class="tc-pill">Cancel</button>
+    </div>
+  </div>
+</div>
+</body></html>

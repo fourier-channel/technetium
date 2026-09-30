@@ -142,61 +142,36 @@ export function UserPicker({
       onKeyDown={(e) => {
         if (e.key === 'Escape') onClose()
       }}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 2000,
-        display: 'grid',
-        placeItems: 'center',
-        background: 'rgba(0,0,0,0.5)',
-      }}
+      className="tc-modal-scrim"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{
-          width: 400,
-          maxWidth: 'calc(100vw - 32px)',
-          maxHeight: '70vh',
-          display: 'flex',
-          flexDirection: 'column',
-          padding: 16,
-          borderRadius: 12,
-          fontFamily: 'var(--tc-ui-font, inherit)',
-          color: 'var(--cpd-color-text-primary)',
-          background: 'var(--cpd-color-bg-canvas-default)',
-          border: '1px solid rgba(128,128,128,0.35)',
-          boxShadow: '0 16px 44px rgba(0,0,0,0.55)',
-        }}
+        className="tc-modal"
+        style={{ maxHeight: '70vh', display: 'flex', flexDirection: 'column' }}
       >
-        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>{title}</div>
+        <div className="tc-modal-title" style={{ marginBottom: 10 }}>{title}</div>
 
         <input
           type="text"
+          className="tc-input"
+          data-wide="true"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Name or @user:server"
           aria-label="Search for a user"
           autoFocus
-          style={{
-            fontSize: 13,
-            padding: '6px 10px',
-            marginBottom: 8,
-            borderRadius: 8,
-            border: '1px solid rgba(128,128,128,0.35)',
-            background: 'transparent',
-            color: 'inherit',
-          }}
+          style={{ marginBottom: 8 }}
         />
 
         {rawLooksLikeAttempt && !rawIsValid && query.trim().length > 1 && (
-          <div style={{ fontSize: 11, color: 'var(--cpd-color-text-secondary)', marginBottom: 6 }}>
+          <div className="tc-modal-hint" style={{ marginBottom: 6 }}>
             A full user id looks like @name:server.tld
           </div>
         )}
 
         <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
           {candidates.length === 0 ? (
-            <div style={{ fontSize: 13, color: 'var(--cpd-color-text-secondary)', padding: '8px 0' }}>
+            <div className="tc-modal-hint" style={{ fontSize: 13, padding: '8px 0' }}>
               {searching ? 'Searching...' : query.trim() ? 'Nobody found.' : 'Start typing a name.'}
             </div>
           ) : (
@@ -204,42 +179,11 @@ export function UserPicker({
               <button
                 key={u.userId}
                 type="button"
+                className="tc-modal-row"
                 disabled={busy}
                 onClick={() => pick(u.userId)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  width: '100%',
-                  textAlign: 'left',
-                  padding: '6px 8px',
-                  borderRadius: 6,
-                  border: 'none',
-                  background: 'transparent',
-                  color: 'inherit',
-                  cursor: busy ? 'default' : 'pointer',
-                  minWidth: 0,
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = 'var(--cpd-color-bg-subtle-secondary)')
-                }
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
               >
-                <span
-                  style={{
-                    width: 26,
-                    height: 26,
-                    flexShrink: 0,
-                    borderRadius: '50%',
-                    overflow: 'hidden',
-                    display: 'grid',
-                    placeItems: 'center',
-                    fontSize: 10,
-                    fontWeight: 700,
-                    color: '#fff',
-                    background: 'var(--cpd-color-bg-subtle-primary, #4a5568)',
-                  }}
-                >
+                <span className="tc-modal-av">
                   {u.avatarMxc ? (
                     <AuthedImage
                       mxc={u.avatarMxc}
@@ -254,30 +198,8 @@ export function UserPicker({
                   )}
                 </span>
                 <span style={{ minWidth: 0 }}>
-                  <span
-                    style={{
-                      display: 'block',
-                      fontSize: 13,
-                      fontWeight: 600,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {u.displayName || u.userId}
-                  </span>
-                  <span
-                    style={{
-                      display: 'block',
-                      fontSize: 11,
-                      color: 'var(--cpd-color-text-secondary)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {u.userId}
-                  </span>
+                  <span className="tc-modal-name">{u.displayName || u.userId}</span>
+                  <span className="tc-modal-sub">{u.userId}</span>
                   <CandidateNote candidate={u} hasDm={!!existingDmWith?.(u.userId)} />
                 </span>
               </button>
@@ -286,22 +208,16 @@ export function UserPicker({
         </div>
 
         {error && (
-          <div
-            style={{
-              fontSize: 12,
-              marginTop: 8,
-              color: 'var(--cpd-color-text-critical-primary, #ff6b6b)',
-            }}
-          >
+          <div className="tc-modal-error" style={{ marginTop: 8 }}>
             {error}
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
-          <span style={{ fontSize: 11, color: 'var(--cpd-color-text-secondary)' }}>
+        <div className="tc-modal-actions" style={{ justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+          <span className="tc-modal-hint">
             {busy ? `${actionLabel}...` : `${candidates.length} match${candidates.length === 1 ? '' : 'es'}`}
           </span>
-          <button type="button" onClick={onClose} style={{ fontSize: 13, padding: '5px 12px' }}>
+          <button type="button" className="tc-pill" onClick={onClose}>
             Cancel
           </button>
         </div>
@@ -336,24 +252,7 @@ function CandidateNote({ candidate, hasDm }: { candidate: Candidate; hasDm: bool
   return (
     <span style={{ display: 'flex', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
       {bits.map((b) => (
-        <span
-          key={b.text}
-          style={{
-            fontSize: 10,
-            lineHeight: 1.6,
-            padding: '0 6px',
-            borderRadius: 8,
-            whiteSpace: 'nowrap',
-            color:
-              b.tone === 'good'
-                ? 'var(--cpd-color-text-success-primary, #3bd16f)'
-                : b.tone === 'warn'
-                  ? 'var(--cpd-color-text-critical-primary, #ff6b6b)'
-                  : 'var(--cpd-color-text-secondary)',
-            border: '1px solid currentColor',
-            opacity: b.tone === 'plain' ? 0.65 : 0.9,
-          }}
-        >
+        <span key={b.text} className="tc-picker-note" data-tone={b.tone}>
           {b.text}
         </span>
       ))}

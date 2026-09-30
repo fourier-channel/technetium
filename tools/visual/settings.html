@@ -10,7 +10,7 @@
 </head><body>
 <div class="h-label">Settings: Encryption</div>
 <div class="tc-settings" role="dialog">
-  <div class="tc-settings-row tc-panel-head" data-inset="true"><strong>Settings</strong><button type="button">Done</button></div>
+  <div class="tc-settings-row tc-panel-head" data-inset="true"><strong>Settings</strong><button type="button" class="tc-pill">Done</button></div>
   <div class="tc-settings-tabs" role="tablist">
     <button role="tab" aria-selected="true">Encryption</button>
     <button role="tab" aria-selected="false">Server permissions</button>
@@ -20,7 +20,7 @@
     <h3 class="tc-settings-head">Encryption</h3>
     <div class="tc-settings-optin">
       <p class="tc-settings-note">Encryption is turned on for this browser.</p>
-      <button type="button">Turn encryption off</button>
+      <button type="button" class="tc-pill">Turn encryption off</button>
     </div>
     <p class="tc-settings-headline tc-tone-warn">This device is not verified yet.</p>
     <ul class="tc-settings-detail">
@@ -32,39 +32,39 @@
     <ul class="tc-settings-detail"><li>Verify this device against one you already trust.</li></ul>
     <div class="tc-settings-restore">
       <label for="k">Recovery key</label>
-      <input id="k" placeholder="paste it here">
-      <button type="button">Unlock older messages</button>
+      <input id="k" class="tc-input" placeholder="paste it here">
+      <button type="button" class="tc-pill">Unlock older messages</button>
     </div>
     <h3 class="tc-settings-head">Your devices</h3>
     <ul class="tc-settings-devices">
       <li><span class="tc-device-name">Technetium<span class="tc-device-id"> ABCDEFGHIJ</span></span><span class="tc-device-here"> this device</span><span class="tc-device-trust tc-trust-local">verified on this device only</span></li>
       <li><span class="tc-device-name">Element<span class="tc-device-id"> KLMNOPQRST</span></span><span class="tc-device-trust tc-trust-ok">verified</span></li>
-      <li><span class="tc-device-name">unnamed device<span class="tc-device-id"> UVWXYZ0123</span></span><span class="tc-device-trust tc-trust-no">not verified</span><button type="button">Verify</button></li>
+      <li><span class="tc-device-name">unnamed device<span class="tc-device-id"> UVWXYZ0123</span></span><span class="tc-device-trust tc-trust-no">not verified</span><button type="button" class="tc-pill">Verify</button></li>
     </ul>
     <h3 class="tc-settings-head">Sessions</h3>
     <p class="tc-settings-note">14 sessions are signed in to this account, this one included. 11 are not a verified device.</p>
     <div class="tc-settings-actions">
-      <button type="button">Sign out the 11 unverified</button>
-      <button type="button">Sign out all 13 others</button>
+      <button type="button" class="tc-pill">Sign out the 11 unverified</button>
+      <button type="button" class="tc-pill">Sign out all 13 others</button>
     </div>
     <div class="tc-settings-key" role="alertdialog">
       <strong>Write this down now.</strong>
       <p>This is the only time it is shown.</p>
       <code class="tc-settings-keytext">EsTc 4Fx2 9QbL mN7r kW3p Zt8y</code>
-      <button type="button">Copy</button>
-      <button type="button">I have written it down</button>
+      <button type="button" class="tc-pill">Copy</button>
+      <button type="button" class="tc-pill">I have written it down</button>
     </div>
     <div class="tc-reset">
       <h3 class="tc-settings-head">If you have lost everything</h3>
       <p class="tc-settings-note">Locked out of every device with no recovery key? There is one way back, and it destroys things permanently.</p>
-      <button type="button" class="tc-reset-go">Reset my encryption permanently</button>
+      <button type="button" class="tc-pill tc-reset-go">Reset my encryption permanently</button>
     </div>
   </div>
 </div>
 
 <div class="h-label">Settings: Server permissions</div>
 <div class="tc-settings" role="dialog">
-  <div class="tc-settings-row tc-panel-head" data-inset="true"><strong>Settings</strong><button type="button">Done</button></div>
+  <div class="tc-settings-row tc-panel-head" data-inset="true"><strong>Settings</strong><button type="button" class="tc-pill">Done</button></div>
   <div class="tc-settings-tabs" role="tablist">
     <button role="tab" aria-selected="false">Encryption</button>
     <button role="tab" aria-selected="true">Server permissions</button>
@@ -78,10 +78,10 @@
         <button type="button" class="tc-pill" aria-pressed="false">Set a level in many rooms</button>
       </div>
       <div class="tc-perm-bar">
-        <label class="tc-perm-range">Power from <input type="number" value="10"> to <input type="number" value="100"></label>
-        <button class="tc-perm-chip" aria-pressed="false">Show only flagged</button>
-        <button class="tc-perm-chip">Re-read</button>
-        <button class="tc-perm-chip">+ New room or space</button>
+        <label class="tc-perm-range">Power from <input type="number" class="tc-input" value="10"> to <input type="number" class="tc-input" value="100"></label>
+        <button class="tc-pill" aria-pressed="false">Show only flagged</button>
+        <button class="tc-pill">Re-read</button>
+        <button class="tc-pill">+ New room or space</button>
       </div>
       <div class="tc-perm-summary">
         <span class="tc-tone-bad">2 faults</span>
@@ -100,7 +100,7 @@
 
 <div class="h-label">Settings: Unfinished features</div>
 <div class="tc-settings" role="dialog">
-  <div class="tc-settings-row tc-panel-head" data-inset="true"><strong>Settings</strong><button type="button">Done</button></div>
+  <div class="tc-settings-row tc-panel-head" data-inset="true"><strong>Settings</strong><button type="button" class="tc-pill">Done</button></div>
   <div class="tc-settings-tabs" role="tablist">
     <button role="tab" aria-selected="false">Encryption</button>
     <button role="tab" aria-selected="false">Server permissions</button>
@@ -111,8 +111,8 @@
     <div class="tc-settings-optin">
       <p class="tc-settings-note">Domain mode is not finished and is turned off for everyone. Turning it on here affects this browser only.</p>
       <div class="tc-settings-confirm">
-        <input type="password" placeholder="Passphrase">
-        <button type="button">Turn domain mode on</button>
+        <input type="password" class="tc-input" placeholder="Passphrase">
+        <button type="button" class="tc-pill">Turn domain mode on</button>
       </div>
       <p class="tc-settings-note tc-tone-warn">That passphrase is not right, or this browser refused to store the setting.</p>
       <p class="tc-settings-note">A reload is needed either way.</p>

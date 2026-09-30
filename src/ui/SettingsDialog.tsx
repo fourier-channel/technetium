@@ -286,7 +286,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     >
       <div className="tc-settings-row tc-panel-head" data-inset="true">
         <strong>Settings</strong>
-        <button type="button" onClick={onClose}>Done</button>
+        <button type="button" className="tc-pill" onClick={onClose}>Done</button>
       </div>
 
       {/* The tab strip appears only once there is more than one tab to pick
@@ -336,6 +336,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               <>
                 <p className="tc-settings-note">Domain mode is on for this browser.</p>
                 <button
+                  className="tc-pill"
                   type="button"
                   onClick={() => {
                     applyDomainOptIn(domainOptInStore, '', false)
@@ -349,6 +350,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             ) : (
               <div className="tc-settings-confirm">
                 <input
+                  className="tc-input"
                   type="password"
                   value={domainPass}
                   onChange={(e) => setDomainPass(e.target.value)}
@@ -358,6 +360,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                   spellCheck={false}
                 />
                 <button
+                  className="tc-pill"
                   type="button"
                   disabled={!domainPass.trim()}
                   onClick={() => {
@@ -396,7 +399,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         ) : optIn ? (
           <>
             <p className="tc-settings-note">Encryption is turned on for this browser.</p>
-            <button type="button" onClick={() => flipOptIn(false)}>Turn encryption off</button>
+            <button type="button" className="tc-pill" onClick={() => flipOptIn(false)}>Turn encryption off</button>
           </>
         ) : (
           <>
@@ -405,6 +408,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             </p>
             <div className="tc-settings-confirm">
               <input
+                className="tc-input"
                 type="password"
                 value={passphrase}
                 onChange={(e) => setPassphrase(e.target.value)}
@@ -413,7 +417,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 autoComplete="off"
                 spellCheck={false}
               />
-              <button type="button" disabled={!passphrase.trim()} onClick={() => flipOptIn(true)}>
+              <button type="button" className="tc-pill" disabled={!passphrase.trim()} onClick={() => flipOptIn(true)}>
                 Turn encryption on
               </button>
             </div>
@@ -427,7 +431,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 otherwise would put encryption UI over a client that has no
                 crypto at all. */}
             Saved. It takes effect when the page reloads.{' '}
-            <button type="button" onClick={() => { window.location.reload() }}>Reload now</button>
+            <button type="button" className="tc-pill" onClick={() => { window.location.reload() }}>Reload now</button>
           </p>
         )}
       </div>
@@ -464,13 +468,13 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 confirming ? (
                   <div className="tc-settings-confirm">
                     <p>This creates an identity and a key backup on your account, and gives you a recovery key to write down. It will not replace anything you already have.</p>
-                    <button type="button" disabled={busy} onClick={() => { void doCreate() }}>
+                    <button type="button" className="tc-pill" disabled={busy} onClick={() => { void doCreate() }}>
                       {busy ? 'Working...' : 'Yes, set it up'}
                     </button>
-                    <button type="button" disabled={busy} onClick={() => setConfirming(false)}>Cancel</button>
+                    <button type="button" className="tc-pill" disabled={busy} onClick={() => setConfirming(false)}>Cancel</button>
                   </div>
                 ) : (
-                  <button type="button" onClick={() => setConfirming(true)}>Set up recovery</button>
+                  <button type="button" className="tc-pill" onClick={() => setConfirming(true)}>Set up recovery</button>
                 )
               )}
 
@@ -478,6 +482,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 <div className="tc-settings-restore">
                   <label htmlFor="tc-recovery-key">Recovery key</label>
                   <input
+                    className="tc-input"
                     id="tc-recovery-key"
                     value={typedKey}
                     onChange={(e) => setTypedKey(e.target.value)}
@@ -485,7 +490,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                     autoComplete="off"
                     spellCheck={false}
                   />
-                  <button type="button" disabled={busy || !typedKey.trim()} onClick={() => { void doRestore() }}>
+                  <button type="button" className="tc-pill" disabled={busy || !typedKey.trim()} onClick={() => { void doRestore() }}>
                     {busy ? 'Working...' : 'Unlock older messages'}
                   </button>
                 </div>
@@ -511,13 +516,13 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               ) : rotating ? (
                 <div className="tc-settings-confirm">
                   <p>Your current recovery key stops working. Your identity and your key backup stay exactly as they are and move under the new key.</p>
-                  <button type="button" disabled={busy} onClick={() => { void doRotate() }}>
+                  <button type="button" className="tc-pill" disabled={busy} onClick={() => { void doRotate() }}>
                     {busy ? 'Working...' : 'Yes, make a new key'}
                   </button>
-                  <button type="button" disabled={busy} onClick={() => setRotating(false)}>Cancel</button>
+                  <button type="button" className="tc-pill" disabled={busy} onClick={() => setRotating(false)}>Cancel</button>
                 </div>
               ) : (
-                <button type="button" onClick={() => setRotating(true)}>Make a new recovery key</button>
+                <button type="button" className="tc-pill" onClick={() => setRotating(true)}>Make a new recovery key</button>
               )}
             </div>
           )}
@@ -553,7 +558,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                   {/* This device cannot verify itself, and one already
                       cross-signed has nothing to gain. */}
                   {!d.isThisDevice && !d.crossSigningVerified && !verifying && (
-                    <button type="button" onClick={() => { void beginVerify(d.deviceId) }}>Verify</button>
+                    <button type="button" className="tc-pill" onClick={() => { void beginVerify(d.deviceId) }}>Verify</button>
                   )}
                 </li>
               ))}
@@ -592,17 +597,17 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                   <ul className="tc-settings-detail">
                     {describeSessions(purgeList).map((line) => <li key={line}>{line}</li>)}
                   </ul>
-                  <button type="button" disabled={purgeBusy} onClick={() => { void doPurge() }}>
+                  <button type="button" className="tc-pill" disabled={purgeBusy} onClick={() => { void doPurge() }}>
                     {purgeBusy ? 'Signing out...' : 'Sign them out'}
                   </button>
-                  <button type="button" disabled={purgeBusy} onClick={() => setPurge(null)}>Cancel</button>
+                  <button type="button" className="tc-pill" disabled={purgeBusy} onClick={() => setPurge(null)}>Cancel</button>
                 </div>
               ) : (
                 <div className="tc-settings-actions">
-                  <button type="button" disabled={purgeable.unverified.length === 0} onClick={() => { setPurgeNote(null); setPurge('unverified') }}>
+                  <button type="button" className="tc-pill" disabled={purgeable.unverified.length === 0} onClick={() => { setPurgeNote(null); setPurge('unverified') }}>
                     Sign out the {purgeable.unverified.length} unverified
                   </button>
-                  <button type="button" disabled={purgeable.others.length === 0} onClick={() => { setPurgeNote(null); setPurge('others') }}>
+                  <button type="button" className="tc-pill" disabled={purgeable.others.length === 0} onClick={() => { setPurgeNote(null); setPurge('others') }}>
                     Sign out all {purgeable.others.length} others
                   </button>
                 </div>
@@ -630,18 +635,18 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             <div className="tc-verify-actions">
               {stage.canConfirm && (
                 <>
-                  <button type="button" onClick={() => { void vhandle?.confirm() }}>They match</button>
+                  <button type="button" className="tc-pill" onClick={() => { void vhandle?.confirm() }}>They match</button>
                   {/* A separate call from cancel: this tells the other side the
                       codes differed, which is a security signal rather than
                       "not now". */}
-                  <button type="button" onClick={() => { void vhandle?.mismatch() }}>They do NOT match</button>
+                  <button type="button" className="tc-pill" onClick={() => { void vhandle?.mismatch() }}>They do NOT match</button>
                 </>
               )}
               {stage.canCancel && (
-                <button type="button" onClick={() => { void vhandle?.cancel(); endVerify(false) }}>Stop</button>
+                <button type="button" className="tc-pill" onClick={() => { void vhandle?.cancel(); endVerify(false) }}>Stop</button>
               )}
               {stage.terminal && (
-                <button type="button" onClick={() => endVerify(stage.verified)}>Close</button>
+                <button type="button" className="tc-pill" onClick={() => endVerify(stage.verified)}>Close</button>
               )}
             </div>
           </div>
@@ -656,8 +661,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             conversations cannot be recovered by anyone, including the server.
           </p>
           <code className="tc-settings-keytext">{newKey}</code>
-          <button type="button" onClick={() => { void navigator.clipboard?.writeText(newKey).catch(() => {}) }}>Copy</button>
+          <button type="button" className="tc-pill" onClick={() => { void navigator.clipboard?.writeText(newKey).catch(() => {}) }}>Copy</button>
           <button
+            className="tc-pill"
             type="button"
             onClick={() => { setNewKey(null); setReload((n) => n + 1) }}
           >
@@ -738,7 +744,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                   Locked out of every device with no recovery key? There is one way back, and it
                   destroys things permanently. Read it before you decide.
                 </p>
-                <button type="button" onClick={() => setResetOpen(true)}>Show me the reset</button>
+                <button type="button" className="tc-pill" onClick={() => setResetOpen(true)}>Show me the reset</button>
               </>
             ) : (
               <>
@@ -752,7 +758,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
 
                 <h4 className="tc-settings-subhead">1. Save your keys</h4>
                 <div className="tc-settings-confirm">
-                  <button type="button" disabled={resetBusy} onClick={() => { void doExport() }}>
+                  <button type="button" className="tc-pill" disabled={resetBusy} onClick={() => { void doExport() }}>
                     {exported ? 'Save the export again' : 'Save a key export'}
                   </button>
                   <label>
@@ -771,6 +777,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 </p>
                 <div className="tc-settings-confirm">
                   <input
+                    className="tc-input"
                     type="text"
                     value={typedId}
                     onChange={(e) => setTypedId(e.target.value)}
@@ -787,10 +794,10 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                       Your account settings opened in another tab. Approve the reset there,
                       then come back and press Continue. Nothing has been changed yet.
                     </p>
-                    <button type="button" onClick={() => { approvalResolve.current?.(true) }}>
+                    <button type="button" className="tc-pill" onClick={() => { approvalResolve.current?.(true) }}>
                       I approved it -- continue
                     </button>
-                    <button type="button" onClick={() => { approvalResolve.current?.(false) }}>
+                    <button type="button" className="tc-pill" onClick={() => { approvalResolve.current?.(false) }}>
                       Cancel
                     </button>
                   </div>
@@ -803,13 +810,13 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 <div className="tc-settings-confirm">
                   <button
                     type="button"
-                    className="tc-reset-go"
+                    className="tc-pill tc-reset-go"
                     disabled={resetBusy || blockers.length > 0}
                     onClick={() => { void doReset() }}
                   >
                     {resetBusy ? 'Working...' : 'Reset my encryption permanently'}
                   </button>
-                  <button type="button" disabled={resetBusy} onClick={() => setResetOpen(false)}>
+                  <button type="button" className="tc-pill" disabled={resetBusy} onClick={() => setResetOpen(false)}>
                     Cancel
                   </button>
                 </div>

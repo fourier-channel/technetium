@@ -113,19 +113,9 @@ export function CreateRoomDialog({
     }
   }
 
-  const field: React.CSSProperties = {
-    width: '100%',
-    // Without it the padding and border are added OUTSIDE the 100%, and the
-    // text inputs stick out past the selects' right edge.
-    boxSizing: 'border-box',
-    fontSize: 13,
-    padding: '6px 10px',
-    borderRadius: 8,
-    border: '1px solid rgba(128,128,128,0.35)',
-    background: 'transparent',
-    color: 'inherit',
-    marginBottom: 10,
-  }
+  // Formant's field, a form row wide (.tc-input[data-wide], which sizes by
+  // border-box so a text input's edge lines up with a select's).
+  const field = { className: 'tc-input', 'data-wide': 'true', style: { marginBottom: 10 } } as const
 
   return createPortal(
     <div
@@ -143,32 +133,14 @@ export function CreateRoomDialog({
       onKeyDown={(e) => {
         if (e.key === 'Escape') close()
       }}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 2000,
-        display: 'grid',
-        placeItems: 'center',
-        background: 'rgba(0,0,0,0.5)',
-      }}
+      className="tc-modal-scrim"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{
-          width: 400,
-          maxWidth: 'calc(100vw - 32px)',
-          maxHeight: '80vh',
-          overflowY: 'auto',
-          padding: 18,
-          borderRadius: 12,
-          fontFamily: 'var(--tc-ui-font, inherit)',
-          color: 'var(--cpd-color-text-primary)',
-          background: 'var(--cpd-color-bg-canvas-default)',
-          border: '1px solid rgba(128,128,128,0.35)',
-          boxShadow: '0 16px 44px rgba(0,0,0,0.55)',
-        }}
+        className="tc-modal"
+        style={{ maxHeight: '80vh', overflowY: 'auto' }}
       >
-        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>
+        <div className="tc-modal-title">
           Create a {isSpace ? 'space' : 'room'}
         </div>
 
@@ -184,7 +156,7 @@ export function CreateRoomDialog({
             </TypeBtn>
           </div>
 
-          <label style={labelStyle} htmlFor="tc-create-name">
+          <label className="tc-modal-label" htmlFor="tc-create-name">
             Name
           </label>
           <input
@@ -193,10 +165,10 @@ export function CreateRoomDialog({
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoFocus
-            style={field}
+            {...field}
           />
 
-          <label style={labelStyle} htmlFor="tc-create-topic">
+          <label className="tc-modal-label" htmlFor="tc-create-topic">
             Topic (optional)
           </label>
           <input
@@ -204,12 +176,12 @@ export function CreateRoomDialog({
             type="text"
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
-            style={field}
+            {...field}
           />
 
           {spaces.length > 0 && (
             <>
-              <label style={labelStyle} htmlFor="tc-create-parent">
+              <label className="tc-modal-label" htmlFor="tc-create-parent">
                 Put it inside (optional)
               </label>
               <select
@@ -228,7 +200,7 @@ export function CreateRoomDialog({
                     setJoinPicked(false)
                   }
                 }}
-                style={field}
+                {...field}
               >
                 <option value="">Nowhere -- top level</option>
                 {spaces.map((s) => (
@@ -240,7 +212,7 @@ export function CreateRoomDialog({
             </>
           )}
 
-          <label style={labelStyle} htmlFor="tc-create-join">
+          <label className="tc-modal-label" htmlFor="tc-create-join">
             Who can join
           </label>
           <select
@@ -250,7 +222,7 @@ export function CreateRoomDialog({
               setJoinRule(e.target.value as HouseJoinRule)
               setJoinPicked(true)
             }}
-            style={field}
+            {...field}
           >
             {JOIN_RULES.filter((r) => r.value !== 'restricted' || parentSpaceId).map((r) => (
               <option key={r.value} value={r.value}>
@@ -258,11 +230,11 @@ export function CreateRoomDialog({
               </option>
             ))}
           </select>
-          <div style={{ fontSize: 11, color: 'var(--cpd-color-text-secondary)', marginTop: -6, marginBottom: 10 }}>
+          <div className="tc-modal-hint" style={{ marginTop: -6, marginBottom: 10 }}>
             {JOIN_RULES.find((r) => r.value === joinRule)?.hint}
           </div>
 
-          <label style={labelStyle} htmlFor="tc-create-federate">
+          <label className="tc-modal-label" htmlFor="tc-create-federate">
             Other servers
           </label>
           <label
@@ -280,16 +252,7 @@ export function CreateRoomDialog({
               Allow people from other Matrix servers to join
             </span>
           </label>
-          <div
-            style={{
-              fontSize: 11,
-              lineHeight: 1.5,
-              color: federate
-                ? 'var(--cpd-color-text-critical-primary, #ff6b6b)'
-                : 'var(--cpd-color-text-secondary)',
-              marginBottom: 12,
-            }}
-          >
+          <div className="tc-modal-hint" data-tone={federate ? 'warn' : undefined} style={{ marginBottom: 12 }}>
             {federate
               ? 'Cannot be undone later. Every server a member joins from receives a permanent copy of everything posted here, and can fetch any image it has seen.'
               : 'This ' +
@@ -297,7 +260,7 @@ export function CreateRoomDialog({
                 ' will exist only on this server. Permanent either way -- this cannot be changed after creation.'}
           </div>
 
-          <label style={labelStyle} htmlFor="tc-create-encrypted">
+          <label className="tc-modal-label" htmlFor="tc-create-encrypted">
             Encryption
           </label>
           <label
@@ -315,16 +278,7 @@ export function CreateRoomDialog({
               End-to-end encrypt everything posted here
             </span>
           </label>
-          <div
-            style={{
-              fontSize: 11,
-              lineHeight: 1.5,
-              color: encrypted
-                ? 'var(--cpd-color-text-critical-primary, #ff6b6b)'
-                : 'var(--cpd-color-text-secondary)',
-              marginBottom: 12,
-            }}
-          >
+          <div className="tc-modal-hint" data-tone={encrypted ? 'warn' : undefined} style={{ marginBottom: 12 }}>
             {encrypted
               ? 'Cannot be turned off later. The site\'s bots cannot read or post in an encrypted room.'
               : 'Not encrypted. It can be switched on later; it can never be switched off once it is.'}
@@ -332,39 +286,28 @@ export function CreateRoomDialog({
         </fieldset>
 
         {error && (
-          <div style={{ fontSize: 12, marginBottom: 10, color: 'var(--cpd-color-text-critical-primary, #ff6b6b)' }}>
+          <div className="tc-modal-error" style={{ marginBottom: 10 }}>
             {error}
           </div>
         )}
 
         {orphanNotice && (
-          <div
-            style={{
-              fontSize: 12,
-              marginBottom: 10,
-              padding: '8px 10px',
-              borderRadius: 6,
-              background: 'var(--cpd-color-bg-subtle-secondary)',
-              color: 'var(--cpd-color-text-primary)',
-              // Breaks only what does not fit -- the room id -- not ordinary words.
-              overflowWrap: 'anywhere',
-            }}
-            role="status"
-          >
+          <div className="tc-modal-notice" style={{ marginBottom: 10 }} role="status">
             {orphanNotice}
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
-          <button type="button" onClick={close} disabled={busy} style={{ fontSize: 13, padding: '5px 12px' }}>
+        <div className="tc-modal-actions">
+          <button type="button" className="tc-pill" onClick={close} disabled={busy}>
             {orphanNotice ? 'Done' : 'Cancel'}
           </button>
           {!orphanNotice && (
             <button
               type="button"
+              className="tc-pill"
+              data-tone="go"
               onClick={() => void submit()}
               disabled={busy || !name.trim()}
-              style={{ fontSize: 13, padding: '5px 12px', fontWeight: 600 }}
             >
               {busy ? 'Creating...' : 'Create'}
             </button>
@@ -374,14 +317,6 @@ export function CreateRoomDialog({
     </div>,
     document.body,
   )
-}
-
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  fontSize: 11,
-  fontWeight: 600,
-  color: 'var(--cpd-color-text-secondary)',
-  marginBottom: 4,
 }
 
 function TypeBtn({
@@ -396,19 +331,10 @@ function TypeBtn({
   return (
     <button
       type="button"
+      className="tc-pill"
       onClick={onClick}
       aria-pressed={active}
-      style={{
-        flex: 1,
-        fontSize: 12,
-        padding: '5px 10px',
-        borderRadius: 8,
-        border: '1px solid rgba(128,128,128,0.35)',
-        background: active ? 'var(--cpd-color-bg-subtle-secondary)' : 'transparent',
-        color: 'inherit',
-        cursor: 'pointer',
-        fontWeight: active ? 600 : 400,
-      }}
+      style={{ flex: 1 }}
     >
       {children}
     </button>

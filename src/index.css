@@ -3045,11 +3045,35 @@ code {
   height: min(720px, calc(100vh - 36px));
   height: min(720px, calc(100dvh - 36px));
   overflow: hidden;
-  border: 1px solid var(--tc-line, rgba(255, 255, 255, 0.14));
-  border-radius: 10px;
-  background: var(--tc-panel, #14171c);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  /* Formant throughout (launch-polish L20, operator 2026-09-30: "bring the
+     entire settings menu into formant compliance"). Every colour, line,
+     radius and face in the dialog is a formant NAME. The two it used before
+     -- --tc-panel and --tc-line -- were defined nowhere, so their literal
+     fallbacks were what rendered: a cool blue-black (#14171c) that no other
+     Fourier surface uses. */
+  border: 1px solid var(--mod-line-strong);
+  border-radius: var(--mod-radius);
+  background: var(--mod-surface);
+  box-shadow: var(--mod-raise-lift);
+  color: var(--mod-ink);
   font-size: 13px;
+  /* Unitless, so every line in the dialog is spaced for its own size: the
+     root's 145% resolves once, at 18px, and was spacing 12px notes 26px
+     apart. */
+  line-height: 1.45;
+}
+/* The dialog's own controls are the house pill and the formant field; its
+   links are the accent; ticks are the accent. */
+.tc-settings a { color: var(--mod-accent); }
+.tc-settings input[type='checkbox'] { accent-color: var(--mod-accent); }
+.tc-settings code {
+  font-family: var(--mod-mono);
+  font-size: 11.5px;
+  line-height: 1.4;
+  padding: 1px 6px;
+  border-radius: var(--mod-radius-sm);
+  background: var(--mod-surface-2);
+  color: var(--mod-ink);
 }
 
 .tc-settings-row {
@@ -3066,6 +3090,9 @@ code {
   min-height: 0;
   overflow-y: auto;
   padding: 2px 14px 14px;
+  /* The chat log's scrollbar (L16): thin, trackless, formant ink. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--mod-ink-faint) transparent;
 }
 /* Prose keeps a readable measure in the wide box; the permissions table and
    the bulk list use the full width. */
@@ -3077,25 +3104,17 @@ code {
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  opacity: 0.7;
+  color: var(--mod-ink-dim);
 }
 
 .tc-settings-subhead {
   margin: 10px 0 4px;
   font-size: 12px;
-  opacity: 0.75;
+  color: var(--mod-ink-dim);
 }
 
 .tc-settings-headline { margin: 0 0 6px; font-weight: 600; }
 
-/* The tone is the worst true thing, so it has to be legible at a glance and
-   must never be green while something is wrong. */
-.tc-tone-ok { color: #7ddc9a; }
-.tc-tone-warn { color: #f0b429; }
-.tc-tone-bad { color: #ff6b60; }
-.tc-tone-off { opacity: 0.75; }
-/* Work in progress: formant orange, which means working, never warning. */
-.tc-tone-active { color: var(--mod-active-fg); }
 
 .tc-settings-detail {
   margin: 0 0 6px;
@@ -3109,22 +3128,25 @@ code {
 .tc-settings-key {
   margin-top: 10px;
   padding: 10px;
-  border: 1px solid #f0b429;
-  border-radius: 8px;
-  background: rgba(240, 180, 41, 0.08);
+  border: 1px solid var(--mod-warn-fg);
+  border-radius: var(--mod-radius-sm);
+  background: var(--mod-warn-bg);
 }
 
-.tc-settings-keytext {
+.tc-settings .tc-settings-keytext {
   display: block;
   margin: 8px 0;
   padding: 8px;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.35);
-  font-family: ui-monospace, monospace;
+  border: 1px solid var(--mod-line);
+  border-radius: var(--mod-radius-sm);
+  background: var(--mod-surface-2);
+  font-family: var(--mod-mono);
   font-size: 12.5px;
   word-break: break-all;
   user-select: all;
 }
+/* The reset asks you to type your own id; the id is shown inline there. */
+.tc-settings .tc-settings-note .tc-settings-keytext { display: inline; margin: 0; padding: 1px 6px; }
 
 .tc-settings-confirm,
 .tc-settings-restore {
@@ -3148,31 +3170,31 @@ code {
 
 .tc-settings-devices li {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
-  padding: 3px 0;
-  border-bottom: 1px solid var(--tc-line, rgba(255, 255, 255, 0.07));
+  padding: 4px 0;
+  border-bottom: 1px solid var(--mod-line);
 }
 
 .tc-device-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tc-device-id {
-  opacity: 0.55;
-  font-family: ui-monospace, monospace;
+  color: var(--mod-ink-faint);
+  font-family: var(--mod-mono);
   font-size: 10.5px;
 }
 
-.tc-device-here { opacity: 0.6; font-size: 11px; }
+.tc-device-here { color: var(--mod-ink-dim); font-size: 11px; }
 .tc-device-trust { font-size: 11px; flex-shrink: 0; }
 /* Only cross-signed trust gets the reassuring colour. */
-.tc-trust-ok { color: #7ddc9a; }
-.tc-trust-local { color: #f0b429; }
-.tc-trust-no { color: #ff6b60; }
+.tc-trust-ok { color: var(--mod-ok-fg); }
+.tc-trust-local { color: var(--mod-warn-fg); }
+.tc-trust-no { color: var(--mod-alarm-ink); }
 
 .tc-verify {
   margin-top: 10px;
   padding: 10px;
-  border: 1px solid var(--tc-line, rgba(255, 255, 255, 0.16));
-  border-radius: 8px;
+  border: 1px solid var(--mod-line-strong);
+  border-radius: var(--mod-radius-sm);
 }
 
 /* Seven pictures, large enough to actually compare against another screen --
@@ -3186,9 +3208,11 @@ code {
   z-index: 80;
   width: 340px;
   padding: 12px 14px;
-  border-radius: 10px;
-  background: var(--tc-panel, #14171c);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  border-radius: var(--mod-radius);
+  background: var(--mod-surface);
+  color: var(--mod-ink);
+  line-height: 1.45;
+  box-shadow: var(--mod-raise-lift);
 }
 
 .tc-verify-emoji {
@@ -3206,7 +3230,7 @@ code {
   align-items: center;
   min-width: 54px;
   font-size: 11px;
-  opacity: 0.85;
+  color: var(--mod-ink-dim);
 }
 
 .tc-verify-emoji li span:first-child { font-size: 26px; line-height: 1.2; }
@@ -3218,21 +3242,31 @@ code {
   margin-top: 6px;
 }
 
-.tc-settings-note { margin: 6px 0 0; opacity: 0.7; font-size: 12px; }
+.tc-settings-note { margin: 6px 0 0; color: var(--mod-ink-dim); font-size: 12px; }
 
-/* The reply to a control the user just pressed. Full opacity and a rule, so it
+/* The tone is the worst true thing, so it has to be legible at a glance and
+   must never be green while something is wrong. After the note rule, so a
+   toned note takes the tone. Red text is the alarm's readable ink, not its
+   lamp. */
+.tc-tone-ok { color: var(--mod-ok-fg); }
+.tc-tone-warn { color: var(--mod-warn-fg); }
+.tc-tone-bad { color: var(--mod-alarm-ink); }
+.tc-tone-off { color: var(--mod-ink-dim); }
+/* Work in progress: formant orange, which means working, never warning. */
+.tc-tone-active { color: var(--mod-active-fg); }
+
+/* The reply to a control the user just pressed. Full ink and a rule, so it
    reads as an answer rather than as one more line of status. */
 .tc-settings-feedback {
-  opacity: 1;
   margin: 8px 0;
   padding: 6px 10px;
-  border-radius: 8px;
-  border-left: 3px solid #f0b429;
-  background: var(--cpd-color-bg-subtle-secondary, rgb(255 255 255 / 6%));
+  border-radius: var(--mod-radius-sm);
+  border-left: 3px solid var(--mod-warn-fg);
+  background: var(--mod-surface-2);
 }
-.tc-settings-feedback.tc-tone-ok { border-left-color: #35e08d; color: #35e08d; }
-.tc-settings-feedback.tc-tone-warn { border-left-color: #f0b429; color: #f0b429; }
-.tc-settings-feedback.tc-tone-bad { border-left-color: #ff5f56; color: #ff5f56; }
+.tc-settings-feedback.tc-tone-ok { border-left-color: var(--mod-ok-fg); }
+.tc-settings-feedback.tc-tone-warn { border-left-color: var(--mod-warn-fg); }
+.tc-settings-feedback.tc-tone-bad { border-left-color: var(--mod-alarm-fg); }
 
 /* The runtime encryption switch. Set apart from the summary below it with a
    rule and a little air, because it is the control and the rest is the
@@ -3241,7 +3275,7 @@ code {
 .tc-settings-optin {
   margin: 4px 0 12px;
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--tc-line, rgb(255 255 255 / 10%));
+  border-bottom: 1px solid var(--mod-line);
 }
 .tc-settings-optin button { margin-top: 6px; }
 
@@ -3288,20 +3322,18 @@ code {
 .tc-reset {
   margin-top: 20px;
   padding-top: 12px;
-  border-top: 1px solid rgb(255 95 86 / 35%);
+  border-top: 1px solid var(--mod-alarm-line);
 }
-.tc-reset label { font-size: 12px; opacity: 0.85; }
+.tc-reset label { font-size: 12px; color: var(--mod-ink-dim); }
 /* The only red control in the panel. Everything else that can be pressed here
-   is recoverable; this one is not. */
-.tc-reset-go:not(:disabled) {
-  border-color: #ff5f56;
-  color: #ff5f56;
+   is recoverable; this one is not. Formant allows red once per page, for
+   exactly this. */
+.tc-pill.tc-reset-go:not(:disabled) {
+  border-color: var(--mod-alarm-fg);
+  color: var(--mod-alarm-ink);
+  background: var(--mod-alarm-bg);
 }
-.tc-reset-go:disabled { opacity: 0.45; }
-.tc-settings-optin input[type="password"] {
-  min-width: 12ch;
-  font: inherit;
-}
+.tc-settings-optin input[type="password"] { min-width: 16ch; }
 
 .tc-layout-editor {
   position: fixed; right: 16px; bottom: 16px; z-index: 1500;
@@ -3573,15 +3605,15 @@ code {
 /* The pill: the Direct Messages pill's face, as one rule. NavTree's DM pill
    takes its border and radius from the same two variables. */
 :root {
-  --tc-pill-line: rgba(128, 128, 128, 0.3);
-  --tc-pill-radius: 14px;
+  --tc-pill-line: var(--mod-line-strong);
+  --tc-pill-radius: var(--mod-pill-radius);
 }
 .tc-pill {
   padding: 3px 10px;
   border: 1px solid var(--tc-pill-line);
   border-radius: var(--tc-pill-radius);
   background: transparent;
-  color: var(--cpd-color-text-secondary);
+  color: var(--mod-ink-dim);
   font-family: var(--tc-ui-font, inherit);
   font-size: 11px;
   font-weight: 700;
@@ -3592,17 +3624,18 @@ code {
   transition: background-color 150ms ease, color 150ms ease;
 }
 .tc-pill:hover {
-  background: var(--cpd-color-bg-subtle-secondary);
-  color: var(--cpd-color-text-primary);
+  background: var(--mod-surface-2);
+  color: var(--mod-ink);
 }
 .tc-pill[aria-pressed='true'],
 .tc-pill[aria-checked='true'] {
-  background: var(--cpd-color-bg-subtle-secondary);
-  color: var(--cpd-color-text-primary);
-  border-color: var(--mod-line-strong);
+  background: var(--mod-surface-2);
+  color: var(--mod-ink);
+  border-color: var(--mod-ink-faint);
 }
+.tc-pill:focus-visible { outline: 1px solid var(--mod-accent); outline-offset: 1px; }
 .tc-pill:disabled { opacity: 0.45; cursor: default; }
-.tc-pill:disabled:hover { background: transparent; color: var(--cpd-color-text-secondary); }
+.tc-pill:disabled:hover { background: transparent; color: var(--mod-ink-dim); }
 /* The pill that commits a change somebody has just reviewed: orange, the
    formant colour for work being done (not a warning -- ruling 2026-09-01). */
 .tc-pill[data-tone='go'] { color: var(--mod-active-fg); border-color: var(--mod-active-fg); }
@@ -4111,25 +4144,27 @@ code {
   flex: none;
   gap: 4px;
   margin: 8px 14px 4px;
-  border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+  border-bottom: 1px solid var(--mod-line);
 }
 .tc-settings-tabs button {
   font-size: 11.5px;
   padding: 5px 10px;
   border: 0;
   border-bottom: 2px solid transparent;
-  border-radius: 6px 6px 0 0;
+  border-radius: var(--mod-radius-sm) var(--mod-radius-sm) 0 0;
   background: transparent;
-  color: var(--cpd-color-text-secondary);
+  color: var(--mod-ink-dim);
   cursor: pointer;
 }
+.tc-settings-tabs button:hover { color: var(--mod-ink); }
 .tc-settings-tabs button[aria-selected='true'] {
-  color: var(--cpd-color-text-primary);
-  border-bottom-color: var(--mod-accent, #0ce92a);
+  color: var(--mod-ink);
+  border-bottom-color: var(--mod-accent);
 }
+.tc-settings-tabs button:focus-visible { outline: 1px solid var(--mod-accent); outline-offset: -1px; }
 
 .tc-perm { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
-.tc-perm-dim { color: var(--cpd-color-text-secondary); opacity: 0.8; }
+.tc-perm-dim { color: var(--mod-ink-dim); }
 
 .tc-perm-bar {
   display: flex;
@@ -4137,32 +4172,10 @@ code {
   gap: 8px;
   flex-wrap: wrap;
   font-size: 11.5px;
-  color: var(--cpd-color-text-secondary);
+  color: var(--mod-ink-dim);
 }
 .tc-perm-range { display: inline-flex; align-items: center; gap: 6px; }
-.tc-perm-range input {
-  width: 52px;
-  font-size: 11.5px;
-  padding: 3px 6px;
-  border-radius: 6px;
-  border: 1px solid rgba(128, 128, 128, 0.35);
-  background: transparent;
-  color: inherit;
-  font-variant-numeric: tabular-nums;
-}
-.tc-perm-chip {
-  font-size: 11px;
-  padding: 3px 9px;
-  border-radius: 999px;
-  border: 1px solid rgba(128, 128, 128, 0.35);
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-}
-.tc-perm-chip[aria-pressed='true'] {
-  color: var(--mod-active-fg, #ff9d3c);
-  border-color: var(--mod-active-fg, #ff9d3c);
-}
+.tc-perm-range .tc-input { width: 64px; }
 
 .tc-perm-summary {
   display: flex;
@@ -4170,19 +4183,19 @@ code {
   flex-wrap: wrap;
   font-size: 11.5px;
   padding: 6px 8px;
-  border-radius: 8px;
-  background: var(--cpd-color-bg-subtle-secondary);
+  border-radius: var(--mod-radius-sm);
+  background: var(--mod-surface-2);
 }
 .tc-perm-notice {
   font-size: 11.5px;
   padding: 5px 8px;
-  border-radius: 6px;
-  border-left: 3px solid var(--mod-accent, #0ce92a);
-  background: var(--cpd-color-bg-subtle-secondary);
+  border-radius: var(--mod-radius-sm);
+  border-left: 3px solid var(--mod-accent);
+  background: var(--mod-surface-2);
 }
 
 .tc-perm-list { display: flex; flex-direction: column; }
-.tc-perm-room { border-bottom: 1px solid rgba(128, 128, 128, 0.16); }
+.tc-perm-room { border-bottom: 1px solid var(--mod-line); }
 .tc-perm-head {
   display: flex;
   align-items: center;
@@ -4191,18 +4204,19 @@ code {
   padding: 6px 8px;
   border: 0;
   background: transparent;
-  color: var(--cpd-color-text-primary);
+  color: var(--mod-ink);
   font-size: 12px;
   text-align: left;
   cursor: pointer;
 }
-.tc-perm-head:hover { background: rgba(128, 128, 128, 0.10); }
+.tc-perm-head:hover { background: var(--mod-surface-2); }
+.tc-perm-head:focus-visible { outline: 1px solid var(--mod-accent); outline-offset: -1px; }
 .tc-perm-kind {
   flex: 0 0 auto;
   width: 42px;
   font-size: 9px;
   letter-spacing: 0.08em;
-  color: var(--cpd-color-text-secondary);
+  color: var(--mod-ink-dim);
 }
 .tc-perm-name {
   flex: 1 1 auto;
@@ -4220,10 +4234,10 @@ code {
   font-size: 10px;
   font-weight: 700;
   padding: 1px 5px;
-  border-radius: 999px;
+  border-radius: var(--mod-pill-radius);
   border: 1px solid currentColor;
 }
-.tc-perm-caret { flex: 0 0 auto; width: 10px; text-align: center; opacity: 0.6; }
+.tc-perm-caret { flex: 0 0 auto; width: 10px; text-align: center; color: var(--mod-ink-dim); }
 
 .tc-perm-body { padding: 2px 8px 10px 14px; display: flex; flex-direction: column; gap: 8px; }
 .tc-perm-id {
@@ -4242,7 +4256,7 @@ code {
      styling, which drew the id at twice the size of every setting below it. */
   font-size: 12px;
   padding: 1px 6px;
-  font-family: var(--tc-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-family: var(--mod-mono);
 }
 .tc-perm-settings {
   display: grid;
@@ -4257,11 +4271,11 @@ code {
   justify-content: space-between;
   gap: 8px;
   min-width: 0;
-  border-bottom: 1px dotted rgba(128, 128, 128, 0.18);
+  border-bottom: 1px dotted var(--mod-line);
   padding-bottom: 1px;
 }
 .tc-perm-settings dt {
-  color: var(--cpd-color-text-secondary);
+  color: var(--mod-ink-dim);
   white-space: nowrap;
 }
 .tc-perm-settings dd {
@@ -4293,24 +4307,17 @@ code {
 .tc-perm-holder-rank {
   flex: 0 0 auto;
   min-width: 92px;
-  color: var(--cpd-color-text-secondary);
+  color: var(--mod-ink-dim);
   font-variant-numeric: tabular-nums;
 }
 .tc-perm-holder-why { flex: 1 1 auto; font-size: 10.5px; }
-.tc-perm-holder-set { display: flex; gap: 3px; flex-wrap: wrap; }
-.tc-perm-holder-set button {
-  font-size: 10.5px;
-  padding: 2px 7px;
-  border-radius: 5px;
-  border: 1px solid rgba(128, 128, 128, 0.3);
-  background: transparent;
-  color: var(--cpd-color-text-secondary);
-  cursor: pointer;
-}
-.tc-perm-holder-set button:disabled { opacity: 0.45; cursor: default; }
-.tc-perm-holder-set button[data-armed='true'] {
-  color: var(--mod-active-fg, #ff9d3c);
-  border-color: var(--mod-active-fg, #ff9d3c);
+.tc-perm-holder-set { display: flex; flex-wrap: wrap; }
+.tc-perm-holder-set { gap: 4px; }
+/* The house pill, a size down: one row carries four of them per person. */
+.tc-perm-holder-set .tc-pill { font-size: 10px; padding: 2px 8px; }
+.tc-perm-holder-set .tc-pill[data-armed='true'] {
+  color: var(--mod-active-fg);
+  border-color: var(--mod-active-fg);
 }
 .tc-perm-promote {
   display: flex;
@@ -4318,18 +4325,11 @@ code {
   gap: 3px;
   padding-top: 4px;
   margin-top: 2px;
-  border-top: 1px dotted rgba(128, 128, 128, 0.2);
+  border-top: 1px dotted var(--mod-line);
   font-size: 11px;
 }
-.tc-perm-promote > .tc-perm-chip { align-self: flex-start; }
-.tc-perm-promote input {
-  font-size: 11.5px;
-  padding: 3px 7px;
-  border-radius: 6px;
-  border: 1px solid rgba(128, 128, 128, 0.35);
-  background: transparent;
-  color: inherit;
-}
+.tc-perm-promote > .tc-pill { align-self: flex-start; }
+.tc-perm-promote .tc-input { max-width: 320px; }
 
 /* Server permissions has two views: Rooms (the audit, one room at a time) and
    the bulk setter. Two pills, the pressed one is the view you are on. */
@@ -4435,6 +4435,106 @@ code {
 }
 .tc-input::placeholder { color: var(--mod-ink-faint); }
 .tc-input:focus-visible { outline: none; border-color: var(--mod-accent); }
+.tc-input:disabled { opacity: 0.55; }
+/* ---------------------------------------------------------------------------
+   The modals Settings opens over itself -- create a room or space, pick a
+   person -- are one look, in formant names (launch-polish L20). The picker is
+   also invite's and start-a-DM's, so they get it too.
+
+   The scrim is Technetium's own token: formant has none, and a formant token
+   is extracted when a second STACK needs it, not a second modal.
+   --------------------------------------------------------------------------- */
+:root { --tc-scrim: rgba(0, 0, 0, 0.5); }
+.tc-modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  background: var(--tc-scrim);
+}
+.tc-modal {
+  box-sizing: border-box;
+  width: 400px;
+  max-width: calc(100vw - 32px);
+  padding: 16px 18px;
+  border: 1px solid var(--mod-line-strong);
+  border-radius: var(--mod-radius);
+  background: var(--mod-surface);
+  box-shadow: var(--mod-raise-lift);
+  color: var(--mod-ink);
+  font-family: var(--tc-ui-font);
+  line-height: 1.45;
+}
+.tc-modal input[type='checkbox'] { accent-color: var(--mod-accent); }
+.tc-modal-title { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+.tc-modal-label { display: block; font-size: 11px; font-weight: 600; color: var(--mod-ink-dim); margin-bottom: 4px; }
+.tc-modal-hint { font-size: 11px; line-height: 1.5; color: var(--mod-ink-dim); }
+/* A setting that cannot be taken back once the form is sent: a caution, in
+   amber. Not red -- nothing is wrong, and red is kept for what is. */
+.tc-modal-hint[data-tone='warn'] { color: var(--mod-warn-fg); }
+.tc-modal-error { font-size: 12px; color: var(--mod-alarm-ink); }
+.tc-modal-notice {
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: var(--mod-radius-sm);
+  background: var(--mod-surface-2);
+  color: var(--mod-ink);
+  /* Breaks only what does not fit -- a room id -- not ordinary words. */
+  overflow-wrap: anywhere;
+}
+.tc-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+/* A person in the picker: one row, the whole row is the button. */
+.tc-modal-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--mod-radius-sm);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.tc-modal-row:hover,
+.tc-modal-row:focus-visible { background: var(--mod-surface-2); outline: none; }
+.tc-modal-row:disabled { cursor: default; }
+.tc-modal-av {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--mod-surface-3);
+  color: var(--mod-ink);
+  font-size: 10px;
+  font-weight: 700;
+}
+.tc-modal-name,
+.tc-modal-sub { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-modal-name { font-size: 13px; font-weight: 600; }
+.tc-modal-sub { font-size: 11px; color: var(--mod-ink-dim); }
+/* What the picker knows about a candidate: green is known, amber is a guess. */
+.tc-picker-note {
+  font-size: 10px;
+  line-height: 1.6;
+  padding: 0 6px;
+  border: 1px solid currentColor;
+  border-radius: var(--mod-pill-radius);
+  white-space: nowrap;
+  color: var(--mod-ink-dim);
+}
+.tc-picker-note[data-tone='good'] { color: var(--mod-ok-fg); }
+.tc-picker-note[data-tone='warn'] { color: var(--mod-warn-fg); }
+
+/* A field that is a form's whole row: the create dialog and the pickers. */
+.tc-input[data-wide='true'] { width: 100%; height: 28px; font-size: 13px; padding: 4px 10px; }
+select.tc-input { padding-right: 4px; }
 
 /* Edit Mode: the per-panel Lock/Pin roster. One row per OPEN panel, so every
    panel can be locked or pinned rather than only the two that happened to

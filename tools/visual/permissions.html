@@ -11,7 +11,7 @@
 <div class="h-label">Settings, server permissions tab</div>
 <div class="tc-settings">
   <div class="tc-settings-row tc-panel-head" data-inset="true">
-    <strong>Settings</strong><button>Done</button>
+    <strong>Settings</strong><button class="tc-pill">Done</button>
   </div>
   <div class="tc-settings-tabs" role="tablist">
     <button role="tab" aria-selected="false">Encryption</button>
@@ -26,9 +26,9 @@
       <button type="button" class="tc-pill" aria-pressed="false">Set a level in many rooms</button>
     </div>
     <div class="tc-perm-bar">
-      <label class="tc-perm-range">Power from <input type="number" value="10"> to <input type="number" value="100"></label>
-      <button class="tc-perm-chip" aria-pressed="false">Show only flagged</button>
-      <button class="tc-perm-chip">Re-read</button>
+      <label class="tc-perm-range">Power from <input type="number" class="tc-input" value="10"> to <input type="number" class="tc-input" value="100"></label>
+      <button class="tc-pill" aria-pressed="false">Show only flagged</button>
+      <button class="tc-pill">Re-read</button>
     </div>
     <div class="tc-perm-summary">
       <span class="tc-tone-bad">2 faults</span>
@@ -57,7 +57,7 @@
           <div class="tc-perm-id">
             <span class="tc-perm-dim">id</span>
             <code class="tc-perm-idtext">!OYabPCKaQKwJzEJxUC:41chan.net</code>
-            <button type="button" class="tc-perm-chip">Copy</button>
+            <button type="button" class="tc-pill">Copy</button>
           </div>
           <dl class="tc-perm-settings">
             <div class="tc-perm-setting"><dt>join</dt><dd>invite</dd></div>
@@ -80,11 +80,11 @@
           </ul>
           <div class="tc-perm-holders">
             <div class="tc-perm-holder"><span class="tc-perm-holder-name">saber</span><span class="tc-perm-holder-rank">Owner 100</span>
-              <span class="tc-perm-holder-set"><button disabled>Member</button><button>Voice</button><button>Moderator</button><button disabled>Owner</button></span></div>
+              <span class="tc-perm-holder-set"><button class="tc-pill" disabled>Member</button><button class="tc-pill">Voice</button><button class="tc-pill">Moderator</button><button class="tc-pill" disabled>Owner</button></span></div>
             <div class="tc-perm-holder"><span class="tc-perm-holder-name">kestrel</span><span class="tc-perm-holder-rank">Moderator 50</span>
-              <span class="tc-perm-holder-set"><button>Member</button><button>Voice</button><button disabled>Moderator</button><button data-armed="true">Confirm</button></span></div>
+              <span class="tc-perm-holder-set"><button class="tc-pill">Member</button><button class="tc-pill">Voice</button><button class="tc-pill" disabled>Moderator</button><button class="tc-pill" data-armed="true">Confirm</button></span></div>
             <div class="tc-perm-holder"><span class="tc-perm-holder-name">nobu</span><span class="tc-perm-holder-rank">Voice 25</span>
-              <span class="tc-perm-holder-set"><button>Member</button><button disabled>Voice</button><button>Moderator</button><button>Owner</button></span></div>
+              <span class="tc-perm-holder-set"><button class="tc-pill">Member</button><button class="tc-pill" disabled>Voice</button><button class="tc-pill">Moderator</button><button class="tc-pill">Owner</button></span></div>
             <div class="tc-perm-holder"><span class="tc-perm-holder-name">fourier</span><span class="tc-perm-holder-rank">Voice 25</span>
               <span class="tc-perm-dim tc-perm-holder-why">They are at level 25 and you are at 25. You can only change someone below you.</span></div>
           </div>

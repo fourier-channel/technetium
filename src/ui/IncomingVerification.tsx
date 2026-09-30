@@ -113,6 +113,7 @@ export function IncomingVerification() {
         {stage.name === 'waiting' && (
           <button
             type="button"
+            className="tc-pill"
             onClick={() => {
               // The rejection is SHOWN, not swallowed: an accept that fails
               // silently is indistinguishable from one that did nothing, and
@@ -125,12 +126,12 @@ export function IncomingVerification() {
         )}
         {stage.canConfirm && (
           <>
-            <button type="button" onClick={() => { void request.verifier?.getShowSasCallbacks()?.confirm() }}>They match</button>
-            <button type="button" onClick={() => { request.verifier?.getShowSasCallbacks()?.mismatch() }}>They do NOT match</button>
+            <button type="button" className="tc-pill" onClick={() => { void request.verifier?.getShowSasCallbacks()?.confirm() }}>They match</button>
+            <button type="button" className="tc-pill" onClick={() => { request.verifier?.getShowSasCallbacks()?.mismatch() }}>They do NOT match</button>
           </>
         )}
-        {stage.canCancel && <button type="button" onClick={() => { void request.cancel(); close() }}>Decline</button>}
-        {stage.terminal && <button type="button" onClick={close}>Close</button>}
+        {stage.canCancel && <button type="button" className="tc-pill" onClick={() => { void request.cancel(); close() }}>Decline</button>}
+        {stage.terminal && <button type="button" className="tc-pill" onClick={close}>Close</button>}
       </div>
     </div>
   )
