@@ -277,9 +277,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   return (
     <div
       className="tc-settings"
-      // The server panel is a table of the whole account; at the dialog's usual
-      // 380px it would be a column of ellipses.
-      data-wide={tab === 'server' ? 'true' : 'false'}
+      // ONE size for every tab (operator, 2026-09-30: "give it a standard size
+      // that doesn't change when you flip between menus"). The header and the
+      // tabs hold still; only the body below them scrolls.
       role="dialog"
       aria-label="Settings"
       aria-modal="true"
@@ -305,6 +305,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         </div>
       )}
 
+      <div className="tc-settings-body">
       {tab === 'server' && admin?.verdict === 'admin' && client && (
         <>
           {/* Said out loud on the panel, because the honest answer to "make
@@ -820,6 +821,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       })()}
       </>
       )}
+      </div>
     </div>
   )
 }

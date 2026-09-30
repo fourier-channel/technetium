@@ -4,11 +4,12 @@
 <style>
   /* The dialog is fixed to the corner in the app; pinned here so the whole
      panel is in the shot. */
-  .tc-settings { position: static !important; margin: 10px auto; max-height: none !important; height: auto !important; }
+  .tc-settings { position: static !important; margin: 10px auto; height: auto !important; overflow: visible !important; }
+  .tc-settings-body { overflow: visible !important; }
 </style>
 </head><body>
 <div class="h-label">Server permissions, set a level in many rooms: choosing</div>
-<div class="tc-settings" data-wide="true">
+<div class="tc-settings"><div class="tc-settings-body">
   <div class="tc-perm">
     <div class="tc-perm-views" role="group">
       <button type="button" class="tc-pill" aria-pressed="false">Rooms</button>
@@ -60,9 +61,10 @@
     </div>
   </div>
 </div>
+</div>
 
 <div class="h-label">confirming</div>
-<div class="tc-settings" data-wide="true">
+<div class="tc-settings"><div class="tc-settings-body">
   <div class="tc-bulk">
     <div class="tc-bulk-foot" role="status">
       <span class="tc-bulk-confirm">Set kestrel to Moderator 50 in 2 places?<span class="tc-tone-warn"> In 1 of them that is your own level, and you will not be able to lower them there again.</span><span class="tc-perm-dim"> In 1 they are not a member yet; it applies when they join.</span></span>
@@ -71,9 +73,10 @@
     </div>
   </div>
 </div>
+</div>
 
 <div class="h-label">running, then done</div>
-<div class="tc-settings" data-wide="true">
+<div class="tc-settings"><div class="tc-settings-body">
   <div class="tc-bulk">
     <ul class="tc-bulk-list">
       <li class="tc-bulk-row" data-can="true"><label><input type="checkbox" checked disabled><span class="tc-perm-kind">ROOM</span><span class="tc-bulk-name">general</span></label>
@@ -90,5 +93,6 @@
       <button type="button" class="tc-pill">Start again</button>
     </div>
   </div>
+</div>
 </div>
 </body></html>

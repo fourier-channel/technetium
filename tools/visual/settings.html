@@ -1,0 +1,122 @@
+<!doctype html><html><head>
+<!--#head-->
+<title>Settings dialog</title>
+<style>
+  /* The dialog is fixed to the corner in the app; here the three tabs stand
+     one above the other at their REAL size, so a size that moved between
+     tabs would show as three different boxes. */
+  .tc-settings { position: static !important; margin: 12px auto; }
+</style>
+</head><body>
+<div class="h-label">Settings: Encryption</div>
+<div class="tc-settings" role="dialog">
+  <div class="tc-settings-row tc-panel-head" data-inset="true"><strong>Settings</strong><button type="button">Done</button></div>
+  <div class="tc-settings-tabs" role="tablist">
+    <button role="tab" aria-selected="true">Encryption</button>
+    <button role="tab" aria-selected="false">Server permissions</button>
+    <button role="tab" aria-selected="false">Unfinished features</button>
+  </div>
+  <div class="tc-settings-body">
+    <h3 class="tc-settings-head">Encryption</h3>
+    <div class="tc-settings-optin">
+      <p class="tc-settings-note">Encryption is turned on for this browser.</p>
+      <button type="button">Turn encryption off</button>
+    </div>
+    <p class="tc-settings-headline tc-tone-warn">This device is not verified yet.</p>
+    <ul class="tc-settings-detail">
+      <li>Your identity is set up and backed up.</li>
+      <li>Messages from before this device joined may not open until it is verified.</li>
+    </ul>
+    <p class="tc-settings-note tc-settings-feedback tc-tone-ok" role="status">Restored. Older messages should open now.</p>
+    <h4 class="tc-settings-subhead">What is left to do</h4>
+    <ul class="tc-settings-detail"><li>Verify this device against one you already trust.</li></ul>
+    <div class="tc-settings-restore">
+      <label for="k">Recovery key</label>
+      <input id="k" placeholder="paste it here">
+      <button type="button">Unlock older messages</button>
+    </div>
+    <h3 class="tc-settings-head">Your devices</h3>
+    <ul class="tc-settings-devices">
+      <li><span class="tc-device-name">Technetium<span class="tc-device-id"> ABCDEFGHIJ</span></span><span class="tc-device-here"> this device</span><span class="tc-device-trust tc-trust-local">verified on this device only</span></li>
+      <li><span class="tc-device-name">Element<span class="tc-device-id"> KLMNOPQRST</span></span><span class="tc-device-trust tc-trust-ok">verified</span></li>
+      <li><span class="tc-device-name">unnamed device<span class="tc-device-id"> UVWXYZ0123</span></span><span class="tc-device-trust tc-trust-no">not verified</span><button type="button">Verify</button></li>
+    </ul>
+    <h3 class="tc-settings-head">Sessions</h3>
+    <p class="tc-settings-note">14 sessions are signed in to this account, this one included. 11 are not a verified device.</p>
+    <div class="tc-settings-actions">
+      <button type="button">Sign out the 11 unverified</button>
+      <button type="button">Sign out all 13 others</button>
+    </div>
+    <div class="tc-settings-key" role="alertdialog">
+      <strong>Write this down now.</strong>
+      <p>This is the only time it is shown.</p>
+      <code class="tc-settings-keytext">EsTc 4Fx2 9QbL mN7r kW3p Zt8y</code>
+      <button type="button">Copy</button>
+      <button type="button">I have written it down</button>
+    </div>
+    <div class="tc-reset">
+      <h3 class="tc-settings-head">If you have lost everything</h3>
+      <p class="tc-settings-note">Locked out of every device with no recovery key? There is one way back, and it destroys things permanently.</p>
+      <button type="button" class="tc-reset-go">Reset my encryption permanently</button>
+    </div>
+  </div>
+</div>
+
+<div class="h-label">Settings: Server permissions</div>
+<div class="tc-settings" role="dialog">
+  <div class="tc-settings-row tc-panel-head" data-inset="true"><strong>Settings</strong><button type="button">Done</button></div>
+  <div class="tc-settings-tabs" role="tablist">
+    <button role="tab" aria-selected="false">Encryption</button>
+    <button role="tab" aria-selected="true">Server permissions</button>
+    <button role="tab" aria-selected="false">Unfinished features</button>
+  </div>
+  <div class="tc-settings-body">
+    <p class="tc-settings-note">The sign-in service says this account is a server administrator. This hides the panel, not the information.</p>
+    <div class="tc-perm">
+      <div class="tc-perm-views" role="group">
+        <button type="button" class="tc-pill" aria-pressed="true">Rooms</button>
+        <button type="button" class="tc-pill" aria-pressed="false">Set a level in many rooms</button>
+      </div>
+      <div class="tc-perm-bar">
+        <label class="tc-perm-range">Power from <input type="number" value="10"> to <input type="number" value="100"></label>
+        <button class="tc-perm-chip" aria-pressed="false">Show only flagged</button>
+        <button class="tc-perm-chip">Re-read</button>
+        <button class="tc-perm-chip">+ New room or space</button>
+      </div>
+      <div class="tc-perm-summary">
+        <span class="tc-tone-bad">2 faults</span>
+        <span class="tc-perm-dim">3 differences from the rest of the server</span>
+        <span class="tc-perm-dim">across 11 rooms and spaces</span>
+      </div>
+      <div class="tc-perm-notice" role="status">kestrel is now Moderator in general.</div>
+      <div class="tc-perm-list">
+        <div class="tc-perm-room"><button class="tc-perm-head" style="padding-left:8px"><span class="tc-perm-kind">SPACE</span><span class="tc-perm-name">Community</span><span class="tc-perm-dim">42</span><span class="tc-perm-dim">3 with power</span><span class="tc-perm-caret">+</span></button></div>
+        <div class="tc-perm-room"><button class="tc-perm-head" style="padding-left:22px"><span class="tc-perm-kind">ROOM</span><span class="tc-perm-name">general</span><span class="tc-perm-dim">38</span><span class="tc-perm-dim">4 with power</span><span class="tc-perm-flag tc-tone-bad">1</span><span class="tc-perm-flag tc-tone-warn">2</span><span class="tc-perm-caret">+</span></button></div>
+        <div class="tc-perm-room"><button class="tc-perm-head" style="padding-left:22px"><span class="tc-perm-kind">ROOM</span><span class="tc-perm-name">tagging</span><span class="tc-perm-dim">21</span><span class="tc-perm-dim">2 with power</span><span class="tc-perm-caret">+</span></button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="h-label">Settings: Unfinished features</div>
+<div class="tc-settings" role="dialog">
+  <div class="tc-settings-row tc-panel-head" data-inset="true"><strong>Settings</strong><button type="button">Done</button></div>
+  <div class="tc-settings-tabs" role="tablist">
+    <button role="tab" aria-selected="false">Encryption</button>
+    <button role="tab" aria-selected="false">Server permissions</button>
+    <button role="tab" aria-selected="true">Unfinished features</button>
+  </div>
+  <div class="tc-settings-body">
+    <h3 class="tc-settings-head">Unfinished features</h3>
+    <div class="tc-settings-optin">
+      <p class="tc-settings-note">Domain mode is not finished and is turned off for everyone. Turning it on here affects this browser only.</p>
+      <div class="tc-settings-confirm">
+        <input type="password" placeholder="Passphrase">
+        <button type="button">Turn domain mode on</button>
+      </div>
+      <p class="tc-settings-note tc-tone-warn">That passphrase is not right, or this browser refused to store the setting.</p>
+      <p class="tc-settings-note">A reload is needed either way.</p>
+    </div>
+  </div>
+</div>
+</body></html>

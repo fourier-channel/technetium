@@ -4,20 +4,27 @@
 <style>
   /* The dialog is fixed to the corner in the app; pinned here so the whole
      panel is in the shot. */
-  .tc-settings { position: static !important; margin: 10px auto; max-height: none !important; }
+  .tc-settings { position: static !important; margin: 10px auto; height: auto !important; overflow: visible !important; }
+  .tc-settings-body { overflow: visible !important; }
 </style>
 </head><body>
 <div class="h-label">Settings, server permissions tab</div>
-<div class="tc-settings" data-wide="true">
+<div class="tc-settings">
   <div class="tc-settings-row tc-panel-head" data-inset="true">
     <strong>Settings</strong><button>Done</button>
   </div>
   <div class="tc-settings-tabs" role="tablist">
     <button role="tab" aria-selected="false">Encryption</button>
     <button role="tab" aria-selected="true">Server permissions</button>
+    <button role="tab" aria-selected="false">Unfinished features</button>
   </div>
+  <div class="tc-settings-body">
   <p class="tc-settings-note">The homeserver says this account is a server administrator. This hides the panel, not the information: everything in it is room state that any member of these rooms can read with any client.</p>
   <div class="tc-perm">
+    <div class="tc-perm-views" role="group">
+      <button type="button" class="tc-pill" aria-pressed="true">Rooms</button>
+      <button type="button" class="tc-pill" aria-pressed="false">Set a level in many rooms</button>
+    </div>
     <div class="tc-perm-bar">
       <label class="tc-perm-range">Power from <input type="number" value="10"> to <input type="number" value="100"></label>
       <button class="tc-perm-chip" aria-pressed="false">Show only flagged</button>
@@ -26,7 +33,7 @@
     <div class="tc-perm-summary">
       <span class="tc-tone-bad">2 faults</span>
       <span class="tc-perm-dim">3 differences from the rest of the server</span>
-      <span class="tc-perm-dim">across 11 rooms, 4 direct messages not audited</span>
+      <span class="tc-perm-dim">across 11 rooms and spaces</span>
     </div>
     <div class="tc-perm-list">
 
@@ -94,6 +101,7 @@
       </div>
 
     </div>
+  </div>
   </div>
 </div>
 </body></html>

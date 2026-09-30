@@ -3027,15 +3027,24 @@ code {
   border: 1px solid rgba(128, 128, 128, 0.45); background: transparent; color: inherit; cursor: pointer;
 }
 .tc-chrome-btn[data-on='true'] { background: var(--tc-unread, #ff9628); color: #000; border-color: transparent; }
+/* ONE size for every tab (launch-polish L21, operator 2026-09-30: "give it a
+   standard size that doesn't change when you flip between menus"). It was
+   380px for Encryption and 880px for Server permissions, and its height
+   followed whatever the tab held. Now the box is fixed -- the widest tab's
+   width, a set height, both capped by the screen so a phone gets nearly all
+   of it -- and the header and tabs hold still while the body scrolls. */
 .tc-settings {
   position: fixed;
   right: 18px;
   bottom: 18px;
   z-index: 70;
-  width: 380px;
-  max-height: 70vh;
-  overflow-y: auto;
-  padding: 12px 14px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: min(880px, calc(100vw - 36px));
+  height: min(720px, calc(100vh - 36px));
+  height: min(720px, calc(100dvh - 36px));
+  overflow: hidden;
   border: 1px solid var(--tc-line, rgba(255, 255, 255, 0.14));
   border-radius: 10px;
   background: var(--tc-panel, #14171c);
@@ -3048,15 +3057,20 @@ code {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  /* Bled to the dialog's own padding, and sticky: the dialog scrolls and Done
-     was scrolling off the top of it. */
-  position: sticky;
-  top: -12px;
-  z-index: 2;
-  margin: -12px -14px 0;
+  flex: none;
   padding: 10px 14px;
-  background-color: var(--tc-panel, #14171c);
 }
+
+.tc-settings-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 14px 14px;
+}
+/* Prose keeps a readable measure in the wide box; the permissions table and
+   the bulk list use the full width. */
+.tc-settings-body p,
+.tc-settings-body .tc-settings-detail { max-width: 76ch; }
 
 .tc-settings-head {
   margin: 12px 0 6px;
@@ -4088,19 +4102,15 @@ code {
 /* ---------------------------------------------------------------------------
    Server Permissions (ui-depth-v1 U8).
 
-   The settings dialog is a 380px card in the corner. This panel is a table of
-   the whole account -- every space, every room, every setting, everyone holding
-   power -- so the dialog widens for it and narrows again when it is closed. One
-   rule, one attribute, no second dialog.
+   A table of the whole account -- every space, every room, every setting,
+   everyone holding power -- inside the settings dialog, whose one fixed size
+   is set by what this tab needs (.tc-settings above).
    --------------------------------------------------------------------------- */
-.tc-settings[data-wide='true'] {
-  width: min(880px, calc(100vw - 36px));
-  max-height: min(84vh, 900px);
-}
 .tc-settings-tabs {
   display: flex;
+  flex: none;
   gap: 4px;
-  margin: 8px 0 4px;
+  margin: 8px 14px 4px;
   border-bottom: 1px solid rgba(128, 128, 128, 0.25);
 }
 .tc-settings-tabs button {
