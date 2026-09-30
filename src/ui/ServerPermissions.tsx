@@ -219,6 +219,7 @@ function RoomRow({
 
       {open && (
         <div className="tc-perm-body">
+          <RoomId roomId={room.roomId} />
           <dl className="tc-perm-settings">
             <Setting label="join" value={room.joinRule} />
             <Setting label="history" value={room.historyVisibility} />
@@ -281,6 +282,36 @@ function RoomRow({
 // TWO grid items -- each blockified into its own cell -- so the labels and the
 // values flowed across the columns independently of each other. A div is legal
 // inside a <dl> and keeps the pair together.
+// The room's id, which Matrix needs wherever a room is named to a machine (a
+// bot's config, an allow-list, a hub grant) and which Technetium showed only
+// as a hover tooltip -- unreachable on a touch screen and uncopyable anywhere.
+// Asked for 2026-09-30, the first time an admin made a room here and then had
+// to wire a bot to it. Selectable text AND a button, because the clipboard API
+// can be refused and a selectable id is the fallback that always works.
+function RoomId({ roomId }: { roomId: string }) {
+  const [state, setState] = useState<'idle' | 'copied' | 'refused'>('idle')
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(roomId)
+      setState('copied')
+    } catch {
+      setState('refused')
+    }
+  }
+  return (
+    <div className="tc-perm-id">
+      <span className="tc-perm-dim">id</span>
+      <code className="tc-perm-idtext">{roomId}</code>
+      <button type="button" className="tc-perm-chip" onClick={() => void copy()}>
+        {state === 'copied' ? 'Copied' : 'Copy'}
+      </button>
+      {state === 'refused' && (
+        <span className="tc-perm-dim">The browser refused the clipboard -- select the id and copy it.</span>
+      )}
+    </div>
+  )
+}
+
 function Setting({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="tc-perm-setting">

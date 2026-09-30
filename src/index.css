@@ -4208,6 +4208,24 @@ code {
 .tc-perm-caret { flex: 0 0 auto; width: 10px; text-align: center; opacity: 0.6; }
 
 .tc-perm-body { padding: 2px 8px 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+.tc-perm-id {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 11px;
+}
+/* One click selects the whole id, so it can be copied by hand when the
+   clipboard API is refused. Breaks only when it must, never mid-word. */
+.tc-perm-idtext {
+  user-select: all;
+  overflow-wrap: anywhere;
+  /* The panel's own scale: a bare <code> here inherits the timeline's code
+     styling, which drew the id at twice the size of every setting below it. */
+  font-size: 12px;
+  padding: 1px 6px;
+  font-family: var(--tc-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+}
 .tc-perm-settings {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
