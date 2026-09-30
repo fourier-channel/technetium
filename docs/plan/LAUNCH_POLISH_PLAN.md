@@ -55,6 +55,12 @@ reading had to be chosen it is stated below.
 | L16 | "Chat panel's scrollbar is too chonky and out of place" -- sleeker, still showing where in the buffer you are | DONE `279e237` |
 | L17 | The browser tab: "matrix-client" and Vite's purple bolt become "Technetium - tc.41chan.net" with 41chan's icon as a placeholder | DONE `279e237` |
 | L18 | Operator, 2026-09-29: on mobile "only chanbooru shows up ... user list, room list, nothing shows"; then the list tabs overlapping into a loop, "Room List has the upper position, user list has the lower position, in both states", "no way out of thread view", and Back going to auth.41chan.net -- "Back should not leave", "Back should function as 'back' does in any other application" | DONE `11c8d33` `419d240` `dcb36f0` |
+| L19 | Operator, 2026-09-30: "a new server permissions menu option to set a given user to a given power level in multiple rooms at a time. it's a pain to go down through each channel just to set global mods" | DONE `65c6b27` |
+| L20 | "bring the entire settings menu into formant compliance" | DONE `043f246` |
+| L21 | "give it a standard size that doesn't change when you flip between menus" | DONE `73b21c6` |
+| L22 | "DMs should not be shown on the server permissions tab. for obvious reasons." | DONE `65c6b27` |
+| L23 | "Standardize Left vs Right click user avatars across the various panels. Left Click -> Perform Chat Action (where appropriate) Right Click -> Profile preview." | DONE `d2ba5c3` |
+| L24 | "Begin work on an actual profile panel, with its button to the left of the settings button under the current user information panel. Profile: Set avatar options. change avatar. mask shape. border/glow effect. occasional animation (like a spin or a flip, or sucked into a black hole. played on adding a line of text to chat, AND a randomized timer, not persisting forever.) Set name font, name color." | BEGUN `9bcd4a8` |
 
 ---
 
@@ -135,6 +141,52 @@ follow-up lines keep the text column and carry no avatar. The narrow thread
 panel keeps its one-line user line, which is already that shape without a
 gutter. Bubbles and the trailing timestamp are unchanged.
 
+**L19, "a given power level".** The four tiers, or any whole number 0-100
+(the grant a bot needs is 10, not a tier). Rooms the person has not joined
+are offered and labelled: the level waits in the room's power levels and
+applies when they join, which is what a global mod needs. Your own level is
+not set in bulk -- stepping down is the one change nobody below you can
+undo, and doing it everywhere at once is not a thing to reach from a list;
+the one-room row still allows it. A banned person and a room-version-12
+creator are refused, each with its reason. Every write reads the room
+fresh; the preview only decides.
+
+**L19, "menu option".** A second view inside the Server permissions tab
+(two pills: Rooms, Set a level in many rooms), not a fourth Settings tab.
+
+**L20, "formant compliance".** Every colour, line, radius and face a formant
+NAME; every control the house pill or the formant field; the two modals
+Settings opens (create a room, pick a person) share one look. Held by a
+check that walks every rule naming a piece of Settings.
+
+**L21, "a standard size".** One box for every tab, the widest tab's width
+(880px, capped by the screen) and a fixed height (720px, capped); header
+and tabs hold still, one body scrolls.
+
+**L22, "DMs".** Not listed, not audited, not counted: one filter feeds the
+list and the summary.
+
+**L23, "Chat Action".** The existing chat actions menu (slap, poke, hug,
+wave...). Left click opens it wherever it applies; where it does not, left
+click opens the profile preview too, so a person is never a dead click.
+Right click is the preview everywhere. The room list's DM faces keep their
+own left (open the conversation) and right (the conversation's menu, the
+only home of close, mute and favourite): they stand for a conversation, not
+a person. Pickers keep their pick; domain mode keeps its own grammar.
+
+**L24, "an actual profile panel".** A sibling of the Settings box, opened by
+a Profile pill left of Settings (the four pills sit two by two under 300px).
+Picture and display name are the standard profile and save as they are made;
+the LOOK is a draft with a live preview, Undo, Discard and Save. The look is
+one custom profile field (MSC4133), which the homeserver advertises as
+stable (measured 2026-09-30), so everyone sees it with no server change; a
+server without it makes Save refuse rather than save where nobody sees.
+Colours are seven NAMES from formant's palette, faces the app's own three
+plus the system serif. "A randomized timer, not persisting forever": the
+avatar plays when a line is just said, then up to twice more at gaps seeded
+from the line inside three minutes, then never; seeded so every viewer sees
+the same moments. "Begin work" is taken literally: this is the first cut.
+
 ---
 
 ## Ledger
@@ -154,3 +206,8 @@ One line per landed step, appended as it lands.
 | L12 `d226e73` | The avatar sits beside a run's newest line and travels down to each new one (transform, skipped under reduced motion); the name stays on the first line; earlier lines keep their bubble and lose the arrow. | PENDING OPERATOR VERIFICATION: the travel in the browser. |
 | L13-L17 `279e237` | Header: a bordered card holding the framed avatar and the name to its right, on the room list's 8px gutter; one row of three equal pills sharing the DM pill's line and radius. Room list: only spaces draw the chevron slot, and a level of indent is that slot, so a child's icon sits under its parent's (a room one level down 14px further left; width budget 100 -> 86). Pull tabs 56 x 16 green collapsed, 56 x 20 orange expanded, one "v" rotated; the thread strip's tab lane grew 16 -> 24. Chat log and thread panel: thin trackless scrollbar in formant ink, green under the pointer. Tab title "Technetium - tc.41chan.net", 41chan.png icon. | Seen in tools/visual/sidebar.html (headless Chromium, scrollbars shown). PENDING OPERATOR VERIFICATION: the real sidebar against a live account, and the scrollbar in Firefox. |
 | L18 `11c8d33` `419d240` `dcb36f0` | A phone is a one-slot screen: Rooms (left edge, upper) and Members (right edge, lower) bring each list back as the whole screen, each list's Back on the far edge at its own height; a thread filling the screen has a Back on the left edge. Back walks the client's own stack of views (room or booru, thread, phone panel) and stays at the first; a panel put away by its tab is a step back. CLAUDE.md's mobile exclusion deleted in canon. | Layout routes proven (spaceOverflow, spaceFuzz); stack decisions proven (backButton). PENDING OPERATOR VERIFICATION: the tabs and Back on a real phone. |
+| L19 + L22 `65c6b27` | Server permissions: "Set a level in many rooms" -- who, level, rooms, each row saying what would happen and why before anything is written; the run room by room with live progress, rate limits waited out, one failed room never stopping the rest. Every level write (this view, the Rooms rows, the profile card) now reads the room fresh and writes it back with one entry changed: the SDK's setPowerLevel wrote from its cached copy, deleting anything it had not caught up with. A refused level change no longer says "invite". Room-version-12 creators count as a room's admin. DMs are gone from the tab. | Run against a fake server whose state moves between preview and write. PENDING OPERATOR VERIFICATION: a real run, a real rate limit. |
+| L21 `73b21c6` | One 880x720 box (capped by the screen) for every tab; header and tabs fixed, one body scrolls. | Seen: three tabs at real size in tools/visual/settings.html. PENDING OPERATOR VERIFICATION: a phone. |
+| L20 `043f246` | Formant throughout: the box was drawn from two names defined nowhere, rendering a cool #14171c; tones, lines, radii, faces are formant names; 33 browser buttons became the house pill; the create-room dialog and the user picker share one modal look; "cannot be undone" hints are amber, not alarm red. | Checked by a rule walk with five mutations. PENDING OPERATOR VERIFICATION: the running app. |
+| L23 `d2ba5c3` | personGestures is every person's handlers: left, Enter, Space perform the chat action (or preview where none applies); right, the menu key, a long press preview. Timelines register their menu and card per room so the member list and thread panel open the same ones; the thread panel's people answer at all, and its Message opens the DM. | PENDING OPERATOR VERIFICATION: clicks in a browser; iOS fires no context menu on long press. |
+| L24 `9bcd4a8` | The Profile panel and the look (mask, edge, animation, name face and colour) in the profile field net.41chan.look, read by everyone, closed-set validated, cached ten minutes, re-read when a preview opens. AvatarDisc is three layers so an edge follows any mask. O-in6 closed. | Seen: every mask with every edge, the palette, faces, animations frozen mid-run, the panel at 940 and 390px. PENDING OPERATOR VERIFICATION: a save against the live server and a second account seeing it. |
