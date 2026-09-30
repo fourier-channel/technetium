@@ -52,7 +52,7 @@ console.log('== L20 formant throughout')
   //
   // Every rule whose selector names a piece of the dialog, or of the two
   // modals it opens, or of the pill and field it is built from.
-  const SCOPE = /\.tc-(settings|perm|bulk|verify|reset|device|trust|tone|modal|picker|pill|input)\b/
+  const SCOPE = /\.tc-(settings|perm|bulk|verify|reset|device|trust|tone|modal|picker|pill|input|prof)\b/
   const blocks: { sel: string; body: string; line: number }[] = []
   {
     // Flat walk over the stylesheet: nested @media blocks keep their inner
@@ -95,7 +95,9 @@ console.log('== L20 formant throughout')
   // The markup: no control drawn by the browser ("Windows 3.1", operator
   // 2026-09-25), and no colour written into an inline style.
   const FILES = ['src/ui/SettingsDialog.tsx', 'src/ui/ServerPermissions.tsx', 'src/ui/BulkLevels.tsx',
-    'src/ui/CreateRoomDialog.tsx', 'src/ui/UserPicker.tsx', 'src/ui/IncomingVerification.tsx']
+    'src/ui/CreateRoomDialog.tsx', 'src/ui/UserPicker.tsx', 'src/ui/IncomingVerification.tsx',
+    // The Profile panel is the Settings box's sibling (L24) and held to it.
+    'src/ui/ProfilePanel.tsx']
   for (const f of FILES) {
     const src = read(f)
     // A tag ends at a > that is not an arrow's: onChange={(e) => ...} would

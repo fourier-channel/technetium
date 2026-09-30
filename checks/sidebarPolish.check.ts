@@ -20,9 +20,12 @@ console.log('== L13 who you are: avatar framed, name to its right, in a panel; p
 const me = /<div className="tc-me">[\s\S]*?<\/div>\n\s*<\/div>\n/.exec(app)?.[0] ?? ''
 check('the header is found', me.length > 0)
 check('the avatar and the name share one card, avatar first',
-  /className="tc-me-card"/.test(me) && me.indexOf('tc-me-av') < me.indexOf('tc-me-name') && me.indexOf('<AvatarDisc') < me.indexOf('tc-me-name'))
-check('Settings, Layout and Log out are pills, in that order',
-  (me.match(/className="tc-pill"/g) ?? []).length === 3 &&
+  /className="tc-me-card"/.test(me) && me.indexOf('tc-me-av') < me.indexOf('<MeName') && me.indexOf('<AvatarDisc') < me.indexOf('<MeName'))
+// L24 (operator, 2026-09-30): the Profile panel's button "to the left of the
+// settings button under the current user information panel".
+check('Profile, Settings, Layout and Log out are pills, in that order',
+  (me.match(/className="tc-pill"/g) ?? []).length === 4 &&
+  me.indexOf('Profile') < me.indexOf('Settings') &&
   me.indexOf('Settings') < me.indexOf("'Layout'") && me.indexOf("'Layout'") < me.indexOf('Log out'))
 check('the card and the avatar each have a border', /\.tc-me-card \{[^}]*border: 1px solid/.test(css) && /\.tc-me-av \{[^}]*border: 1px solid/.test(css))
 check('the header sits on the room list\'s 8px gutter', /\.tc-me \{[^}]*padding: \d+px 8px/.test(css))

@@ -1,5 +1,7 @@
 import { AvatarDisc } from './AvatarDisc'
 import { personGestures } from './personGesture'
+import { nameAttrs } from '../client/look'
+import { useLook } from './lookContext'
 
 // ---------------------------------------------------------------------------
 // The long rounded pill carrying a person's avatar and display name together.
@@ -31,6 +33,7 @@ export function AvatarPill({
   onLook?: (userId: string, x: number, y: number) => void
 }) {
   const clickable = !!(onAct ?? onLook)
+  const look = useLook(userId)
   return (
     <span
       {...personGestures(userId, onAct, onLook)}
@@ -48,17 +51,10 @@ export function AvatarPill({
       }}
     >
       <AvatarDisc userId={userId} name={name} avatarMxc={avatarMxc} size={22} />
-      <span
-        style={{
-          fontFamily: 'var(--tc-ui-font, inherit)',
-          fontWeight: 600,
-          fontSize: 13,
-          color: 'var(--cpd-color-text-primary)',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
+      {/* A class, not an inline style: the person's chosen face and colour
+          are attribute rules in the stylesheet, and an inline font or colour
+          would outrank them (L24). */}
+      <span className="tc-avpill-name" {...nameAttrs(look)}>
         {name}
       </span>
     </span>

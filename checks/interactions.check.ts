@@ -37,7 +37,6 @@ import {
   DEFAULT_AVATAR_SHAPE,
   clipPathFor,
   isAvatarShape,
-  resolveAvatarShape,
 } from '../src/ui/avatarShape.ts'
 
 let failures = 0
@@ -443,14 +442,8 @@ console.log('\n-- avatar masks --')
   check('an unknown shape still yields a usable path',
     clipPathFor('hexagon' as never) === clipPathFor(DEFAULT_AVATAR_SHAPE))
 
-  // Only your own choice is knowable today. Stated once, so the day a shared
-  // surface exists there is exactly one place to change (O-in6).
-  check('your own avatar takes your shape',
-    resolveAvatarShape('@me:x.net', '@me:x.net', 'keyhole') === 'keyhole')
-  check('everyone else keeps the default',
-    resolveAvatarShape('@you:x.net', '@me:x.net', 'keyhole') === DEFAULT_AVATAR_SHAPE)
-  check('logged out, nobody is special',
-    resolveAvatarShape('@me:x.net', null, 'keyhole') === DEFAULT_AVATAR_SHAPE)
+  // Whose mask applies to whom is now each person's own published look
+  // (L24, O-in6 closed): checks/look.check.ts holds how it is read.
 }
 
 console.log('\n-- the splash: who was standing in the way --')

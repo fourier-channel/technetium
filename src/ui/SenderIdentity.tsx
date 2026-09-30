@@ -1,5 +1,7 @@
 import { displayDecoration, decoratedName } from './displayDecoration'
 import { personGestures } from './personGesture'
+import { nameAttrs } from '../client/look'
+import { useLook } from './lookContext'
 
 // ---------------------------------------------------------------------------
 // The name line of the first message of a run: the decorated name, and the
@@ -30,12 +32,15 @@ export function SenderIdentity({
   onOpenInteractions?: (userId: string, x: number, y: number) => void
 }) {
   const dec = displayDecoration(userId)
+  // Their chosen face and colour (L24).
+  const look = useLook(userId)
   return (
     <div className="tc-ident-row">
       <span className="tc-ident">
         <span
           className="tc-ident-name"
           {...personGestures(userId, onOpenInteractions, onOpenProfile)}
+          {...nameAttrs(look)}
           title={userId}
         >
           {/* Concatenated with no separator of any kind. The whitespace, if

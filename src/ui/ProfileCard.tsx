@@ -1,10 +1,11 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { Room } from 'matrix-js-sdk'
-import { AuthedImage } from './AuthedImage'
+import { AvatarDisc } from './AvatarDisc'
+import { nameAttrs } from '../client/look'
+import { useLook, useLookStore } from './lookContext'
 import { presenceLabel, type PresenceState } from '../client/usePresence'
 import {
-  initials,
   maxPower,
   splitUserId,
   standingLabel,
@@ -67,6 +68,14 @@ export function ProfileCard({
   const pl = roomMember ? roomMember.powerLevel : member ? maxPower(member) : 0
   const standing = standingLabel(pl)
   const { uname, server } = splitUserId(userId)
+  const look = useLook(userId)
+  // Opening someone's preview is the moment to be current about them: a
+  // profile field has no push, so their look is re-read now rather than
+  // waiting out the cache (lookStore.ts).
+  const lookStore = useLookStore()
+  useEffect(() => {
+    void lookStore?.refresh(userId)
+  }, [lookStore, userId])
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -105,36 +114,13 @@ export function ProfileCard({
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div
-          style={{
-            width: 56,
-            height: 56,
-            borderRadius: '50%',
-            overflow: 'hidden',
-            display: 'grid',
-            placeItems: 'center',
-            flexShrink: 0,
-            fontSize: 20,
-            fontWeight: 700,
-            color: '#fff',
-            background: 'var(--cpd-color-bg-subtle-primary)',
-          }}
-        >
-          {avatarMxc ? (
-            <AuthedImage
-              mxc={avatarMxc}
-              width={180}
-              fill
-              transparentLoading
-              alt=""
-              fallback={initials(name)}
-            />
-          ) : (
-            initials(name)
-          )}
-        </div>
+        {/* The person's look, through the one avatar renderer: their mask,
+            their edge. This card is the profile preview (L23), so it must be
+            the place a look can be seen in full (L24). */}
+        <AvatarDisc userId={userId} name={name} avatarMxc={avatarMxc} size={56} />
         <div style={{ minWidth: 0 }}>
           <div
+            {...nameAttrs(look)}
             style={{
               fontSize: 16,
               fontWeight: 700,

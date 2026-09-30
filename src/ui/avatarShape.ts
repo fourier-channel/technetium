@@ -1,4 +1,3 @@
-import { useCallback, useSyncExternalStore } from 'react'
 import { reportIgnored } from '../client/report'
 
 // ---------------------------------------------------------------------------
@@ -8,12 +7,10 @@ import { reportIgnored } from '../client/report'
 // disc is drawn at 26px in a member row, 40px in the timeline and larger again
 // in the overlay -- a px path would only be correct at one of them.
 //
-// Local per-user for now, like the chat background and the tag strips (CD-21).
-// See O-in6: making YOUR mask visible to OTHER people needs a shared surface,
-// and Matrix has no widely-supported per-user custom profile field. Rather than
-// invent one, this ships as the half that works, and other people's avatars
-// stay round until that question is answered. Nothing here fakes a state: an
-// unknown user's shape is the default, not a guess.
+// WHOSE MASK APPLIES: the person's own choice, from the look in their profile
+// (client/look.ts, L24), which everyone can read -- so a mask is now seen by
+// everyone, not only by the person who chose it (O-in6, closed 2026-09-30).
+// An unknown or unreadable choice is the default, never a guess.
 // ---------------------------------------------------------------------------
 
 export type AvatarShape = 'circle' | 'square' | 'triangle' | 'torn' | 'keyhole'
@@ -58,57 +55,19 @@ export function clipPathFor(shape: AvatarShape): string {
   return (BY_ID.get(shape) ?? BY_ID.get(DEFAULT_AVATAR_SHAPE))!.clipPath
 }
 
-// Whose mask applies to whose avatar. Only your own choice is knowable today,
-// so everyone else keeps the default -- stated as one pure function rather than
-// scattered as `userId === me` checks through the render tree, so the day a
-// shared surface exists there is exactly one place to change.
-export function resolveAvatarShape(
-  userId: string,
-  selfId: string | null,
-  selfShape: AvatarShape,
-): AvatarShape {
-  return selfId !== null && userId === selfId ? selfShape : DEFAULT_AVATAR_SHAPE
-}
+// --- the old per-browser choice, read once to carry it over ---------------
+//
+// Before L24 the mask was this browser's alone, in localStorage. It is read
+// (never written) so the first time the Profile panel opens, it starts from the
+// shape already chosen here instead of forgetting it; saving publishes it.
+const LEGACY_KEY = 'net.41chan.avatar_shape'
 
-// --- preference store (localStorage, same idiom as the tag strips) ----------
-
-const KEY = 'net.41chan.avatar_shape'
-
-function load(): AvatarShape {
+export function legacyAvatarShape(): AvatarShape | null {
   try {
-    const raw = localStorage.getItem(KEY)
-    return isAvatarShape(raw) ? raw : DEFAULT_AVATAR_SHAPE
+    const raw = localStorage.getItem(LEGACY_KEY)
+    return isAvatarShape(raw) ? raw : null
   } catch (err) {
-    reportIgnored('avatar shape: read', err)
-    return DEFAULT_AVATAR_SHAPE
+    reportIgnored('avatar shape: read the pre-profile choice', err)
+    return null
   }
-}
-
-let current: AvatarShape = load()
-const listeners = new Set<() => void>()
-
-function subscribe(cb: () => void): () => void {
-  listeners.add(cb)
-  return () => listeners.delete(cb)
-}
-
-function snapshot(): AvatarShape {
-  return current
-}
-
-export function useAvatarShape() {
-  const shape = useSyncExternalStore(subscribe, snapshot, snapshot)
-
-  const setShape = useCallback((next: AvatarShape) => {
-    if (!isAvatarShape(next)) return
-    current = next
-    try {
-      localStorage.setItem(KEY, next)
-    } catch (err) {
-      reportIgnored('avatar shape: save', err)
-    }
-    for (const cb of listeners) cb()
-  }, [])
-
-  return { shape, setShape }
 }

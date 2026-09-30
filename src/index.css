@@ -3558,6 +3558,7 @@ code {
   flex-direction: column;
   gap: 5px;
   padding: 6px 8px 7px;
+  container: tc-me / inline-size;
 }
 .tc-me-card {
   display: flex;
@@ -3587,11 +3588,17 @@ code {
   font-weight: 700;
   color: var(--mod-ink);
 }
-/* One row, three equal pills filling the gutter-to-gutter width; at a very
+/* One row, four equal pills filling the gutter-to-gutter width; at a very
    narrow room list a label ellipsizes rather than wrapping the header. */
 .tc-me-actions {
   display: flex;
   gap: 4px;
+}
+/* Four pills since the Profile pill (L24) do not fit one row at the width the
+   room list opens at on a laptop (18% of the window: about 250px), and a
+   header of "PRO... SETT..." is no header. Under 300px they sit two by two. */
+@container tc-me (max-width: 300px) {
+  .tc-me-actions { display: grid; grid-template-columns: 1fr 1fr; }
 }
 .tc-me-actions > .tc-pill {
   flex: 1 1 0;
@@ -4401,13 +4408,17 @@ code {
 /* The count and the button stay in view however long the list is. */
 .tc-bulk-foot {
   position: sticky;
-  bottom: 0;
+  /* Flush with the dialog's bottom edge: the body pads its bottom by 14px, and
+     a footer stuck at 0 left that strip for the list to scroll through under
+     it. */
+  bottom: -14px;
+  margin-bottom: -14px;
   z-index: 1;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 8px 6px;
+  padding: 8px 6px 22px;
   border-top: 1px solid var(--mod-line-strong);
   background: var(--mod-surface);
   font-size: 12px;
@@ -4566,3 +4577,251 @@ select.tc-input { padding-right: 4px; }
 }
 .tc-member-scale input[type='range'] { flex: 1; min-width: 0; }
 .tc-member-scale-val { font-variant-numeric: tabular-nums; min-width: 3em; text-align: right; }
+
+/* ---------------------------------------------------------------------------
+   A person's look (launch-polish L24): the avatar's mask, edge and animation,
+   and the name's face and colour -- chosen in the Profile panel, published in
+   the person's own profile, drawn everywhere they are (client/look.ts).
+   --------------------------------------------------------------------------- */
+:root {
+  /* The palette a person picks from, by NAME: formant's own hues, borrowed
+     for a choice rather than for their meaning. One list, so a name colour
+     and an edge colour are the same seven, and every one reads on the formant
+     surface. */
+  --tc-look-green: var(--mod-accent);
+  --tc-look-orange: var(--mod-active-fg);
+  --tc-look-amber: var(--mod-warn-fg);
+  --tc-look-rose: var(--mod-tag-artist-fg);
+  --tc-look-violet: var(--mod-tag-copyright-fg);
+  --tc-look-gold: var(--mod-tag-meta-fg);
+  --tc-look-white: var(--mod-tag-ink);
+}
+.tc-av {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+.tc-av-body {
+  display: grid;
+  place-items: center;
+  --tc-av-edge: var(--tc-look-green);
+}
+.tc-av-face {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  font-weight: 700;
+  color: var(--mod-ink);
+}
+.tc-av-body[data-ring-color='orange'] { --tc-av-edge: var(--tc-look-orange); }
+.tc-av-body[data-ring-color='amber'] { --tc-av-edge: var(--tc-look-amber); }
+.tc-av-body[data-ring-color='rose'] { --tc-av-edge: var(--tc-look-rose); }
+.tc-av-body[data-ring-color='violet'] { --tc-av-edge: var(--tc-look-violet); }
+.tc-av-body[data-ring-color='gold'] { --tc-av-edge: var(--tc-look-gold); }
+.tc-av-body[data-ring-color='white'] { --tc-av-edge: var(--tc-look-white); }
+/* The edge follows the MASK, not a circle: drop-shadows on the parent of the
+   clipped face trace whatever shape the clip left. Four 1px offsets make the
+   line; blur makes the glow. Static -- nothing here animates. */
+.tc-av-body[data-ring='line'] {
+  filter: drop-shadow(1px 0 0 var(--tc-av-edge)) drop-shadow(-1px 0 0 var(--tc-av-edge))
+    drop-shadow(0 1px 0 var(--tc-av-edge)) drop-shadow(0 -1px 0 var(--tc-av-edge));
+}
+.tc-av-body[data-ring='glow'] {
+  filter: drop-shadow(0 0 2px var(--tc-av-edge)) drop-shadow(0 0 4px var(--tc-av-edge));
+}
+.tc-av-body[data-ring='both'] {
+  filter: drop-shadow(1px 0 0 var(--tc-av-edge)) drop-shadow(-1px 0 0 var(--tc-av-edge))
+    drop-shadow(0 1px 0 var(--tc-av-edge)) drop-shadow(0 -1px 0 var(--tc-av-edge))
+    drop-shadow(0 0 4px var(--tc-av-edge));
+}
+/* Each play is ONE run and then it is over: the component ends it on a timer
+   (G-tc06) at ANIM_MS in client/look.ts, which a check holds equal to the
+   durations here. Transform and opacity only. */
+.tc-av[data-anim-play='spin'] > .tc-av-body { animation: tcAvSpin 900ms cubic-bezier(0.45, 0.05, 0.3, 1) 1; }
+.tc-av[data-anim-play='flip'] > .tc-av-body { animation: tcAvFlip 900ms ease-in-out 1; }
+.tc-av[data-anim-play='blackhole'] > .tc-av-body { animation: tcAvHole 1400ms cubic-bezier(0.55, 0, 0.3, 1) 1; }
+/* The black hole itself: a dark well that opens behind the avatar, swallows
+   it, and closes again once it has come back out. */
+.tc-av-hole {
+  position: absolute;
+  inset: -35%;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, var(--mod-page-edge) 0 34%,
+    color-mix(in srgb, var(--tc-look-violet) 55%, transparent) 50%, transparent 70%);
+  animation: tcAvWell 1400ms ease-in-out 1 both;
+}
+@keyframes tcAvSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes tcAvFlip {
+  from { transform: perspective(160px) rotateY(0deg); }
+  to { transform: perspective(160px) rotateY(360deg); }
+}
+@keyframes tcAvHole {
+  0% { transform: scale(1) rotate(0deg); opacity: 1; }
+  42% { transform: scale(0.06) rotate(620deg); opacity: 0.2; }
+  58% { transform: scale(0.06) rotate(760deg); opacity: 0; }
+  100% { transform: scale(1) rotate(1080deg); opacity: 1; }
+}
+@keyframes tcAvWell {
+  0% { transform: scale(0) rotate(0deg); opacity: 0; }
+  30% { transform: scale(1) rotate(-180deg); opacity: 1; }
+  70% { transform: scale(1) rotate(-400deg); opacity: 1; }
+  100% { transform: scale(0) rotate(-560deg); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tc-av > .tc-av-body { animation: none; }
+  .tc-av-hole { display: none; }
+}
+/* The membership pill's name: its own face and ink, BEFORE the look rules
+   below so a chosen face or colour wins over them. */
+.tc-avpill-name {
+  font-family: var(--tc-ui-font);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--mod-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A name's face and colour. Only faces the app ships (look.ts says why);
+   serif is the system's. An absent member's dimmed name still dims -- the
+   userline's absent rule is more specific than these. */
+[data-name-font='grotesk'] { font-family: 'Space Grotesk', var(--tc-ui-font); }
+[data-name-font='inter'] { font-family: 'Inter', var(--tc-ui-font); }
+[data-name-font='mono'] { font-family: 'Inconsolata', var(--mod-mono); }
+[data-name-font='serif'] { font-family: Georgia, 'Times New Roman', serif; }
+[data-name-color='green'] { color: var(--tc-look-green); }
+[data-name-color='orange'] { color: var(--tc-look-orange); }
+[data-name-color='amber'] { color: var(--tc-look-amber); }
+[data-name-color='rose'] { color: var(--tc-look-rose); }
+[data-name-color='violet'] { color: var(--tc-look-violet); }
+[data-name-color='gold'] { color: var(--tc-look-gold); }
+[data-name-color='white'] { color: var(--tc-look-white); }
+
+/* ---------------------------------------------------------------------------
+   The Profile panel (launch-polish L24): the Settings box (.tc-settings), with
+   the controls on the left and a live preview of the draft on the right. On a
+   phone the preview goes first. Formant throughout.
+   --------------------------------------------------------------------------- */
+.tc-prof-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 8px 24px;
+  align-items: start;
+}
+.tc-prof-controls { min-width: 0; }
+.tc-prof-field {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 10px 0 0;
+}
+.tc-prof-label {
+  flex: 0 0 104px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mod-ink-faint);
+}
+.tc-prof-choices { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.tc-prof-choices .tc-input { width: 220px; max-width: 100%; }
+.tc-prof-file { display: none; }
+/* A shape is a swatch, not a word: the swatch IS the shape. */
+.tc-prof-swatch {
+  width: 30px;
+  height: 30px;
+  padding: 3px;
+  border: 1px solid var(--mod-line-strong);
+  border-radius: var(--mod-radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+.tc-prof-swatch > span { display: block; width: 100%; height: 100%; background: var(--mod-ink-dim); }
+.tc-prof-swatch[aria-checked='true'] { border-color: var(--mod-accent); }
+.tc-prof-swatch[aria-checked='true'] > span { background: var(--mod-accent); }
+.tc-prof-swatch:focus-visible,
+.tc-prof-color:focus-visible { outline: 1px solid var(--mod-accent); outline-offset: 1px; }
+.tc-prof-font { text-transform: none; letter-spacing: 0; font-size: 12px; }
+.tc-prof-color {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid var(--mod-surface);
+  border-radius: var(--mod-pill-radius);
+  box-shadow: 0 0 0 1px var(--mod-line-strong);
+  background: var(--tc-look-green);
+  cursor: pointer;
+}
+.tc-prof-color[data-color='orange'] { background: var(--tc-look-orange); }
+.tc-prof-color[data-color='amber'] { background: var(--tc-look-amber); }
+.tc-prof-color[data-color='rose'] { background: var(--tc-look-rose); }
+.tc-prof-color[data-color='violet'] { background: var(--tc-look-violet); }
+.tc-prof-color[data-color='gold'] { background: var(--tc-look-gold); }
+.tc-prof-color[data-color='white'] { background: var(--tc-look-white); }
+.tc-prof-color[aria-checked='true'] { box-shadow: 0 0 0 2px var(--mod-ink); }
+.tc-prof-color:disabled { opacity: 0.35; cursor: default; }
+
+.tc-prof-preview {
+  position: sticky;
+  top: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--mod-line);
+  border-radius: var(--mod-radius);
+  background: var(--mod-surface-2);
+}
+.tc-prof-preview > .tc-prof-label { flex: none; }
+/* The face and ink are set on the hero, not on the name, so a chosen face or
+   colour on the name (an attribute rule earlier in this file) is not outranked
+   by a later class. */
+.tc-prof-hero { display: grid; justify-items: center; gap: 4px; width: 100%; padding: 6px 0; font-family: var(--tc-ui-font); color: var(--mod-ink); }
+.tc-prof-hero-name { font-size: 16px; font-weight: 700; }
+.tc-prof-hero-id { font-family: var(--mod-mono); font-size: 11px; color: var(--mod-ink-dim); }
+.tc-prof-sample {
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  border-radius: var(--mod-radius-sm);
+  background: var(--mod-surface);
+}
+.tc-prof-sample-col { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tc-prof-sample-name { cursor: default; }
+.tc-prof-bubble {
+  align-self: flex-start;
+  padding: 6px 10px;
+  border-radius: var(--mod-radius);
+  background: var(--mod-surface-3);
+  color: var(--mod-ink);
+  font-size: 13px;
+}
+.tc-prof-foot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--mod-line-strong);
+  background: var(--mod-surface);
+  font-size: 12px;
+}
+.tc-prof-foot-say { flex: 1 1 240px; min-width: 0; }
+@media (max-width: 720px) {
+  .tc-prof-grid { grid-template-columns: minmax(0, 1fr); }
+  .tc-prof-preview { position: static; order: -1; }
+  .tc-prof-label { flex-basis: 100%; }
+}

@@ -59,6 +59,8 @@ import { InteractionTargetContext, useInteractionTarget } from './interactionTar
 import { useBubbleFx } from './useBubbleFx'
 import { BubbleFx } from './BubbleFx'
 import { useReducedMotion } from './reducedMotion'
+import { useLook } from './lookContext'
+import { ANIM_MS, playsAhead, type LookAnim } from '../client/look'
 import { useRoomListSettings } from './roomListSettings'
 
 // How many pages of history a click-to-jump will paginate before giving up.
@@ -613,6 +615,28 @@ export function Row({
     })
   }, [speaks, item.id, item.runHead, narrow, reducedMotion])
 
+  // The speaker's own animation, if they chose one (L24): on a line just said,
+  // then at the seeded moments after it (look.ts playsAhead), then never again
+  // -- "not persisting forever". Each play is started and ended by a timer
+  // (G-tc06). Nothing plays in a hidden tab, under reduced motion, or with
+  // animations switched off.
+  const senderLook = useLook(senderId)
+  const [playing, setPlaying] = useState<LookAnim | null>(null)
+  useEffect(() => {
+    const anim = senderLook.anim
+    if (!speaks || narrow || anim === 'none' || reducedMotion || !animationsEnabled) return
+    const timers: ReturnType<typeof setTimeout>[] = []
+    const play = () => {
+      if (document.visibilityState !== 'visible') return
+      setPlaying(anim)
+      timers.push(setTimeout(() => setPlaying(null), ANIM_MS[anim]))
+    }
+    for (const delay of playsAhead(item.id, Date.now() - event.getTs())) timers.push(setTimeout(play, delay))
+    return () => {
+      for (const t of timers) clearTimeout(t)
+    }
+  }, [speaks, narrow, senderLook.anim, reducedMotion, animationsEnabled, item.id, event])
+
   let body: React.ReactNode
   if (kind === 'gallery' && cells) {
     body = <GalleryBody cells={cells} layout={layout ?? 'grid'} thread={thread} />
@@ -810,7 +834,7 @@ export function Row({
             title={speaks ? senderName : undefined}
             {...(speaks ? personGestures(senderId, openInteractions, openProfile) : {})}
           >
-            {speaks && <AvatarDisc userId={senderId} name={senderName} avatarMxc={senderAvatar} size={34} />}
+            {speaks && <AvatarDisc userId={senderId} name={senderName} avatarMxc={senderAvatar} size={34} playing={playing} />}
             {face && <FaceFlash face={face} seed={item.id} />}
           </span>
           )}

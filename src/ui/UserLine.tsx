@@ -1,4 +1,6 @@
 import { AvatarDisc } from './AvatarDisc'
+import { nameAttrs } from '../client/look'
+import { useLook } from './lookContext'
 import { avatarPx, type UserLineSize } from './userLineSize'
 import type { PresenceState } from '../client/usePresence'
 import '../userline.css'
@@ -81,6 +83,9 @@ export function UserLine({
   title,
 }: UserLineProps) {
   const px = avatarPx(size, scale)
+  // Their chosen face and colour for the name (L24); the absent dimming still
+  // wins, from userline.css.
+  const look = useLook(userId)
   // Derived from the avatar rather than set independently: that is what makes
   // one scale slider move all four slots instead of the face alone.
   const nameSize = Math.round(px * 0.6 * 10) / 10
@@ -122,7 +127,7 @@ export function UserLine({
           <AvatarDisc userId={userId} name={name} avatarMxc={avatarMxc} size={px} />
         </span>
       )}
-      <span className="tc-userline-name" style={{ fontSize: nameSize }}>
+      <span className="tc-userline-name" {...nameAttrs(look)} style={{ fontSize: nameSize }}>
         {name}
       </span>
       {children}

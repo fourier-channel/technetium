@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Room } from 'matrix-js-sdk'
 import { useClient } from './client/clientContextValue'
 import { Sidebar } from './ui/Sidebar'
@@ -23,6 +23,13 @@ import { useSpace } from './ui/spaceContext'
 import { openLeaves } from './ui/space'
 import { ThreadPanel } from './ui/ThreadPanel'
 import { PersonRouterContext, createPersonRouter } from './ui/personRouter'
+import { PersonCard, type PersonCardTarget } from './ui/PersonCard'
+import { personGestures } from './ui/personGesture'
+import { ProfilePanel } from './ui/ProfilePanel'
+import { ProfilePanelContext } from './ui/profilePanelContext'
+import { LookStoreContext, useLook } from './ui/lookContext'
+import { createLookStore, lookIO } from './client/lookStore'
+import { nameAttrs } from './client/look'
 import { ThreadList } from './ui/ThreadList'
 import { useReveal } from './ui/useReveal'
 import { TTD_DEFAULT } from './client/useDomainMedia'
@@ -135,6 +142,21 @@ function App() {
   // threadStrip.ts for the dead space a share left around the cards.
   const threadStripH = threadStripCss()
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // The Profile panel (L24): Settings' sibling, never open at the same time.
+  const [profileOpen, setProfileOpen] = useState(false)
+  const openProfile = () => {
+    setSettingsOpen(false)
+    setProfileOpen(true)
+  }
+  const openSettings = () => {
+    setProfileOpen(false)
+    setSettingsOpen(true)
+  }
+  // Your own profile preview, from a right click (or a left one -- there is no
+  // chat action to perform on yourself) on your own card (L23).
+  const [meCard, setMeCard] = useState<PersonCardTarget | null>(null)
+  // Everyone's look, read from their profiles, one store per client (L24).
+  const lookStore = useMemo(() => (client ? createLookStore(lookIO(client), client.getUserId()) : null), [client])
   // Which timeline hosts each room's chat actions and profile preview, so the
   // member list and the thread panel open the same ones (L23).
   const [personRouter] = useState(createPersonRouter)
@@ -267,6 +289,8 @@ function App() {
   // status === 'ready' or 'syncing' (with client) -- three-pane layout.
   return (
     <PersonRouterContext.Provider value={personRouter}>
+    <LookStoreContext.Provider value={lookStore}>
+    <ProfilePanelContext.Provider value={openProfile}>
     <LightboxProvider>
     <RoomListSettingsProvider>
     {booting && (
@@ -302,7 +326,11 @@ function App() {
           // its Direct Messages pill sit on -- and the panel pads its content
           // by the minimum, so nothing floats in its container.
           <div className="tc-me">
-            <div className="tc-me-card" title={userId ?? undefined}>
+            <div
+              className="tc-me-card"
+              title={userId ?? undefined}
+              {...personGestures(userId ?? '', undefined, (u, x, y) => setMeCard({ userId: u, x, y }))}
+            >
               <span className="tc-me-av">
                 <AvatarDisc
                   userId={userId ?? ''}
@@ -311,12 +339,13 @@ function App() {
                   size={30}
                 />
               </span>
-              {/* Ellipsizes rather than wrapping: the name must fit the width
-                  most people leave the room list at. */}
-              <span className="tc-me-name">{userId}</span>
+              <MeName userId={userId ?? ''} />
             </div>
             <div className="tc-me-actions">
-              <button type="button" className="tc-pill" onClick={() => setSettingsOpen(true)} title="Settings">
+              <button type="button" className="tc-pill" aria-pressed={profileOpen} onClick={openProfile} title="Your picture, name and look">
+                Profile
+              </button>
+              <button type="button" className="tc-pill" onClick={openSettings} title="Settings">
                 Settings
               </button>
               <button
@@ -563,13 +592,34 @@ function App() {
     </div>
     <LayoutEditor />
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+      {profileOpen && <ProfilePanel onClose={() => setProfileOpen(false)} />}
+      {meCard && client && (
+        <PersonCard
+          client={client}
+          target={meCard}
+          room={selectedRoom}
+          onOpenRoom={openRoomById}
+          onClose={() => setMeCard(null)}
+        />
+      )}
       {/* Global: a verification request arrives when the OTHER device sends
           it, not when a panel happens to be open. */}
       <IncomingVerification />
     </RoomListSettingsProvider>
     </LightboxProvider>
+    </ProfilePanelContext.Provider>
+    </LookStoreContext.Provider>
     </PersonRouterContext.Provider>
   )
+}
+
+// Your own name on your card, in your own look (L24). Its own component so a
+// look arriving redraws this line and not the whole shell.
+function MeName({ userId }: { userId: string }) {
+  const look = useLook(userId)
+  // Ellipsizes rather than wrapping: the name must fit the width most people
+  // leave the room list at.
+  return <span className="tc-me-name" {...nameAttrs(look)}>{userId}</span>
 }
 
 // The domain's handle: a tab riding the chatbox's right edge, wearing the

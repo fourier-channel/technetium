@@ -1,11 +1,10 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import type { MatrixClient, Room } from 'matrix-js-sdk'
 import { canIgnore, isIgnored, setIgnored } from '../client/ignoredUsers'
 import { startDm } from '../client/dm'
 import { recordDmNotice } from '../client/dmNotice'
-import { clearAvatar, setDisplayName, uploadAndSetAvatar } from '../client/profile'
 import { describeInviteError } from '../client/userDirectory'
-import { AVATAR_SHAPES, useAvatarShape } from './avatarShape'
+import { useProfilePanel } from './profilePanelContext'
 import { describePowerError, powerEdit, requiredToSetPower, type Tier } from '../client/powerLevels'
 import { PowerRefused, powerIO, setUserLevel } from '../client/powerWrite'
 import { roomCreators } from '../client/roomFacts'
@@ -34,7 +33,7 @@ export function ProfileActions({
   return (
     <>
       {isSelf ? (
-        <OwnProfileActions client={client} />
+        <OwnProfileActions onClose={onClose} />
       ) : (
         <OtherProfileActions
           client={client}
@@ -174,103 +173,22 @@ function RoomPowerEditor({
   )
 }
 
-function OwnProfileActions({ client }: { client: MatrixClient }) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [notice, setNotice] = useState<string | null>(null)
-  const fileRef = useRef<HTMLInputElement | null>(null)
-
-  const saveName = async () => {
-    setBusy(true)
-    setNotice(null)
-    try {
-      await setDisplayName(client, draft)
-      setEditing(false)
-      setNotice('Display name updated.')
-    } catch (err) {
-      setNotice(describeInviteError(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const pickAvatar = async (file: File) => {
-    setBusy(true)
-    setNotice(null)
-    try {
-      // D-bf01: chrome media goes to the HOMESERVER, not the content gateway.
-      await uploadAndSetAvatar(client, file)
-      setNotice('Avatar updated.')
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : describeInviteError(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-
+// Your own card offers one thing: the Profile panel, which is where your
+// picture, name and look are edited (L24). The name, picture and mask editors
+// that used to live here moved there whole -- two editors for one profile is
+// how they come to disagree (D-tc01).
+function OwnProfileActions({ onClose }: { onClose: () => void }) {
+  const openPanel = useProfilePanel()
   return (
-    <>
-      {editing ? (
-        <div style={{ display: 'flex', gap: 4 }}>
-          <input
-            type="text"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void saveName()
-              if (e.key === 'Escape') setEditing(false)
-            }}
-            aria-label="Display name"
-            autoFocus
-            style={{
-              flex: 1,
-              minWidth: 0,
-              fontSize: 12,
-              padding: '4px 7px',
-              borderRadius: 6,
-              border: '1px solid rgba(128,128,128,0.35)',
-              background: 'transparent',
-              color: 'inherit',
-            }}
-          />
-          <ActionBtn onClick={() => void saveName()} disabled={busy}>
-            Save
-          </ActionBtn>
-        </div>
-      ) : (
-        <ActionBtn
-          onClick={() => {
-            setDraft(client.getUser(client.getUserId() ?? '')?.displayName ?? '')
-            setEditing(true)
-          }}
-          disabled={busy}
-        >
-          Change display name
-        </ActionBtn>
-      )}
-
-      <ActionBtn onClick={() => fileRef.current?.click()} disabled={busy}>
-        {busy ? 'Working...' : 'Change avatar'}
-      </ActionBtn>
-      <ActionBtn onClick={() => void clearAvatar(client)} disabled={busy}>
-        Remove avatar
-      </ActionBtn>
-      <AvatarShapePicker />
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        style={{ display: 'none' }}
-        onChange={(e) => {
-          const file = e.target.files?.[0]
-          e.target.value = ''
-          if (file) void pickAvatar(file)
-        }}
-      />
-
-      {notice && <Notice>{notice}</Notice>}
-    </>
+    <ActionBtn
+      onClick={() => {
+        onClose()
+        openPanel?.()
+      }}
+      disabled={!openPanel}
+    >
+      Edit your profile
+    </ActionBtn>
   )
 }
 
@@ -446,63 +364,6 @@ function Notice({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
-    </div>
-  )
-}
-
-// The avatar's mask. Swatches rather than a dropdown: a keyhole and a torn hole
-// are not things a word describes usefully, and the swatch IS the shape.
-//
-// Local-only today (O-in6) and the row says so rather than implying that other
-// people can see it -- a customisation that silently only exists on your own
-// screen is worse than one that admits it.
-function AvatarShapePicker() {
-  const { shape, setShape } = useAvatarShape()
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 2 }}>
-      <div style={{ fontSize: 11, color: 'var(--cpd-color-text-secondary)' }}>
-        Avatar shape (only you see this for now)
-      </div>
-      <div role="radiogroup" aria-label="Avatar shape" style={{ display: 'flex', gap: 6 }}>
-        {AVATAR_SHAPES.map((s) => {
-          const selected = s.id === shape
-          return (
-            <button
-              key={s.id}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              title={s.label}
-              aria-label={s.label}
-              onClick={() => setShape(s.id)}
-              style={{
-                width: 30,
-                height: 30,
-                padding: 2,
-                borderRadius: 6,
-                border: selected
-                  ? '1px solid var(--tc-link)'
-                  : '1px solid rgba(128,128,128,0.28)',
-                background: 'transparent',
-                cursor: 'pointer',
-              }}
-            >
-              <span
-                aria-hidden="true"
-                style={{
-                  display: 'block',
-                  width: '100%',
-                  height: '100%',
-                  clipPath: s.clipPath,
-                  background: selected
-                    ? 'var(--tc-link)'
-                    : 'var(--cpd-color-text-secondary, #a8b0bd)',
-                }}
-              />
-            </button>
-          )
-        })}
-      </div>
     </div>
   )
 }
