@@ -143,6 +143,26 @@ code {
 .tc-message-html a:hover {
   text-decoration: underline;
 }
+/* A mention: a PERSON, not an address (L25). It opens their profile preview
+   rather than following the link, so it is drawn as a name -- the chat's own
+   green on a faint wash of it -- and never underlined like a web link. The
+   selectors are the two shapes messageLinks.ts reads as a person. */
+.tc-message-html a[href^='https://matrix.to/#/@'],
+.tc-message-html a[href^='https://matrix.to/#/%40'],
+.tc-message-html a[href^='matrix:u/'] {
+  padding: 0 3px;
+  border-radius: var(--mod-radius-sm);
+  background: color-mix(in srgb, var(--mod-accent) 14%, transparent);
+  color: var(--mod-accent);
+  font-weight: 600;
+  cursor: pointer;
+}
+.tc-message-html a[href^='https://matrix.to/#/@']:hover,
+.tc-message-html a[href^='https://matrix.to/#/%40']:hover,
+.tc-message-html a[href^='matrix:u/']:hover {
+  text-decoration: none;
+  background: color-mix(in srgb, var(--mod-accent) 26%, transparent);
+}
 
 .tc-message-html {
   white-space: pre-wrap;

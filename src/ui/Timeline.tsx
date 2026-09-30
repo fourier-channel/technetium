@@ -60,6 +60,7 @@ import { useBubbleFx } from './useBubbleFx'
 import { BubbleFx } from './BubbleFx'
 import { useReducedMotion } from './reducedMotion'
 import { useLook } from './lookContext'
+import { onMessageLinkClick, onMessageLinkContextMenu } from './messageLinks'
 import { ANIM_MS, playsAhead, type LookAnim } from '../client/look'
 import { useRoomListSettings } from './roomListSettings'
 
@@ -705,7 +706,14 @@ export function Row({
         // from the event target (W2.L2).
         <span
           className="tc-message-html"
-          onClick={onSpoilerClick}
+          onClick={(e) => {
+            onSpoilerClick(e)
+            // A mention opens the person's preview; any other link a new tab
+            // (L25, messageLinks.ts). After the spoiler, so a hidden link is
+            // revealed by the first click rather than followed.
+            onMessageLinkClick(e, openProfile)
+          }}
+          onContextMenu={(e) => onMessageLinkContextMenu(e, openProfile)}
           onKeyDown={onSpoilerKey}
           dangerouslySetInnerHTML={{ __html: rendered.html }}
         />
@@ -1027,6 +1035,7 @@ const GALLERY_GAP = 3
 function GalleryBody({ cells, layout, thread }: { cells: (MatrixEvent | null)[]; layout: GalleryLayout; thread?: LightboxThread }) {
   const n = cells.length
   const { open } = useLightbox()
+  const openProfile = useProfileOpener()
   // Present (non-null, valid) images in cell order, plus a map from cell index
   // to its position in that list, so clicking a cell opens the lightbox at the
   // right spot and prev/next steps through the batch's real images only.
@@ -1108,7 +1117,12 @@ function GalleryBody({ cells, layout, thread }: { cells: (MatrixEvent | null)[];
       {caption && (
         <div style={{ fontSize: 14, wordBreak: 'break-word', marginTop: 4 }}>
           {caption.html !== undefined ? (
-            <span className="tc-message-html" dangerouslySetInnerHTML={{ __html: caption.html }} />
+            <span
+              className="tc-message-html"
+              onClick={(e) => onMessageLinkClick(e, openProfile)}
+              onContextMenu={(e) => onMessageLinkContextMenu(e, openProfile)}
+              dangerouslySetInnerHTML={{ __html: caption.html }}
+            />
           ) : (
             <span style={{ whiteSpace: 'pre-wrap' }}>{linkify(caption.text ?? '')}</span>
           )}
