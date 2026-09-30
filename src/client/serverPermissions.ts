@@ -40,9 +40,10 @@ export interface RoomFacts {
   roomId: string
   name: string
   isSpace: boolean
-  // True when this room is a direct message. DMs are excluded from the audit
-  // entirely: a two-person room where both sides are at 100 is not a room with
-  // a broken power structure, it is a DM.
+  // True when this room is a direct message. DMs are left out of the panel
+  // entirely -- not listed, not audited (serverRooms below). They are not the
+  // server's rooms, and a two-person room where both sides are at 100 is not a
+  // broken power structure, it is a DM.
   isDm: boolean
   // Ids of the spaces this room is a child of. Empty for an orphan.
   parentIds: string[]
@@ -61,6 +62,10 @@ export interface RoomFacts {
   // What the room requires to send m.room.power_levels.
   powerLevelsRequired: number
   users: RoomUser[]
+  // Room version 12 onward: whoever created the room holds unlimited power
+  // and is never listed in `users` (powerLevels.hydraCreators). Empty for
+  // older versions.
+  creators: string[]
 }
 
 export type FindingKind = 'hard' | 'outlier'
@@ -130,8 +135,9 @@ function hardFindings(room: RoomFacts): Finding[] {
 
   // A room nobody can administer. Not a style question: the power-levels event
   // is the only way back from any other mistake in this list, and without
-  // somebody able to send it there is no way back at all.
-  if (!room.users.some((u) => u.level >= 100)) {
+  // somebody able to send it there is no way back at all. A creator in room
+  // version 12 onward is that somebody, with no entry in `users` to show it.
+  if (room.creators.length === 0 && !room.users.some((u) => u.level >= 100)) {
     const top = room.users.reduce((m, u) => Math.max(m, u.level), 0)
     f(
       'no-admin',
@@ -272,12 +278,18 @@ export interface Audit {
   // clean bill of health, which is rule 8 of the doctrine exactly.
   consensusSkipped: boolean
   auditedRooms: number
-  // DMs, counted and excluded. Named so the total is explicable.
-  skippedDms: number
+}
+
+// DMs are not the server's rooms and this panel does not show them (operator,
+// 2026-09-30: "DMs should not be shown on the server permissions tab. for
+// obvious reasons."). One filter, used by the list and the audit alike, so
+// the count the summary gives is the count of rows below it.
+export function serverRooms(rooms: RoomFacts[]): RoomFacts[] {
+  return rooms.filter((r) => !r.isDm)
 }
 
 export function auditRooms(rooms: RoomFacts[]): Audit {
-  const audited = rooms.filter((r) => !r.isDm)
+  const audited = serverRooms(rooms)
   const findings: Finding[] = []
   for (const r of audited) findings.push(...hardFindings(r))
   const spaces = audited.filter((r) => r.isSpace).length
@@ -288,7 +300,6 @@ export function auditRooms(rooms: RoomFacts[]): Audit {
     findings,
     consensusSkipped,
     auditedRooms: audited.length,
-    skippedDms: rooms.length - audited.length,
   }
 }
 
@@ -303,6 +314,7 @@ export function findingsFor(audit: Audit, roomId: string): Finding[] {
 // The server's structure as a list: each space, then its children, then the
 // orphans -- every level alphabetised. A room in two spaces appears under both,
 // because it IS in both and showing it once would make one of the two lie.
+// DMs are left out entirely (serverRooms).
 export interface StructureRow {
   room: RoomFacts
   depth: number
@@ -310,7 +322,8 @@ export interface StructureRow {
   underSpaceId: string | null
 }
 
-export function structure(rooms: RoomFacts[]): StructureRow[] {
+export function structure(all: RoomFacts[]): StructureRow[] {
+  const rooms = serverRooms(all)
   const byId = new Map(rooms.map((r) => [r.roomId, r]))
   const spaces = rooms.filter((r) => r.isSpace).sort(compareRooms)
   const out: StructureRow[] = []

@@ -16,6 +16,7 @@ import {
   compareUsers,
   findingsFor,
   normaliseRange,
+  serverRooms,
   structure,
   usersInRange,
   type RoomFacts,
@@ -50,6 +51,7 @@ function room(over: Partial<RoomFacts> = {}): RoomFacts {
     redact: 50,
     powerLevelsRequired: 50,
     users: [{ userId: '@saber:x.net', level: 100 }],
+    creators: [],
     ...over,
   }
 }
@@ -101,15 +103,35 @@ console.log('\n-- the same fault arriving by a different road --')
     both.includes('power_levels'), both)
 }
 
-console.log('\n-- DMs are not audited --')
+console.log('\n-- DMs are not on this panel at all --')
 {
   // Both sides of a DM are at 100 and its history is shared. That is not a
   // broken power structure, it is a DM, and auditing them would bury every
-  // real finding under one per conversation.
-  const a = auditRooms([room({ isDm: true, users: [], usersDefault: 100 })])
+  // real finding under one per conversation. And since 2026-09-30 they are not
+  // listed either (operator: "DMs should not be shown on the server
+  // permissions tab").
+  const dm = room({ roomId: '!dm:x.net', name: 'kestrel', isDm: true, users: [], usersDefault: 100 })
+  const a = auditRooms([dm])
   check('a DM produces no findings', a.findings.length === 0, a.findings)
-  check('and is counted as skipped, so the total is explicable', a.skippedDms === 1)
   check('and does not count as audited', a.auditedRooms === 0)
+  const rows = structure([room({ roomId: '!g:x.net' }), dm])
+  check('a DM is not a row of the structure', rows.length === 1 && rows.every((r) => !r.room.isDm), rows.map((r) => r.room.roomId))
+  // The summary's count and the list must agree, so both come from one filter.
+  const mixed = [room({ roomId: '!g:x.net' }), dm, room({ roomId: '!h:x.net', name: 'help' })]
+  check('the audit counts exactly the rooms the list shows',
+    auditRooms(mixed).auditedRooms === new Set(structure(mixed).map((r) => r.room.roomId)).size)
+  check('serverRooms is that one filter', serverRooms(mixed).map((r) => r.roomId).join(',') === '!g:x.net,!h:x.net')
+}
+
+console.log('\n-- a creator in room version 12 is the room\'s administrator --')
+{
+  // Hydra rooms (MSC4289) never list their creator in `users`: the creator's
+  // power is unlimited and implicit. Reading `users` alone called every such
+  // room one nobody could administer.
+  const hydra = room({ users: [], creators: ['@saber:x.net'] })
+  check('no "nobody is at 100" fault when a creator exists', !fields(hydra).includes('no-admin'), fields(hydra))
+  const orphaned = room({ users: [{ userId: '@a:x.net', level: 50 }], creators: [] })
+  check('and the fault still stands in an older room with nobody at 100', fields(orphaned).includes('no-admin'))
 }
 
 console.log('\n-- outliers need a consensus to be outliers from --')

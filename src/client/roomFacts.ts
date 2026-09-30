@@ -1,5 +1,5 @@
 import type { MatrixClient, Room } from 'matrix-js-sdk'
-import { requiredToSetPower } from './powerLevels'
+import { hydraCreators, requiredToSetPower } from './powerLevels'
 import { isDirect } from './roomClass'
 import type { RoomFacts, RoomUser } from './serverPermissions'
 
@@ -48,6 +48,15 @@ function parentsOf(client: MatrixClient, roomId: string): string[] {
   return out
 }
 
+// Who created this room, where that makes them all-powerful (room version 12
+// onward). The create event is in every room's synced state (slidingSync's
+// required_state lists it), and an absent one reads as a pre-hydra room.
+export function roomCreators(room: Room): string[] {
+  const create = room.currentState.getStateEvents('m.room.create', '')
+  const content = create?.getContent() as Record<string, unknown> | undefined
+  return hydraCreators(content?.room_version, create?.getSender(), content)
+}
+
 export function readRoomFacts(client: MatrixClient): RoomFacts[] {
   const rooms = client.getRooms().filter((r) => r.getMyMembership() === 'join')
   return rooms.map((room) => {
@@ -81,6 +90,7 @@ export function readRoomFacts(client: MatrixClient): RoomFacts[] {
       redact: num(content.redact, 50),
       powerLevelsRequired: requiredToSetPower(content),
       users,
+      creators: roomCreators(room),
     }
   })
 }

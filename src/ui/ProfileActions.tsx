@@ -6,7 +6,9 @@ import { recordDmNotice } from '../client/dmNotice'
 import { clearAvatar, setDisplayName, uploadAndSetAvatar } from '../client/profile'
 import { describeInviteError } from '../client/userDirectory'
 import { AVATAR_SHAPES, useAvatarShape } from './avatarShape'
-import { powerEdit, requiredToSetPower, type Tier } from '../client/powerLevels'
+import { describePowerError, powerEdit, requiredToSetPower, type Tier } from '../client/powerLevels'
+import { PowerRefused, powerIO, setUserLevel } from '../client/powerWrite'
+import { roomCreators } from '../client/roomFacts'
 import { standingLabel } from '../client/members'
 
 // W4.2/W4.3/W4.4 -- what fills the shared ProfileCard's `actions` slot.
@@ -90,13 +92,20 @@ function RoomPowerEditor({
     setBusy(true)
     setNotice(null)
     try {
-      await client.setPowerLevel(room.roomId, userId, level)
+      await setUserLevel(
+        powerIO(client),
+        { roomId: room.roomId, isSpace: room.isSpaceRoom(), creators: roomCreators(room) },
+        myId,
+        userId,
+        level,
+      )
       setNotice(`Set to ${standingLabel(level)} (${level}).`)
       setConfirm(null)
     } catch (err) {
-      // The server's own words. A 403 here means the room disagreed with what
-      // we computed, and that disagreement is the interesting part.
-      setNotice(describeInviteError(err))
+      // A refusal found on the fresh read is already worded; anything else is
+      // the server's, in terms of power. A 403 here means the room disagreed
+      // with what we computed, and that disagreement is the interesting part.
+      setNotice(err instanceof PowerRefused ? err.message : describePowerError(err, room.isSpaceRoom()))
     } finally {
       setBusy(false)
     }

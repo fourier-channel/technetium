@@ -11,9 +11,10 @@ import {
   type Finding,
   type RoomFacts,
 } from '../client/serverPermissions'
-import { powerEdit, requiredToSetPower, TIERS } from '../client/powerLevels'
-import { describeInviteError } from '../client/userDirectory'
+import { describePowerError, powerEdit, requiredToSetPower, TIERS } from '../client/powerLevels'
+import { PowerRefused, powerIO, setUserLevel } from '../client/powerWrite'
 import { standingLabel, splitUserId } from '../client/members'
+import { BulkLevels } from './BulkLevels'
 import { CreateRoomDialog } from './CreateRoomDialog'
 
 // ---------------------------------------------------------------------------
@@ -38,6 +39,10 @@ import { CreateRoomDialog } from './CreateRoomDialog'
 // surface an admin reaches and an admin is the only account the homeserver
 // lets create one (room_creation_policy.py, operator ruling 2026-09-07). The
 // panel being admin-only is not what stops anybody else; the server is.
+//
+// And it sets levels: one person in one room from that room's row, or one
+// person in many rooms at once from the second view (BulkLevels, L19).
+// DMs are not shown at all (serverRooms).
 // ---------------------------------------------------------------------------
 
 export function ServerPermissions({ client }: { client: MatrixClient }) {
@@ -48,6 +53,7 @@ export function ServerPermissions({ client }: { client: MatrixClient }) {
   const [notice, setNotice] = useState<string | null>(null)
   const [onlyFindings, setOnlyFindings] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [view, setView] = useState<'rooms' | 'bulk'>('rooms')
 
   // Re-read on demand rather than subscribing to every room's state: this is a
   // settings panel somebody opens to look at, not a live surface, and a
@@ -70,6 +76,19 @@ export function ServerPermissions({ client }: { client: MatrixClient }) {
 
   return (
     <div className="tc-perm">
+      <div className="tc-perm-views" role="group" aria-label="Server permissions view">
+        <button type="button" className="tc-pill" aria-pressed={view === 'rooms'} onClick={() => setView('rooms')}>
+          Rooms
+        </button>
+        <button type="button" className="tc-pill" aria-pressed={view === 'bulk'} onClick={() => setView('bulk')}>
+          Set a level in many rooms
+        </button>
+      </div>
+
+      {view === 'bulk' ? (
+        <BulkLevels client={client} rows={rows} onWritten={() => setReload((n) => n + 1)} />
+      ) : (
+      <>
       <div className="tc-perm-bar">
         <label className="tc-perm-range">
           Power from
@@ -130,8 +149,7 @@ export function ServerPermissions({ client }: { client: MatrixClient }) {
           {outlierCount} difference{outlierCount === 1 ? '' : 's'} from the rest of the server
         </span>
         <span className="tc-perm-dim">
-          across {audit.auditedRooms} room{audit.auditedRooms === 1 ? '' : 's'}
-          {audit.skippedDms > 0 ? `, ${audit.skippedDms} direct message${audit.skippedDms === 1 ? '' : 's'} not audited` : ''}
+          across {audit.auditedRooms} room{audit.auditedRooms === 1 ? '' : 's'} and space{audit.auditedRooms === 1 ? '' : 's'}
         </span>
         {audit.consensusSkipped && (
           <span className="tc-tone-warn">
@@ -171,6 +189,8 @@ export function ServerPermissions({ client }: { client: MatrixClient }) {
           />
         ))}
       </div>
+      </>
+      )}
     </div>
   )
 }
@@ -206,7 +226,7 @@ function RoomRow({
         onClick={onToggle}
         aria-expanded={open}
       >
-        <span className="tc-perm-kind">{room.isSpace ? 'SPACE' : room.isDm ? 'DM' : 'ROOM'}</span>
+        <span className="tc-perm-kind">{room.isSpace ? 'SPACE' : 'ROOM'}</span>
         <span className="tc-perm-name" title={room.roomId}>{room.name}</span>
         <span className="tc-perm-dim">{room.memberCount}</span>
         <span className="tc-perm-dim">{holders.length} with power</span>
@@ -220,6 +240,15 @@ function RoomRow({
       {open && (
         <div className="tc-perm-body">
           <RoomId roomId={room.roomId} />
+          {/* Room version 12 onward: a creator holds unlimited power and has no
+              entry in the levels list, so without this line the room's most
+              powerful account would be missing from its own permissions. */}
+          {room.creators.length > 0 && (
+            <div className="tc-perm-dim">
+              Created by {room.creators.map((c) => splitUserId(c).uname).join(', ')}: unlimited power in this
+              room&apos;s version, which no one can change.
+            </div>
+          )}
           <dl className="tc-perm-settings">
             <Setting label="join" value={room.joinRule} />
             <Setting label="history" value={room.historyVisibility} />
@@ -433,10 +462,10 @@ function HolderRow({
   const apply = async (to: number) => {
     setBusy(true)
     try {
-      await client.setPowerLevel(room.roomId, userId, to)
+      await setUserLevel(powerIO(client), room, myId, userId, to)
       onChanged(`${uname} is now ${standingLabel(to)} in ${room.name}.`)
     } catch (err) {
-      onChanged(describeInviteError(err))
+      onChanged(err instanceof PowerRefused ? err.message : describePowerError(err, room.isSpace))
     } finally {
       setBusy(false)
       setArmed(null)

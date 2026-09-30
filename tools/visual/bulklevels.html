@@ -1,0 +1,94 @@
+<!doctype html><html><head>
+<!--#head-->
+<title>Set a level in many rooms</title>
+<style>
+  /* The dialog is fixed to the corner in the app; pinned here so the whole
+     panel is in the shot. */
+  .tc-settings { position: static !important; margin: 10px auto; max-height: none !important; height: auto !important; }
+</style>
+</head><body>
+<div class="h-label">Server permissions, set a level in many rooms: choosing</div>
+<div class="tc-settings" data-wide="true">
+  <div class="tc-perm">
+    <div class="tc-perm-views" role="group">
+      <button type="button" class="tc-pill" aria-pressed="false">Rooms</button>
+      <button type="button" class="tc-pill" aria-pressed="true">Set a level in many rooms</button>
+    </div>
+    <div class="tc-bulk">
+      <section class="tc-bulk-step">
+        <span class="tc-bulk-label">Who</span>
+        <span class="tc-bulk-who"><strong>kestrel</strong><code class="tc-bulk-id">@kestrel:41chan.net</code></span>
+        <button type="button" class="tc-pill">Change</button>
+      </section>
+      <section class="tc-bulk-step">
+        <span class="tc-bulk-label">Level</span>
+        <span class="tc-bulk-levels" role="radiogroup">
+          <button type="button" role="radio" class="tc-pill" aria-checked="false">Member 0</button>
+          <button type="button" role="radio" class="tc-pill" aria-checked="false">Voice 25</button>
+          <button type="button" role="radio" class="tc-pill" aria-checked="true">Moderator 50</button>
+          <button type="button" role="radio" class="tc-pill" aria-checked="false">Owner 100</button>
+          <label class="tc-bulk-other">or <input type="number" class="tc-input" placeholder="level"></label>
+        </span>
+      </section>
+      <section class="tc-bulk-step">
+        <span class="tc-bulk-label">Where</span>
+        <span class="tc-bulk-picks">
+          <button type="button" class="tc-pill">Every room</button>
+          <button type="button" class="tc-pill">Every space</button>
+          <button type="button" class="tc-pill">Clear</button>
+          <span class="tc-tone-active">Reading their membership: 9 of 11</span>
+        </span>
+      </section>
+      <ul class="tc-bulk-list">
+        <li class="tc-bulk-row" data-can="true"><label><input type="checkbox"><span class="tc-perm-kind">SPACE</span><span class="tc-bulk-name">Community</span></label>
+          <span class="tc-bulk-say">Member 0 &#8594; Moderator 50</span></li>
+        <li class="tc-bulk-row" data-can="true"><label style="padding-left:14px"><input type="checkbox" checked><span class="tc-perm-kind">ROOM</span><span class="tc-bulk-name">general</span></label>
+          <span class="tc-bulk-say">Voice 25 &#8594; Moderator 50</span></li>
+        <li class="tc-bulk-row" data-can="false"><label style="padding-left:14px"><input type="checkbox" disabled><span class="tc-perm-kind">ROOM</span><span class="tc-bulk-name">tagging</span></label>
+          <span class="tc-bulk-say tc-perm-dim">already Moderator 50</span></li>
+        <li class="tc-bulk-row" data-can="true"><label style="padding-left:14px"><input type="checkbox" checked><span class="tc-perm-kind">ROOM</span><span class="tc-bulk-name">announcements-and-a-very-long-room-name</span></label>
+          <span class="tc-bulk-say">Member 0 &#8594; Moderator 50<span class="tc-perm-dim"> -- not in it yet; waits for them to join</span></span></li>
+        <li class="tc-bulk-row" data-can="false"><label style="padding-left:14px"><input type="checkbox" disabled><span class="tc-perm-kind">ROOM</span><span class="tc-bulk-name">staff</span></label>
+          <span class="tc-bulk-say tc-perm-dim">Changing levels in this room needs power level 100; you have 50. Ask someone at 100 or above.</span></li>
+        <li class="tc-bulk-row" data-can="false"><label><input type="checkbox" disabled><span class="tc-perm-kind">ROOM</span><span class="tc-bulk-name">orphan</span></label>
+          <span class="tc-bulk-say tc-perm-dim">reading...</span></li>
+      </ul>
+      <div class="tc-bulk-foot" role="status">
+        <span>2 chosen.</span>
+        <button type="button" class="tc-pill">Set in 2</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="h-label">confirming</div>
+<div class="tc-settings" data-wide="true">
+  <div class="tc-bulk">
+    <div class="tc-bulk-foot" role="status">
+      <span class="tc-bulk-confirm">Set kestrel to Moderator 50 in 2 places?<span class="tc-tone-warn"> In 1 of them that is your own level, and you will not be able to lower them there again.</span><span class="tc-perm-dim"> In 1 they are not a member yet; it applies when they join.</span></span>
+      <button type="button" class="tc-pill" data-tone="go">Yes, set it</button>
+      <button type="button" class="tc-pill">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="h-label">running, then done</div>
+<div class="tc-settings" data-wide="true">
+  <div class="tc-bulk">
+    <ul class="tc-bulk-list">
+      <li class="tc-bulk-row" data-can="true"><label><input type="checkbox" checked disabled><span class="tc-perm-kind">ROOM</span><span class="tc-bulk-name">general</span></label>
+        <span class="tc-bulk-say tc-tone-ok">done: Voice 25 &#8594; Moderator 50</span></li>
+      <li class="tc-bulk-row" data-can="true"><label><input type="checkbox" checked disabled><span class="tc-perm-kind">ROOM</span><span class="tc-bulk-name">help</span></label>
+        <span class="tc-bulk-say tc-tone-active">the server asked for a pause; retrying in 3s</span></li>
+      <li class="tc-bulk-row" data-can="true"><label><input type="checkbox" checked disabled><span class="tc-perm-kind">ROOM</span><span class="tc-bulk-name">memes</span></label>
+        <span class="tc-bulk-say tc-tone-warn">skipped: Already at 50 when it came to write.</span></li>
+      <li class="tc-bulk-row" data-can="true"><label><input type="checkbox" checked disabled><span class="tc-perm-kind">ROOM</span><span class="tc-bulk-name">staff</span></label>
+        <span class="tc-bulk-say tc-tone-bad">failed: The server refused the change. It said: "You don't have permission". Re-read, check your level in this room and theirs, and try again.</span></li>
+    </ul>
+    <div class="tc-bulk-foot" role="status">
+      <span><span class="tc-tone-ok">Set in 1.</span><span class="tc-tone-warn"> 1 skipped.</span><span class="tc-tone-bad"> 1 failed.</span> Each row says why.</span>
+      <button type="button" class="tc-pill">Start again</button>
+    </div>
+  </div>
+</div>
+</body></html>

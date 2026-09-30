@@ -6,7 +6,21 @@
 // client must refuse BEFORE the server does, and the one place the obvious
 // rule is wrong (you may always lower your own level, even though you may
 // never touch anyone else standing at your height).
-import { powerEdit, requiredToSetPower, TIERS, DEFAULT_STATE_LEVEL } from '../src/client/powerLevels.ts'
+import { readFileSync } from 'node:fs'
+import {
+  powerEdit,
+  requiredToSetPower,
+  TIERS,
+  DEFAULT_STATE_LEVEL,
+  PRE_HYDRA_ROOM_VERSIONS,
+  describePowerError,
+  hydraCreators,
+  levelIn,
+  rateLimitWaitMs,
+  refusal,
+  standing,
+  withUserLevel,
+} from '../src/client/powerLevels.ts'
 
 let failures = 0
 const check = (name: string, cond: boolean, extra?: unknown) => {
@@ -145,6 +159,88 @@ console.log('\n-- the tiers match the glyphs the rest of the client draws --')
     TIERS.map((t) => t.level).join(',') === '0,25,50,100')
   check('they ascend', TIERS.every((t, i) => i === 0 || t.level > TIERS[i - 1].level))
   check('every tier has a label', TIERS.every((t) => t.label.length > 0))
+}
+
+console.log('\n-- one set of rules: the editor and the bulk setter agree --')
+{
+  // powerEdit's options must be exactly the tiers refusal() accepts, for every
+  // combination -- the two surfaces must never disagree about one room.
+  let disagreements = 0
+  for (const myLevel of [0, 25, 50, 75, 100]) for (const targetLevel of [0, 25, 50, 100]) for (const requiredToSet of [0, 50, 100]) for (const isSelf of [false, true]) {
+    const i = { isSelf, haveRoom: true, inRoom: true, myLevel, targetLevel: isSelf ? myLevel : targetLevel, requiredToSet, isSpace: false }
+    const f = powerEdit(i)
+    const accepted = TIERS.filter((t) => refusal(i, t.level) === null && !(isSelf && t.level >= myLevel)).map((t) => t.level).join(',')
+    const offered = f.options.map((o) => o.level).join(',')
+    if (offered !== accepted) disagreements++
+    // Whenever the shared rules refuse, the editor shows that same refusal.
+    const s2 = standing(i)
+    if (s2 !== null && f.blocked !== s2) disagreements++
+  }
+  check('powerEdit offers exactly what refusal accepts, across 120 rooms', disagreements === 0, disagreements)
+  check('a level above your own is refused with both numbers',
+    /75.*50/.test(refusal({ isSelf: false, myLevel: 50, targetLevel: 0, requiredToSet: 50, isSpace: false }, 75) ?? ''))
+  check('a fraction is refused', refusal({ isSelf: false, myLevel: 100, targetLevel: 0, requiredToSet: 50, isSpace: false }, 50.5) !== null)
+}
+
+console.log('\n-- room version 12 creators, by the SDK\'s own rule --')
+{
+  // The SDK decides member levels with this list (utils/roomVersion.ts). A
+  // second copy here must be the same copy, or a new room version would give
+  // the Rooms view and the bulk setter different answers than the member list.
+  const sdk = readFileSync(new URL('../node_modules/matrix-js-sdk/src/utils/roomVersion.ts', import.meta.url), 'utf8')
+  const theirs = /PRE_HYDRA_ROOM_VERSIONS = \[([^\]]*)\]/.exec(sdk)?.[1].split(',').map((v) => v.trim().replace(/"/g, '')) ?? []
+  check('the pre-hydra list is the SDK\'s', theirs.length > 0 && theirs.join(',') === PRE_HYDRA_ROOM_VERSIONS.join(','), { theirs, ours: PRE_HYDRA_ROOM_VERSIONS })
+  check('version 11: nobody is a creator in this sense', hydraCreators('11', '@a:x', { additional_creators: ['@b:x'] }).length === 0)
+  check('no version named is version 1', hydraCreators(undefined, '@a:x', {}).length === 0)
+  check('version 12: the sender and the additional creators',
+    hydraCreators('12', '@a:x', { additional_creators: ['@b:x', 7, '@a:x'] }).join(',') === '@a:x,@b:x')
+  check('an unknown version is treated as hydra, as the SDK does', hydraCreators('org.example.13', '@a:x', {}).join(',') === '@a:x')
+}
+
+console.log('\n-- reading a level out of raw content --')
+{
+  const c = { users: { '@a:x': 50, '@f:x': 12.5 }, users_default: 10 }
+  check('their own entry', levelIn(c, '@a:x') === 50)
+  check('else the room default', levelIn(c, '@b:x') === 10)
+  check('a non-integer entry is not a level (the SDK ignores it too)', levelIn(c, '@f:x') === 10)
+  check('else 0', levelIn({}, '@b:x') === 0 && levelIn(null, '@b:x') === 0)
+  check('a creator is unlimited', levelIn(c, '@a:x', ['@a:x']) === Infinity)
+}
+
+console.log('\n-- the write changes one entry and nothing else --')
+{
+  const before = {
+    users: { '@a:x': 100, '@b:x': 25 },
+    users_default: 0,
+    events: { 'm.room.power_levels': 100, 'net.41chan.media.tags': 10 },
+    notifications: { room: 50 },
+    state_default: 50,
+  }
+  const snapshot = JSON.stringify(before)
+  const after = withUserLevel(before, '@c:x', 50)
+  check('the new entry is there', (after.users as Record<string, number>)['@c:x'] === 50)
+  check('everything else is identical', JSON.stringify({ ...after, users: { ...(after.users as object), '@c:x': undefined } }) === JSON.stringify({ ...before, users: { ...before.users, '@c:x': undefined } }))
+  check('the input is not touched (it is usually the SDK\'s own state)', JSON.stringify(before) === snapshot)
+  check('a room with no users map gets one', JSON.stringify(withUserLevel({ state_default: 50 }, '@c:x', 25).users) === '{"@c:x":25}')
+}
+
+console.log('\n-- a failed change is described as a power change --')
+{
+  const forbidden = describePowerError({ errcode: 'M_FORBIDDEN', httpStatus: 403, data: { error: "You don't have permission to add ops level greater than your own" } })
+  check('a 403 says the server refused, quotes it, names the remedy, and never says invite',
+    /refused/.test(forbidden) && /greater than your own/.test(forbidden) && /re-read/i.test(forbidden) && !/invite/i.test(forbidden), forbidden)
+  check('a rate limit says to wait', /wait/i.test(describePowerError({ errcode: 'M_LIMIT_EXCEEDED', httpStatus: 429 })))
+  check('no answer at all is the network', /reached/.test(describePowerError(new TypeError('Failed to fetch'))))
+  check('a space says space', /space/.test(describePowerError({ errcode: 'M_FORBIDDEN', httpStatus: 403 }, true)))
+}
+
+console.log('\n-- how long a rate limit asks for --')
+{
+  check('not rate-limited: null', rateLimitWaitMs({ errcode: 'M_FORBIDDEN', httpStatus: 403 }) === null)
+  check('the body field', rateLimitWaitMs({ errcode: 'M_LIMIT_EXCEEDED', data: { retry_after_ms: 900 } }) === 900)
+  check('the SDK\'s own reading wins when it has one', rateLimitWaitMs({ httpStatus: 429, getRetryAfterMs: () => 4000, data: { retry_after_ms: 900 } }) === 4000)
+  check('a header the SDK cannot read falls back to the body', rateLimitWaitMs({ httpStatus: 429, getRetryAfterMs: () => { throw new Error('bad') }, data: { retry_after_ms: 700 } }) === 700)
+  check('asked for nothing: 0, and the caller picks the wait', rateLimitWaitMs({ httpStatus: 429 }) === 0)
 }
 
 if (failures > 0) {

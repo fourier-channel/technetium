@@ -3080,6 +3080,8 @@ code {
 .tc-tone-warn { color: #f0b429; }
 .tc-tone-bad { color: #ff6b60; }
 .tc-tone-off { opacity: 0.75; }
+/* Work in progress: formant orange, which means working, never warning. */
+.tc-tone-active { color: var(--mod-active-fg); }
 
 .tc-settings-detail {
   margin: 0 0 6px;
@@ -3579,11 +3581,17 @@ code {
   background: var(--cpd-color-bg-subtle-secondary);
   color: var(--cpd-color-text-primary);
 }
-.tc-pill[aria-pressed='true'] {
+.tc-pill[aria-pressed='true'],
+.tc-pill[aria-checked='true'] {
   background: var(--cpd-color-bg-subtle-secondary);
   color: var(--cpd-color-text-primary);
   border-color: var(--mod-line-strong);
 }
+.tc-pill:disabled { opacity: 0.45; cursor: default; }
+.tc-pill:disabled:hover { background: transparent; color: var(--cpd-color-text-secondary); }
+/* The pill that commits a change somebody has just reviewed: orange, the
+   formant colour for work being done (not a warning -- ruling 2026-09-01). */
+.tc-pill[data-tone='go'] { color: var(--mod-active-fg); border-color: var(--mod-active-fg); }
 
 /* A header on a panel that is itself inset (the pinned/search overlays, the
    settings dialog) keeps the shade but drops the lip: there is no panel edge
@@ -4312,6 +4320,111 @@ code {
   background: transparent;
   color: inherit;
 }
+
+/* Server permissions has two views: Rooms (the audit, one room at a time) and
+   the bulk setter. Two pills, the pressed one is the view you are on. */
+.tc-perm-views { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ---------------------------------------------------------------------------
+   Set a level in many rooms (launch-polish L19). Who, what level, where; one
+   row per room saying what would happen there, then what did. Every colour is
+   a formant name.
+   --------------------------------------------------------------------------- */
+.tc-bulk { display: flex; flex-direction: column; gap: 10px; }
+.tc-bulk-step {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  font-size: 12px;
+}
+.tc-bulk-label {
+  flex: 0 0 48px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mod-ink-faint);
+}
+.tc-bulk-who { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; min-width: 0; color: var(--mod-ink); }
+.tc-bulk-id { font-family: var(--mod-mono); font-size: 11px; color: var(--mod-ink-dim); overflow-wrap: anywhere; }
+.tc-bulk-levels,
+.tc-bulk-picks { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; }
+.tc-bulk-other { display: inline-flex; align-items: center; gap: 6px; color: var(--mod-ink-dim); }
+.tc-bulk-other .tc-input { width: 64px; }
+.tc-bulk-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--mod-line);
+}
+.tc-bulk-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--mod-line);
+  font-size: 12px;
+}
+.tc-bulk-row > label {
+  box-sizing: border-box;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: 0 1 40%;
+  min-width: 0;
+  cursor: pointer;
+}
+.tc-bulk-row[data-can='false'] > label { cursor: default; }
+.tc-bulk-row input[type='checkbox'] { accent-color: var(--mod-accent); flex: none; }
+.tc-bulk-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--mod-ink);
+}
+.tc-bulk-row[data-can='false'] .tc-bulk-name { font-weight: 400; color: var(--mod-ink-dim); }
+.tc-bulk-say { flex: 1 1 60%; min-width: 0; font-size: 11.5px; }
+/* The count and the button stay in view however long the list is. */
+.tc-bulk-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 6px;
+  border-top: 1px solid var(--mod-line-strong);
+  background: var(--mod-surface);
+  font-size: 12px;
+}
+.tc-bulk-foot > span:first-child { flex: 1 1 220px; min-width: 0; }
+/* A phone: the verdict goes under the room's name rather than beside it. */
+@media (max-width: 560px) {
+  .tc-bulk-row { flex-wrap: wrap; gap: 2px 8px; }
+  .tc-bulk-row > label { flex: 1 1 100%; }
+  .tc-bulk-say { flex: 1 1 100%; padding-left: 24px; }
+}
+
+/* A text or number field in the formant face. */
+.tc-input {
+  box-sizing: border-box;
+  height: 22px;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.3;
+  padding: 2px 8px;
+  border: 1px solid var(--mod-line-strong);
+  border-radius: var(--mod-radius-sm);
+  background: var(--mod-surface);
+  color: var(--mod-ink);
+  font-variant-numeric: tabular-nums;
+}
+.tc-input::placeholder { color: var(--mod-ink-faint); }
+.tc-input:focus-visible { outline: none; border-color: var(--mod-accent); }
 
 /* Edit Mode: the per-panel Lock/Pin roster. One row per OPEN panel, so every
    panel can be locked or pinned rather than only the two that happened to
