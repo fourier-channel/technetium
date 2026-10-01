@@ -43,5 +43,10 @@ export function userFromPermalink(href: string): string | null {
     }
   }
   if (!raw || !raw.startsWith('@')) return null
+  // Exactly the id validated, or nothing: isValidMxid trims, and its server
+  // pattern admits '#', so "@a:x.org%0a" and "@a:x.org#frag" used to come back
+  // as people -- a card, a profile read, an ignore list entry for a junk id.
+  // A server name never holds whitespace, '#' or '?'.
+  if (/[\s#?]/.test(raw)) return null
   return isValidMxid(raw) ? raw : null
 }

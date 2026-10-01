@@ -34,7 +34,6 @@ import { MessageVerbsProvider } from './MessageVerbs'
 import { JumpContext, scrollToEventInDom, useJump, type JumpApi } from './jumpToEvent'
 import { ReactionAdd, ReactionPills, ReactionRail } from './Reactions'
 import { ReceiptCluster } from './ReceiptCluster'
-import { SPOILER_ATTR, toggleSpoiler } from '../client/spoilers'
 import { usePinnedEvents } from '../client/usePinnedEvents'
 import { PinnedPanel } from './PinnedPanel'
 import { SearchPanel } from './SearchPanel'
@@ -60,7 +59,7 @@ import { useBubbleFx } from './useBubbleFx'
 import { BubbleFx } from './BubbleFx'
 import { useReducedMotion } from './reducedMotion'
 import { useLook } from './lookContext'
-import { onMessageLinkClick, onMessageLinkContextMenu } from './messageLinks'
+import { messageBodyHandlers } from './messageLinks'
 import { ANIM_MS, playsAhead, type LookAnim } from '../client/look'
 import { useRoomListSettings } from './roomListSettings'
 
@@ -110,27 +109,6 @@ function reserveBox(content: IContent): { width: number; height: number } | unde
   // Never upscale -- a small image keeps its own size, as it does today.
   const scale = Math.min(INLINE_IMAGE_MAX_W / w, INLINE_IMAGE_MAX_H / h, 1)
   return { width: Math.round(w * scale), height: Math.round(h * scale) }
-}
-
-// Delegated spoiler handlers, shared by every row rather than allocated per
-// row: they resolve their target from the event, so they need no closure.
-function onSpoilerClick(e: React.MouseEvent) {
-  const el = (e.target as Element | null)?.closest?.(`[${SPOILER_ATTR}]`)
-  // A revealed spoiler must stay clickable as ordinary text -- a link inside
-  // one should work once it is visible.
-  if (el && !el.classList.contains('tc-spoiler-revealed')) {
-    e.preventDefault()
-    toggleSpoiler(el)
-  }
-}
-
-function onSpoilerKey(e: React.KeyboardEvent) {
-  if (e.key !== 'Enter' && e.key !== ' ') return
-  const el = (e.target as Element | null)?.closest?.(`[${SPOILER_ATTR}]`)
-  if (el && !el.classList.contains('tc-spoiler-revealed')) {
-    e.preventDefault()
-    toggleSpoiler(el)
-  }
 }
 
 // Read-only timeline. Message bodies render sanitized rich HTML (via DOMPurify)
@@ -704,17 +682,11 @@ export function Row({
         // The click/key handlers are DELEGATED: an innerHTML subtree cannot
         // carry React handlers, so spoiler reveal is resolved by walking up
         // from the event target (W2.L2).
+        // A hidden spoiler reveals on the first click; a mention opens the
+        // person's preview; any other link a new tab (messageLinks.ts).
         <span
           className="tc-message-html"
-          onClick={(e) => {
-            onSpoilerClick(e)
-            // A mention opens the person's preview; any other link a new tab
-            // (L25, messageLinks.ts). After the spoiler, so a hidden link is
-            // revealed by the first click rather than followed.
-            onMessageLinkClick(e, openProfile)
-          }}
-          onContextMenu={(e) => onMessageLinkContextMenu(e, openProfile)}
-          onKeyDown={onSpoilerKey}
+          {...messageBodyHandlers(openProfile)}
           dangerouslySetInnerHTML={{ __html: rendered.html }}
         />
       ) : (
@@ -1119,8 +1091,7 @@ function GalleryBody({ cells, layout, thread }: { cells: (MatrixEvent | null)[];
           {caption.html !== undefined ? (
             <span
               className="tc-message-html"
-              onClick={(e) => onMessageLinkClick(e, openProfile)}
-              onContextMenu={(e) => onMessageLinkContextMenu(e, openProfile)}
+              {...messageBodyHandlers(openProfile)}
               dangerouslySetInnerHTML={{ __html: caption.html }}
             />
           ) : (
