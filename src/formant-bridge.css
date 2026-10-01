@@ -94,4 +94,9 @@
   --accent:    var(--mod-accent);
   --tc-unread: var(--mod-active-fg);
   --tc-link:   var(--mod-accent);
+  /* Read by the thread cards, the DM notice and the layout editor since before
+     the bridge existed, and defined nowhere -- every one of them drew its own
+     literal fallback (a cool white hairline, a private mono stack). */
+  --tc-line:   var(--mod-line);
+  --tc-mono:   var(--mod-mono);
 }

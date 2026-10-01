@@ -415,7 +415,7 @@ function DmCloseWarningText() {
         padding: '8px 12px',
         fontSize: 11,
         lineHeight: 1.45,
-        color: 'var(--tc-ui-dim, #9aa0a6)',
+        color: 'var(--mod-ink-dim)',
         maxWidth: MENU_W,
         whiteSpace: 'normal',
       }}
