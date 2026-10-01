@@ -3230,7 +3230,11 @@ code {
   right: 18px;
   top: 18px;
   z-index: 80;
-  width: 340px;
+  /* Border box, and never wider than the window less its gutters: at 340px
+     content-box it was 370px wide, so on a 360px phone the headline and the
+     Accept button started 28px off the left edge. */
+  box-sizing: border-box;
+  width: min(340px, calc(100vw - 36px));
   padding: 12px 14px;
   border-radius: var(--mod-radius);
   background: var(--mod-surface);

@@ -40,8 +40,29 @@ console.log('== L21 one size for every tab')
   const body = dialog.indexOf('<div className="tc-settings-body">')
   check('the body opens after the tab strip and before the first tab',
     body > dialog.indexOf('className="tc-settings-tabs"') && body < dialog.indexOf("{tab === 'server' &&"))
-  check('every tab renders inside it',
-    ["{tab === 'server' &&", "{tab === 'features' &&", "{tab === 'encryption' &&"].every((t) => dialog.indexOf(t) > body))
+  // Inside means between the body's opening tag and ITS closing tag: the
+  // first version only held that each tab came after the opening, so closing
+  // the body early (one tab outside the scroll box, clipped) stayed green.
+  let depth = 0
+  let bodyEnd = -1
+  for (const m of dialog.slice(body).matchAll(/<div\b[^>]*?(\/?)>|<\/div>/g)) {
+    if (m[0] === '</div>') depth--
+    else if (m[1] !== '/') depth++
+    if (depth === 0) { bodyEnd = body + m.index!; break }
+  }
+  const tabs = ["{tab === 'server' &&", "{tab === 'features' &&", "{tab === 'encryption' &&"]
+  check('every tab renders inside it -- after it opens and before it closes',
+    bodyEnd > body && tabs.every((t) => dialog.indexOf(t) > body && dialog.indexOf(t) < bodyEnd), { body, bodyEnd, at: tabs.map((t) => dialog.indexOf(t)) })
+
+  // The size is the base rule's ALONE. Any other rule, anywhere in the sheet
+  // -- inside an @media block, on a [data-*] variant, in a selector list --
+  // that sizes the box would make it change with the tab or the window.
+  const sizing = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .map((m) => ({ sel: m[1].replace(/\/\*[\s\S]*?\*\//g, '').trim(), body: m[2], at: m.index! }))
+    .filter((b) => b.sel.split(',').some((s) => /^\.tc-settings(?![\w-])/.test(s.trim())))
+    .filter((b) => /(^|[\s;])(width|height|min-width|min-height|max-width|max-height|inline-size|block-size)\s*:/.test(b.body))
+  check('exactly one rule sizes the dialog, and it is the base rule', sizing.length === 1 && sizing[0].sel === '.tc-settings', sizing.map((b) => b.sel))
+  check('and nothing sizes it inline', !/className="tc-settings[^"]*"[^>]*style=\{\{[^}]*(width|height)/.test(dialog))
 }
 
 console.log('== L20 formant throughout')
@@ -90,7 +111,22 @@ console.log('== L20 formant throughout')
     /color: var\(--mod-alarm-ink\)/.test(rules('.tc-tone-bad')) && /color: var\(--mod-active-fg\)/.test(rules('.tc-tone-active')))
   // A toned note must take the tone: the note rule sets a colour too, so the
   // tones have to come after it in the file.
-  check('a toned note takes its tone', css.indexOf('.tc-tone-warn {') > css.indexOf('.tc-settings-note {'))
+  // A box fixed to the window must fit the window: border-box, so padding
+  // and border are inside its width, and a width capped by 100vw. The
+  // incoming-verification prompt was 340px content-box -- 370px on screen,
+  // 28px off the left edge of a 360px phone.
+  const fixedWide = scoped.filter((b) => /position:\s*fixed/.test(b.body) && /(^|[\s;])width:/.test(b.body))
+  const unfit = fixedWide.filter((b) => !/box-sizing:\s*border-box/.test(b.body) || !/(^|[\s;])width:[^;]*100vw/.test(b.body)).map((b) => `${b.line}: ${b.sel}`)
+  // (A selector here can carry the tail of the comment above it; its end is
+  // the selector.)
+  check('the fixed boxes are found', fixedWide.some((b) => b.sel.endsWith('.tc-verify--incoming')) && fixedWide.some((b) => /(^|\s)\.tc-settings$/.test(b.sel)), fixedWide.map((b) => b.sel.slice(-40)))
+  check('every fixed box fits the window it is fixed to', unfit.length === 0, unfit)
+
+  const note = css.indexOf('.tc-settings-note {')
+  for (const tone of ['ok', 'warn', 'bad', 'active']) {
+    const at = css.indexOf(`.tc-tone-${tone} {`)
+    check(`a note toned ${tone} takes its tone (the tone rule comes after the note's)`, note > 0 && at > note, { note, at })
+  }
 
   // The markup: no control drawn by the browser ("Windows 3.1", operator
   // 2026-09-25), and no colour written into an inline style.
