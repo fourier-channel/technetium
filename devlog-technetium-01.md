@@ -4206,5 +4206,45 @@ id.52 and the interactions ledger's L3 row now say what is true. The sign-in
 rebrand's last gate, Technetium in step, is met: the served bundle carries the
 onboarding change.
 
-**Still open.** The adversarial review of L19-L25, their deploy, and every live
-pass the previous entry lists.
+**The review, then all 38 of its findings.** At the operator's go-ahead the
+adversarial review of L19-L25 ran: 102 agents on Sonnet (7 finders, two
+skeptics per finding and a third on a split, three critic rounds that each
+found more), 68 minutes, 6.3M tokens -- against an estimate of 40-70 agents,
+because the checks finder alone reported 15 and the critics never ran dry.
+38 confirmed, 6 rejected. The operator: "Fix all 38." Five commits by area
+-- power `b9eccd5`, links `973cd8f`, look `619b104`, people `6ac9189`,
+settings `a40ec2f` -- each fix with a check that a mutation restoring the
+bug turns red: 65 mutations, all caught (one survived the first pass -- a
+Stop that mutated the run in place, which no React subscriber would see --
+and the check was tightened until it did not). The serious ones are in the
+ledger's review row; twelve findings were checks green with their feature
+broken.
+
+**draft-20 (gotcha) -- a retry must repeat the read, not the write.** The bulk
+setter waited out a 429 and resent the content it had read BEFORE the pause,
+so whatever another admin changed during it was deleted -- the exact loss
+L19 was built to prevent, reintroduced by the retry loop around it. The
+whole read-judge-write attempt is what gets retried.
+
+**draft-21 (gotcha) -- a media query adds no specificity.** `@media
+(prefers-reduced-motion: reduce) { .tc-av > .tc-av-body { animation: none } }`
+(0,2,0) lost to every `.tc-av[data-anim-play='spin'] > .tc-av-body` (0,3,0).
+The check matched the dead rule's text and was green; headless Chromium with
+reduced motion forced still ran the spin. The check now compares weights.
+
+**draft-22 (gotcha) -- a transformed ancestor captures position: fixed.** The
+chat-actions menu, rendered inside the timeline, opened displaced and
+clipped in the DM dock, whose inner wrapper keeps `transform: translateX(0)`
+while shown. Anything fixed to the window is portalled to the page.
+
+**draft-23 (gotcha) -- a local echo is the same event, re-keyed.** When the
+server confirms a sent line the SDK rewrites its id in place; a row keyed
+by id remounts, and anything it does on mount happens twice. Per-line state
+that must survive that is keyed by the event OBJECT (a WeakMap). And an age
+for "was this just said" is `Date.now() - event.localTimestamp`, never
+`- getTs()`: origin_server_ts is the server's clock, and a viewer behind it
+saw every fresh line as from the future.
+
+**Still open.** The deploy of L19-L25 and these fixes, and every live pass
+the previous entry lists -- now including the iOS tap path and the DM-dock
+menu, which were reasoned about and checked from source, not seen.
