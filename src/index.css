@@ -1742,7 +1742,10 @@ code {
 
 /* Interaction picker (right-click a person in the chat). */
 .tc-ix-menu {
-  z-index: 40;
+  /* Portalled to <body> (popupFocus.ts), so it sits over the panels rather
+     than inside one; capped to the window by usePopupAt and scrolls past it. */
+  z-index: 1000;
+  overflow-y: auto;
   min-width: 168px;
   padding: 4px;
   border-radius: 8px;

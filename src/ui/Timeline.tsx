@@ -454,6 +454,7 @@ export function Timeline({ room, onOpenThread, onOpenRoom, threadListOpen, onTog
               onPick={(def, userId) =>
                 interactions.trigger(def.id, def.shape === 'targeted' ? userId : undefined)
               }
+              onProfile={() => setProfile({ userId: ixMenu.userId, x: ixMenu.x, y: ixMenu.y })}
               onClose={() => setIxMenu(null)}
             />
           )}

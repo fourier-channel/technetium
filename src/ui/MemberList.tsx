@@ -24,6 +24,7 @@ import {
   densityOverridden,
   effectiveDensity,
   honorificPulses,
+  presentIn,
   useMemberDensity,
   type MemberDensity,
 } from './memberListDisplay'
@@ -411,7 +412,7 @@ function MemberRow({
   // A member can be present here (white name) yet hold authority elsewhere (grey
   // badge). The prior single-flag version chained these together, so fixing the
   // badge dragged the name grey too — that's the regression this undoes.
-  const presentHere = !!room && room.roomId in member.powerByRoom
+  const presentHere = presentIn(room, member.id)
   const plHere = room ? (member.powerByRoom[room.roomId] ?? 0) : 0
   const authorityHere =
     identityHonor !== null && honorificFor(plHere) === identityHonor

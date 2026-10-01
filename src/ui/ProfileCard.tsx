@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { Room } from 'matrix-js-sdk'
 import { AvatarDisc } from './AvatarDisc'
+import { usePopupAt, usePopupFocus } from './popupFocus'
 import { nameAttrs } from '../client/look'
 import { useLook, useLookStore } from './lookContext'
 import { presenceLabel, type PresenceState } from '../client/usePresence'
@@ -92,16 +93,23 @@ export function ProfileCard({
     }
   }, [onClose])
 
-  const left = Math.max(6, Math.min(x, window.innerWidth - CARD_W - 8))
-  const top = Math.max(6, Math.min(y, window.innerHeight - 190))
+  // Placed inside the window by its MEASURED size (the power editor makes it
+  // taller than any guess), focused on open, focus returned on close
+  // (popupFocus.ts) -- so a person opened from the keyboard is usable from it.
+  usePopupAt(ref, x, y)
+  usePopupFocus(ref)
 
   return createPortal(
     <div
       ref={ref}
+      role="dialog"
+      aria-label={`Profile of ${name}`}
+      tabIndex={-1}
       style={{
         position: 'fixed',
-        left,
-        top,
+        left: x,
+        top: y,
+        overflowY: 'auto',
         width: CARD_W,
         zIndex: 1001,
         padding: 14,

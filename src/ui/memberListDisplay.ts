@@ -107,3 +107,12 @@ export function useMemberDensity(): {
   const toggle = useCallback(() => set(nextDensity(value)), [])
   return { pref, setPref, toggle }
 }
+
+// Is this person IN the room being viewed -- joined, now. Read from the room's
+// own membership, not from whether a power level was recorded for them: the
+// member model records levels only for rooms under a space, so in a room
+// joined directly every member read as absent -- dimmed, and denied the chat
+// actions the timeline offers for the same person (L23 review).
+export function presentIn(room: { getMember(userId: string): { membership?: string } | null } | null, userId: string): boolean {
+  return room?.getMember(userId)?.membership === 'join'
+}
