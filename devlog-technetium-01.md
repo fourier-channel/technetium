@@ -4175,3 +4175,36 @@ stopped at the operator's usage limit before any finding completed: re-run it.
 Nothing was exercised in a browser or against the live server: the bulk run,
 a look saved and seen from a second account, the clicks, the animations, a
 phone -- all PENDING OPERATOR VERIFICATION.
+
+## 2026-10-01 -- three loose ends from 2026-09-30
+
+No new asks. The previous entry left three tidy-ups open; all are closed.
+
+**Undefined tokens (draft-16), `e6195c9`.** `--tc-line` and `--tc-mono` now
+alias formant's `--mod-line` and `--mod-mono` in the bridge, beside
+`--tc-link`. Draft-16 named the wrong readers: they were the thread cards,
+the DM notice's rule and the layout editor's rule, not the send-error bar or
+code blocks. A scan of every token read in `src` found one more, the DM close
+warning's `--tc-ui-dim`, now `--mod-ink-dim`. Rendered before and after: the
+two hairlines move from a neutral to formant's warm line; the mono stacks
+resolve to the same face on the headless box, so a difference there would only
+show on a system with Consolas.
+
+**draft-19 (gotcha) -- a fallback is not a definition.**
+`var(--tc-line, rgb(255 255 255 / 10%))` with no `--tc-line` anywhere renders
+its fallback, the page looks roughly right, and nothing reports it. That is how
+three surfaces and the whole Settings dialog wore colours no Fourier surface
+uses. `checks/cssTokens.check.ts` now fails on any `--tc-*` or `--mod-*` name
+read by `var()` or `getPropertyValue()` with no definition in the tree. It
+proves "defined somewhere", not that the defining selector reaches the reader.
+Two mutations killed: dropping the aliases, and restoring the `--tc-ui-dim`
+read.
+
+**Canon.** The roadmap's tc.43 said BLOCKED on a server flag that was already
+on; it is BUILT_HELD by L24, and the stale O-in6 references in tc.29, tc.108,
+id.52 and the interactions ledger's L3 row now say what is true. The sign-in
+rebrand's last gate, Technetium in step, is met: the served bundle carries the
+onboarding change.
+
+**Still open.** The adversarial review of L19-L25, their deploy, and every live
+pass the previous entry lists.
