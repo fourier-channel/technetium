@@ -55,19 +55,21 @@ export function clipPathFor(shape: AvatarShape): string {
   return (BY_ID.get(shape) ?? BY_ID.get(DEFAULT_AVATAR_SHAPE))!.clipPath
 }
 
-// --- the old per-browser choice, read once to carry it over ---------------
+// --- the old per-browser choice, taken once to carry it over -------------
 //
-// Before L24 the mask was this browser's alone, in localStorage. It is read
-// (never written) so the first time the Profile panel opens, it starts from the
-// shape already chosen here instead of forgetting it; saving publishes it.
+// Before L24 the mask was this browser's alone, in localStorage. The Profile
+// panel takes it the first time it has read your published look: offered as
+// a draft over a default look, and REMOVED either way, so it is offered once
+// and never comes back after you have saved, discarded or reset your look.
 const LEGACY_KEY = 'net.41chan.avatar_shape'
 
-export function legacyAvatarShape(): AvatarShape | null {
+export function takeLegacyAvatarShape(): AvatarShape | null {
   try {
     const raw = localStorage.getItem(LEGACY_KEY)
+    if (raw !== null) localStorage.removeItem(LEGACY_KEY)
     return isAvatarShape(raw) ? raw : null
   } catch (err) {
-    reportIgnored('avatar shape: read the pre-profile choice', err)
+    reportIgnored('avatar shape: take the pre-profile choice', err)
     return null
   }
 }

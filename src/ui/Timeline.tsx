@@ -60,7 +60,7 @@ import { BubbleFx } from './BubbleFx'
 import { useReducedMotion } from './reducedMotion'
 import { useLook } from './lookContext'
 import { messageBodyHandlers } from './messageLinks'
-import { ANIM_MS, playsAhead, type LookAnim } from '../client/look'
+import { ANIM_MS, playsFor, type LinePlays, type LookAnim } from '../client/look'
 import { useRoomListSettings } from './roomListSettings'
 
 // How many pages of history a click-to-jump will paginate before giving up.
@@ -110,6 +110,11 @@ function reserveBox(content: IContent): { width: number; height: number } | unde
   const scale = Math.min(INLINE_IMAGE_MAX_W / w, INLINE_IMAGE_MAX_H / h, 1)
   return { width: Math.round(w * scale), height: Math.round(h * scale) }
 }
+
+// Each line's look plays, keyed by the event OBJECT, which survives a local
+// echo being confirmed under a new id (look.ts playsFor). Weak, so a line
+// that leaves memory takes its record with it.
+const linePlays = new WeakMap<object, LinePlays>()
 
 // Read-only timeline. Message bodies render sanitized rich HTML (via DOMPurify)
 // when present, else plaintext. Events we could not decrypt render the REASON
@@ -605,12 +610,17 @@ export function Row({
     const anim = senderLook.anim
     if (!speaks || narrow || anim === 'none' || reducedMotion || !animationsEnabled) return
     const timers: ReturnType<typeof setTimeout>[] = []
-    const play = () => {
+    const { record, delays } = playsFor(linePlays.get(event), item.id, Date.now() - event.localTimestamp)
+    linePlays.set(event, record)
+    const play = (isArrival: boolean) => {
+      // Marked when it PLAYS, not when it is scheduled: a schedule cleared
+      // before it fired (a remount, StrictMode's double effect) owes it still.
+      if (isArrival) record.arrived = true
       if (document.visibilityState !== 'visible') return
       setPlaying(anim)
       timers.push(setTimeout(() => setPlaying(null), ANIM_MS[anim]))
     }
-    for (const delay of playsAhead(item.id, Date.now() - event.getTs())) timers.push(setTimeout(play, delay))
+    for (const delay of delays) timers.push(setTimeout(() => play(delay === 0), delay))
     return () => {
       for (const t of timers) clearTimeout(t)
     }

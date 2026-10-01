@@ -51,8 +51,11 @@ export interface LookStore {
   peek(userId: string): Look
   // Read it if it has never been read or has gone stale. Deduped; limited.
   want(userId: string): void
-  // Read it now, whatever its age.
-  refresh(userId: string): Promise<void>
+  // Read it now, whatever its age. True when what is now cached came from the
+  // server just now; false when the read failed or the server does not share
+  // profile fields -- so an editor knows whether it is editing the real thing.
+  // A read already in flight is joined, not repeated.
+  refresh(userId: string): Promise<boolean>
   // Publish your own. Resolves when the server has it; rejects, having put
   // nothing in the cache, when it does not.
   publish(look: Look): Promise<void>
@@ -71,7 +74,7 @@ export function createLookStore(
   now: () => number = Date.now,
 ): LookStore {
   const known = new Map<string, Entry>()
-  const inFlight = new Set<string>()
+  const inFlight = new Map<string, Promise<boolean>>()
   const listeners = new Set<() => void>()
   const limiter = createLimiter(LOOK_READS_AT_ONCE)
   let support: LookSupport = 'unknown'
@@ -101,32 +104,47 @@ export function createLookStore(
     if (!prev || !sameLook(prev.look, look)) changed()
   }
 
-  const read = async (userId: string) => {
+  const readOnce = async (userId: string): Promise<boolean> => {
     await asked
-    if (support === 'no' || inFlight.has(userId)) return
-    inFlight.add(userId)
+    if (support === 'no') return false
     try {
       const raw = await limiter.run(() => io.read(userId))
       remember(userId, parseLook(raw))
+      return true
     } catch (err) {
       const code = errcode(err)
       if (code === 'M_NOT_FOUND' || code === 'M_FORBIDDEN') {
         // No profile, or not one this account may read: the default, and that
         // is an answer, so it is remembered like one.
         remember(userId, DEFAULT_LOOK)
-      } else if (err instanceof Error && /does not support extended profiles/i.test(err.message)) {
+        return true
+      }
+      if (err instanceof Error && /does not support extended profiles/i.test(err.message)) {
         support = 'no'
         changed()
-      } else {
-        // A failed read is not a look: whatever was drawn before stays drawn
-        // (the default if nothing was), and it is asked again LOOK_RETRY_MS
-        // from now rather than a whole TTL.
-        reportIgnored('look: profile read', err)
-        known.set(userId, { look: known.get(userId)?.look ?? DEFAULT_LOOK, at: now() - LOOK_TTL_MS + LOOK_RETRY_MS })
+        return false
       }
-    } finally {
-      inFlight.delete(userId)
+      // A failed read is not a look: whatever was drawn before stays drawn
+      // (the default if nothing was), and it is asked again LOOK_RETRY_MS
+      // from now rather than a whole TTL.
+      reportIgnored('look: profile read', err)
+      known.set(userId, { look: known.get(userId)?.look ?? DEFAULT_LOOK, at: now() - LOOK_TTL_MS + LOOK_RETRY_MS })
+      return false
     }
+  }
+
+  // One read per person at a time; a second asker joins the first. The
+  // promise never rejects (readOnce catches), so nothing here can surface as
+  // an unhandled rejection (G-tc04).
+  const read = (userId: string): Promise<boolean> => {
+    const running = inFlight.get(userId)
+    if (running) return running
+    const p = readOnce(userId).then((answered) => {
+      inFlight.delete(userId)
+      return answered
+    })
+    inFlight.set(userId, p)
+    return p
   }
 
   return {

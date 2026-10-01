@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useReducer, useRef, useState } from 'react'
 import { useClient } from '../client/clientContextValue'
 import {
   ANIM_MS,
@@ -9,17 +9,17 @@ import {
   LOOK_RINGS,
   isDefaultLook,
   nameAttrs,
-  sameLook,
   type Look,
   type LookAnim,
   type LookColor,
 } from '../client/look'
-import { clearAvatar, setDisplayName, uploadAndSetAvatar } from '../client/profile'
-import { detail } from '../client/report'
+import { clearAvatar, describeProfileError, setDisplayName, uploadAndSetAvatar } from '../client/profile'
 import { AvatarDisc } from './AvatarDisc'
-import { clipPathFor, legacyAvatarShape } from './avatarShape'
+import { clipPathFor, takeLegacyAvatarShape } from './avatarShape'
 import { useLook, useLookStore, useLookSupport } from './lookContext'
+import { currentLook, INITIAL_DRAFT, isDirty, lookDraft } from './lookDraft'
 import { useReducedMotion } from './reducedMotion'
+import { useRoomListSettings } from './roomListSettings'
 
 // ---------------------------------------------------------------------------
 // The Profile panel (launch-polish L24).
@@ -40,62 +40,63 @@ import { useReducedMotion } from './reducedMotion'
 //                     to a copy; nothing reaches viewers until it is saved).
 //
 // The same box as Settings -- a sibling, opened from the pill beside it.
+// Opening Settings HIDES this panel rather than closing it (App), so a draft
+// is never lost to a click on the pill beside Profile; only Done closes it,
+// and Done asks first when there is something unsaved.
+//
+// The draft's rules are client-free and checked: ui/lookDraft.ts.
 // ---------------------------------------------------------------------------
 
-type SaveState = { kind: 'idle' } | { kind: 'saving' } | { kind: 'saved' } | { kind: 'failed'; why: string }
-
-const HISTORY_MAX = 50
-
-export function ProfilePanel({ onClose }: { onClose: () => void }) {
+export function ProfilePanel({ onClose, hidden = false }: { onClose: () => void; hidden?: boolean }) {
   const { client } = useClient()
   const store = useLookStore()
   const support = useLookSupport()
   const reduced = useReducedMotion()
+  const { animationsEnabled } = useRoomListSettings()
   const me = client?.getUserId() ?? ''
   const saved = useLook(me)
 
-  // The shape this browser chose before a look could be published, carried
-  // over ONCE: while nothing is published, the draft starts from it and the
-  // panel says so; saving publishes it.
-  const [legacyShape] = useState(() => legacyAvatarShape())
-  const carried = isDefaultLook(saved) && legacyShape !== null && legacyShape !== saved.mask
-  const base: Look = carried ? { ...saved, mask: legacyShape } : saved
-
-  const [draft, setDraft] = useState<Look | null>(null)
-  const [history, setHistory] = useState<Look[]>([])
-  const [save, setSave] = useState<SaveState>({ kind: 'idle' })
+  const [state, dispatch] = useReducer(lookDraft, INITIAL_DRAFT)
   const [closeArmed, setCloseArmed] = useState(false)
-  const current = draft ?? base
-  const dirty = !sameLook(current, saved)
+  const current = currentLook(state, saved)
+  const dirty = isDirty(state, saved)
+  const { history, save } = state
+
+  // Your published look is read again on open: the cache may be minutes old,
+  // a profile field has no push, and Save writes the WHOLE look -- so a draft
+  // built on a stale copy would quietly undo a change made on another device.
+  // Until that read answers, the look's controls wait.
+  const [fresh, setFresh] = useState<'reading' | 'read' | 'unread'>(store && me ? 'reading' : 'unread')
+  useEffect(() => {
+    if (!store || !me) return
+    let live = true
+    void store.refresh(me).then((answered) => {
+      if (!live) return
+      setFresh(answered ? 'read' : 'unread')
+      if (!answered) return
+      // The old per-browser mask, taken (and removed) once the real look is
+      // known: offered as a draft over a default look, dropped over any other.
+      const shape = takeLegacyAvatarShape()
+      const now = store.peek(me)
+      if (shape && isDefaultLook(now)) dispatch({ type: 'carry', saved: now, shape })
+    })
+    return () => { live = false }
+  }, [store, me])
 
   const change = (next: Partial<Look>) => {
-    setHistory((h) => [...h, current].slice(-HISTORY_MAX))
-    setDraft({ ...current, ...next })
-    setSave({ kind: 'idle' })
+    dispatch({ type: 'change', saved, next })
     setCloseArmed(false)
   }
-  const undo = () => {
-    const prev = history[history.length - 1]
-    if (!prev) return
-    setHistory((h) => h.slice(0, -1))
-    setDraft(prev)
-    setSave({ kind: 'idle' })
-  }
-  const discard = () => {
-    setHistory([])
-    setDraft(null)
-    setSave({ kind: 'idle' })
-  }
+  const undo = () => dispatch({ type: 'undo' })
+  const discard = () => dispatch({ type: 'discard' })
   const publish = async () => {
     if (!store) return
-    setSave({ kind: 'saving' })
+    dispatch({ type: 'saving' })
     try {
       await store.publish(current)
-      setHistory([])
-      setDraft(null)
-      setSave({ kind: 'saved' })
+      dispatch({ type: 'saved' })
     } catch (err) {
-      setSave({ kind: 'failed', why: detail(err) })
+      dispatch({ type: 'failed', why: describeProfileError(err, 'look') })
     }
   }
 
@@ -134,7 +135,7 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
       await setDisplayName(client, nameDraft)
       setIdNote({ text: 'Display name saved.', tone: 'ok' })
     } catch (err) {
-      setIdNote({ text: `The name was not saved: ${detail(err)}`, tone: 'bad' })
+      setIdNote({ text: describeProfileError(err, 'name'), tone: 'bad' })
     } finally {
       setIdBusy(false)
     }
@@ -148,7 +149,7 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
       setAvatarMxc(await uploadAndSetAvatar(client, file))
       setIdNote({ text: 'Picture saved.', tone: 'ok' })
     } catch (err) {
-      setIdNote({ text: `The picture was not saved: ${detail(err)}`, tone: 'bad' })
+      setIdNote({ text: describeProfileError(err, 'picture'), tone: 'bad' })
     } finally {
       setIdBusy(false)
     }
@@ -162,7 +163,7 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
       setAvatarMxc(null)
       setIdNote({ text: 'Picture removed.', tone: 'ok' })
     } catch (err) {
-      setIdNote({ text: `The picture was not removed: ${detail(err)}`, tone: 'bad' })
+      setIdNote({ text: describeProfileError(err, 'picture-removal'), tone: 'bad' })
     } finally {
       setIdBusy(false)
     }
@@ -176,11 +177,14 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
     onClose()
   }
 
-  const canSave = dirty && support !== 'no' && save.kind !== 'saving' && !!store
+  const canSave = dirty && support !== 'no' && save.kind !== 'saving' && fresh !== 'reading' && !!store
+  const lookLocked = fresh === 'reading'
+  const motionOff = reduced || !animationsEnabled
 
   return (
     <div
       className="tc-settings tc-profile"
+      hidden={hidden}
       role="dialog"
       aria-label="Profile"
       aria-modal="true"
@@ -260,6 +264,7 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
             <p className="tc-settings-note">
               How your avatar and name are drawn in Technetium. A draft until you press Save; the preview shows it now.
             </p>
+            <fieldset className="tc-prof-look" disabled={lookLocked}>
 
             <Choices label="Avatar shape">
               {LOOK_MASKS.map((m) => (
@@ -357,6 +362,7 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
               </button>
               <ColorSwatches value={current.nameColor} onPick={(c) => change({ nameColor: c })} />
             </Choices>
+            </fieldset>
           </div>
 
           <aside className="tc-prof-preview" aria-label="Preview">
@@ -376,14 +382,19 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
             <button
               type="button"
               className="tc-pill"
-              disabled={current.anim === 'none' || reduced}
+              disabled={current.anim === 'none' || motionOff}
               onClick={playPreview}
             >
-              {reduced ? 'Animations are off (reduced motion)' : 'Play the animation'}
+              {reduced
+                ? 'Animations are off (reduced motion)'
+                : !animationsEnabled
+                  ? 'Animations are off (Settings)'
+                  : 'Play the animation'}
             </button>
-            {carried && !draft && (
+            {state.carried && (
               <p className="tc-settings-note">
-                Your avatar shape was carried over from this browser. Save to show it to everyone.
+                Your avatar shape was carried over from this browser&apos;s old setting. Save to show it to everyone; it
+                is not kept otherwise.
               </p>
             )}
           </aside>
@@ -400,10 +411,17 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
               This server does not share profile fields, so a look saved here would be seen by nobody. Nothing is
               saved.
             </span>
+          ) : fresh === 'reading' ? (
+            <span className="tc-tone-active">Reading your saved look...</span>
           ) : save.kind === 'saving' ? (
             <span className="tc-tone-active">Saving...</span>
           ) : save.kind === 'failed' ? (
-            <span className="tc-tone-bad">Not saved: {save.why}</span>
+            <span className="tc-tone-bad">{save.why}</span>
+          ) : fresh === 'unread' && dirty ? (
+            <span className="tc-tone-warn">
+              Your saved look could not be read just now, so Save replaces whatever is saved. Reopen Profile to read it
+              again.
+            </span>
           ) : dirty ? (
             <span className="tc-tone-warn">Unsaved changes.</span>
           ) : save.kind === 'saved' ? (

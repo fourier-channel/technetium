@@ -4693,8 +4693,12 @@ select.tc-input { padding-right: 4px; }
   70% { transform: scale(1) rotate(-400deg); opacity: 1; }
   100% { transform: scale(0) rotate(-560deg); opacity: 0; }
 }
+/* As specific as the play rules and after them, so it wins: the earlier
+   `.tc-av > .tc-av-body` (0,2,0) lost to each `[data-anim-play]` rule (0,3,0)
+   and a reduced-motion viewer still got the spin (a media query adds no
+   weight). checks/look.check.ts compares the two weights. */
 @media (prefers-reduced-motion: reduce) {
-  .tc-av > .tc-av-body { animation: none; }
+  .tc-av[data-anim-play] > .tc-av-body { animation: none; }
   .tc-av-hole { display: none; }
 }
 /* The membership pill's name: its own face and ink, BEFORE the look rules
@@ -4728,6 +4732,13 @@ select.tc-input { padding-right: 4px; }
    the controls on the left and a live preview of the draft on the right. On a
    phone the preview goes first. Formant throughout.
    --------------------------------------------------------------------------- */
+.tc-settings[hidden] { display: none; }
+/* The look's controls, as one group the panel can hold while it reads your
+   published look. A fieldset for the free disabled-on-everything-inside;
+   none of its chrome. */
+.tc-prof-look { border: 0; margin: 0; padding: 0; min-width: 0; }
+.tc-prof-look:disabled { opacity: 0.55; }
+
 .tc-prof-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 280px;

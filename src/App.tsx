@@ -142,15 +142,24 @@ function App() {
   // threadStrip.ts for the dead space a share left around the cards.
   const threadStripH = threadStripCss()
   const [settingsOpen, setSettingsOpen] = useState(false)
-  // The Profile panel (L24): Settings' sibling, never open at the same time.
+  // The Profile panel (L24): Settings' sibling, never SHOWN at the same time.
+  // Opening Settings hides it rather than unmounting it, so an unsaved look
+  // draft and its undo history are still there when Profile is opened again;
+  // only the panel's own Done (which asks first) closes it.
   const [profileOpen, setProfileOpen] = useState(false)
+  const [profileMounted, setProfileMounted] = useState(false)
   const openProfile = () => {
     setSettingsOpen(false)
     setProfileOpen(true)
+    setProfileMounted(true)
   }
   const openSettings = () => {
     setProfileOpen(false)
     setSettingsOpen(true)
+  }
+  const closeProfile = () => {
+    setProfileOpen(false)
+    setProfileMounted(false)
   }
   // Your own profile preview, from a right click (or a left one -- there is no
   // chat action to perform on yourself) on your own card (L23).
@@ -592,7 +601,7 @@ function App() {
     </div>
     <LayoutEditor />
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
-      {profileOpen && <ProfilePanel onClose={() => setProfileOpen(false)} />}
+      {profileMounted && <ProfilePanel hidden={!profileOpen} onClose={closeProfile} />}
       {meCard && client && (
         <PersonCard
           client={client}

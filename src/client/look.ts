@@ -190,12 +190,35 @@ export function replaySchedule(seed: string): number[] {
 }
 
 // Every play still ahead for a line of this age: the arrival itself if the
-// line was just said, then whatever of its schedule has not passed -- so
-// somebody who opens the room a minute later sees the same later plays as
-// everyone else, and a line older than the window plays nothing, which is how
-// history never replays.
-export function playsAhead(seed: string, ageMs: number): number[] {
-  if (!(ageMs >= 0)) return []
-  const later = replaySchedule(seed).map((at) => at - ageMs).filter((d) => d > 0)
-  return ageMs <= LIVE_WINDOW_MS ? [0, ...later] : later
+// line was just said (and `arrival` has not already been played), then
+// whatever of its schedule has not passed -- so somebody who opens the room a
+// minute later sees the same later plays as everyone else, and a line older
+// than the window plays nothing, which is how history never replays.
+//
+// The age is measured on THIS client's clock (the SDK's localTimestamp, which
+// is arrival minus the server's own count of the event's age), never as
+// now - origin_server_ts: a viewer whose clock ran behind the homeserver's saw
+// every fresh line as "from the future" and never saw a look play at all. A
+// negative age can then only mean the local clock stepped; the line was just
+// said.
+export function playsAhead(seed: string, ageMs: number, arrival = true): number[] {
+  if (!Number.isFinite(ageMs)) return []
+  const age = Math.max(0, ageMs)
+  const later = replaySchedule(seed).map((at) => at - age).filter((d) => d > 0)
+  return arrival && age <= LIVE_WINDOW_MS ? [0, ...later] : later
+}
+
+// One line's plays, remembered across its row being drawn again. A line you
+// send is drawn first as a local echo; when the server confirms it, the SDK
+// re-keys the SAME event in place and its row remounts -- which played the
+// arrival a second time, and reseeded the later plays from the new id. The
+// record keeps the first id as the seed and whether the arrival has played.
+export interface LinePlays {
+  seed: string
+  arrived: boolean
+}
+
+export function playsFor(record: LinePlays | undefined, id: string, ageMs: number): { record: LinePlays; delays: number[] } {
+  const r = record ?? { seed: id, arrived: false }
+  return { record: r, delays: playsAhead(r.seed, ageMs, !r.arrived) }
 }
