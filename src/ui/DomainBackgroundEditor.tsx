@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MatrixClient, Room } from 'matrix-js-sdk'
 import { describeBackgroundError, useDomainBackground } from '../client/useDomainBackground'
-import { uploadAndPostBackground } from '../client/backgroundPost'
+import { uploadAndPostBackground, type BackgroundAttempt } from '../client/backgroundPost'
 import {
   IDENTITY_TRANSFORM,
   nudge,
@@ -36,6 +36,8 @@ export function DomainBackgroundEditor({
   const { setBackground, canSet } = useDomainBackground(client, room)
   const [imgUrl, setImgUrl] = useState<string | null>(null)
   const fileRef = useRef<File | null>(null)
+  // What the last failed Save already put on the server, for a resume.
+  const attemptRef = useRef<BackgroundAttempt | null>(null)
   const [transform, setTransform] = useState<Transform>(IDENTITY_TRANSFORM)
   const [mode, setMode] = useState<'interact' | 'transform'>('interact')
   const [naturalAspect, setNaturalAspect] = useState(1)
@@ -143,7 +145,8 @@ export function DomainBackgroundEditor({
       // POST it, then reference it. The gate authorizes media that has a
       // message behind it, so posting is what makes the background fetchable
       // by everyone in the room -- see client/backgroundPost.ts.
-      const post = await uploadAndPostBackground(client, room.roomId, file, 'domain')
+      // A retry after a failure resumes from whatever already landed.
+      const post = await uploadAndPostBackground(client, room.roomId, file, 'domain', attemptRef)
       await setBackground(post.mxc, tRef.current, post.eventId)
       onExit()
     } catch (err) {

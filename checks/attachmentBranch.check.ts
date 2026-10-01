@@ -34,18 +34,23 @@ function check(name: string, cond: boolean, extra?: unknown) {
 
 const composer = readFileSync('src/ui/Composer.tsx', 'utf8')
 const timeline = readFileSync('src/ui/Timeline.tsx', 'utf8')
+// Since 2026-10-01 the upload itself lives in client/attachmentUpload.ts, so a
+// retry can reuse what already landed; the composer only decides and sends.
+// checks/attachmentUpload.check.ts drives that module for real -- these keep
+// the shape assertions pointed at where the code now is.
+const upload = readFileSync('src/client/attachmentUpload.ts', 'utf8')
 
 console.log('== the upload branch')
 check('encryption is decided by the ROOM, not by a setting or a guess',
-  /const encrypt = room\.hasEncryptionStateEvent\(\)/.test(composer))
+  /encrypt: room\.hasEncryptionStateEvent\(\)/.test(composer))
 check('the plaintext default is the untouched file',
-  /let upload: Blob = att\.file/.test(composer))
+  /io\.uploadContent\(file, \{ name: file\.name, type: file\.type \}\)/.test(upload))
 check('encryption happens BEFORE the upload',
-  composer.indexOf('encryptAttachment(') < composer.indexOf('client.uploadContent(') &&
-  composer.indexOf('encryptAttachment(') > 0)
+  upload.indexOf('encryptAttachment(') < upload.indexOf('io.uploadContent(') &&
+  upload.indexOf('encryptAttachment(') > 0)
 // The filename reaches the server in the clear even when the bytes do not.
 check('an encrypted upload does not publish the real filename',
-  /name: 'encrypted', type: 'application\/octet-stream'/.test(composer))
+  /name: 'encrypted',\s*type: 'application\/octet-stream'/.test(upload))
 
 console.log('\n== the event carries file XOR url')
 check('file replaces url, never joins it',

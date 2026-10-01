@@ -74,22 +74,48 @@ export class BackgroundStageError extends Error {
   }
 }
 
+// What one save attempt has already done on the server, so pressing Save again
+// after a failure resumes instead of uploading the same bytes a second time
+// (the first copy would be an orphan: media nothing references). Valid only
+// for the same File, room and kind; anything else starts over.
+export interface BackgroundAttempt {
+  file: File
+  roomId: string
+  kind: BackgroundKind
+  mxc?: string
+  post?: BackgroundPost
+}
+
 export async function uploadAndPostBackground(
   client: MatrixClient,
   roomId: string,
   file: File,
   kind: BackgroundKind,
+  // A holder the caller keeps across retries (a React ref fits). Omitted, every
+  // call is a fresh attempt -- right for a picker where each try is a new file.
+  attempt?: { current: BackgroundAttempt | null },
 ): Promise<BackgroundPost> {
-  let mxc: string
-  try {
-    const res = await client.uploadContent(file, {
-      name: safeUploadName(file),
-      type: file.type,
-    })
-    mxc = res.content_uri
-  } catch (err) {
-    throw new BackgroundStageError('upload', err)
+  let a = attempt?.current ?? null
+  if (!a || a.file !== file || a.roomId !== roomId || a.kind !== kind) {
+    a = { file, roomId, kind }
+    if (attempt) attempt.current = a
   }
+  // Already posted on an earlier try (a later step, such as the state write,
+  // is what failed): the post is the answer, and posting again would duplicate it.
+  if (a.post) return a.post
+
+  if (!a.mxc) {
+    try {
+      const res = await client.uploadContent(file, {
+        name: safeUploadName(file),
+        type: file.type,
+      })
+      a.mxc = res.content_uri
+    } catch (err) {
+      throw new BackgroundStageError('upload', err)
+    }
+  }
+  const mxc = a.mxc
 
   const content: IContent = {
     msgtype: 'm.image',
@@ -108,7 +134,8 @@ export async function uploadAndPostBackground(
       null,
       content as unknown as Parameters<typeof client.sendMessage>[2],
     )
-    return { mxc, eventId }
+    a.post = { mxc, eventId }
+    return a.post
   } catch (err) {
     throw new BackgroundStageError('post', err)
   }

@@ -10,8 +10,14 @@ import {
 import type { Room, RoomMember } from 'matrix-js-sdk'
 import { useClient } from '../client/clientContextValue'
 import { formatMessage } from '../client/messageFormat'
-import { encryptAttachment, type EncryptedFileInfo } from '../client/encryptedFile'
+import { type EncryptedFileInfo } from '../client/encryptedFile'
 import { makeThumbnail } from '../client/imageThumbnail'
+import {
+  sendAttachment,
+  removePendingAttachment,
+  describeAttachmentFailure,
+  type UploadStash,
+} from '../client/attachmentUpload'
 import { describeSendFailure } from '../client/sendFailure'
 import { EmojiPicker } from './EmojiPicker'
 import { useComposerMode, type ComposerMode } from './composerMode'
@@ -257,12 +263,13 @@ export function Composer({
     ])
   }
 
+  // What already reached the server for each pending attachment, kept across
+  // a failed send so a retry does not upload the same bytes again. Entries
+  // leave when their event is sent or the attachment is removed.
+  const uploadStashRef = useRef<UploadStash>(new Map())
+
   const removeAttachment = (id: string) => {
-    setAttachments((prev) => {
-      const found = prev.find((a) => a.id === id)
-      if (found) URL.revokeObjectURL(found.previewUrl)
-      return prev.filter((a) => a.id !== id)
-    })
+    setAttachments((prev) => removePendingAttachment(prev, id, uploadStashRef.current))
   }
 
   // Build an m.image content object, optionally captioned (MSC2530) and always
@@ -410,67 +417,42 @@ export function Composer({
       const att = atts[i]
       try {
         const dims = await readImageSize(att.file).catch(() => null)
+        const cap =
+          i === 0 && caption ? { plain: caption.plain, html: caption.html } : null
         // Encrypt BEFORE upload when the room is encrypted. hasEncryptionStateEvent
         // is only trustworthy because m.room.encryption is now in sliding sync's
         // required_state -- while it was not, this would have answered false in
         // every room and quietly uploaded every picture in the clear.
-        const encrypt = room.hasEncryptionStateEvent()
-        let encrypted: Omit<EncryptedFileInfo, 'url'> | null = null
-        let thumbInfo: Record<string, unknown> = {}
-        let upload: Blob = att.file
-        let uploadOpts = { name: att.file.name, type: att.file.type }
-        if (encrypt) {
-          const out = await encryptAttachment(await att.file.arrayBuffer())
-          encrypted = out.info
-          upload = new Blob([out.ciphertext], { type: 'application/octet-stream' })
-          // The upload's NAME and TYPE reach the server in the clear even though
-          // the bytes do not. Sending the real filename there would publish
-          // "holiday-photo.png" beside ciphertext and undo part of the point.
-          // `encrypted` rather than nothing is deliberate and ruled on
-          // 2026-09-09: it labels these objects for a future prune, and the
-          // operator's call was that identifying encrypted media is fine
-          // precisely because it cannot be read.
-          uploadOpts = { name: 'encrypted', type: 'application/octet-stream' }
-
-          // The THUMBNAIL, as a second and completely separate encrypted
-          // attachment -- its own key, its own IV, its own upload. This is the
-          // only kind of thumbnail an encrypted image can have: the server
-          // cannot make one, and downscaling on receipt would still pull the
-          // whole picture once per recipient. Failing to make one is not a
-          // failure to send; the image simply goes without.
-          const thumb = await makeThumbnail(att.file, att.file.type)
-          if (thumb) {
-            const tOut = await encryptAttachment(await thumb.blob.arrayBuffer())
-            const tUp = await client.uploadContent(
-              new Blob([tOut.ciphertext], { type: 'application/octet-stream' }),
-              { name: 'encrypted-thumbnail', type: 'application/octet-stream' },
+        //
+        // The upload itself is resumable: whatever already landed for this
+        // attachment on an earlier, failed press of Send is reused rather than
+        // uploaded again (client/attachmentUpload.ts -- orphaned media).
+        await sendAttachment({
+          id: att.id,
+          file: att.file,
+          encrypt: room.hasEncryptionStateEvent(),
+          stash: uploadStashRef.current,
+          io: { uploadContent: (body, opts) => client.uploadContent(body, opts), makeThumbnail },
+          sendEvent: (up) => {
+            const info = { mimetype: att.file.type, size: att.file.size, ...(dims ?? {}), ...up.thumbInfo }
+            const content = buildImageContent(up.contentUri, info, att.file.name, cap, {
+              id: batchId,
+              index: i,
+              count: atts.length,
+              layout,
+            }, up.encrypted)
+            return client.sendMessage(
+              room.roomId,
+              threadId ?? null,
+              content as unknown as Parameters<typeof client.sendMessage>[2],
             )
-            thumbInfo = {
-              thumbnail_file: { ...tOut.info, url: tUp.content_uri },
-              thumbnail_info: { mimetype: thumb.mimetype, size: thumb.blob.size, w: thumb.w, h: thumb.h },
-            }
-          }
-        }
-        const { content_uri } = await client.uploadContent(upload, uploadOpts)
-        const info = { mimetype: att.file.type, size: att.file.size, ...(dims ?? {}), ...thumbInfo }
-        const cap =
-          i === 0 && caption ? { plain: caption.plain, html: caption.html } : null
-        const content = buildImageContent(content_uri, info, att.file.name, cap, {
-          id: batchId,
-          index: i,
-          count: atts.length,
-          layout,
-        }, encrypted)
-        await client.sendMessage(
-          room.roomId,
-          threadId ?? null,
-          content as unknown as Parameters<typeof client.sendMessage>[2],
-        )
+          },
+        })
         URL.revokeObjectURL(att.previewUrl)
         remaining.shift()
       } catch (err) {
         console.error('Image send failed:', err)
-        setSendError(describeSendFailure(err))
+        setSendError(describeAttachmentFailure(err))
         failed = true
         break
       }
