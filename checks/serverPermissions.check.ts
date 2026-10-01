@@ -21,6 +21,7 @@ import {
   usersInRange,
   type RoomFacts,
 } from '../src/client/serverPermissions.ts'
+import { readRoomFacts, roomCreators } from '../src/client/roomFacts.ts'
 
 let failures = 0
 const check = (name: string, cond: boolean, extra?: unknown) => {
@@ -132,6 +133,35 @@ console.log('\n-- a creator in room version 12 is the room\'s administrator --')
   check('no "nobody is at 100" fault when a creator exists', !fields(hydra).includes('no-admin'), fields(hydra))
   const orphaned = room({ users: [{ userId: '@a:x.net', level: 50 }], creators: [] })
   check('and the fault still stands in an older room with nobody at 100', fields(orphaned).includes('no-admin'))
+
+  // The same, from a synced room rather than hand-built facts: the creators
+  // must actually be read out of m.room.create, or every v12 room is back to
+  // "nobody is at 100".
+  const ev = (content: Record<string, unknown>, sender = '', stateKey = '') => ({
+    getContent: () => content, getSender: () => sender, getStateKey: () => stateKey,
+  })
+  const syncedRoom = (roomId: string, version: string | undefined, extra: string[] = []) => {
+    const state: Record<string, ReturnType<typeof ev>> = {
+      'm.room.create': ev({ ...(version ? { room_version: version } : {}), ...(extra.length ? { additional_creators: extra } : {}) }, '@saber:x.net'),
+      'm.room.power_levels': ev({ users: { '@a:x.net': 50 } }),
+    }
+    return {
+      roomId, name: roomId, getMyMembership: () => 'join', isSpaceRoom: () => false, getJoinedMemberCount: () => 2,
+      currentState: { getStateEvents: (type: string, key?: string) => (key === undefined ? [] : state[type] ?? null) },
+    }
+  }
+  const client = {
+    getRooms: () => [syncedRoom('!v12:x.net', '12', ['@co:x.net']), syncedRoom('!v11:x.net', '11'), syncedRoom('!v1:x.net', undefined)],
+    getAccountData: () => undefined,
+  }
+  const read = readRoomFacts(client as never)
+  const byId = new Map(read.map((r) => [r.roomId, r]))
+  check('a v12 room read from sync names its creator and additional creators',
+    byId.get('!v12:x.net')?.creators.join(',') === '@saber:x.net,@co:x.net', byId.get('!v12:x.net')?.creators)
+  check('so it raises no "nobody is at 100" fault', !fields(byId.get('!v12:x.net')!).includes('no-admin'))
+  check('a v11 room and a room naming no version have no all-powerful creator',
+    byId.get('!v11:x.net')?.creators.length === 0 && byId.get('!v1:x.net')?.creators.length === 0)
+  check('roomCreators reads the same, for the one-room editor', roomCreators(client.getRooms()[0] as never).join(',') === '@saber:x.net,@co:x.net')
 }
 
 console.log('\n-- outliers need a consensus to be outliers from --')

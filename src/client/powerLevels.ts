@@ -60,6 +60,10 @@ export interface PowerInput {
   requiredToSet: number
   // Spaces and rooms are the same object here; only the wording differs.
   isSpace: boolean
+  // They created the room in a version where that makes their power unlimited
+  // (room version 12 onward). Nobody can set it -- not them, not anyone -- and
+  // the SDK reports their level as Infinity, which no tier is below.
+  targetIsCreator: boolean
 }
 
 export interface PowerFacts {
@@ -116,6 +120,7 @@ export function powerEdit(i: PowerInput): PowerFacts {
   if (!i.inRoom) {
     return { ...none, blocked: `They are not in this ${where}, so they have no level here. Invite them first.` }
   }
+  if (i.targetIsCreator) return { ...none, blocked: creatorRefusal(i.isSelf, i.isSpace) }
   const blocked = standing(i)
   if (blocked) return { ...none, blocked }
 
@@ -142,6 +147,16 @@ export function powerEdit(i: PowerInput): PowerFacts {
       ? `Setting someone to your own level (${i.myLevel}) means you can no longer change it back.`
       : null,
   }
+}
+
+// A creator's level cannot be set by anyone, themselves included: the server
+// refuses a power-levels event that lists a creator at all. One sentence for
+// the editor, the bulk setter and the write, about you or about them.
+export function creatorRefusal(isSelf: boolean, isSpace: boolean): string {
+  const where = isSpace ? 'space' : 'room'
+  return isSelf
+    ? `You created this ${where}, and in its room version a creator's power has no limit and cannot be lowered, even by you.`
+    : `They created this ${where}, and in its room version a creator's power has no limit and cannot be set.`
 }
 
 // What a room requires to send m.room.power_levels, read from the content of

@@ -9,12 +9,16 @@
 // moves between the preview and the write, and the question is what survives.
 import {
   asMembership,
+  choosable,
+  customLevel,
   judgeRoom,
   levelsFromContent,
   levelsFromFacts,
   pickKind,
   runBulk,
   tally,
+  RATE_LIMIT_DEFAULT_MS,
+  RATE_LIMIT_MAX_MS,
   RATE_LIMIT_TRIES,
   type BulkIO,
   type Membership,
@@ -22,6 +26,8 @@ import {
   type RoomLevels,
 } from '../src/client/bulkPower.ts'
 import { PowerRefused, powerIO, setUserLevel } from '../src/client/powerWrite.ts'
+import { bulkRunFor, bulkRunning, dismissBulkRun, startBulkRun, stopBulkRun, subscribeBulkRun } from '../src/client/bulkRun.ts'
+import { readFileSync } from 'node:fs'
 import type { RoomFacts } from '../src/client/serverPermissions.ts'
 
 let failures = 0
@@ -115,9 +121,29 @@ console.log('\n-- quick picks take only what can change, of one kind --')
     ['!b', judgeRoom(levels({ targetLevel: 50 }), 'join', 50, false)],
     ['!s', judgeRoom(levels({ isSpace: true }), 'join', 50, false)],
     ['!c', judgeRoom(levels(), null, 50, false)],
+    // Refused by the preview: above my level, banned, a creator. None of these
+    // may be ticked or picked; the write would only skip them.
+    ['!x', judgeRoom(levels({ myLevel: 50, targetLevel: 50 }), 'join', 25, false)],
+    ['!y', judgeRoom(levels(), 'ban', 50, false)],
+    ['!z', judgeRoom(levels({ targetIsCreator: true, targetLevel: Infinity }), 'join', 50, false)],
   ])
+  rows.push({ roomId: '!x', isSpace: false }, { roomId: '!y', isSpace: false }, { roomId: '!z', isSpace: false })
+  check('the refused fixtures really are blocked', ['!x', '!y', '!z'].every((id) => verdicts.get(id)?.kind === 'blocked'))
   check('every room: the changeable room only', [...pickKind(rows, verdicts, 'rooms')].join(',') === '!a')
   check('every space: the space only', [...pickKind(rows, verdicts, 'spaces')].join(',') === '!s')
+  check('a blocked room cannot be ticked', ['!x', '!y', '!z'].every((id) => !choosable(verdicts.get(id)!)))
+  check('nor can a same or still-reading room', !choosable(verdicts.get('!b')!) && !choosable(verdicts.get('!c')!))
+}
+
+console.log('\n-- the "or [level]" box: a level, or plainly not one --')
+{
+  const k = (s: string) => { const c = customLevel(s); return c.kind === 'level' ? c.level : c.kind }
+  check('empty leaves the pressed tier standing', k('') === 'empty' && k('  ') === 'empty')
+  check('whole numbers 0 to 100 are levels', k('0') === 0 && k('15') === 15 && k(' 75 ') === 75 && k('100') === 100)
+  // Typing 150 passes through 1 and 15 on the way. The box ends at 150, which
+  // is no level -- never the 15 the last parse happened to leave behind.
+  check('150 is not a level (and not the 15 typed on the way to it)', k('150') === 'invalid')
+  check('fractions, signs and exponents are not levels', ['7.5', '-1', '1e2', '+5', '0x10', 'abc'].every((s) => k(s) === 'invalid'))
 }
 
 console.log('\n-- membership values from the server --')
@@ -133,31 +159,44 @@ interface FakeRoom {
   levels: Record<string, unknown> | null
   members: Record<string, Membership>
   failWrite?: unknown
+  // 429s still to come on writes, on power-level reads, on membership reads.
   rateLimits?: number
+  readRateLimits?: number
+  memberRateLimits?: number
+  // What a 429 asks for; absent means the 1234 most cases use.
+  retryAfter?: number | null
 }
 
-function fakeServer(rooms: Record<string, FakeRoom>) {
+function fakeServer(rooms: Record<string, FakeRoom>, onSleep: (ms: number) => void = () => {}) {
   const writes: { roomId: string; content: Record<string, unknown> }[] = []
   const slept: number[] = []
+  const limited = (r: FakeRoom) => ({
+    errcode: 'M_LIMIT_EXCEEDED',
+    httpStatus: 429,
+    data: r.retryAfter === null ? {} : { retry_after_ms: r.retryAfter ?? 1234 },
+  })
   const io: BulkIO = {
     async readLevels(roomId) {
       const r = rooms[roomId]
+      if (r.readRateLimits && r.readRateLimits > 0) { r.readRateLimits--; throw limited(r) }
       return r.levels === null ? null : structuredClone(r.levels)
     },
     async readMembership(roomId, userId) {
-      return rooms[roomId].members[userId] ?? 'none'
+      const r = rooms[roomId]
+      if (r.memberRateLimits && r.memberRateLimits > 0) { r.memberRateLimits--; throw limited(r) }
+      return r.members[userId] ?? 'none'
     },
     async writeLevels(roomId, content) {
       const r = rooms[roomId]
       if (r.rateLimits && r.rateLimits > 0) {
         r.rateLimits--
-        throw { errcode: 'M_LIMIT_EXCEEDED', httpStatus: 429, data: { retry_after_ms: 1234 } }
+        throw limited(r)
       }
       if (r.failWrite) throw r.failWrite
       writes.push({ roomId, content })
       r.levels = structuredClone(content)
     },
-    async sleep(ms) { slept.push(ms) },
+    async sleep(ms) { slept.push(ms); onSleep(ms) },
   }
   return { io, writes, slept }
 }
@@ -237,6 +276,44 @@ console.log('\n-- a rate limit is waited out, and not forever --')
   const out2 = await runBulk({ me: ME, target: MOD, to: 50, rooms: [{ roomId: '!a', isSpace: false, creators: [] }] }, stubborn.io, () => {}, () => false)
   check('a server that never relents ends the room as failed', out2.get('!a')?.kind === 'failed', out2.get('!a'))
   check(`after ${RATE_LIMIT_TRIES} tries`, stubborn.slept.length === RATE_LIMIT_TRIES - 1, stubborn.slept.length)
+
+  // The reads are most of a many-room run's requests; a 429 on one is waited
+  // out the same way, not turned into the room's failure.
+  const reads = fakeServer({ '!a': { levels: base(), members: { [MOD]: 'join' }, readRateLimits: 1, memberRateLimits: 1 } })
+  const out3 = await runBulk({ me: ME, target: MOD, to: 50, rooms: [{ roomId: '!a', isSpace: false, creators: [] }] }, reads.io, () => {}, () => false)
+  check('a 429 on either read is waited out too', out3.get('!a')?.kind === 'done' && reads.slept.length === 2, { out: out3.get('!a'), slept: reads.slept })
+
+  const silent = fakeServer({ '!a': { levels: base(), members: { [MOD]: 'join' }, rateLimits: 1, retryAfter: null } })
+  await runBulk({ me: ME, target: MOD, to: 50, rooms: [{ roomId: '!a', isSpace: false, creators: [] }] }, silent.io, () => {}, () => false)
+  check('a 429 that names no wait gets the default, not zero', silent.slept.join(',') === String(RATE_LIMIT_DEFAULT_MS), silent.slept)
+  const greedy = fakeServer({ '!a': { levels: base(), members: { [MOD]: 'join' }, rateLimits: 1, retryAfter: 3_600_000 } })
+  await runBulk({ me: ME, target: MOD, to: 50, rooms: [{ roomId: '!a', isSpace: false, creators: [] }] }, greedy.io, () => {}, () => false)
+  check('a 429 asking for an hour is capped', greedy.slept.join(',') === String(RATE_LIMIT_MAX_MS), greedy.slept)
+}
+
+console.log('\n-- a retry after a pause starts again from a fresh read --')
+{
+  // L19's own rule, under a 429: the write gets "later", and during the pause
+  // another admin promotes nobu. The retried write must carry that, which it
+  // can only do if it reads again rather than resending the pre-pause copy.
+  const rooms: Record<string, FakeRoom> = { '!a': { levels: base(), members: { [MOD]: 'join' }, rateLimits: 1 } }
+  const server = fakeServer(rooms, () => {
+    (rooms['!a'].levels!.users as Record<string, number>)['@nobu:x.net'] = 50
+  })
+  const out = await runBulk({ me: ME, target: MOD, to: 50, rooms: [{ roomId: '!a', isSpace: false, creators: [] }] }, server.io, () => {}, () => false)
+  const w = server.writes.at(-1)?.content as { users: Record<string, number> } | undefined
+  check('it wrote, once', out.get('!a')?.kind === 'done' && server.writes.length === 1, out.get('!a'))
+  check('the promotion made during the pause survived the write', w?.users['@nobu:x.net'] === 50, w)
+
+  // And it is JUDGED again: during the pause they were raised to my level.
+  const rooms2: Record<string, FakeRoom> = { '!a': { levels: { ...base(), users: { [ME]: 75 }, events: { 'm.room.power_levels': 50 } }, members: { [MOD]: 'join' }, rateLimits: 1 } }
+  const server2 = fakeServer(rooms2, () => {
+    (rooms2['!a'].levels!.users as Record<string, number>)[MOD] = 75
+  })
+  const out2 = await runBulk({ me: ME, target: MOD, to: 50, rooms: [{ roomId: '!a', isSpace: false, creators: [] }] }, server2.io, () => {}, () => false)
+  const r2 = out2.get('!a')
+  check('a change of standing during the pause is caught, and nothing is written',
+    r2?.kind === 'skipped' && /you are at 75/.test(r2.reason) && server2.writes.length === 0, r2)
 }
 
 console.log('\n-- stopping --')
@@ -251,6 +328,31 @@ console.log('\n-- stopping --')
   check('the room in hand finishes', out.get('!a')?.kind === 'done')
   check('the rest are not written, and say they were stopped',
     out.get('!b')?.kind === 'skipped' && /Stopped/.test((out.get('!b') as { reason: string }).reason) && server.writes.length === 1)
+
+  // Stop pressed DURING a rate-limit pause: the room in hand is abandoned
+  // with nothing written, and says so.
+  let stop2 = false
+  const paused = fakeServer({ '!a': { levels: base(), members: { [MOD]: 'join' }, rateLimits: 1 } }, () => { stop2 = true })
+  const out2 = await runBulk({ me: ME, target: MOD, to: 50, rooms: [{ roomId: '!a', isSpace: false, creators: [] }] }, paused.io, () => {}, () => stop2)
+  const r = out2.get('!a')
+  check('a stop during a pause writes nothing there, and says it was waiting',
+    r?.kind === 'skipped' && /Stopped while waiting/.test(r.reason) && paused.writes.length === 0, r)
+}
+
+console.log('\n-- the tally while a run is still going --')
+{
+  const mid = new Map<string, Progress>([
+    ['!a', { kind: 'done', from: 0, to: 50, waits: false }],
+    ['!b', { kind: 'working' }],
+    ['!c', { kind: 'waiting', ms: 1000 }],
+    ['!d', { kind: 'queued' }],
+    ['!e', { kind: 'skipped', reason: 'x' }],
+    ['!f', { kind: 'failed', reason: 'y' }],
+  ])
+  const t = tally(mid)
+  // BulkLevels' "Setting N of M" is finished+1; a queued room counted as
+  // finished would read "Setting 6 of 6" the moment a run starts.
+  check('rooms not yet finished are pending, not finished', t.pending === 3 && t.done === 1 && t.skipped === 1 && t.failed === 1, t)
 }
 
 // ---------------------------------------------------------------------------
@@ -281,6 +383,18 @@ console.log('\n-- powerIO speaks to the client the way the SDK expects --')
   await io.writeLevels('!r', { users: { [MOD]: 50 } })
   check('the write is a power_levels state event with an empty key, sent with its this',
     calls.length === 1 && calls[0].startsWith('!r|m.room.power_levels||'), calls)
+
+  // A pause ends when Stop is pressed, not when the server's minute is up.
+  const t0 = Date.now()
+  await io.sleep(10_000, () => true)
+  check('a stopped pause returns at once', Date.now() - t0 < 300, Date.now() - t0)
+  const t1 = Date.now()
+  let flips = 0
+  await io.sleep(10_000, () => ++flips > 2)
+  check('a pause stopped part-way returns within a beat of the stop', Date.now() - t1 < 1000, Date.now() - t1)
+  const t2 = Date.now()
+  await io.sleep(120, () => false)
+  check('an unstopped pause lasts as long as asked', Date.now() - t2 >= 110, Date.now() - t2)
 }
 
 console.log('\n-- the one-room path reads fresh and refuses by the same rules --')
@@ -294,11 +408,71 @@ console.log('\n-- the one-room path reads fresh and refuses by the same rules --
   const self = await setUserLevel(server.io, { roomId: '!g', isSpace: false, creators: [] }, ME, ME, 25)
   check('here you may still step yourself down', self.from === 50 && self.to === 25)
   const creator = await setUserLevel(server.io, { roomId: '!g', isSpace: false, creators: [MOD] }, ME, MOD, 0).then(() => null, (e) => e)
-  check('a creator cannot be set', creator instanceof PowerRefused)
+  check('a creator cannot be set', creator instanceof PowerRefused && /They created/.test(creator.message), creator)
+  // The case only the explicit guard catches: the creator is YOU. The standing
+  // rule lets anyone lower themselves, so without the guard this would write
+  // users[creator] -- an event the homeserver rejects for listing a creator.
+  const writesBefore = server.writes.length
+  const myself = await setUserLevel(server.io, { roomId: '!g', isSpace: false, creators: [ME] }, ME, ME, 25).then(() => null, (e) => e)
+  check('a creator cannot step themselves down, and is told it is them',
+    myself instanceof PowerRefused && /You created/.test(myself.message) && server.writes.length === writesBefore, myself)
   const bare = fakeServer({ '!n': { levels: null, members: {} } })
   const none = await setUserLevel(bare.io, { roomId: '!n', isSpace: false, creators: [] }, ME, MOD, 50).then(() => null, (e) => e)
   check('a room with no power levels is refused, not written from nothing (the SDK path wrote one naming only the target)',
     none instanceof PowerRefused && bare.writes.length === 0)
+}
+
+// ---------------------------------------------------------------------------
+// The run outlives the panel that started it.
+// ---------------------------------------------------------------------------
+console.log('\n-- a confirmed run belongs to the session, not to the panel --')
+{
+  // The panel used to stop the run on unmount and lose its report, so the
+  // Rooms pill or another Settings tab halted a confirmed run silently.
+  const src = readFileSync('src/ui/BulkLevels.tsx', 'utf8')
+  check('the panel no longer stops a run when it goes away', !/useEffect\(\(\) => \(\) => \{ stop/.test(src) && !/stop\.current = true/.test(src))
+  let gate!: () => void
+  const held = new Promise<void>((r) => { gate = r })
+  const server = fakeServer({ '!a': { levels: base(), members: { [MOD]: 'join' } }, '!b': { levels: base(), members: { [MOD]: 'join' } }, '!c': { levels: base(), members: { [MOD]: 'join' } } })
+  const slow: BulkIO = { ...server.io, async readLevels(id) { if (id === '!b') await held; return server.io.readLevels(id) } }
+  let pings = 0
+  const off = subscribeBulkRun(() => { pings++ })
+  const running = startBulkRun({ me: ME, target: MOD, to: 50, rooms: ['!a', '!b', '!c'].map((roomId) => ({ roomId, isSpace: false, creators: [] })) }, slow)
+  await new Promise((r) => setTimeout(r, 0))
+  const mid = bulkRunFor(ME)
+  check('while it runs, the run is there for its account', mid?.phase === 'run' && bulkRunning() && mid.target === MOD && mid.to === 50, mid)
+  check('and for nobody else', bulkRunFor('@else:x.net') === null)
+  check('a snapshot is stable between changes', bulkRunFor(ME) === bulkRunFor(ME))
+  check('rooms written so far are counted for the Rooms view to re-read on', mid?.written === 1, mid?.written)
+  dismissBulkRun()
+  check('a run in progress cannot be dismissed out from under itself', bulkRunFor(ME)?.phase === 'run')
+  const beforeStop = bulkRunFor(ME)
+  const pingsBeforeStop = pings
+  stopBulkRun()
+  // A NEW snapshot, announced: the panel reads this through
+  // useSyncExternalStore, which re-renders only when the object changes.
+  check('Stop is acknowledged at once, as a new snapshot subscribers hear about',
+    bulkRunFor(ME)?.stopping === true && bulkRunFor(ME) !== beforeStop && pings > pingsBeforeStop)
+  const second = await startBulkRun({ me: ME, target: MOD, to: 25, rooms: [] }, slow).then(() => 'started', () => 'refused')
+  check('a second run cannot start over the first', second === 'refused')
+  gate()
+  await running
+  const end = bulkRunFor(ME)
+  check('the finished run and its report stay until dismissed',
+    end?.phase === 'done' && end.progress.get('!a')?.kind === 'done' && end.progress.get('!b')?.kind === 'done'
+      && end.progress.get('!c')?.kind === 'skipped', end && [...end.progress])
+  check('subscribers heard every change', pings >= 4, pings)
+  dismissBulkRun()
+  check('Start again dismisses a finished run', bulkRunFor(ME) === null)
+  off()
+}
+
+console.log('\n-- an unreadable membership names a control that exists --')
+{
+  const v = judgeRoom(levels(), { error: 'HTTP 502' }, 50, false)
+  check('the row says what failed and to use Read again', v.kind === 'blocked' && /HTTP 502/.test(v.reason) && /Read again/.test(v.reason), v)
+  const src = readFileSync('src/ui/BulkLevels.tsx', 'utf8')
+  check('and the bulk view has a Read again button', /<button[^>]*>[\s\S]{0,200}?Read again/.test(src))
 }
 
 if (failures > 0) {

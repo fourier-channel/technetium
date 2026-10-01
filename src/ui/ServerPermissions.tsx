@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useSyncExternalStore } from 'react'
 import type { MatrixClient } from 'matrix-js-sdk'
 import { readRoomFacts } from '../client/roomFacts'
+import { bulkRunFor, subscribeBulkRun } from '../client/bulkRun'
 import {
   DEFAULT_RANGE,
   auditRooms,
@@ -54,6 +55,10 @@ export function ServerPermissions({ client }: { client: MatrixClient }) {
   const [onlyFindings, setOnlyFindings] = useState(false)
   const [creating, setCreating] = useState(false)
   const [view, setView] = useState<'rooms' | 'bulk'>('rooms')
+  // Each room a bulk run writes is a reason to read the facts again, whether
+  // or not the bulk view is the one showing (the run outlives it).
+  const me = client.getUserId() ?? ''
+  const bulkWritten = useSyncExternalStore(subscribeBulkRun, () => bulkRunFor(me)?.written ?? 0)
 
   // Re-read on demand rather than subscribing to every room's state: this is a
   // settings panel somebody opens to look at, not a live surface, and a
@@ -63,7 +68,7 @@ export function ServerPermissions({ client }: { client: MatrixClient }) {
   // readRoomFacts reads mutable SDK state, so nothing in the argument list
   // changes when the answer does. Bumping the counter IS the re-read.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const facts = useMemo(() => readRoomFacts(client), [client, reload])
+  const facts = useMemo(() => readRoomFacts(client), [client, reload, bulkWritten])
   const audit = useMemo(() => auditRooms(facts), [facts])
   const rows = useMemo(() => structure(facts), [facts])
   const range = normaliseRange(low, high)
@@ -375,7 +380,9 @@ function Promote({
   const ranked = new Set(holders.map((h) => h.userId))
   const query = q.trim().toLowerCase()
   const candidates = (live?.getJoinedMembers() ?? [])
-    .filter((m) => !ranked.has(m.userId))
+    // A creator holds no entry in the levels list and needs none: their power
+    // is unlimited and cannot be set, so they are not somebody to promote.
+    .filter((m) => !ranked.has(m.userId) && !room.creators.includes(m.userId))
     .filter((m) => query.length === 0
       || m.userId.toLowerCase().includes(query)
       || (m.name ?? '').toLowerCase().includes(query))
@@ -459,6 +466,7 @@ function HolderRow({
     targetLevel: level,
     requiredToSet: requiredToSetPower(live?.currentState.getStateEvents('m.room.power_levels', '')?.getContent()),
     isSpace: room.isSpace,
+    targetIsCreator: room.creators.includes(userId),
   })
   const { uname } = splitUserId(userId)
 

@@ -84,6 +84,7 @@ function RoomPowerEditor({
     targetLevel: target?.powerLevel ?? 0,
     requiredToSet: requiredToSetPower(plEvent?.getContent()),
     isSpace: !!room?.isSpaceRoom(),
+    targetIsCreator: !!room && roomCreators(room).includes(userId),
   })
 
   const apply = async (level: number) => {

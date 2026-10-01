@@ -36,6 +36,7 @@ const base = {
   targetLevel: 0,
   requiredToSet: 50,
   isSpace: false,
+  targetIsCreator: false,
 }
 const at = (over: Partial<typeof base>) => powerEdit({ ...base, ...over })
 const levels = (f: ReturnType<typeof powerEdit>) => f.options.map((o) => o.level).join(',')
@@ -161,13 +162,30 @@ console.log('\n-- the tiers match the glyphs the rest of the client draws --')
   check('every tier has a label', TIERS.every((t) => t.label.length > 0))
 }
 
+console.log('\n-- a room-version-12 creator: nobody sets their level --')
+{
+  // The SDK reports a creator's level as Infinity. Every tier is below it, so
+  // without the creator fact the editor offered a creator four live step-down
+  // buttons that the write then always refused -- as "They created this room",
+  // about themselves -- and showed others "They are at level Infinity".
+  const self = at({ isSelf: true, myLevel: Infinity, targetLevel: Infinity, targetIsCreator: true })
+  check('a creator looking at themselves gets no controls', self.options.length === 0 && self.blocked !== null, self)
+  check('and is told it is THEIR creation, with no talk of stepping down',
+    /^You created/.test(self.blocked ?? '') && self.warning === null, self)
+  const other = at({ myLevel: 100, targetLevel: Infinity, targetIsCreator: true })
+  check('anyone else looking at a creator gets no controls, and the reason', other.options.length === 0 && /^They created/.test(other.blocked ?? ''), other)
+  check('no sentence mentions Infinity', ![self.blocked, other.blocked, self.warning, other.warning].some((s) => /Infinity/.test(s ?? '')))
+  const byCreator = at({ myLevel: Infinity, targetLevel: 0 })
+  check('a creator setting someone else is offered every rank', levels(byCreator) === '0,25,50,100' && byCreator.blocked === null, byCreator)
+}
+
 console.log('\n-- one set of rules: the editor and the bulk setter agree --')
 {
   // powerEdit's options must be exactly the tiers refusal() accepts, for every
   // combination -- the two surfaces must never disagree about one room.
   let disagreements = 0
   for (const myLevel of [0, 25, 50, 75, 100]) for (const targetLevel of [0, 25, 50, 100]) for (const requiredToSet of [0, 50, 100]) for (const isSelf of [false, true]) {
-    const i = { isSelf, haveRoom: true, inRoom: true, myLevel, targetLevel: isSelf ? myLevel : targetLevel, requiredToSet, isSpace: false }
+    const i = { isSelf, haveRoom: true, inRoom: true, myLevel, targetLevel: isSelf ? myLevel : targetLevel, requiredToSet, isSpace: false, targetIsCreator: false }
     const f = powerEdit(i)
     const accepted = TIERS.filter((t) => refusal(i, t.level) === null && !(isSelf && t.level >= myLevel)).map((t) => t.level).join(',')
     const offered = f.options.map((o) => o.level).join(',')

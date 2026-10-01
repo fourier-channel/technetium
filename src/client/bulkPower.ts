@@ -1,4 +1,5 @@
 import {
+  creatorRefusal,
   describePowerError,
   levelIn,
   rateLimitWaitMs,
@@ -80,14 +81,12 @@ export function judgeRoom(levels: RoomLevels, membership: MembershipRead | null,
       reason: `Your own level is not set from here. Step down one ${where} at a time, from its row under Rooms: nobody below you can put you back.`,
     }
   }
-  if (levels.targetIsCreator) {
-    return { kind: 'blocked', reason: `They created this ${where}, and in its room version a creator's power has no limit and cannot be set.` }
-  }
+  if (levels.targetIsCreator) return { kind: 'blocked', reason: creatorRefusal(false, levels.isSpace) }
   // Already there needs no write, whatever their membership turns out to be.
   if (levels.targetLevel === to) return { kind: 'same', level: to }
   if (membership === null) return { kind: 'reading' }
   if (typeof membership === 'object') {
-    return { kind: 'blocked', reason: `Their membership here could not be read (${membership.error}). Re-read to try again.` }
+    return { kind: 'blocked', reason: `Their membership here could not be read (${membership.error}). Use Read again to retry.` }
   }
   if (membership === 'ban') {
     return { kind: 'blocked', reason: `They are banned from this ${where}. Unban them first if they belong here.` }
@@ -144,7 +143,9 @@ export interface BulkIO {
   readLevels(roomId: string): Promise<Record<string, unknown> | null>
   readMembership(roomId: string, userId: string): Promise<Membership>
   writeLevels(roomId: string, content: Record<string, unknown>): Promise<void>
-  sleep(ms: number): Promise<void>
+  // Resolves after `ms`, or as soon as `stopped()` turns true: a Stop pressed
+  // during a minute-long rate-limit pause takes effect now, not in a minute.
+  sleep(ms: number, stopped: () => boolean): Promise<void>
 }
 
 export interface BulkRoom {
@@ -177,7 +178,39 @@ export const RATE_LIMIT_TRIES = 5
 export const RATE_LIMIT_DEFAULT_MS = 3000
 export const RATE_LIMIT_MAX_MS = 60_000
 
-class Stopped extends Error {}
+export class Stopped extends Error {}
+
+// The wait a rate-limited attempt gets: what the server asked for, a default
+// when it named none (0 or absent), never more than the cap.
+export function rateLimitPause(asked: number): number {
+  return Math.min(RATE_LIMIT_MAX_MS, asked > 0 ? asked : RATE_LIMIT_DEFAULT_MS)
+}
+
+// Run `attempt` until it succeeds, waiting out rate limits between tries. Any
+// other failure is thrown at once. The WHOLE attempt is repeated, never a
+// piece of it: a write retried after a pause must be built from a read taken
+// after that pause, or whatever changed during it is deleted by the write.
+export async function patiently<T>(
+  attempt: () => Promise<T>,
+  sleep: BulkIO['sleep'],
+  stopped: () => boolean,
+  onWait: (ms: number) => void,
+  onResume: () => void,
+): Promise<T> {
+  for (let tries = 1; ; tries++) {
+    try {
+      return await attempt()
+    } catch (err) {
+      const asked = rateLimitWaitMs(err)
+      if (asked === null || tries >= RATE_LIMIT_TRIES) throw err
+      const ms = rateLimitPause(asked)
+      onWait(ms)
+      await sleep(ms, stopped)
+      if (stopped()) throw new Stopped()
+      onResume()
+    }
+  }
+}
 
 export async function runBulk(
   job: BulkJob,
@@ -200,48 +233,36 @@ export async function runBulk(
     }
     set(room.roomId, { kind: 'working' })
 
-    // One request, with the rate limit waited out. Any other failure is the
-    // room's failure; the run goes on to the next room (doctrine rule 6), and
-    // the room's row says what happened.
-    const patient = async <T>(call: () => Promise<T>): Promise<T> => {
-      for (let attempt = 1; ; attempt++) {
-        try {
-          return await call()
-        } catch (err) {
-          const asked = rateLimitWaitMs(err)
-          if (asked === null || attempt >= RATE_LIMIT_TRIES) throw err
-          const ms = Math.min(RATE_LIMIT_MAX_MS, asked > 0 ? asked : RATE_LIMIT_DEFAULT_MS)
-          set(room.roomId, { kind: 'waiting', ms })
-          await io.sleep(ms)
-          if (stopped()) throw new Stopped()
-          set(room.roomId, { kind: 'working' })
+    // Read, judge, write -- as one attempt, so a rate-limited write starts
+    // again from the read. Any other failure is the room's failure; the run
+    // goes on to the next room (doctrine rule 6), and the room's row says what
+    // happened.
+    const attempt = async (): Promise<Progress> => {
+      const content = await io.readLevels(room.roomId)
+      if (content === null) {
+        return {
+          kind: 'skipped',
+          reason: `This ${where} has no power-levels event, so there is no list to add them to. Writing one from here would take its creator's power away.`,
         }
       }
+      const membership = await io.readMembership(room.roomId, job.target)
+      const v = judgeRoom(levelsFromContent(content, room, job.me, job.target), membership, job.to, job.me === job.target)
+      if (v.kind === 'same') return { kind: 'skipped', reason: `Already at ${v.level} when it came to write.` }
+      // 'reading' cannot come back from a membership that was just read;
+      // blocked says its own reason, which may differ from the preview's.
+      if (v.kind !== 'change') return { kind: 'skipped', reason: v.kind === 'blocked' ? v.reason : 'Their membership could not be read.' }
+      await io.writeLevels(room.roomId, withUserLevel(content, job.target, job.to))
+      return { kind: 'done', from: v.from, to: v.to, waits: v.waits }
     }
 
     try {
-      const content = await patient(() => io.readLevels(room.roomId))
-      if (content === null) {
-        set(room.roomId, {
-          kind: 'skipped',
-          reason: `This ${where} has no power-levels event, so there is no list to add them to. Writing one from here would take its creator's power away.`,
-        })
-        continue
-      }
-      const membership = await patient(() => io.readMembership(room.roomId, job.target))
-      const v = judgeRoom(levelsFromContent(content, room, job.me, job.target), membership, job.to, job.me === job.target)
-      if (v.kind === 'same') {
-        set(room.roomId, { kind: 'skipped', reason: `Already at ${v.level} when it came to write.` })
-        continue
-      }
-      if (v.kind !== 'change') {
-        // 'reading' cannot come back from a membership that was just read;
-        // blocked says its own reason, which may differ from the preview's.
-        set(room.roomId, { kind: 'skipped', reason: v.kind === 'blocked' ? v.reason : 'Their membership could not be read.' })
-        continue
-      }
-      await patient(() => io.writeLevels(room.roomId, withUserLevel(content, job.target, job.to)))
-      set(room.roomId, { kind: 'done', from: v.from, to: v.to, waits: v.waits })
+      set(room.roomId, await patiently(
+        attempt,
+        io.sleep,
+        stopped,
+        (ms) => set(room.roomId, { kind: 'waiting', ms }),
+        () => set(room.roomId, { kind: 'working' }),
+      ))
     } catch (err) {
       if (err instanceof Stopped) {
         set(room.roomId, { kind: 'skipped', reason: 'Stopped while waiting on the server; nothing was written here.' })
@@ -278,6 +299,17 @@ export function tally(progress: ReadonlyMap<string, Progress>): Tally {
 // ---------------------------------------------------------------------------
 export function choosable(v: Verdict): boolean {
   return v.kind === 'change'
+}
+
+// The "or [level]" box. Empty means the pressed tier stands; anything else
+// must be a whole number from 0 to 100 or it is NO level -- never the last
+// keystroke that happened to parse (typing 150 passes through 1 and 15).
+export function customLevel(text: string): { kind: 'empty' } | { kind: 'level'; level: number } | { kind: 'invalid' } {
+  const s = text.trim()
+  if (s === '') return { kind: 'empty' }
+  if (!/^\d{1,3}$/.test(s)) return { kind: 'invalid' }
+  const n = Number(s)
+  return n <= 100 ? { kind: 'level', level: n } : { kind: 'invalid' }
 }
 
 export function pickKind(

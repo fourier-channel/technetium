@@ -1,16 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { MatrixClient } from 'matrix-js-sdk'
 import {
   choosable,
+  customLevel,
   judgeRoom,
   levelsFromFacts,
+  patiently,
   pickKind,
-  runBulk,
   tally,
   type MembershipRead,
   type Progress,
   type Verdict,
 } from '../client/bulkPower'
+import { bulkRunFor, dismissBulkRun, startBulkRun, stopBulkRun, subscribeBulkRun } from '../client/bulkRun'
 import { createLimiter } from '../client/concurrency'
 import { standingLabel, splitUserId } from '../client/members'
 import { TIERS } from '../client/powerLevels'
@@ -33,6 +35,10 @@ import { UserPicker } from './UserPicker'
 // are the synced ones; the write reads them again (bulkPower's header says
 // why), so a preview that has gone stale can only make a room be skipped with
 // its reason, never make it be written wrongly.
+//
+// A run, once confirmed, is the session's (client/bulkRun.ts): switching to
+// Rooms, to another Settings tab, or closing Settings leaves it running, and
+// this panel shows it again -- progress or report -- when it next opens.
 // ---------------------------------------------------------------------------
 
 // Membership reads in flight at once: enough that forty rooms take a moment,
@@ -43,7 +49,7 @@ const READS_AT_ONCE = 4
 // pressed, so it reads as a choice and not as a blank (formant rule 4).
 const START_LEVEL = 50
 
-type Phase = 'choose' | 'confirm' | 'run' | 'done'
+type Phase = 'choose' | 'confirm'
 
 function rank(level: number): string {
   return `${standingLabel(level)} ${level}`
@@ -59,27 +65,31 @@ export function BulkLevels({
   onWritten: () => void
 }) {
   const me = client.getUserId() ?? ''
-  const [target, setTarget] = useState<string | null>(null)
+  const runState = useSyncExternalStore(subscribeBulkRun, () => bulkRunFor(me))
+  // A run already here when the panel opens brings its person and level back.
+  const [target, setTarget] = useState<string | null>(() => bulkRunFor(me)?.target ?? null)
   const [picking, setPicking] = useState(false)
-  const [level, setLevel] = useState(START_LEVEL)
+  const [tierLevel, setTierLevel] = useState(() => bulkRunFor(me)?.to ?? START_LEVEL)
   const [custom, setCustom] = useState('')
   const [memberships, setMemberships] = useState<ReadonlyMap<string, MembershipRead>>(new Map())
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
-  const [phase, setPhase] = useState<Phase>('choose')
-  const [progress, setProgress] = useState<ReadonlyMap<string, Progress>>(new Map())
+  const [local, setLocal] = useState<Phase>('choose')
+  // Which pick the membership reads in flight belong to; a read that lands
+  // after somebody else was picked is dropped rather than shown against them.
+  const generation = useRef(0)
+
+  const typed = customLevel(custom)
+  // Null while the box holds something that is not a level: no verdicts, and
+  // nothing can be confirmed, rather than a level the box does not show.
+  const level = typed.kind === 'empty' ? tierLevel : typed.kind === 'level' ? typed.level : null
+  // A confirm whose level has since become unreadable goes back to choosing.
+  const phase = runState ? runState.phase : local === 'confirm' && level === null ? 'choose' : local
+  const progress = runState?.progress ?? EMPTY_PROGRESS
   // The rooms a run was started on, fixed when it starts. The preview keeps
   // moving underneath it -- sync delivers each new level as it lands, which
   // turns a written room's verdict into "already" -- and the count of a run
   // must not move with it.
-  const [ran, setRan] = useState<readonly string[]>([])
-  // Which pick the membership reads in flight belong to; a read that lands
-  // after somebody else was picked is dropped rather than shown against them.
-  const generation = useRef(0)
-  const stop = useRef(false)
-
-  // Closing Settings mid-run stops it after the room in hand. What was written
-  // stays written, and the Rooms view shows it; nothing carries on unseen.
-  useEffect(() => () => { stop.current = true }, [])
+  const ran = runState?.ran ?? NO_ROOMS
 
   // A room under two spaces is two rows and one room.
   const rooms = useMemo(() => {
@@ -90,7 +100,7 @@ export function BulkLevels({
 
   const verdicts = useMemo(() => {
     const out = new Map<string, Verdict>()
-    if (!target) return out
+    if (!target || level === null) return out
     for (const [roomId, room] of rooms) {
       out.set(roomId, judgeRoom(levelsFromFacts(room, me, target), memberships.get(roomId) ?? null, level, target === me))
     }
@@ -106,13 +116,24 @@ export function BulkLevels({
   const waits = chosen.filter((id) => { const v = verdicts.get(id); return v?.kind === 'change' && v.waits }).length
   const ownLevel = chosen.filter((id) => { const v = verdicts.get(id); return v?.kind === 'change' && v.ownLevel }).length
 
-  const readMemberships = (userId: string) => {
+  const failedReads = order.filter((id) => typeof memberships.get(id) === 'object').length
+
+  // Each read waits out a rate limit the way the run does: forty rooms read at
+  // once is exactly when a homeserver asks for a pause.
+  const readMemberships = (userId: string, only?: readonly string[]) => {
     const gen = ++generation.current
-    setMemberships(new Map())
+    const ids = only ?? order
+    setMemberships((cur) => {
+      if (!only) return new Map()
+      const next = new Map(cur)
+      for (const id of ids) next.delete(id)
+      return next
+    })
     const io = powerIO(client)
     const limiter = createLimiter(READS_AT_ONCE)
-    for (const roomId of order) {
-      void limiter.run(() => io.readMembership(roomId, userId)).then(
+    const superseded = () => gen !== generation.current
+    for (const roomId of ids) {
+      void limiter.run(() => patiently(() => io.readMembership(roomId, userId), io.sleep, superseded, () => {}, () => {})).then(
         (m) => {
           if (gen === generation.current) setMemberships((cur) => new Map(cur).set(roomId, m))
         },
@@ -124,11 +145,11 @@ export function BulkLevels({
   }
 
   const pick = (userId: string) => {
+    dismissBulkRun()
     setPicking(false)
     setTarget(userId)
     setSelected(new Set())
-    setProgress(new Map())
-    setPhase('choose')
+    setLocal('choose')
     readMemberships(userId)
   }
 
@@ -146,7 +167,7 @@ export function BulkLevels({
   }
 
   const run = async () => {
-    if (!target || chosen.length === 0) return
+    if (!target || level === null || chosen.length === 0) return
     const job = {
       me,
       target,
@@ -156,20 +177,14 @@ export function BulkLevels({
         return { roomId: id, isSpace: r.isSpace, creators: r.creators }
       }),
     }
-    stop.current = false
-    setProgress(new Map())
-    setRan(job.rooms.map((r) => r.roomId))
-    setPhase('run')
-    await runBulk(job, powerIO(client), (roomId, p) => setProgress((cur) => new Map(cur).set(roomId, p)), () => stop.current)
-    setPhase('done')
-    onWritten()
+    setLocal('choose')
+    await startBulkRun(job, powerIO(client))
   }
 
   const again = () => {
-    setProgress(new Map())
-    setRan([])
+    dismissBulkRun()
     setSelected(new Set())
-    setPhase('choose')
+    setLocal('choose')
     onWritten()
     if (target) readMemberships(target)
   }
@@ -207,7 +222,7 @@ export function BulkLevels({
               className="tc-pill"
               aria-checked={level === tier.level}
               disabled={busy}
-              onClick={() => { setLevel(tier.level); setCustom('') }}
+              onClick={() => { setTierLevel(tier.level); setCustom('') }}
             >
               {tier.label} {tier.level}
             </button>
@@ -224,13 +239,13 @@ export function BulkLevels({
               placeholder="level"
               aria-label="Any other power level, 0 to 100"
               disabled={busy}
-              onChange={(e) => {
-                setCustom(e.target.value)
-                const n = Number(e.target.value)
-                if (e.target.value.trim() !== '' && Number.isInteger(n) && n >= 0 && n <= 100) setLevel(n)
-              }}
+              aria-invalid={typed.kind === 'invalid'}
+              onChange={(e) => setCustom(e.target.value)}
             />
           </label>
+          {typed.kind === 'invalid' && (
+            <span className="tc-tone-bad" role="alert">A level is a whole number from 0 to 100.</span>
+          )}
         </span>
       </section>
 
@@ -244,6 +259,15 @@ export function BulkLevels({
               <button type="button" className="tc-pill" disabled={busy || selected.size === 0} onClick={() => setSelected(new Set())}>Clear</button>
               {reading > 0 && (
                 <span className="tc-tone-active">Reading their membership: {order.length - reading} of {order.length}</span>
+              )}
+              {reading === 0 && failedReads > 0 && !busy && (
+                <button
+                  type="button"
+                  className="tc-pill"
+                  onClick={() => readMemberships(target, order.filter((id) => typeof memberships.get(id) === 'object'))}
+                >
+                  Read again ({failedReads} unread)
+                </button>
               )}
             </span>
           </section>
@@ -276,11 +300,13 @@ export function BulkLevels({
             {phase === 'choose' && (
               <>
                 <span>
-                  {chosen.length === 0
-                    ? 'Tick the rooms to change, or use Every room.'
-                    : `${chosen.length} chosen.`}
+                  {level === null
+                    ? 'Choose a level first.'
+                    : chosen.length === 0
+                      ? 'Tick the rooms to change, or use Every room.'
+                      : `${chosen.length} chosen.`}
                 </span>
-                <button type="button" className="tc-pill" disabled={chosen.length === 0} onClick={() => setPhase('confirm')}>
+                <button type="button" className="tc-pill" disabled={level === null || chosen.length === 0} onClick={() => setLocal('confirm')}>
                   Set in {chosen.length}
                 </button>
               </>
@@ -288,7 +314,7 @@ export function BulkLevels({
             {phase === 'confirm' && (
               <>
                 <span className="tc-bulk-confirm">
-                  Set {name} to {rank(level)} in {chosen.length} {chosen.length === 1 ? 'place' : 'places'}?
+                  Set {name} to {rank(level ?? 0)} in {chosen.length} {chosen.length === 1 ? 'place' : 'places'}?
                   {ownLevel > 0 && (
                     <span className="tc-tone-warn">
                       {' '}In {ownLevel} of them that is your own level, and you will not be able to lower them there again.
@@ -301,15 +327,19 @@ export function BulkLevels({
                   )}
                 </span>
                 <button type="button" className="tc-pill" data-tone="go" onClick={() => void run()}>Yes, set it</button>
-                <button type="button" className="tc-pill" onClick={() => setPhase('choose')}>Cancel</button>
+                <button type="button" className="tc-pill" onClick={() => setLocal('choose')}>Cancel</button>
               </>
             )}
             {phase === 'run' && (
               <>
                 <span className="tc-tone-active">
-                  Setting {Math.min(finished + 1, ran.length)} of {ran.length}...
+                  {runState?.stopping
+                    ? `Stopping -- finishing the room in hand. ${finished} of ${ran.length} done.`
+                    : `Setting ${Math.min(finished + 1, ran.length)} of ${ran.length}...`}
                 </span>
-                <button type="button" className="tc-pill" onClick={() => { stop.current = true }}>Stop</button>
+                <button type="button" className="tc-pill" disabled={runState?.stopping} onClick={stopBulkRun}>
+                  {runState?.stopping ? 'Stopping' : 'Stop'}
+                </button>
               </>
             )}
             {phase === 'done' && (
@@ -339,6 +369,9 @@ export function BulkLevels({
     </div>
   )
 }
+
+const EMPTY_PROGRESS: ReadonlyMap<string, Progress> = new Map()
+const NO_ROOMS: readonly string[] = []
 
 function VerdictLine({ v }: { v: Verdict }) {
   switch (v.kind) {

@@ -1,6 +1,6 @@
 import type { MatrixClient } from 'matrix-js-sdk'
 import { asMembership, type BulkIO } from './bulkPower'
-import { levelIn, refusal, requiredToSetPower, withUserLevel } from './powerLevels'
+import { creatorRefusal, levelIn, refusal, requiredToSetPower, withUserLevel } from './powerLevels'
 
 // ---------------------------------------------------------------------------
 // The one way Technetium writes somebody's power level.
@@ -50,7 +50,17 @@ export function powerIO(client: MatrixClient): BulkIO {
       ) => Promise<unknown>
       await send(roomId, 'm.room.power_levels', content, '')
     },
-    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    // Wakes every quarter second to look at Stop, so a long pause ends as
+    // soon as somebody asks it to.
+    sleep: (ms, stopped) => new Promise((resolve) => {
+      const end = Date.now() + ms
+      const tick = () => {
+        const left = end - Date.now()
+        if (left <= 0 || stopped()) resolve()
+        else setTimeout(tick, Math.min(250, left))
+      }
+      tick()
+    }),
   }
 }
 
@@ -72,9 +82,7 @@ export async function setUserLevel(
   if (content === null) {
     throw new PowerRefused(`This ${where} has no power-levels event, so there is no list to add them to. Writing one from here would take its creator's power away.`)
   }
-  if (room.creators.includes(target)) {
-    throw new PowerRefused(`They created this ${where}, and in its room version a creator's power has no limit and cannot be set.`)
-  }
+  if (room.creators.includes(target)) throw new PowerRefused(creatorRefusal(me === target, room.isSpace))
   const from = levelIn(content, target, room.creators)
   const why = refusal({
     isSelf: me === target,
