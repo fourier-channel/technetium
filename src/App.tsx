@@ -25,6 +25,7 @@ import { ThreadPanel } from './ui/ThreadPanel'
 import { PersonRouterContext, createPersonRouter } from './ui/personRouter'
 import { PersonCard, type PersonCardTarget } from './ui/PersonCard'
 import { personGestures } from './ui/personGesture'
+import { SiteReset } from './ui/SiteReset'
 import { ProfilePanel } from './ui/ProfilePanel'
 import { ProfilePanelContext } from './ui/profilePanelContext'
 import { LookStoreContext, useLook } from './ui/lookContext'
@@ -370,6 +371,7 @@ function App() {
                 Log out
               </button>
             </div>
+            <SiteReset />
           </div>
         }
       />

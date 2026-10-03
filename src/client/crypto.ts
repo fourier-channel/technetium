@@ -7,6 +7,7 @@ import {
 import { isSilentAction, type CryptoIdentityFacts, type IdentityAction } from './cryptoIdentity'
 import type { KeyBackupFacts } from './keyBackup'
 import { browserOptInStore, readOptIn } from './e2eeOptIn'
+import { CRYPTO_STORE_PREFIX } from './storeNames'
 
 // ---------------------------------------------------------------------------
 // Bringing up the Rust crypto engine, and showing the user that it is
@@ -85,7 +86,6 @@ export function e2eeFromBuild(): boolean {
 // it. The only such device was the operator's, already unusable for the
 // reason above, with its room keys in the server backup and its identity in
 // secret storage; a restore from the recovery key brings both back.
-const CRYPTO_STORE_PREFIX = 'matrix-js-sdk::matrix-sdk-crypto'
 
 const cryptoStorePrefixFor = (userId: string, deviceId: string) => `${CRYPTO_STORE_PREFIX}::${userId}::${deviceId}`
 

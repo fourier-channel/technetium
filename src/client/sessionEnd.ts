@@ -23,6 +23,10 @@
 export type SessionEndReason =
   // The user chose to sign out.
   | 'logout'
+  // The user chose Purge (client/browserPurge.ts): a logout, and then everything else
+  // this client stored in the browser is deleted -- except the keys, which no
+  // reason here ever deletes.
+  | 'purge'
   // The server rejected our token and no refresh can save it: signed out from
   // another device, session killed server-side, or banned.
   | 'revoked'
@@ -51,7 +55,7 @@ export function planSessionEnd(reason: SessionEndReason): SessionEndPlan {
   return {
     stopClient: true,
     // The operator's ruling: a revoked session is a logout, not a hiccup.
-    deleteSyncStore: reason === 'logout' || reason === 'revoked',
+    deleteSyncStore: reason === 'logout' || reason === 'revoked' || reason === 'purge',
     clearStoredSession: true,
     deleteCryptoStore: false,
   }
@@ -61,6 +65,7 @@ export function planSessionEnd(reason: SessionEndReason): SessionEndPlan {
 // that would rot the moment a fourth is added.
 export const SESSION_END_REASONS: readonly SessionEndReason[] = [
   'logout',
+  'purge',
   'revoked',
   'resume_failed',
   'foreign_tokens',

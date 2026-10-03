@@ -40,6 +40,10 @@ export interface ClientContextValue {
   // its login page; MAS links between the two either way.
   login: (intent?: 'create') => Promise<void>
   logout: () => void
+  // Log out, then delete everything else this client stored in the browser
+  // except the encryption keys (client/browserPurge.ts), then reload. If any
+  // of it could not be deleted, the error screen says what and how to finish.
+  purge: () => Promise<void>
 }
 
 export const ClientContext = createContext<ClientContextValue | null>(null)

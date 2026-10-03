@@ -12,6 +12,7 @@ import { watchRoomEncryptionConfig } from './roomEncryptionConfig'
 import { createTokenRefreshFunction } from './tokenRefresher'
 import { ClientContext, type ClientContextValue, type ClientStatus } from './clientContextValue'
 import { planSessionEnd, type SessionEndReason } from './sessionEnd'
+import { executePurge } from './browserPurge'
 import { compareDevice, ForeignTokensError } from './sessionIdentity'
 import { generateLoginUrl } from './oidcAuthorize'
 import { detail } from './report'
@@ -342,6 +343,25 @@ export function ClientProvider({ children }: { children: ReactNode }) {
   // Stop syncing, drop the session, return to the login screen.
   const logout = () => { endSession('logout') }
 
+  // A logout, then the browser purge: everything this client stored, except
+  // the encryption keys and the opt-in that uses them (operator rulings
+  // 2026-10-03; client/browserPurge.ts says why).
+  //
+  // Signing out unmounts everything that could report a partial failure, so
+  // the report is the error screen's: what could not be deleted, and how to
+  // finish (memory errors-must-carry-their-own-remedy).
+  const purge = async (): Promise<void> => {
+    endSession('purge')
+    const { failed } = await executePurge(window)
+    if (failed.length === 0) {
+      window.location.reload()
+      return
+    }
+    setError(`You are signed out and this browser's copy of Technetium is purged, except: ${failed.join(', ')}. ` +
+      "Clear this site's data from your browser's own settings to finish.")
+    setStatus('error')
+  }
+
   // The server has rejected our token and no refresh can save it: signed out
   // elsewhere, session killed server-side, or banned. Without this the SDK
   // simply keeps retrying -- measured 2026-09-07 at ~2800 requests an hour from
@@ -372,6 +392,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     userId,
     login,
     logout,
+    purge,
   }
 
   return <ClientContext.Provider value={value}>{children}</ClientContext.Provider>
