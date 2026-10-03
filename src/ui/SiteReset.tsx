@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useClient } from '../client/clientContextValue'
 import { PURGE_QUESTION, refreshUrls } from '../client/browserPurge'
 import { usePopupAt, usePopupFocus } from './popupFocus'
+import { Pip2Link } from './Pip2Link'
 
 // ---------------------------------------------------------------------------
 // Hard refresh and purge, one rectangle, each half the option, under your name
@@ -121,7 +122,7 @@ function PurgeQuestion({
       <p className="tc-site-reset-what">
         Purge signs you out of Technetium and deletes everything it stored in this browser except your encryption
         keys, so your encrypted messages still open when you sign back in. To delete the keys as well, use the reset
-        in Settings &gt; Encryption.
+        in Settings &gt; Encryption. What 41chan keeps, and why: <Pip2Link />.
       </p>
       <div className="tc-site-reset-row">
         <button type="button" className="tc-pill tc-site-reset-go" disabled={purging} onClick={onGo}>

@@ -4,6 +4,7 @@ import { AssetImage } from './AssetImage'
 import { ONBOARDING_ASSETS } from './assets'
 import { FourierSay } from './FourierSay'
 import { FOURIER_INTRO } from './fourierIntro'
+import { Pip2Link } from '../ui/Pip2Link'
 
 // ---------------------------------------------------------------------------
 // The first thing a visitor sees: logo, then two clear doors -- Create account
@@ -58,6 +59,11 @@ export function AuthLanding({ onProceed }: { onProceed: (intent?: 'create') => v
           invisible to users on other clients. These features are in heavy alpha
           stages so may not work properly. Please report anything that feels
           "wrong" or "off", as UI satisfaction is the number one goal.
+        </p>
+        {/* What 41chan does with what it learns about you, before you give it
+            anything: PIP2, the one page every surface links. */}
+        <p style={pipLine}>
+          <Pip2Link full />
         </p>
       </div>
     </div>
@@ -175,6 +181,13 @@ const alphaNotice: CSSProperties = {
   textAlign: 'center',
   opacity: 0.85,
   maxWidth: 340,
+}
+
+const pipLine: CSSProperties = {
+  margin: 0,
+  fontFamily: 'var(--tc-ui-font, inherit)',
+  fontSize: 12,
+  textAlign: 'center',
 }
 
 const actions: CSSProperties = {
