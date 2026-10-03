@@ -98,6 +98,12 @@ console.log('== hard refresh, and the question')
   const ui = read('src/ui/SiteReset.tsx')
   check('the rectangle asks in place with that question, and says the keys stay',
     /\{PURGE_QUESTION\}/.test(ui) && /except your encryption\s+keys/.test(ui) && /Settings &gt; Encryption/.test(ui) && !/window\.confirm|confirm\(/.test(ui))
+  const purgeAt = ui.indexOf('aria-label="Purge"')
+  const refreshAt = ui.indexOf('aria-label="Hard refresh"')
+  check('symbols, not words: the bin first, the recycling mark second, each named',
+    purgeAt > -1 && refreshAt > purgeAt &&
+    ui.indexOf('<ResetIcon d={PURGE_ICON} />') > purgeAt && ui.indexOf('<ResetIcon d={REFRESH_ICON} />') > refreshAt &&
+    !/>\s*(Refresh|Purge)\s*</.test(ui), { purgeAt, refreshAt })
   check('it sits under the name card', /<\/div>\n\s*<SiteReset \/>\n\s*<\/div>/.test(read('src/App.tsx')))
 }
 
