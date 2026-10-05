@@ -3773,6 +3773,36 @@ code {
 .tc-signout-status ul { margin: 0 0 8px; padding-left: 18px; }
 .tc-signout-status a { color: var(--mod-accent); }
 
+/* Another tab has this device (DeviceElsewhere.tsx): the whole window, one
+   box, one action. */
+.tc-device-elsewhere {
+  box-sizing: border-box;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: var(--mod-surface);
+  color: var(--mod-ink);
+  font-family: var(--tc-ui-font, inherit);
+}
+.tc-device-elsewhere-box {
+  box-sizing: border-box;
+  width: min(30rem, 100%);
+  padding: 18px 20px;
+  border: 1px solid var(--mod-line-strong);
+  border-left: 3px solid var(--mod-warn-fg);
+  border-radius: var(--mod-radius);
+  background: var(--mod-surface-2);
+  box-shadow: var(--mod-raise-lift);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.tc-device-elsewhere-box h1 { margin: 0 0 8px; font-size: 17px; }
+.tc-device-elsewhere-box p { margin: 0 0 12px; color: var(--mod-ink-dim); }
+.tc-device-elsewhere-pip { font-size: 12px; margin: 12px 0 0 !important; }
+.tc-device-elsewhere-pip a { color: var(--mod-accent); }
+
 /* The pill: the Direct Messages pill's face, as one rule. NavTree's DM pill
    takes its border and radius from the same two variables. */
 :root {

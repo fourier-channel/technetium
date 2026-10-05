@@ -17,6 +17,12 @@ export type ClientStatus =
   | 'syncing' // client built, initial sync running
   | 'ready' // synced and usable
   | 'error'
+  // Another tab of this browser is using this device (deviceLock.ts): this tab
+  // started nothing ('device_busy'), or stopped when that tab took over
+  // ('device_taken'). Either way the session is kept, and "Use it here" takes
+  // the device back.
+  | 'device_busy'
+  | 'device_taken'
 
 export interface ClientContextValue {
   client: MatrixClient | null
@@ -50,6 +56,8 @@ export interface ClientContextValue {
   // signed-out screen to say. Null when there is nothing to say.
   signOut: SignOutProgress | null
   dismissSignOut: () => void
+  // "Use it here": take this device from the tab that has it.
+  takeOverDevice: () => void
 }
 
 export const ClientContext = createContext<ClientContextValue | null>(null)

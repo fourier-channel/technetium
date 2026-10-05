@@ -1,0 +1,26 @@
+<!doctype html><html><head><meta charset="utf-8"><title>device lock tab</title></head><body>
+<script type="module">
+  // One "tab": the real deviceLock module (type-stripped into out/ by
+  // devicelock.sh), the real navigator.locks and BroadcastChannel of THIS
+  // browsing context. The parent page drives two of these.
+  import * as m from './out/deviceLock.js'
+  const log = []
+  let held = null
+  window.tab = {
+    log,
+    async acquire(steal) {
+      const r = await m.acquireDeviceLock({
+        locks: navigator.locks,
+        name: m.deviceLockName('@probe:example', 'DEVICE'),
+        steal,
+        onLost: () => { log.push('lost: stopped client') },
+        openChannel: () => new BroadcastChannel(m.DEVICE_LOCK_CHANNEL),
+      })
+      if (r.kind === 'held') held = r
+      log.push('acquire(' + (steal ? 'steal' : 'ifAvailable') + ') -> ' + r.kind)
+      return r.kind
+    },
+    release() { held?.release(); log.push('released') },
+  }
+</script>
+</body></html>

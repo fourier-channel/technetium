@@ -17,6 +17,7 @@ import { clearOidcState, signOutFailures, signOutServerSide, type SignOutFailure
 import { booruCsrfToken, resetBooruCsrf } from './booruCsrf'
 import { resetBooruSession } from './booruSession'
 import { BOORU_ORIGIN } from './booruUrl'
+import { DEVICE_LOCK_CHANNEL, acquireDeviceLock, deviceLockName, type LockManagerLike } from './deviceLock'
 import { compareDevice, ForeignTokensError } from './sessionIdentity'
 import { generateLoginUrl } from './oidcAuthorize'
 import { detail, reportIgnored } from './report'
@@ -81,6 +82,24 @@ export function ClientProvider({ children }: { children: ReactNode }) {
   // so the catch could only ever see null -- which is exactly why a failed
   // resume used to leave a started client syncing forever against a dead token.
   const clientRef = useRef<MatrixClient | null>(null)
+  // This tab's hold on the device (deviceLock.ts): one tab per device, so two
+  // encryption engines never write one store. Null when not held -- before a
+  // start, after a logout, after another tab took it, or in a browser without
+  // Web Locks.
+  const lockRef = useRef<{ release: () => void } | null>(null)
+
+  // Another tab said "Use it here" and the browser gave it the lock. Stop
+  // everything that uses the device NOW, synchronously -- deviceLock announces
+  // the stop the moment this returns, and the other tab starts its engine on
+  // that word. The session record and caches stay: this is a pause, not a
+  // sign-out, and this tab can take the device back the same way.
+  const onDeviceLost = () => {
+    clientRef.current?.stopClient()
+    clientRef.current = null
+    lockRef.current = null
+    setClient(null)
+    setStatus('device_taken')
+  }
 
   // Shared: build the persistent-store client, sync, and publish it to context.
   const startSyncedClient = async (params: {
@@ -93,12 +112,41 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     // Resume only: ask the server whose token this is before trusting the
     // stored device id. A fresh login just did whoami and needs no second ask.
     confirmDevice?: boolean
+    // "Use it here": take the device from the tab that has it.
+    steal?: boolean
   }) => {
+    // The device first, before anything opens its stores: whichever tab holds
+    // the lock is the only one that starts a client, encryption or not -- a
+    // tab without an engine would still take this device's room keys off the
+    // to-device channel and drop them (deviceLock.ts).
+    lockRef.current?.release()
+    lockRef.current = null
+    const got = await acquireDeviceLock({
+      locks: (typeof navigator !== 'undefined' ? (navigator as { locks?: LockManagerLike }).locks : undefined),
+      name: deviceLockName(params.userId, params.deviceId ?? ''),
+      steal: !!params.steal,
+      onLost: onDeviceLost,
+      openChannel: () => (typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel(DEVICE_LOCK_CHANNEL)),
+    })
+    if (got.kind === 'busy') {
+      setStatus('device_busy')
+      return
+    }
+    if (got.kind === 'unsupported') {
+      // Run unguarded rather than not at all, and say so with the remedy.
+      console.warn(`[device-lock] not held (${got.why}): a second tab of this browser could run alongside this one. Use one tab, or a current browser.`)
+    }
+    const myLock = got.kind === 'held' ? { release: got.release } : null
+    lockRef.current = myLock
+    // Lost while starting? Then this start is over: the other tab has the device.
+    const stillOurs = () => lockRef.current === myLock
+
     setStatus('syncing')
     const c = await buildClient(params)
     // Recorded BEFORE anything that can throw, so every failure path can stop it.
     clientRef.current = c
     exposeForDevConsole(c)
+    if (!stillOurs()) { c.stopClient(); clientRef.current = null; return }
 
     // The stored record is shared across tabs and was, until 2026-09-10,
     // writable by a tab on an older login. Crypto below is keyed to the device
@@ -135,8 +183,10 @@ export function ClientProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    if (!stillOurs()) { c.stopClient(); clientRef.current = null; return }
     setClient(c)
     await startAndWaitForSync(c)
+    if (!stillOurs()) return
     setStatus('ready')
   }
 
@@ -227,7 +277,9 @@ export function ClientProvider({ children }: { children: ReactNode }) {
   }
 
   // Path 2: rebuild the client from the stored session -- no MAS visit.
-  async function resumeSession() {
+  // `steal` is "Use it here" on the busy screen: the record is read afresh,
+  // because the tab that had the device may have refreshed the tokens since.
+  async function resumeSession(steal = false) {
     const s = loadSession()
     if (!s) {
       setStatus('awaiting_login')
@@ -249,6 +301,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
           idTokenClaims: s.oidc.idTokenClaims,
         }),
         confirmDevice: true,
+        steal,
       })
     } catch (err: unknown) {
       console.error('Resume failed:', err)
@@ -357,6 +410,9 @@ export function ClientProvider({ children }: { children: ReactNode }) {
       clientId: stored?.oidc.clientId ?? null,
     }
     if (plan.stopClient) c?.stopClient()
+    // The device is free for the next tab or the next sign-in.
+    lockRef.current?.release()
+    lockRef.current = null
     if (plan.deleteSyncStore) {
       // Read from the client, not from `userId` state: a handler subscribed at
       // mount closes over the value as it was then.
@@ -465,6 +521,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     purge,
     signOut,
     dismissSignOut: () => setSignOut(null),
+    takeOverDevice: () => { void resumeSession(true) },
   }
 
   return <ClientContext.Provider value={value}>{children}</ClientContext.Provider>

@@ -1,0 +1,31 @@
+<!doctype html><html><head><meta charset="utf-8"><title>device lock -- two tabs, real Web Locks</title></head><body>
+<!-- Driven by devicelock.sh. Two same-origin frames stand in for two tabs: each
+     has its own navigator.locks and BroadcastChannel objects, sharing the
+     origin's lock manager exactly as two tabs do. The result is written into
+     #result for --dump-dom to print. -->
+<iframe id="a" src="devicelock-tab.html"></iframe>
+<iframe id="b" src="devicelock-tab.html"></iframe>
+<pre id="result">running</pre>
+<script type="module">
+  // Poll rather than listen: a frame can finish loading before this module
+  // runs, and its 'ready' would be missed.
+  const frame = (id) => document.getElementById(id).contentWindow
+  for (let i = 0; i < 200 && !(frame('a')?.tab && frame('b')?.tab); i++) await new Promise((r) => setTimeout(r, 10))
+  if (!(frame('a')?.tab && frame('b')?.tab)) { document.getElementById('result').textContent = 'FRAMES DID NOT LOAD THE MODULE'; throw new Error('frames') }
+  const A = frame('a').tab
+  const B = frame('b').tab
+  const out = []
+  const t0 = performance.now()
+  out.push('A ' + await A.acquire(false))
+  out.push('B ' + await B.acquire(false))
+  out.push('B steal ' + await B.acquire(true))
+  out.push('A log: ' + A.log.join(' | '))
+  out.push('A ' + await A.acquire(false))
+  B.release()
+  await new Promise((r) => setTimeout(r, 50))
+  out.push('A after B released ' + await A.acquire(false))
+  out.push('B log: ' + B.log.join(' | '))
+  out.push('steal waited ms < 2000: ' + (performance.now() - t0 < 2000))
+  document.getElementById('result').textContent = out.join('\n')
+</script>
+</body></html>

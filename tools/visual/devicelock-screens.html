@@ -1,0 +1,17 @@
+<!doctype html><html><head>
+<!--#head-->
+<title>Device lock -- the two screens</title>
+<style>
+  /* DeviceElsewhere.tsx's markup with the copy from deviceLockCopy, at a
+     laptop width and a phone width. Regenerate the copy if it changes. */
+  .h-wrap { display: flex; gap: 16px; padding: 8px 16px 16px; align-items: flex-start; }
+  .h-frame { width: 640px; height: 360px; overflow: hidden; border: 1px solid var(--mod-line); }
+  .h-frame.phone { width: 360px; height: 480px; }
+  .h-frame .tc-device-elsewhere { min-height: 100%; height: 100%; }
+</style>
+</head><body>
+<div class="h-label">another tab has the device: busy (this tab never started) / taken (this tab gave it up)</div>
+<div class="h-wrap"><div class="h-frame"><div class="tc-device-elsewhere" role="alertdialog"><div class="tc-device-elsewhere-box"><h1>Technetium is open in another tab</h1><p>Another tab of this browser is using this device and its encryption keys, and only one tab can at a time -- two at once can leave messages unreadable. Use that tab, or use this one instead; the other tab stops.</p><button type="button" class="tc-pill">Use it here</button><p class="tc-device-elsewhere-pip"><a class="tc-link" href="#">PIP<sup>2</sup></a></p></div></div></div><div class="h-frame"><div class="tc-device-elsewhere" role="alertdialog"><div class="tc-device-elsewhere-box"><h1>Technetium moved to another tab</h1><p>Another tab of this browser took over this device and its encryption keys, so this tab stopped. Nothing was lost. Use that tab, or bring Technetium back to this one; the other tab stops.</p><button type="button" class="tc-pill">Use it here</button><p class="tc-device-elsewhere-pip"><a class="tc-link" href="#">PIP<sup>2</sup></a></p></div></div></div></div>
+<div class="h-label">the same at a phone's width</div>
+<div class="h-wrap"><div class="h-frame phone"><div class="tc-device-elsewhere" role="alertdialog"><div class="tc-device-elsewhere-box"><h1>Technetium is open in another tab</h1><p>Another tab of this browser is using this device and its encryption keys, and only one tab can at a time -- two at once can leave messages unreadable. Use that tab, or use this one instead; the other tab stops.</p><button type="button" class="tc-pill">Use it here</button><p class="tc-device-elsewhere-pip"><a class="tc-link" href="#">PIP<sup>2</sup></a></p></div></div></div></div>
+</body></html>

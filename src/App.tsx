@@ -27,6 +27,7 @@ import { PersonCard, type PersonCardTarget } from './ui/PersonCard'
 import { personGestures } from './ui/personGesture'
 import { SiteReset } from './ui/SiteReset'
 import { ManageSession } from './ui/ManageSession'
+import { DeviceElsewhere } from './ui/DeviceElsewhere'
 import { ProfilePanel } from './ui/ProfilePanel'
 import { ProfilePanelContext } from './ui/profilePanelContext'
 import { LookStoreContext, useLook } from './ui/lookContext'
@@ -294,6 +295,11 @@ function App() {
   }
 
   // Pre-client beat only: a moving boot screen, never a dead "Loading".
+  // Another tab of this browser has the device (client/deviceLock.ts).
+  if (status === 'device_busy' || status === 'device_taken') {
+    return <DeviceElsewhere which={status === 'device_busy' ? 'busy' : 'taken'} />
+  }
+
   if (status === 'starting' || (status === 'syncing' && !client)) {
     return <BootScreen label={status === 'starting' ? 'Starting' : 'Connecting'} />
   }
