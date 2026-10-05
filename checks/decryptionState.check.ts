@@ -100,6 +100,12 @@ console.log('\n-- every explanation is usable copy --')
   check('every actionable reason tells the user what to do',
     noInstruction.length === 0, noInstruction)
   check('there is at least one actionable reason', actionable.length > 0)
+  // What THIS device must do is done in one place, Manage session (it moved
+  // there from Settings, 2026-10-05); the reason says where, or "verify it"
+  // leaves the user hunting for the button.
+  const ownDevice = ['MEGOLM_KEY_WITHHELD_FOR_UNVERIFIED_DEVICE', 'HISTORICAL_MESSAGE_BACKUP_UNCONFIGURED']
+  const unplaced = ownDevice.filter((c) => !/under Manage session below your name/.test(explainDecryptionFailure(c as never).text))
+  check('a reason this device can fix says where: Manage session', unplaced.length === 0, unplaced)
 }
 
 console.log('\n-- pending is exactly the retryable set --')

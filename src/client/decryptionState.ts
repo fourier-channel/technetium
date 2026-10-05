@@ -59,7 +59,7 @@ const EXPLANATIONS: Record<string, DecryptionExplanation> = {
   // "press the verify button".
   MEGOLM_KEY_WITHHELD_FOR_UNVERIFIED_DEVICE: {
     outlook: 'actionable',
-    text: 'The sender did not share the key because this device is unverified. Verify it to read this message.',
+    text: 'The sender did not share the key because this device is unverified. Verify it, under Manage session below your name, to read this message.',
   },
   // The session is known but from a later point in the conversation.
   OLM_UNKNOWN_MESSAGE_INDEX: {
@@ -74,7 +74,7 @@ const EXPLANATIONS: Record<string, DecryptionExplanation> = {
   // Sent before this device existed; a backup exists but is not set up here.
   HISTORICAL_MESSAGE_BACKUP_UNCONFIGURED: {
     outlook: 'actionable',
-    text: 'Sent before you signed in on this device. Enter your recovery key to restore it from your backup.',
+    text: 'Sent before you signed in on this device. Enter your recovery key, under Manage session below your name, to restore it from your backup.',
   },
   // The backup is working and may yet produce this one.
   HISTORICAL_MESSAGE_WORKING_BACKUP: {
