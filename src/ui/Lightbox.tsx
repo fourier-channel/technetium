@@ -338,7 +338,7 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
                     borderRadius: 4,
                   }}
                 />
-                <MediaTags mxc={current.mxc} />
+                <MediaTags mxc={current.mxc} roomId={current.roomId} />
               </div>
             ) : (
               <span style={{ color: 'var(--cpd-color-text-secondary)' }}>Loading...</span>

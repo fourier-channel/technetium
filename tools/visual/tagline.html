@@ -1,0 +1,51 @@
+<!doctype html><html><head>
+<!--#head-->
+<link rel="stylesheet" href="../../src/mediatags.css">
+<style>
+  /* Harness only. The line under a chat picture in each state MediaTags.tsx
+     renders (tagAsks.ts tagLineView), markup copied from TagLineNote and
+     TagBubble. The h-ruler under each shot is where the next message starts:
+     it must sit at the SAME height in every state. Proves what the
+     stylesheet does with this markup; the React tree and a live homeserver
+     are not exercised. Animations are frozen at their end (the loading
+     note's fade-in has a delay). */
+  *, *::before, *::after { animation-delay: 0s !important; animation-duration: 0s !important; }
+  .row { display: flex; gap: 24px; padding: 12px 16px; }
+  .shot { width: 230px; }
+  .fake-img { display: block; border-radius: 8px; width: 230px; height: 120px;
+    background: repeating-linear-gradient(135deg, #2a3550 0 14px, #223048 14px 28px); }
+  .h-ruler { height: 2px; background: #c85; margin-top: 6px; }
+  .h-cap { font: 600 10px var(--tc-ui-font); opacity: .5; padding-bottom: 4px; }
+</style>
+</head><body><div id="root">
+<div class="h-label">the tagspace, pre-assigned: every state, one height</div>
+<div class="row">
+  <div class="shot"><div class="h-cap">loading</div><div class="mtags-stack">
+    <div class="mtags-media"><span class="fake-img"></span></div>
+    <div class="mtags-bubble" role="status"><span class="mtags-note mtags-note--loading">loading tags</span></div>
+  </div><div class="h-ruler"></div></div>
+  <div class="shot"><div class="h-cap">tags</div><div class="mtags-stack">
+    <div class="mtags-media"><span class="fake-img"></span></div>
+    <div class="mtags-bubble">
+      <a class="mod-pill mod-pill--cat-artist"><i class="mod-pill-dot mod-pill-dot--manual"></i><span class="mod-pill-name">saber</span></a>
+      <button type="button" class="mtags-expose"><span class="mtags-expose-label">expose tags</span><span class="mtags-expose-n">(23)</span></button>
+    </div>
+  </div><div class="h-ruler"></div></div>
+</div>
+<div class="row">
+  <div class="shot"><div class="h-cap">no tags</div><div class="mtags-stack">
+    <div class="mtags-media"><span class="fake-img"></span></div>
+    <div class="mtags-bubble"><span class="mtags-note">no tags</span></div>
+  </div><div class="h-ruler"></div></div>
+  <div class="shot"><div class="h-cap">failed</div><div class="mtags-stack">
+    <div class="mtags-media"><span class="fake-img"></span></div>
+    <div class="mtags-bubble"><button type="button" class="mtags-note mtags-note--failed">tags did not load &middot; retry</button></div>
+  </div><div class="h-ruler"></div></div>
+</div>
+</div>
+<script>
+  // Every line's box, for the record: the four must be one height.
+  const hs = [...document.querySelectorAll('.mtags-bubble')].map((e) => e.getBoundingClientRect().height)
+  document.title = 'heights ' + hs.join(',')
+</script>
+</body></html>

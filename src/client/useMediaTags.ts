@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react'
-import { RoomEvent, RoomStateEvent, type MatrixClient, type MatrixEvent, type Room } from 'matrix-js-sdk'
+import { RoomEvent, RoomStateEvent, type MatrixClient, type MatrixEvent } from 'matrix-js-sdk'
 import { parseMxc } from './media'
 import { createLimiter } from './concurrency'
 import { reportIgnored } from './report'
@@ -10,6 +10,7 @@ import {
   type TagEdit,
 } from './booruTags'
 import { mayRead, mergeBooruIntoSet, newBooruReadState, optimisticSet } from './booruLive'
+import { askKey, beginAsk, heardOf, isAbsent, newTagAsks, retry, settle, tagLineView, takeDeferred, type TagLineView } from './tagAsks'
 import {
   MEDIA_TAGS_EVENT,
   mediaIdFromStateKey,
@@ -82,10 +83,8 @@ function ingestEvent(ev: MatrixEvent): void {
   const mediaId = mediaIdFromStateKey(ev.getStateKey())
   if (!mediaId) return
   ingestSet(tagSetFromEvent(ev), mediaId)
-  // Seen for real -- drop any "known absent" mark so a later miss re-fetches.
-  for (const key of [...missing]) {
-    if (key.endsWith('|' + mediaId)) missing.delete(key)
-  }
+  // Seen for real -- drop any "no tags" or "could not load" on record for it.
+  heardOf(asks, mediaId)
   // A push means somebody retagged, so whatever this event carried, the live
   // set is now the truth: ignore the TTL and read it again.
   //
@@ -133,34 +132,21 @@ function scanAll(client: MatrixClient): void {
 // thread root, or a lightbox opened on a scrolled-back image -- without asking
 // sliding sync to carry every tag event in the room.
 //
-// `missing` is a negative cache: a 404 means "this image has no tags", and
-// without remembering that, every render of an untagged image re-requests it.
+// What has been asked and answered lives in `asks` (tagAsks.ts): a 404 is
+// remembered as "no tags", so a render of an untagged image does not ask again,
+// and an ask made before the client exists is parked rather than dropped.
 // ---------------------------------------------------------------------------
 
-const inFlight = new Set<string>()
-const missing = new Set<string>()
+const asks = newTagAsks()
 
 let fetchClient: MatrixClient | null = null
 
-// Does this room carry image tags at all -- is it one the bridge tags? The
-// line under a picture is reserved only where the answer is yes, so a set
-// arriving there fills a line instead of pushing the conversation, and an
-// image in a room that is never tagged gets no empty line.
-export function roomCarriesTags(room: Room | null | undefined): boolean {
-  if (!room) return false
-  // getStateEvents is typed to known event names; the custom type goes through
-  // a loosely-typed, bound alias, as fetchTags does below (cf. G-bf03).
-  const get = room.currentState.getStateEvents.bind(room.currentState) as unknown as (type: string) => unknown[]
-  return get(MEDIA_TAGS_EVENT).length > 0
-}
-
 export function fetchTags(roomId: string, mxc: string): void {
   const mediaId = parseMxc(mxc)?.mediaId
-  if (!fetchClient || !mediaId) return
-  if (sets.has(mediaId)) return
-  const key = roomId + '|' + mediaId
-  if (inFlight.has(key) || missing.has(key)) return
-  inFlight.add(key)
+  if (!mediaId) return
+  const go = beginAsk(asks, roomId, mxc, mediaId, { haveClient: !!fetchClient, haveSet: sets.has(mediaId) })
+  if (go !== 'go' || !fetchClient) return
+  const key = askKey(roomId, mediaId)
 
   // getStateEvent is typed to known event names and uses `this` internally, so
   // reach the custom type through a bound, loosely-typed alias (cf. G-bf03).
@@ -173,15 +159,31 @@ export function fetchTags(roomId: string, mxc: string): void {
   // The bridge keys state by the FULL mxc uri, so ask for it that way.
   get(roomId, MEDIA_TAGS_EVENT, mxc)
     .then((content) => {
-      inFlight.delete(key)
-      ingestSet(parseTagContent(content, mediaId, Date.now()), mediaId)
+      const set = parseTagContent(content, mediaId, Date.now())
+      // An event the parser cannot read carries no tags this client can show.
+      settle(asks, key, set ? 'found' : 'absent')
+      if (set) ingestSet(set, mediaId)
+      else changedLine(mediaId)
     })
-    .catch(() => {
-      // 404 (no tags for this image) or 403 (cannot read state) -- either way,
-      // stop asking. A live write for this image clears the mark.
-      inFlight.delete(key)
-      missing.add(key)
+    .catch((err: unknown) => {
+      if (isAbsent(err)) {
+        settle(asks, key, 'absent')
+      } else {
+        // Said where a report is read, and on the line itself, which offers
+        // to try again (G-tc05).
+        const why = err instanceof Error ? err.message : String(err)
+        reportIgnored('media tags: the homeserver did not answer for ' + mxc, err)
+        settle(asks, key, { failed: why })
+      }
+      changedLine(mediaId)
     })
+}
+
+// An image's line changed without its set changing (an answer of "no tags", a
+// failure): its consumers re-read their state on the next flush.
+function changedLine(mediaId: string): void {
+  dirty.add(mediaId)
+  scheduleFlush()
 }
 
 // ---------------------------------------------------------------------------
@@ -395,6 +397,9 @@ export function useMediaTagSync(client: MatrixClient | null): void {
     if (!client) return
     fetchClient = client
     scanAll(client)
+    // Every image that asked before the client existed -- on a cold start,
+    // the whole first screen, since a child's effects run before App's.
+    for (const a of takeDeferred(asks)) fetchTags(a.roomId, a.mxc)
 
     // The live read is credentialed, so the booru applies the VIEWER's own
     // visibility rather than handing an anonymous client a quietly reduced
@@ -445,6 +450,36 @@ export function useMediaTags(mxc: string | undefined, roomId?: string): MediaTag
   const getSnapshot = useCallback(() => (mediaId ? sets.get(mediaId) : undefined), [mediaId])
 
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+}
+
+// The line under a chat picture: the set, and what to say when there is none
+// yet (tagAsks.ts tagLineView). `retry` is offered only on a failure.
+export function useMediaTagLine(
+  mxc: string | undefined,
+  roomId?: string,
+): { set: MediaTagSet | undefined; view: TagLineView; reason?: string; retry?: () => void } {
+  const set = useMediaTags(mxc, roomId)
+  const mediaId = mxc ? (parseMxc(mxc)?.mediaId ?? '') : ''
+  const key = roomId && mediaId ? askKey(roomId, mediaId) : ''
+  const subscribe = useCallback(
+    (cb: Listener) => (mediaId ? subscribeTo(mediaId, cb) : () => {}),
+    [mediaId],
+  )
+  const status = useSyncExternalStore(subscribe, () => (key ? asks.status.get(key) : undefined))
+  const reason = key ? asks.reason.get(key) : undefined
+  const view = tagLineView(!!set, status, !!key)
+  return {
+    set,
+    view,
+    reason: view === 'failed' ? reason : undefined,
+    retry:
+      view === 'failed' && roomId && mxc
+        ? () => {
+            retry(asks, key)
+            fetchTags(roomId, mxc)
+          }
+        : undefined,
+  }
 }
 
 // Count only -- for surfaces that show a chip instead of a strip. Subscribes the

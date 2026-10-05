@@ -4,7 +4,8 @@ import { booruPostUrl, booruTagUrl } from '../client/booruUrl'
 import { isHypeTag } from '../client/hypeTags'
 import { useTagDiff, tagKey, type DiffedTag, type TagPhase } from '../client/useTagDiff'
 import '../mediatags.css'
-import { editBooruTags, refreshBooruTags, useMediaTags } from '../client/useMediaTags'
+import { editBooruTags, refreshBooruTags, useMediaTagLine } from '../client/useMediaTags'
+import type { TagLineView } from '../client/tagAsks'
 import { parseTagInput } from '../client/booruLive'
 import { splitForBubble } from '../client/tagBubble'
 import { useOnScreen } from './useOnScreen'
@@ -46,17 +47,12 @@ export interface MediaTagsProps {
   // event is outside the loaded timeline. Pass it wherever it is known.
   roomId?: string
   variant?: 'bubble' | 'chip'
-  // Hold the line under the picture from the first paint, before the image's
-  // tag set has arrived. The caller passes it where tags are expected (a room
-  // the bridge tags), so the set landing fills a line that is already there
-  // instead of pushing the conversation down by a line -- and an image in a
-  // room that is never tagged gets no empty line under it.
-  reserve?: boolean
   onTagClick?: (tag: MediaTag) => void
 }
 
-export function MediaTags({ mxc, roomId, variant = 'bubble', reserve = false, onTagClick }: MediaTagsProps) {
-  const set = useMediaTags(mxc, roomId)
+export function MediaTags({ mxc, roomId, variant = 'bubble', onTagClick }: MediaTagsProps) {
+  const line = useMediaTagLine(mxc, roomId)
+  const set = line.set
   const prefs = useMediaTagPrefs()
   const mediaId = mxc ? parseMxc(mxc)?.mediaId : undefined
   const visible = prefs.visibleFor(mediaId)
@@ -68,15 +64,22 @@ export function MediaTags({ mxc, roomId, variant = 'bubble', reserve = false, on
   // real store write, so this recomputes exactly when the tags change.
   const tags = useMemo(() => sortTags(set?.tags ?? []), [set?.tags])
 
-  // Nothing to show: no tags for this image (yet). Render nothing rather than
-  // an empty line, so untagged images keep their exact layout.
+  // Nothing to show yet, or nothing at all. A chip says nothing (a "0" badge
+  // on every picture is worse than silence). The bubble's line is ALWAYS
+  // there -- the tagspace is pre-assigned (operator, 2026-10-05) -- so tags
+  // arriving fill a line that already exists and move nothing, and the line
+  // says which it is: loading, no tags, or could not load (tagAsks.ts).
   //
   // A set with NO TAGS BUT A POST ID is not nothing: it is the pointer, and the
   // bubble is what triggers the live read that fills it. Returning null there
   // would be a deadlock -- no bubble, so no read, so no tags, so no bubble.
   // Chips stay out of it: a "0" badge on every picture is worse than silence.
   const empty = !set || (set.tags.length === 0 && (set.postId === undefined || variant === 'chip'))
-  if (empty) return variant === 'bubble' && reserve ? <div className="mtags-bubble" aria-hidden="true" /> : null
+  if (empty) {
+    if (variant !== 'bubble') return null
+    // A set that exists but holds nothing to show is an answer: no tags.
+    return <TagLineNote view={set ? 'none' : line.view} reason={line.reason} retry={line.retry} />
+  }
 
   const meta: TagMeta = { rating: set.rating, postId: set.postId, updatedBy: set.updatedBy }
   const hide = () => prefs.setOverride(mediaId ?? '', 'hide')
@@ -105,6 +108,44 @@ export function MediaTags({ mxc, roomId, variant = 'bubble', reserve = false, on
       onShow={show}
     />
   )
+}
+
+// The line under the picture before it has tags to show. Same box as the
+// line with tags (.mtags-bubble's fixed height), so the change between them
+// moves nothing. Words, not a spinner: an infinite animation costs a core at
+// idle (cssAnimations.check.ts), and a word says which state it is.
+function TagLineNote({ view, reason, retry }: { view: TagLineView; reason?: string; retry?: () => void }) {
+  if (view === 'loading') {
+    return (
+      <div className="mtags-bubble" role="status">
+        <span className="mtags-note mtags-note--loading">loading tags</span>
+      </div>
+    )
+  }
+  if (view === 'none') {
+    return (
+      <div className="mtags-bubble">
+        <span className="mtags-note" title="No tags have been recorded for this image.">no tags</span>
+      </div>
+    )
+  }
+  if (view === 'failed') {
+    return (
+      <div className="mtags-bubble">
+        <button
+          type="button"
+          className="mtags-note mtags-note--failed"
+          onClick={retry}
+          title={`The homeserver did not say whether this image has tags${reason ? ` (${reason})` : ''}. Click to ask again.`}
+        >
+          tags did not load {'\u00b7'} retry
+        </button>
+      </div>
+    )
+  }
+  // 'blank': no room to ask in and no set -- no answer to give, so the line
+  // holds its place and says nothing rather than claim to be loading forever.
+  return <div className="mtags-bubble" aria-hidden="true" />
 }
 
 // The line under the picture.

@@ -45,10 +45,17 @@ console.log('\n-- L5: the tags are UNDER the picture, and never wider than it --
   check('and its words give way before its count',
     /text-overflow:\s*ellipsis/.test(block(tagsCss, '.mtags-expose-label')) && /flex:\s*none/.test(block(tagsCss, '.mtags-expose-n')))
   const tags = readFileSync('src/ui/MediaTags.tsx', 'utf8')
-  check('before the set arrives, a reserved empty line holds the space (no-forced-reflow)',
-    /variant === 'bubble' && reserve \? <div className="mtags-bubble" aria-hidden="true" \/>/.test(tags))
-  check('the timeline reserves it only in rooms that carry tags',
-    /reserve=\{roomCarriesTags\(client\?\.getRoom\(roomId\)\)\}/.test(timeline))
+  // The tagspace is pre-assigned (operator, 2026-10-05): every chat picture
+  // has its line from the first paint, in every room, and the line says what
+  // it is waiting on (tagAsks.ts). It used to be reserved only in rooms whose
+  // state already showed tags -- which on a cold start was none of them.
+  check('before the set arrives, the bubble still renders its line, saying which state it is in',
+    /if \(variant !== 'bubble'\) return null\s*\n[^\n]*\n\s*return <TagLineNote /.test(tags))
+  const note = /function TagLineNote[\s\S]*?\n\}\n/.exec(tags)?.[0] ?? ''
+  check('every state of that line is the same .mtags-bubble box (no-forced-reflow)',
+    (note.match(/<div className="mtags-bubble"/g) ?? []).length === 4, note.length)
+  check('the timeline does not gate the line on the room', /<MediaTags mxc=\{mxc\} roomId=\{event\.getRoomId\(\)\} \/>/.test(timeline) && !/<MediaTags[^>]*reserve=/.test(timeline))
+  check('the lightbox passes its room, so its line can ask rather than sit blank', /<MediaTags mxc=\{current\.mxc\} roomId=\{current\.roomId\} \/>/.test(lightbox))
   check('an edit refused after the popup closed is still shown, on the line',
     /data-error=\{editError \? 'true' : undefined\}/.test(tags) && !/const \[error, setError\] = useState/.test(tags))
   // Declarations only: the file's own comment explains the rule it replaced.

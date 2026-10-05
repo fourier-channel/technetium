@@ -525,3 +525,39 @@
   will-change: transform;
 }
 
+
+/* The line before it has tags (MediaTags.tsx TagLineNote): loading, no tags,
+   or could not load. Quiet text in the line's own box, so the change to pills
+   moves nothing. "loading tags" waits a moment before it shows, so a fast
+   answer never flashes it; the fade runs once and ends (no infinite
+   animation -- cssAnimations.check.ts). */
+.mtags-note {
+  font: inherit;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  color: var(--cpd-color-text-secondary);
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.mtags-note--loading {
+  opacity: 0;
+  animation: mtags-note-in 200ms ease-out 400ms forwards;
+}
+@keyframes mtags-note-in {
+  to { opacity: 0.6; }
+}
+button.mtags-note--failed {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: var(--cpd-color-text-critical-primary);
+  opacity: 0.9;
+}
+button.mtags-note--failed:hover { text-decoration: underline; }
+@media (prefers-reduced-motion: reduce) {
+  .mtags-note--loading { animation: none; opacity: 0.6; }
+}
