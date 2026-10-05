@@ -112,5 +112,26 @@ for (const [type, where] of [...read].sort()) {
     declared.has(type) ? undefined : { fix: "add ['" + type + "', ''] to LIST_REQUIRED_STATE" })
 }
 
+// Rosters. The SDK applies sliding sync's timeline events with addToState:
+// false, so a join reaches room state ONLY through required_state. With
+// `$ME` alone nobody else's join or leave ever landed (reproduced 2026-10-05
+// against Synapse 1.152.1), and a once-a-minute /joined_members poll of every
+// room hid it -- 82% of the requests reaching the origin. The rosters list is
+// the fix; these keep it, and keep the poll from coming back.
+console.log('\n== rosters come from sync, not from polling')
+{
+  const at = sliding.indexOf('const ROSTERS_LIST')
+  const decl = sliding.slice(at, sliding.indexOf('\n}', at))
+  check('ROSTERS_LIST asks for every member of each room', at >= 0 && /\['m\.room\.member',\s*'\*'\]/.test(decl), decl)
+  check('and is one of the lists the SlidingSync is BUILT with (Synapse applies a list added later only on that room\'s next activity)',
+    /\['rosters',\s*ROSTERS_LIST\]/.test(sliding.slice(sliding.indexOf('const lists = new Map'))))
+  const top = (name: string) => Number(new RegExp(`const ${name}: number\\[\\]\\[\\] = \\[\\[0, (\\d+)\\]\\]`).exec(sliding)?.[1] ?? NaN)
+  check('its range covers every room and space the other two lists can show',
+    top('ROSTERS_RANGE') >= top('ROOMS_RANGE') + top('SPACES_RANGE') + 1,
+    { rosters: top('ROSTERS_RANGE'), rooms: top('ROOMS_RANGE'), spaces: top('SPACES_RANGE') })
+  const pollers = files.filter((f) => /getJoinedRoomMembers\(|clearLoadedMembersIfNeeded\(/.test(readFileSync(f, 'utf8')))
+  check('nothing re-fetches rosters behind sync\'s back', pollers.length === 0, pollers)
+}
+
 if (failures) { console.log(`\n${failures} FAILED`); process.exit(1) }
 console.log('\nALL CHECKS PASSED')

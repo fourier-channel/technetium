@@ -46,10 +46,10 @@ const SLIDING_SYNC_TIMEOUT_MS = 20_000
 //   - a SPACES list (all spaces, sorted by name) so the hierarchy is ALWAYS
 //     complete -- spaces sort low by recency and otherwise fall out of a window;
 //   - a ROOMS list with a generous range.
-// `required_state` stays LEAN everywhere: room chrome + own membership only,
-// NEVER the full member rosters that made classic sync heavy. Per-user members
-// load on demand (CD-15). Ranges are generous but finite; true grow-on-scroll
-// windowing is a later optimization for thousands-of-rooms accounts.
+// These two lists' `required_state` stays LEAN: room chrome + own membership
+// only. Member rosters have a third list of their own (ROSTERS below). Ranges are generous but
+// finite; true grow-on-scroll windowing is a later optimization for
+// thousands-of-rooms accounts.
 const SPACES_RANGE: number[][] = [[0, 99]]
 const ROOMS_RANGE: number[][] = [[0, 499]]
 const LIST_REQUIRED_STATE: string[][] = [
@@ -117,6 +117,35 @@ const LIST_REQUIRED_STATE: string[][] = [
 ]
 const TIMELINE_LIMIT = 1
 
+// ROSTERS. Who is in each room, kept current by the server rather than polled.
+//
+// The SDK adds sliding sync's timeline events with addToState: false
+// (sliding-sync-sdk.ts, injectRoomEvents): room state moves ONLY through
+// required_state. With `m.room.member: $ME` alone above, nobody else's join or
+// leave ever reached a roster -- not even in a quiet room with sync healthy
+// (reproduced 2026-10-05 against Synapse 1.152.1). A once-a-minute
+// /joined_members poll of every room in every tab papered over it, and was 82%
+// of everything that reached the origin. Asked for here, the server sends each
+// room's members once and then every change as it happens, gaps included:
+// required_state deltas cover everything since the last response, however
+// much timeline was skipped.
+//
+// Its own list, so the two above keep their lean state and this is the one
+// place rosters are asked for. It is in the FIRST request: Synapse applies a
+// required_state widened later only when that room next has activity
+// (measured), so a list added after the first response left quiet rooms with
+// no roster at all. MEASURED before adding, as tags were: 48 rooms, 42 KB of
+// /joined_members in total, the largest 2.2 KB (2026-10-05) -- about 130 KB as
+// member events, once per session, against 42 KB a minute per open tab for
+// the poll it replaces. Spaces are included: the community list reads them.
+const ROSTERS_RANGE: number[][] = [[0, 599]]
+const ROSTERS_LIST: MSC3575List = {
+  ranges: ROSTERS_RANGE,
+  sort: ['by_recency'],
+  required_state: [['m.room.member', '*']],
+  timeline_limit: 0,
+}
+
 // Build a SlidingSync instance for the client. The caller passes it to
 // startClient({ slidingSync }); the SDK's SlidingSyncSdk then drives it (we do
 // NOT call start() ourselves).
@@ -144,6 +173,7 @@ export function buildSlidingSync(client: MatrixClient): SlidingSync {
         timeline_limit: TIMELINE_LIMIT,
       },
     ],
+    ['rosters', ROSTERS_LIST],
   ])
   // Default room-subscription shape (used when a specific room is subscribed).
   const defaultRoomSub = { timeline_limit: TIMELINE_LIMIT, required_state: LIST_REQUIRED_STATE }

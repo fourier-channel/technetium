@@ -1,30 +1,19 @@
 import { useEffect, useState } from 'react'
 import { UserEvent, type MatrixClient } from 'matrix-js-sdk'
+import { presenceOf, type PresenceState } from './presence'
 
 // ---------------------------------------------------------------------------
-// W4.5 -- presence.
+// W4.5 -- presence, for the rows on screen. What counts as known is decided
+// in ./presence (presenceOf); this only listens and rebuilds.
 //
-// SERVER-GATED. Synapse ships with `presence.enabled: false` on many
-// deployments because it is expensive, and when it is off the server simply
-// never sends m.presence. There is then no such thing as "offline" -- only
-// "unknown".
-//
-// So this returns undefined for a user we have heard nothing about, and the
-// renderer draws NOTHING. Rendering a grey dot for unknown would tell every
-// member of the room that everyone is offline, which is a lie the client
-// invented rather than something the server said.
+// SERVER-GATED, and on this homeserver nothing arrives: presence is enabled,
+// but Synapse's sliding sync has no presence extension (1.152.1 offers
+// to_device, e2ee, account_data, receipts, typing and thread subscriptions),
+// so under sliding sync no m.presence ever reaches the client. Everyone is
+// unknown, and unknown is drawn as nothing.
 // ---------------------------------------------------------------------------
-
-export type PresenceState = 'online' | 'unavailable' | 'offline'
 
 export type PresenceMap = Map<string, PresenceState>
-
-function read(client: MatrixClient, userId: string): PresenceState | undefined {
-  const user = client.getUser(userId)
-  const p = user?.presence
-  if (p === 'online' || p === 'unavailable' || p === 'offline') return p
-  return undefined
-}
 
 // Presence for the given user ids. Absent from the map = the server has told
 // us nothing, which is NOT the same as offline.
@@ -49,7 +38,7 @@ export function usePresence(
       if (cancelled) return
       const next: PresenceMap = new Map()
       for (const id of ids) {
-        const p = read(client, id)
+        const p = presenceOf(client.getUser(id))
         if (p) next.set(id, p)
       }
       setMap(next)
@@ -68,12 +57,4 @@ export function usePresence(
   }, [client, key])
 
   return map
-}
-
-export function presenceLabel(state: PresenceState | undefined): string | null {
-  if (state === 'online') return 'Online'
-  if (state === 'unavailable') return 'Away'
-  if (state === 'offline') return 'Offline'
-  // Deliberately null: unknown is not a status to display.
-  return null
 }

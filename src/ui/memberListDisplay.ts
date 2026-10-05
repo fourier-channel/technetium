@@ -1,6 +1,6 @@
 import { useCallback, useSyncExternalStore } from 'react'
 import { reportIgnored } from '../client/report'
-import type { PresenceState } from '../client/usePresence'
+import type { PresenceState } from '../client/presence'
 
 // ---------------------------------------------------------------------------
 // How the user list draws itself (ui-depth-v1 U9).

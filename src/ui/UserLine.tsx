@@ -2,7 +2,7 @@ import { AvatarDisc } from './AvatarDisc'
 import { nameAttrs } from '../client/look'
 import { useLook } from './lookContext'
 import { avatarPx, type UserLineSize } from './userLineSize'
-import type { PresenceState } from '../client/usePresence'
+import type { PresenceState } from '../client/presence'
 import '../userline.css'
 
 // ---------------------------------------------------------------------------

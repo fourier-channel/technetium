@@ -1,6 +1,6 @@
 import type { MatrixClient, Room } from 'matrix-js-sdk'
 import type { MergedMember } from '../client/members'
-import type { PresenceState } from '../client/usePresence'
+import type { PresenceState } from '../client/presence'
 import { ProfileActions } from './ProfileActions'
 import { ProfileCard } from './ProfileCard'
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useRef, useState, type CSSProperties } from 'react'
 import type { Room } from 'matrix-js-sdk'
 import { useClient } from '../client/clientContextValue'
 import { startDm } from '../client/dm'
@@ -9,9 +9,9 @@ import { findExistingDm } from '../client/dm'
 import { PersonCard } from './PersonCard'
 import { personGestures, type PersonOpener } from './personGesture'
 import { usePersonOpeners } from './personRouter'
-import { usePresence, type PresenceState } from '../client/usePresence'
+import { usePresence } from '../client/usePresence'
+import type { PresenceState } from '../client/presence'
 import { useMembers } from '../client/useMembers'
-import { useMemberBackfill } from '../client/useMemberBackfill'
 import { compareByStanding, honorificFor, maxPower, type MergedMember } from '../client/members'
 import { useFlipList } from './flip'
 import { usePopEnter } from './pop'
@@ -86,20 +86,11 @@ export function MemberList({
   const roomOpeners = usePersonOpeners(room?.roomId)
   const listRef = useRef<HTMLDivElement>(null)
 
-  // Background-hydrate the community roster so All / Nearby fill in (sliding sync
-  // ships only $ME per room). Arrivals animate in via the FLIP + pop below.
-  useMemberBackfill(client)
-
-  // Member-on-demand (CD-15): sliding sync ships only $ME's membership, so a
-  // room's full roster isn't present until we ask for it. Fetch it when a room
-  // is opened; the SDK applies it in one batch (out-of-band members), which the
-  // member source hears via RoomState.members and repaints once (no re-sort
-  // churn). Idempotent -- loadMembersIfNeeded no-ops if already loaded.
-  useEffect(() => {
-    room?.loadMembersIfNeeded().catch(() => {
-      /* transient under sync; a later open or membership event retries */
-    })
-  }, [room])
+  // Rosters need no fetching here: sliding sync carries every room's members
+  // and each change as it happens (ROSTERS in client/slidingSync.ts). That
+  // replaced a background /members pass and a once-a-minute re-poll of every
+  // room, which existed only because joins never reached room state.
+  // Arrivals animate in via the FLIP + pop below.
 
   const inRoom = (m: MergedMember) =>
     room ? room.roomId in m.powerByRoom : false

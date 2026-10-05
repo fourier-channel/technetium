@@ -5,7 +5,7 @@ import { AvatarDisc } from './AvatarDisc'
 import { usePopupAt, usePopupFocus } from './popupFocus'
 import { nameAttrs } from '../client/look'
 import { useLook, useLookStore } from './lookContext'
-import { presenceLabel, type PresenceState } from '../client/usePresence'
+import { presenceLabel, type PresenceState } from '../client/presence'
 import {
   maxPower,
   splitUserId,
