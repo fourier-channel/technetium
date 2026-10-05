@@ -282,6 +282,12 @@ function App() {
           {error ?? 'Something went wrong.'}
         </p>
         <button type="button" onClick={() => login()}>Try again</button>
+        {/* Signed out here too, and this is where a purge that could not
+            finish says so -- so the way to try it again is on the same
+            screen. */}
+        <div style={{ width: 128, marginTop: 16 }}>
+          <SiteReset />
+        </div>
       </Centered>
     )
   }

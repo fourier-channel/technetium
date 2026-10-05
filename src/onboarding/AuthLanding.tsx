@@ -6,6 +6,7 @@ import { FourierSay } from './FourierSay'
 import { FOURIER_INTRO } from './fourierIntro'
 import { Pip2Link } from '../ui/Pip2Link'
 import { SignOutStatus } from '../ui/SignOutStatus'
+import { SiteReset } from '../ui/SiteReset'
 
 // ---------------------------------------------------------------------------
 // The first thing a visitor sees: logo, then two clear doors -- Create account
@@ -66,6 +67,13 @@ export function AuthLanding({ onProceed }: { onProceed: (intent?: 'create') => v
         <p style={pipLine}>
           <Pip2Link full />
         </p>
+        {/* Purge and hard refresh, signed out as well as in (PIP2 claims
+            sweep, operator remedy 2): the SAME component the room list's
+            header carries, so the two cannot drift apart. In flow and always
+            present, so it moves nothing when the screen draws. */}
+        <div style={resetBox}>
+          <SiteReset />
+        </div>
       </div>
       {/* After a logout: the booru and token half of it, running or done. */}
       <SignOutStatus />
@@ -191,6 +199,12 @@ const pipLine: CSSProperties = {
   fontFamily: 'var(--tc-ui-font, inherit)',
   fontSize: 12,
   textAlign: 'center',
+}
+
+// The rectangle's own width, not the column's: two symbols across 380px
+// would read as a bar, not as two buttons.
+const resetBox: CSSProperties = {
+  width: 128,
 }
 
 const actions: CSSProperties = {
