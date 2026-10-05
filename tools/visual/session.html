@@ -1,0 +1,37 @@
+<!doctype html><html><head>
+<!--#head-->
+<title>Session -- sign-out status</title>
+<style>
+  /* PIP2 remedies (2026-10-05). Mirrors the markup SignOutStatus.tsx emits.
+     The strip is position: fixed in the app; each frame here is a
+     transform'd box so the fixed strip lands inside its own frame. */
+  .h-wrap { display: flex; flex-direction: column; gap: 12px; padding: 8px 16px 16px; }
+  .h-frame { position: relative; transform: translateZ(0); width: 640px; height: 130px;
+             border: 1px solid var(--mod-line); background: var(--cpd-color-bg-canvas-default); }
+</style>
+</head><body>
+<div class="h-label">the sign-out strip: running, done, and with failures</div>
+<div class="h-wrap">
+  <div class="h-frame">
+    <div class="tc-signout-status" role="status" data-tone="active">
+      <p>Signing you out of the booru and ending this sign-in on the server...</p>
+    </div>
+  </div>
+  <div class="h-frame">
+    <div class="tc-signout-status" role="status" data-tone="ok">
+      <p>Signed out of Technetium and the booru, and the sign-in server accepted the end of this sign-in. Your settings and encryption keys stay in this browser; Purge removes the settings too.</p>
+      <button type="button" class="tc-pill">Dismiss</button>
+    </div>
+  </div>
+  <div class="h-frame" style="height: 190px">
+    <div class="tc-signout-status" role="status" data-tone="warn">
+      <p>You are signed out of Technetium. Not everything else confirmed it:</p>
+      <ul>
+        <li>The booru did not confirm you are signed out of it (HTTP 422). Open the booru and use its Purge, or sign out from its Manage Session card. <a href="#">Open it</a></li>
+        <li>The sign-in server did not confirm it ended this sign-in (no answer). End it from the session list on your account page. <a href="#">Open it</a></li>
+      </ul>
+      <button type="button" class="tc-pill">Dismiss</button>
+    </div>
+  </div>
+</div>
+</body></html>

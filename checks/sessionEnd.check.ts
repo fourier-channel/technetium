@@ -60,9 +60,12 @@ check(
   'logout DROPS the sync cache',
   logout.deleteSyncStore === true,
 )
+// And in the server-side sign-out (client/signOut.ts, 2026-10-05): a failed
+// resume's tokens are presumed dead and its user is likely coming straight
+// back, so nothing is sent on its behalf. Those two fields and no others.
 check(
-  'resume_failed differs from logout in exactly the cache field',
-  JSON.stringify({ ...resumeFailed, deleteSyncStore: logout.deleteSyncStore })
+  'resume_failed differs from logout in exactly the cache and server-side fields',
+  JSON.stringify({ ...resumeFailed, deleteSyncStore: logout.deleteSyncStore, signOutServerSide: logout.signOutServerSide })
     === JSON.stringify(logout),
   { resumeFailed, logout },
 )

@@ -5,6 +5,7 @@ import { ONBOARDING_ASSETS } from './assets'
 import { FourierSay } from './FourierSay'
 import { FOURIER_INTRO } from './fourierIntro'
 import { Pip2Link } from '../ui/Pip2Link'
+import { SignOutStatus } from '../ui/SignOutStatus'
 
 // ---------------------------------------------------------------------------
 // The first thing a visitor sees: logo, then two clear doors -- Create account
@@ -66,6 +67,8 @@ export function AuthLanding({ onProceed }: { onProceed: (intent?: 'create') => v
           <Pip2Link full />
         </p>
       </div>
+      {/* After a logout: the booru and token half of it, running or done. */}
+      <SignOutStatus />
     </div>
   )
 }

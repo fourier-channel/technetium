@@ -3,6 +3,7 @@ import type { MatrixClient } from 'matrix-js-sdk'
 import type { CryptoIdentityFacts, IdentityAction } from './cryptoIdentity'
 import type { KeyBackupFacts } from './keyBackup'
 import type { CryptoLoadState } from './cryptoProgress'
+import type { SignOutProgress } from './signOut'
 
 // The client context, its value type, and the hook that reads it.
 //
@@ -12,7 +13,7 @@ import type { CryptoLoadState } from './cryptoProgress'
 // Lifecycle of the client, so the UI can render the right thing per phase.
 export type ClientStatus =
   | 'starting' // bootstrap in progress (deciding which path)
-  | 'awaiting_login' // no session — show the login UI
+  | 'awaiting_login' // no session -- show the login UI
   | 'syncing' // client built, initial sync running
   | 'ready' // synced and usable
   | 'error'
@@ -44,6 +45,11 @@ export interface ClientContextValue {
   // except the encryption keys (client/browserPurge.ts), then reload. If any
   // of it could not be deleted, the error screen says what and how to finish.
   purge: () => Promise<void>
+  // The server-side half of the last sign-out (client/signOut.ts): booru,
+  // picture gate, token revocation. Running, then what did not happen, for the
+  // signed-out screen to say. Null when there is nothing to say.
+  signOut: SignOutProgress | null
+  dismissSignOut: () => void
 }
 
 export const ClientContext = createContext<ClientContextValue | null>(null)

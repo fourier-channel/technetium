@@ -13,9 +13,13 @@ import { createTokenRefreshFunction } from './tokenRefresher'
 import { ClientContext, type ClientContextValue, type ClientStatus } from './clientContextValue'
 import { planSessionEnd, type SessionEndReason } from './sessionEnd'
 import { executePurge } from './browserPurge'
+import { clearOidcState, signOutFailures, signOutServerSide, type SignOutFailure, type SignOutProgress } from './signOut'
+import { booruCsrfToken, resetBooruCsrf } from './booruCsrf'
+import { resetBooruSession } from './booruSession'
+import { BOORU_ORIGIN } from './booruUrl'
 import { compareDevice, ForeignTokensError } from './sessionIdentity'
 import { generateLoginUrl } from './oidcAuthorize'
-import { detail } from './report'
+import { detail, reportIgnored } from './report'
 import {
   e2eeEnabled,
   initCrypto,
@@ -67,6 +71,9 @@ export function ClientProvider({ children }: { children: ReactNode }) {
   const [identityAction, setIdentityAction] = useState<IdentityAction | null>(null)
   const [identityFacts, setIdentityFacts] = useState<CryptoIdentityFacts | null>(null)
   const [keyBackup, setKeyBackup] = useState<KeyBackupFacts | null>(null)
+  // The server-side half of the last sign-out, for the signed-out screen:
+  // running, then what did not happen. Null when there is nothing to say.
+  const [signOut, setSignOut] = useState<SignOutProgress | null>(null)
 
   // The live client, reachable from paths that cannot see the `client` STATE.
   // resumeSession's catch is the one that matters: setClient(c) has been called
@@ -212,7 +219,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // Path 2: rebuild the client from the stored session — no MAS visit.
+  // Path 2: rebuild the client from the stored session -- no MAS visit.
   async function resumeSession() {
     const s = loadSession()
     if (!s) {
@@ -242,14 +249,14 @@ export function ClientProvider({ children }: { children: ReactNode }) {
         // Not a dead token: a live one belonging to another tab's login. Say
         // so, because "sign in again" with no reason looks like the bug it is
         // the cure for, and the other tab must be closed or it recurs.
-        endSession('foreign_tokens')
+        void endSession('foreign_tokens')
         setError(err.message)
         setStatus('error')
         return
       }
       // Refresh also failed (refresh token dead) -> session is truly gone.
       // Keeps this user's sync cache: see sessionEnd.ts.
-      endSession('resume_failed')
+      void endSession('resume_failed')
     }
   }
 
@@ -287,6 +294,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = async (intent?: 'create') => {
+    setSignOut(null)
     const homeserver = DEFAULT_HOMESERVER
     try {
       const discovery = await sdk.AutoDiscovery.findClientConfig(homeserver)
@@ -320,12 +328,27 @@ export function ClientProvider({ children }: { children: ReactNode }) {
   }
 
   // The single teardown. What differs between reasons is decided by
-  // planSessionEnd and nothing else, so the three callers cannot drift apart
-  // again. Dropping the sync cache keeps a shared machine from showing the room
-  // list after someone walks away; the crypto store is never touched.
-  function endSession(reason: SessionEndReason) {
+  // planSessionEnd and nothing else, so the callers cannot drift apart again.
+  // Dropping the sync cache keeps a shared machine from showing the room list
+  // after someone walks away; the crypto store is never touched.
+  //
+  // LOCAL FIRST, AND WHOLE, before anything goes over the network: the session
+  // is forgotten here whatever the servers then say. The server-side half
+  // (client/signOut.ts) runs after, from credentials read BEFORE the record is
+  // cleared, and reports on the signed-out screen; the promise it returns
+  // resolves to what did not happen, so purge can wait for it before reloading.
+  function endSession(reason: SessionEndReason): Promise<SignOutFailure[]> {
     const plan = planSessionEnd(reason)
     const c = clientRef.current
+    const stored = loadSession()
+    // The client's tokens before the record's: a refresh the record refused
+    // to take (a foreign device's record) leaves the client holding newer ones.
+    const creds = {
+      accessToken: c?.getAccessToken() ?? stored?.accessToken ?? null,
+      refreshToken: c?.getRefreshToken() ?? stored?.refreshToken ?? null,
+      issuer: stored?.oidc.issuer ?? null,
+      clientId: stored?.oidc.clientId ?? null,
+    }
     if (plan.stopClient) c?.stopClient()
     if (plan.deleteSyncStore) {
       // Read from the client, not from `userId` state: a handler subscribed at
@@ -334,31 +357,71 @@ export function ClientProvider({ children }: { children: ReactNode }) {
       if (uid) deleteSyncStore(uid)
     }
     if (plan.clearStoredSession) clearSession()
+    if (plan.clearOidcState) {
+      try {
+        if (clearOidcState(window.sessionStorage).failed) reportIgnored('sign-out: session storage', new Error('an mx_oidc_ entry could not be removed'))
+      } catch (err) {
+        reportIgnored('sign-out: session storage', err)
+      }
+    }
     clientRef.current = null
     setClient(null)
     setUserId(null)
     setStatus('awaiting_login')
+    if (!plan.signOutServerSide) return Promise.resolve([])
+    setSignOut({ phase: 'running' })
+    return signOutServerSide(creds, { fetch, csrfToken: booruCsrfToken, booruOrigin: BOORU_ORIGIN })
+      .then((results) => {
+        const failures = signOutFailures(results, BOORU_ORIGIN, creds.issuer)
+        // Said in the console as well as on the screen (G-tc05): the screen
+        // is gone after a reload, the console line is what a report quotes.
+        for (const f of failures) console.warn('[sign-out]', f.text)
+        return failures
+      })
+      .catch((err: unknown) => {
+        // signOutServerSide catches per step; this is the net under it.
+        console.error('[sign-out] the server-side sign-out failed outright', err)
+        return [{ step: 'tokens' as const, text: `The server-side sign-out could not run (${detail(err)}). Log in and out again, or use Purge.`, href: null }]
+      })
+      .then((failures) => {
+        // Whatever the servers said, the memos are of a session that is gone:
+        // the next login exchanges and fetches its booru token afresh.
+        resetBooruSession()
+        resetBooruCsrf()
+        setSignOut({ phase: 'done', failures })
+        return failures
+      })
   }
 
-  // Stop syncing, drop the session, return to the login screen.
-  const logout = () => { endSession('logout') }
+  // Stop syncing, drop the session, return to the login screen; then sign out
+  // of the booru and revoke the tokens, reporting on that screen.
+  const logout = () => { void endSession('logout') }
 
   // A logout, then the browser purge: everything this client stored, except
   // the encryption keys and the opt-in that uses them (operator rulings
-  // 2026-10-03; client/browserPurge.ts says why).
+  // 2026-10-03; client/browserPurge.ts says why). Works signed out too: the
+  // signed-out screen carries the same rectangle, and there the booru half
+  // still has its cookies to end.
   //
-  // Signing out unmounts everything that could report a partial failure, so
-  // the report is the error screen's: what could not be deleted, and how to
-  // finish (memory errors-must-carry-their-own-remedy).
+  // The server-side sign-out is AWAITED here, unlike a plain logout: the
+  // reload below would cancel it mid-flight. Signing out unmounts everything
+  // that could report a partial failure, so the report is the error screen's:
+  // what could not be done, and how to finish (memory
+  // errors-must-carry-their-own-remedy).
   const purge = async (): Promise<void> => {
-    endSession('purge')
+    const serverFailures = await endSession('purge')
     const { failed } = await executePurge(window)
-    if (failed.length === 0) {
+    if (failed.length === 0 && serverFailures.length === 0) {
       window.location.reload()
       return
     }
-    setError(`You are signed out and this browser's copy of Technetium is purged, except: ${failed.join(', ')}. ` +
-      "Clear this site's data from your browser's own settings to finish.")
+    const parts: string[] = []
+    if (failed.length > 0) {
+      parts.push(`This browser's copy of Technetium is purged, except: ${failed.join(', ')}. ` +
+        "Clear this site's data from your browser's own settings to finish.")
+    }
+    for (const f of serverFailures) parts.push(f.text)
+    setError(`You are signed out. ${parts.join(' ')}`)
     setStatus('error')
   }
 
@@ -372,7 +435,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     const onLoggedOut = () => {
       // G-tc01: never a synchronous setState from inside an event that can fire
       // during render-adjacent SDK work.
-      queueMicrotask(() => { endSession('revoked') })
+      queueMicrotask(() => { void endSession('revoked') })
     }
     client.on(sdk.HttpApiEvent.SessionLoggedOut, onLoggedOut)
     return () => { client.off(sdk.HttpApiEvent.SessionLoggedOut, onLoggedOut) }
@@ -393,6 +456,8 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     login,
     logout,
     purge,
+    signOut,
+    dismissSignOut: () => setSignOut(null),
   }
 
   return <ClientContext.Provider value={value}>{children}</ClientContext.Provider>

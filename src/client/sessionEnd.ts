@@ -45,6 +45,17 @@ export interface SessionEndPlan {
   deleteSyncStore: boolean
   // Forget the stored access + refresh tokens.
   clearStoredSession: boolean
+  // Remove the sign-in's leftover mx_oidc_* entries from session storage
+  // (client/signOut.ts). Always: they are this tab's own, spent once a login
+  // completes, and no reason to end a session needs them afterwards.
+  clearOidcState: boolean
+  // Sign out of the booru and its picture gate, and revoke the tokens at the
+  // sign-in server (client/signOut.ts). For the three reasons that END the
+  // session. Never for a failed resume, whose tokens are presumed dead and
+  // whose user is likely coming straight back, and NEVER for foreign tokens:
+  // those are another tab's live login, and revoking them would sign that
+  // tab out from under its user.
+  signOutServerSide: boolean
   // NEVER true, for any reason. Losing device keys is the harm E8 exists to
   // prevent, and no sign-out is worth it. Present as a field so the check can
   // assert it across every reason rather than trusting prose.
@@ -57,6 +68,8 @@ export function planSessionEnd(reason: SessionEndReason): SessionEndPlan {
     // The operator's ruling: a revoked session is a logout, not a hiccup.
     deleteSyncStore: reason === 'logout' || reason === 'revoked' || reason === 'purge',
     clearStoredSession: true,
+    clearOidcState: true,
+    signOutServerSide: reason === 'logout' || reason === 'revoked' || reason === 'purge',
     deleteCryptoStore: false,
   }
 }

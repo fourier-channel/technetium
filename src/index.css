@@ -3686,6 +3686,37 @@ code {
 .tc-site-reset-row { display: flex; gap: 6px; }
 .tc-site-reset-go { color: var(--mod-alarm-ink); border-color: var(--mod-alarm-line); }
 
+/* The server-side half of a sign-out, on the signed-out screen
+   (client/signOut.ts). Fixed to the bottom of the window, out of the landing's
+   centred column, so its arrival moves nothing (no-forced-reflow-law). */
+.tc-signout-status {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  z-index: 20;
+  box-sizing: border-box;
+  width: min(34rem, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  transform: translateX(-50%);
+  padding: 10px 12px;
+  border: 1px solid var(--mod-line-strong);
+  border-left-width: 3px;
+  border-radius: var(--mod-radius-sm);
+  background: var(--mod-surface-2);
+  box-shadow: var(--mod-raise-lift);
+  color: var(--mod-ink);
+  font-family: var(--tc-ui-font, inherit);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.tc-signout-status[data-tone='active'] { border-left-color: var(--mod-active-fg); }
+.tc-signout-status[data-tone='ok'] { border-left-color: var(--mod-ok-fg); }
+.tc-signout-status[data-tone='warn'] { border-left-color: var(--mod-warn-fg); }
+.tc-signout-status p { margin: 0 0 6px; }
+.tc-signout-status ul { margin: 0 0 8px; padding-left: 18px; }
+.tc-signout-status a { color: var(--mod-accent); }
+
 /* The pill: the Direct Messages pill's face, as one rule. NavTree's DM pill
    takes its border and radius from the same two variables. */
 :root {
