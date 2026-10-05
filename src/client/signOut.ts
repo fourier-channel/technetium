@@ -219,19 +219,25 @@ export interface SignOutFailure {
 }
 
 // What did not happen, each with its remedy.
+//
+// The booru pair is phrased "if you were signed in there": this browser cannot
+// see the booru's cookies, so a browser that never had a booru session (a
+// signed-out purge on a fresh browser, say) is refused at the booru's edge
+// exactly as a real failure would be. The sentence says what was not
+// confirmed, and does not claim a session existed.
 export function signOutFailures(results: readonly SignOutStepResult[], booruOrigin: string, issuer: string | null): SignOutFailure[] {
   return results.filter((r) => !r.ok).map((r) => {
     switch (r.step) {
       case 'booru':
         return {
           step: r.step,
-          text: `The booru did not confirm you are signed out of it (${r.detail}). Open the booru and use its Purge, or sign out from its Manage Session card.`,
+          text: `The booru did not confirm you are signed out of it (${r.detail}). If you were signed in there, open the booru and use its Purge, or sign out from its Manage Session card.`,
           href: booruOrigin,
         }
       case 'gate':
         return {
           step: r.step,
-          text: `The booru's picture gate did not confirm it ended your session there (${r.detail}). That session ends by itself within a day; Purge on the booru ends it now.`,
+          text: `The booru's picture gate did not confirm it ended your session there (${r.detail}). If you had one, it ends by itself within a day; Purge on the booru ends it now.`,
           href: booruOrigin,
         }
       case 'tokens':
