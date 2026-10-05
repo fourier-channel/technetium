@@ -29,8 +29,11 @@ check('Profile, Settings, Layout and Log out are pills, in that order',
   me.indexOf('Settings') < me.indexOf("'Layout'") && me.indexOf("'Layout'") < me.indexOf('Log out'))
 check('the card and the avatar each have a border', /\.tc-me-card \{[^}]*border: 1px solid/.test(css) && /\.tc-me-av \{[^}]*border: 1px solid/.test(css))
 check('the header sits on the room list\'s 8px gutter', /\.tc-me \{[^}]*padding: \d+px 8px/.test(css))
-check('the Direct Messages pill and .tc-pill share one line and one radius',
-  /border: '1px solid var\(--tc-pill-line\)'/.test(nav) && /borderRadius: 'var\(--tc-pill-radius\)'/.test(nav) &&
+// They share the LINE. Not the radius since 2026-10-05: the pill radius on a
+// box that grows is a stadium that cuts into the faces; the section's own
+// fixed radius (checks/dmShape.check.ts) is the same stadium only while shut.
+check('the Direct Messages section and .tc-pill share one line',
+  /border: '1px solid var\(--tc-pill-line\)'/.test(nav) &&
   /\.tc-pill \{[^}]*border: 1px solid var\(--tc-pill-line\);[^}]*border-radius: var\(--tc-pill-radius\);/.test(css))
 
 console.log('== L14 the room list\'s left edge')

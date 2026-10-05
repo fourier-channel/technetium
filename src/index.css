@@ -3808,6 +3808,14 @@ code {
 :root {
   --tc-pill-line: var(--mod-line-strong);
   --tc-pill-radius: var(--mod-pill-radius);
+  /* The room list's Direct Messages section (NavTree.tsx): the height of its
+     header row, and the radius that makes the COLLAPSED section a stadium --
+     half its outer height, the header plus the 1px border above and below.
+     Fixed, so the opened section is a rounded rectangle rather than a taller
+     stadium whose ends cut into the faces (2026-10-05). One definition; the
+     check reads both files. */
+  --tc-dm-head-h: 22px;
+  --tc-dm-radius: calc((var(--tc-dm-head-h) + 2px) / 2);
 }
 .tc-pill {
   padding: 3px 10px;

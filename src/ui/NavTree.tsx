@@ -443,15 +443,19 @@ export function NavTree({
         <div
           style={{
             margin: '2px 4px 6px',
-            // The whole section is ONE pill that grows downwards. Collapsed it
-            // is ~24px tall, so this radius clamps to a true stadium; expanded
-            // it stays a rounded container, which is the same shape grown
-            // rather than a new one. overflow:hidden keeps the header's
-            // corners from squaring off against the border.
-            // The pill's line and radius are .tc-pill's (index.css), so the
-            // header's Settings / Layout / Log out pills are this pill's kin.
+            // The whole section is ONE container that grows downwards. Its
+            // radius is FIXED at half its COLLAPSED height (--tc-dm-radius,
+            // index.css): collapsed that is a true stadium, the pill it has
+            // always looked like; opened, it is a rounded rectangle whose
+            // corners clear the faces. It used to take the pill radius
+            // (999px), which a browser clamps to half of WHATEVER height the
+            // box has -- so the opened section became a stadium too, and its
+            // semicircular ends cut into the faces at the corners (operator,
+            // 2026-10-05: "the DM window, shape is wrong").
+            // The line is .tc-pill's (index.css), so the header's pills are
+            // this section's kin.
             border: '1px solid var(--tc-pill-line)',
-            borderRadius: 'var(--tc-pill-radius)',
+            borderRadius: 'var(--tc-dm-radius)',
             // Deliberately NOT overflow:hidden. The waiting glow reaches ~16px
             // past a face, and a face near the pill's edge would have had its
             // glow sliced off by the corner -- clipping the one thing the strip
@@ -475,8 +479,12 @@ export function NavTree({
               alignItems: 'center',
               gap: 6,
               width: '100%',
-              padding: '4px 10px',
-              // The pill is the CONTAINER now; this is its header face.
+              // The collapsed face's height, the one the radius is half of
+              // (plus the border): fixed, so the two cannot drift apart.
+              boxSizing: 'border-box',
+              height: 'var(--tc-dm-head-h)',
+              padding: '0 10px',
+              // The section is the CONTAINER; this is its header face.
               borderRadius: 0,
               cursor: 'pointer',
               border: 'none',
