@@ -27,7 +27,8 @@ export type DecryptionOutlook =
   | 'permanent'
   // We do not recognise the reason. Never dressed up as one of the above.
   | 'unknown'
-  // There is no decryptor at all -- encryption is not enabled in this build.
+  // There is no decryptor at all -- encryption is turned off in this browser,
+  // or its engine failed to start.
   // Distinct from every reason above, which describe a decryptor that TRIED
   // and could not. Collapsing the two would tell a user their message failed
   // when nothing ever attempted it, and would imply a fault where there is
@@ -127,7 +128,7 @@ export function explainUnreadable(
   if (!cryptoAvailable) {
     return {
       outlook: 'unavailable',
-      text: 'Encrypted. This client cannot read encrypted messages yet.',
+      text: 'Encrypted. Encryption is not running in this browser, so this client cannot read encrypted messages here. Turn it back on under Manage session below your name.',
     }
   }
   return explainDecryptionFailure(code)

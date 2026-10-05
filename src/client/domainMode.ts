@@ -1,4 +1,4 @@
-import { type OptInStore, readOptIn } from './e2eeOptIn'
+import { type OptInStore, readFlag } from './e2eeOptIn'
 
 // ---------------------------------------------------------------------------
 // Whether domain mode exists for this user at all.
@@ -65,7 +65,7 @@ export function domainEnabledFrom(env: DomainEnv, store: OptInStore | null): boo
   if (env.flag === '1') return true
   if (env.dev === true) return true
   if (!store) return false
-  return readOptIn(store)
+  return readFlag(store)
 }
 
 /** The same decision, asked of this build and this browser. */

@@ -54,8 +54,11 @@ export function encryptionSummary(
   if (!enabled) {
     return {
       tone: 'off',
-      headline: 'Encryption is off in this build.',
-      detail: ['Messages are stored on the server in a form it can read.'],
+      headline: 'Encryption is turned off in this browser.',
+      detail: [
+        'Direct messages you start here are not encrypted: the server can read them.',
+        'Encrypted conversations do not open here until you turn it back on, above.',
+      ],
       actions: [],
     }
   }

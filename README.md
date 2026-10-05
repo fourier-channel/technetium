@@ -29,13 +29,16 @@ use [Element](https://element.io).
   receipts, pinned messages, forwarding, mention autocomplete, threads,
   polls, search, spaces, typing indicators, link previews, a lightbox for
   media, room creation and a user directory.
-- **End-to-end encryption for direct messages**, off by default and switched
-  on per browser behind a passphrase. Encrypted DMs, encrypted attachments
-  with sender-side thumbnails, device verification by emoji, key backup,
-  recovery keys (set up, restore, rotate), and a settings panel that says
-  plainly what state your keys are in.
-- **Sessions**: the settings panel lists every session on the account and
-  signs out the unverified ones, or all others, in one action.
+- **End-to-end encryption for direct messages**, on by default and switched
+  off per browser behind a passphrase; one tab per device, enforced by a
+  browser lock with a "Use it here" handover. Encrypted DMs, encrypted
+  attachments with sender-side thumbnails, device verification by emoji, key
+  backup, recovery keys (set up, restore, rotate), and a panel under Manage
+  session that says plainly what state your keys are in.
+- **Manage session**, under your name: the life of every token this sign-in
+  holds, counting down live, and every session on the account, with the
+  unverified ones, or all others, signed out in one action. Logout also signs
+  out of the booru and revokes the tokens at the sign-in server.
 - **Sliding sync** (MSC4186) behind a build flag, through a deliberate
   deep-import of the SDK's internals. Re-verify before any SDK bump.
 - **A DM dock**: a pinned panel of direct messages across the top of the
@@ -86,7 +89,6 @@ homeserver for anyone but the developer, so set them for any real build:
 | `VITE_HOMESERVER` | Homeserver base URL |
 | `VITE_MAS_CLIENT_ID` | The OIDC client id registered with MAS |
 | `VITE_SLIDING_SYNC` | `1` to use sliding sync instead of classic sync |
-| `VITE_E2EE` | `1` to turn encryption on for every user of the build. Compared as the string `1`; any other value is off. The per-browser switch in Settings works either way. |
 | `VITE_DOMAIN` | `1` to offer domain mode to every user of the build. Compared as the string `1`; any other value is off, so `0` and `false` are both off. A dev server has it without setting anything. On a build with it off, the per-browser switch under Settings -> Unfinished features turns it on for one browser. |
 | `VITE_BOORU_URL`, `VITE_BOORU_LOGIN_URL`, `VITE_BOORU_EXCHANGE_URL` | The community image board panel and its sign-in bridge |
 

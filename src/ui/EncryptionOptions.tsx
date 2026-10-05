@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useClient } from '../client/clientContextValue'
-import { e2eeEnabled, e2eeFromBuild, observeCryptoIdentity, observeKeyBackup } from '../client/crypto'
-import { applyOptIn, browserOptInStore, needsReload, readOptIn } from '../client/e2eeOptIn'
+import { e2eeEnabled, observeCryptoIdentity, observeKeyBackup } from '../client/crypto'
+import { applyOptOut, browserOptOutStore, needsReload, readOptOut } from '../client/e2eeOptIn'
 import type { CryptoIdentityFacts } from '../client/cryptoIdentity'
 import type { KeyBackupFacts } from '../client/keyBackup'
 import { encryptionSummary, type EncryptionAction } from './encryptionSummary'
@@ -106,10 +106,11 @@ export function EncryptionOptions() {
   // pauses here while the user goes and does it.
   const [approvalUrl, setApprovalUrl] = useState<string | null>(null)
   const approvalResolve = useRef<((ok: boolean) => void) | null>(null)
-  // The runtime switch. `optIn` is what is STORED; e2eeEnabled() is what this
-  // session actually started with. They disagree between flipping the switch
-  // and reloading, and saying so is the whole point of `pendingReload`.
-  const [optIn, setOptIn] = useState(() => readOptIn(browserOptInStore))
+  // The per-browser switch, which turns encryption OFF (e2eeOptIn.ts).
+  // `optedOut` is what is STORED; e2eeEnabled() is what this session actually
+  // started with. They disagree between flipping the switch and reloading,
+  // and saying so is the whole point of `pendingReload`.
+  const [optedOut, setOptedOut] = useState(() => readOptOut(browserOptOutStore))
   const [passphrase, setPassphrase] = useState('')
   const [optInNote, setOptInNote] = useState<string | null>(null)
   const [pendingReload, setPendingReload] = useState(false)
@@ -143,15 +144,15 @@ export function EncryptionOptions() {
     return () => { cancelled = true }
   }, [client, reload])
 
-  const flipOptIn = (on: boolean) => {
-    const before = readOptIn(browserOptInStore)
-    const result = applyOptIn(browserOptInStore, passphrase, on)
+  const flipOptOut = (off: boolean) => {
+    const before = readOptOut(browserOptOutStore)
+    const result = applyOptOut(browserOptOutStore, passphrase, off)
     if (result === 'bad-passphrase') {
       setOptInNote('That passphrase is not right, or this browser refused to store the setting.')
       return
     }
-    const after = readOptIn(browserOptInStore)
-    setOptIn(after)
+    const after = readOptOut(browserOptOutStore)
+    setOptedOut(after)
     setPassphrase('')
     setOptInNote(null)
     setPendingReload(needsReload(before, after))
@@ -265,17 +266,19 @@ export function EncryptionOptions() {
           off, so a switch placed further down would be a control you can only
           reach once you no longer need it. */}
       <div className="tc-settings-optin">
-        {e2eeFromBuild() ? (
-          <p className="tc-settings-note">Encryption is turned on in this build. There is nothing to switch here.</p>
-        ) : optIn ? (
+        {optedOut ? (
           <>
-            <p className="tc-settings-note">Encryption is turned on for this browser.</p>
-            <button type="button" className="tc-pill" onClick={() => flipOptIn(false)}>Turn encryption off</button>
+            <p className="tc-settings-note">
+              Encryption is turned off for this browser. Direct messages you start here are not encrypted, and
+              encrypted ones do not open here.
+            </p>
+            {/* The way back needs no passphrase: a switch you cannot undo is a trap. */}
+            <button type="button" className="tc-pill" onClick={() => flipOptOut(false)}>Turn encryption back on</button>
           </>
         ) : (
           <>
             <p className="tc-settings-note">
-              Encryption is off. Turning it on is for testing, and needs the passphrase you were given.
+              Encryption is on. Turning it off affects this browser only, and needs the passphrase you were given.
             </p>
             <div className="tc-settings-confirm">
               <input
@@ -284,12 +287,12 @@ export function EncryptionOptions() {
                 value={passphrase}
                 onChange={(e) => setPassphrase(e.target.value)}
                 placeholder="Passphrase"
-                aria-label="Encryption passphrase"
+                aria-label="Passphrase to turn encryption off"
                 autoComplete="off"
                 spellCheck={false}
               />
-              <button type="button" className="tc-pill" disabled={!passphrase.trim()} onClick={() => flipOptIn(true)}>
-                Turn encryption on
+              <button type="button" className="tc-pill" disabled={!passphrase.trim()} onClick={() => flipOptOut(true)}>
+                Turn encryption off
               </button>
             </div>
           </>

@@ -26,7 +26,7 @@ const has = (a: EncryptionAction[], x: EncryptionAction) => a.includes(x)
 // --- the flag ---------------------------------------------------------------
 {
   const s = encryptionSummary(false, ident(), backup())
-  check('with encryption off it says so plainly', s.tone === 'off' && /off in this build/i.test(s.headline))
+  check('with encryption off it says so plainly', s.tone === 'off' && /turned off in this browser/i.test(s.headline))
   check('and offers nothing to press', s.actions.length === 0)
   check('and does not imply messages are private', s.detail.join(' ').includes('server'))
 }

@@ -11,7 +11,7 @@ import {
   refreshUrls,
   type PurgeWindow,
 } from '../src/client/browserPurge.ts'
-import { E2EE_OPT_IN_KEY } from '../src/client/e2eeOptIn.ts'
+import { E2EE_OPT_OUT_KEY } from '../src/client/e2eeOptIn.ts'
 import { CRYPTO_STORE_PREFIX } from '../src/client/storeNames.ts'
 import { SESSION_END_REASONS, planSessionEnd } from '../src/client/sessionEnd.ts'
 
@@ -32,13 +32,16 @@ console.log('== the keys stay; everything else goes')
 {
   const plan = browserPurgePlan(
     [CRYPTO, CRYPTO_META, SYNC, 'some-other-db', ''],
-    ['matrix-client:session', E2EE_OPT_IN_KEY, 'net.41chan.room_list_settings', 'net.41chan.avatar_shape'],
+    ['matrix-client:session', E2EE_OPT_OUT_KEY, 'net.41chan.room_list_settings', 'net.41chan.avatar_shape'],
   )
   check('the device\'s crypto stores are kept', JSON.stringify(plan.keepDatabases) === JSON.stringify([CRYPTO, CRYPTO_META]), plan.keepDatabases)
   check('the sync cache and every other database are deleted', JSON.stringify(plan.deleteDatabases) === JSON.stringify([SYNC, 'some-other-db']), plan.deleteDatabases)
-  check('the encryption opt-in is kept, so the kept keys are still used', JSON.stringify(plan.keepLocalKeys) === JSON.stringify([E2EE_OPT_IN_KEY]))
+  // Since 2026-10-05 encryption is ON by default and the switch is an
+  // opt-OUT: clearing it can only turn encryption back on, so nothing in
+  // local storage is kept any more.
+  check('no local-storage entry is kept -- the encryption opt-out goes too', plan.keepLocalKeys.length === 0 && plan.removeLocalKeys.includes(E2EE_OPT_OUT_KEY), plan)
   check('the stored session and every setting are removed',
-    plan.removeLocalKeys.length === 3 && plan.removeLocalKeys.includes('matrix-client:session'), plan.removeLocalKeys)
+    plan.removeLocalKeys.length === 4 && plan.removeLocalKeys.includes('matrix-client:session'), plan.removeLocalKeys)
   check('a database that merely mentions crypto further in is not a key store', !keepsDatabase('other::matrix-js-sdk::matrix-sdk-crypto'))
   const cryptoSrc = read('src/client/crypto.ts')
   check('the crypto store is created under the same prefix the purge keeps',
@@ -48,7 +51,7 @@ console.log('== the keys stay; everything else goes')
 
 console.log('== running it')
 {
-  const local = new Map<string, string>([['matrix-client:session', '{}'], [E2EE_OPT_IN_KEY, '1'], ['net.41chan.x', '1']])
+  const local = new Map<string, string>([['matrix-client:session', '{}'], [E2EE_OPT_OUT_KEY, '1'], ['net.41chan.x', '1']])
   const deleted: string[] = []
   let sessionCleared = false
   const cachesDeleted: string[] = []
@@ -64,7 +67,7 @@ console.log('== running it')
   }
   const { failed } = await executePurge(win)
   check('nothing failed', failed.length === 0, failed)
-  check('only the opt-in is left in local storage', JSON.stringify([...local.keys()]) === JSON.stringify([E2EE_OPT_IN_KEY]), [...local.keys()])
+  check('local storage is emptied', local.size === 0, [...local.keys()])
   check('the key store was never asked to be deleted', !deleted.includes(CRYPTO) && deleted.includes(SYNC), deleted)
   check('session storage and caches are cleared', sessionCleared && cachesDeleted.join() === 'a')
 

@@ -1,4 +1,3 @@
-import { E2EE_OPT_IN_KEY } from './e2eeOptIn'
 import { CRYPTO_STORE_PREFIX } from './storeNames'
 
 // ---------------------------------------------------------------------------
@@ -14,10 +13,10 @@ import { CRYPTO_STORE_PREFIX } from './storeNames'
 // (sessionEnd.ts, deleteCryptoStore: never), because without them messages
 // already received cannot be read here again unless restored from a recovery
 // key; deleting them is the separately gated reset in Manage session.
-// Purge keeps them, and keeps the per-browser encryption opt-in that uses
-// them -- clearing that would switch encryption off and strand the kept keys.
-// Everything else goes: the sync cache, every other database, local and
-// session storage, the Cache API.
+// Purge keeps them and nothing else: the sync cache, every other database,
+// local and session storage (the encryption opt-out included -- encryption is
+// on by default, so clearing it can only turn encryption back on and put the
+// kept keys to use), the Cache API.
 //
 // Pure apart from the window handed to executePurge, so the checks drive it.
 // ---------------------------------------------------------------------------
@@ -26,8 +25,11 @@ export function keepsDatabase(name: string): boolean {
   return name.startsWith(CRYPTO_STORE_PREFIX)
 }
 
+// No local-storage entry is kept. Kept as a function, and checked, so that a
+// future exception is a visible decision rather than an edit to a filter.
 export function keepsLocalKey(key: string): boolean {
-  return key === E2EE_OPT_IN_KEY
+  void key
+  return false
 }
 
 export interface BrowserPurgePlan {

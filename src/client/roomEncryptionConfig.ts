@@ -111,7 +111,7 @@ export async function configureRoomEncryptionNow(
   }: { attempts?: number; intervalMs?: number; waitForUserId?: string | null } = {},
 ): Promise<void> {
   // No crypto engine means nothing to configure and nothing to wait for. This
-  // is the ordinary case while VITE_E2EE is off, and without it the poll below
+  // is the ordinary case in a browser that turned encryption off, and without it the poll below
   // would spend its whole budget before letting the caller open a plaintext
   // conversation.
   if (!client.getCrypto()) return

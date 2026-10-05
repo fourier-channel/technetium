@@ -6,7 +6,7 @@ import {
 } from './cryptoProgress'
 import { isSilentAction, type CryptoIdentityFacts, type IdentityAction } from './cryptoIdentity'
 import type { KeyBackupFacts } from './keyBackup'
-import { browserOptInStore, readOptIn } from './e2eeOptIn'
+import { browserOptOutStore, readOptOut } from './e2eeOptIn'
 import { CRYPTO_STORE_PREFIX } from './storeNames'
 
 // ---------------------------------------------------------------------------
@@ -34,38 +34,23 @@ import { CRYPTO_STORE_PREFIX } from './storeNames'
 // is worse than no meter.
 // ---------------------------------------------------------------------------
 
-// Opt-in via env so the default path is untouched until this is proven against
-// a live login. Set VITE_E2EE=1 to enable.
-//
-// Compared against the string '1', not truthiness: Vite env values are
-// STRINGS, so !!'0' is true and the .env.production line VITE_E2EE=0 --
-// written to pin the flag OFF -- was what switched it on in the first
-// production build to carry it (2026-09-05, found live and unproven).
-//
-// Two sources now, ORed: the build flag above, and a runtime opt-in the
-// operator can set from the settings panel on a build that shipped with the
-// flag off (client/e2eeOptIn.ts). Neither can force the other off; the switch
-// only ever turns encryption ON, which is the direction that cannot silently
-// downgrade a conversation someone believes is private.
+// ON IN EVERY BUILD (operator, 2026-10-05: "E2EE is defaulted to ON and the
+// passphrase box in settings allows it to be turned OFF"). There is no build
+// flag: VITE_E2EE is gone, and the one thing that turns encryption off is this
+// browser's own opt-out (client/e2eeOptIn.ts), behind the passphrase. Safe to
+// default on because one tab per device is enforced (deviceLock.ts): two
+// engines on one store was the reason it could not be.
 //
 // SNAPSHOTTED ONCE, at module load, and this matters. Crypto is initialised
 // while the client is being built, so a session that started without it has no
 // crypto object to hand to anything. If this answer could change mid-session,
 // the UI would offer encryption over a client that cannot encrypt -- the false
-// claim E10 exists to forbid. The toggle therefore asks for a reload instead of
+// claim E10 exists to forbid. The switch therefore asks for a reload instead of
 // pretending to take effect.
-const E2EE_AT_STARTUP = import.meta.env.VITE_E2EE === '1' || readOptIn(browserOptInStore)
+const E2EE_AT_STARTUP = !readOptOut(browserOptOutStore)
 
 export function e2eeEnabled(): boolean {
   return E2EE_AT_STARTUP
-}
-
-// Whether the BUILD turned it on, independent of the runtime switch. The
-// settings panel needs to tell these apart: "on in this build" is not something
-// a user can turn off from here, and offering them a switch that would not work
-// is worse than saying so.
-export function e2eeFromBuild(): boolean {
-  return import.meta.env.VITE_E2EE === '1'
 }
 
 // Where the crypto store lives in IndexedDB. Named, not inlined, because
