@@ -4248,3 +4248,46 @@ saw every fresh line as from the future.
 **Still open.** The deploy of L19-L25 and these fixes, and every live pass
 the previous entry lists -- now including the iOS tap path and the DM-dock
 menu, which were reasoned about and checked from source, not seen.
+
+## 2026-10-05 -- rosters from sync, and the "Offline" that was never true
+
+**What the operator saw.** Request counts showed a single client call -- the
+member re-check -- as about four in five of everything the server received,
+and the user list and profile cards had only ever shown "Offline".
+
+**Rosters.** The 2026-09-06 fix for "a join after first load is invisible
+until reload" blamed rooms outside the sliding window and re-asked every
+room's members every minute in every tab. Reproduced against a local
+homeserver at production's version with this client's own sync setup and no
+re-check: no join or leave by anyone else ever reached a roster, even in a
+quiet room with sync healthy. The window was never the cause. A third sync
+list now asks for every room's members; the server sends each roster once,
+then every change as it happens, gaps included. The startup member pass, the
+minute re-check and the per-open member fetch are gone, and the
+required-state check holds the new list in place.
+
+**Presence.** Unknown presence was drawn as "Offline": the SDK's user record
+starts out offline, and the client read that default as if the server had
+said it. Only a presence event the server actually sent counts now. Under
+sliding sync none arrive, so presence shows nothing -- which is the truth.
+
+**draft-24 (gotcha) -- sliding sync never applies timeline state.** The SDK
+adds sliding sync's timeline events with addToState false: a membership
+event lands in the timeline and room state never hears of it. State moves
+only through required_state. A state type the UI reads but the request does
+not list is not late, it is absent -- the same law the required-state check
+already enforces, met here by membership, which `$ME` covered only for us.
+
+**draft-25 (gotcha) -- a list widened later waits for activity.** Adding the
+roster list after the first response, to keep that response lean, left
+quiet rooms with no roster: the server applies a widened required_state to
+a room only on that room's next event. The list is in the first request.
+
+**draft-26 (gotcha) -- an SDK default is not a server fact.** `User.presence`
+is "offline" before any presence event exists. Reading a field whose
+default is a legal value cannot tell "said" from "never said"; the event
+behind it can.
+
+**Still open.** The deploy, and a live pass: a second account joining and
+leaving a room while the list is open, and a profile card showing no
+presence line.
