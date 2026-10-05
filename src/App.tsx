@@ -42,7 +42,9 @@ import { useReadMarker } from './client/useReadMarker'
 import { useMediaTagSync } from './client/useMediaTags'
 import { DomainView } from './ui/DomainView'
 import { domainEnabled } from './client/domainMode'
-import { threadStripCss, DM_TAB_BESIDE_TITLE, PULLTAB_OPEN_H, ROOMS_TAB_TOP, MEMBERS_TAB_TOP } from './ui/threadStrip'
+import { threadStripCss, dmTabBesideTitle, ROOMS_TAB_TOP, MEMBERS_TAB_TOP, THREAD_TAB_TOP_EDGE } from './ui/threadStrip'
+import { dockShareCss, tabAttach, threadTabGeometry } from './ui/tabRide'
+import { TabRail } from './ui/TabRail'
 import { useBackButton } from './ui/backButton'
 import { threadPinsOf, useThreadPinsVersion } from './client/threadPinState'
 import { usePinnedFold } from './client/pinnedFold'
@@ -196,6 +198,11 @@ function App() {
   // The thread list descends from the dock's bottom edge (no sudden jumps):
   // mounted for the whole choreography, its height going 0 -> share -> 0.
   const threadListReveal = useReveal(threadListOpen, 380)
+  // The dock slides on its own stylesheet transition (DmDock.tsx); this reveal
+  // only times its pull tab -- how long the dock is still on screen after it
+  // is told to close, so the tab rides its edge out of sight (tabRide.ts).
+  const dockShown = !!(dockRoom && space.leaves.dock.open)
+  const dockReveal = useReveal(dockShown, 420)
   // The dock's closed-state tab rides the strip's title bar for as long as the
   // strip is on screen -- its closing animation included, so the tab does not
   // jump back over the title while the strip is still visible.
@@ -415,12 +422,28 @@ function App() {
         {/* While the thread strip is on screen this border is the strip's
             title bar, whose label sits on the centre (launch-polish L3), so
             the tab moves onto the strip itself -- see dmTabOnStrip below. */}
-        {dockRoom && !space.leaves.dock.open && !dmTabOnStrip && (
-          <PullTab pull="down" open={false} target="dock" label="Direct message" onClick={() => showInDock(dockRoom)} style={{ top: 0, left: 'calc(50% - 40px)' }} />
-        )}
-        {dockRoom && space.leaves.dock.open && (
-          <PullTab pull="up" open target="dock" label="Hide the direct message" onClick={closeDock} style={{ top: `${Math.round(dockShareOfMain * 1000) / 10}%`, marginTop: -PULLTAB_OPEN_H, left: 'calc(50% - 40px)' }} />
-        )}
+        {/* ONE tab, riding the dock's bottom edge (tabRide.ts): closed it
+            hangs from the region's top border -- or from the thread strip's
+            title bar beside its label, while the strip is on screen -- and
+            open it sits inside the dock on its edge, carried there by the
+            edge itself. <main> clips, so the moment it changes sides is a
+            moment nobody can see. */}
+        {dockRoom && (() => {
+          const seat = tabAttach(dockShown, dockReveal.mounted)
+          return (
+            <TabRail axis="y" offset={dockShown ? dockShareCss(dockShareOfMain) : '0px'} durationMs={dockReveal.durationMs} clip={{ inset: 0 }}>
+              <PullTab
+                pull={dockShown ? 'up' : 'down'}
+                open={dockShown}
+                attach={seat === 'end' ? 'above' : 'start'}
+                target="dock"
+                label={dockShown ? 'Hide the direct message' : 'Direct message'}
+                onClick={() => (dockShown ? closeDock() : showInDock(dockRoom))}
+                style={{ top: 0, left: seat === 'start' && dmTabOnStrip ? dmTabBesideTitle(domainWidth) : 'calc(50% - 40px)' }}
+              />
+            </TabRail>
+          )
+        })()}
         {/* Below the dock: the chat column and, to its right, the domain --
             a tile that takes width from the column, so the thread list and
             the chat SHRINK for it rather than being covered. The dock keeps
@@ -435,18 +458,23 @@ function App() {
                 down (push it up). */}
             {/* Right of centre: with the dock closed this border is also the
                 dock's, and its tab sits left of centre. Two tabs, side by side. */}
-            {selectedRoom && !threadListOpen && (
-              <PullTab pull="down" open={false} target="threads" label="Threads" onClick={() => setThreadListOpen(true)} style={{ top: 0, left: 'calc(50% + 40px)' }} />
-            )}
-            {/* The dock's tab, on the strip's title bar and in the STRIP's
-                coordinates: placed from <main> it drifted onto the scope pills
-                at ordinary widths, and onto the title whenever the domain made
-                <main> wider than the strip. */}
-            {dockRoom && dmTabOnStrip && (
-              <PullTab pull="down" open={false} target="dock" label="Direct message" onClick={() => showInDock(dockRoom)} style={{ top: 0, left: DM_TAB_BESIDE_TITLE }} />
-            )}
-            {selectedRoom && threadListOpen && (
-              <PullTab pull="up" open target="threads" label="Hide threads" onClick={() => setThreadListOpen(false)} style={{ top: threadStripH, marginTop: -PULLTAB_OPEN_H, left: 'calc(50% + 40px)' }} />
+            {/* ONE tab, riding the strip's bottom edge on the strip's own
+                reveal (tabRide.ts); the column clips, so it is carried in and
+                out of sight by the edge. The dock's tab, which sits on the
+                strip's title bar while the strip is up, now rides <main>'s
+                rail above, in <main>'s coordinates (dmTabBesideTitle). */}
+            {selectedRoom && (
+              <TabRail axis="y" offset={threadListReveal.shown ? threadStripH : '0px'} durationMs={threadListReveal.durationMs} clip={{ inset: 0 }}>
+                <PullTab
+                  pull={threadListOpen ? 'up' : 'down'}
+                  open={threadListOpen}
+                  attach={tabAttach(threadListOpen, threadListReveal.mounted) === 'end' ? 'above' : 'start'}
+                  target="threads"
+                  label={threadListOpen ? 'Hide threads' : 'Threads'}
+                  onClick={() => setThreadListOpen(!threadListOpen)}
+                  style={{ top: 0, left: 'calc(50% + 40px)' }}
+                />
+              </TabRail>
             )}
             {threadListReveal.mounted && selectedRoom && (
               <div
@@ -557,22 +585,29 @@ function App() {
         </div>
       )}
 
-      {/* The thread view's tab: on the user list's left border when a thread
-          can be pulled back out, on the view's left border when it is out. */}
-      {lastThread && !openThread && (
-        <PullTab pull="left" open={false} target="thread" label="Thread" onClick={() => setOpenThread(lastThread)} style={{ right: membersWidth + DIVIDER_PX }} />
-      )}
-      {/* Beside the chat, the close tab rides the thread panel's left edge.
-          Alone on a phone the thread IS the screen, and that edge (computed
-          from a member list that is not there) was off the screen's left --
-          no way out of a thread (operator, 2026-09-29). There it is on the
-          screen's own left edge. */}
-      {openThread && upAlone !== 'thread' && (
-        <PullTab pull="right" open target="thread" label="Close thread" onClick={() => setOpenThread(null)} style={{ right: membersWidth + DIVIDER_PX + threadPanelWidth, marginRight: -PULLTAB_OPEN_H }} />
-      )}
-      {openThread && upAlone === 'thread' && (
-        <PullTab pull="right" open target="thread" label="Back" onClick={() => setOpenThread(null)} style={{ left: 0 }} />
-      )}
+      {/* The thread view's ONE tab, riding the view's left edge (tabRide.ts):
+          closed, outside the border the view comes out of -- the member
+          list's, or the screen's own right edge when the list is not open
+          (a phone), a slot below the Members tab there; open, inside the view
+          on its edge, which on a phone where the thread fills the screen is
+          the screen's left edge. */}
+      {lastThread && (() => {
+        const g = threadTabGeometry(space.leaves.members.open, membersWidth, DIVIDER_PX, threadPanelWidth, threadPanelReveal.shown)
+        const seat = tabAttach(!!openThread, threadPanelReveal.mounted)
+        return (
+          <TabRail axis="x" offset={g.offset} durationMs={threadPanelReveal.durationMs} clip={{ top: 0, bottom: 0, left: 0, right: g.r0 }}>
+            <PullTab
+              pull={openThread ? 'right' : 'left'}
+              open={!!openThread}
+              attach={seat === 'end' ? 'right' : 'start'}
+              target="thread"
+              label={openThread ? (upAlone === 'thread' ? 'Back' : 'Close thread') : 'Thread'}
+              onClick={() => setOpenThread(openThread ? null : lastThread)}
+              style={{ right: 0, ...(seat === 'start' && !space.leaves.members.open ? { top: THREAD_TAB_TOP_EDGE } : {}) }}
+            />
+          </TabRail>
+        )
+      })()}
       {/* Closed by reflow when the screen cannot hold it (space.ts). The
           handle goes with it: a divider for a panel that is not there is a
           drag that silently does nothing. */}
@@ -603,17 +638,28 @@ function App() {
           other list's tab -- Back from the room list landed on Members, and
           round again (operator, 2026-09-29). While a thread or a DM fills the
           screen, only its own Back shows. */}
-      {!space.leaves.sidebar.open && (!upAlone || membersAlone) && (
-        <PullTab pull="right" open={false} target="sidebar" label="Rooms" onClick={openSidebar} style={{ left: 0, top: ROOMS_TAB_TOP }} />
+      {/* ONE tab each, flipping in place. These two lists do not slide --
+          they are there or not -- so a tab that changes edge in the same
+          frame as its list is tracking it. */}
+      {((!space.leaves.sidebar.open && (!upAlone || membersAlone)) || sidebarAlone) && (
+        <PullTab
+          pull={sidebarAlone ? 'left' : 'right'}
+          open={sidebarAlone}
+          target="sidebar"
+          label={sidebarAlone ? 'Back' : 'Rooms'}
+          onClick={sidebarAlone ? closeSidebar : openSidebar}
+          style={sidebarAlone ? { right: 0, top: ROOMS_TAB_TOP } : { left: 0, top: ROOMS_TAB_TOP }}
+        />
       )}
-      {sidebarAlone && (
-        <PullTab pull="left" open target="sidebar" label="Back" onClick={closeSidebar} style={{ right: 0, top: ROOMS_TAB_TOP }} />
-      )}
-      {selectedRoom && !space.leaves.members.open && (!upAlone || sidebarAlone) && (
-        <PullTab pull="left" open={false} target="members" label="Members" onClick={openMembers} style={{ right: 0, top: MEMBERS_TAB_TOP }} />
-      )}
-      {membersAlone && (
-        <PullTab pull="right" open target="members" label="Back" onClick={closeMembers} style={{ left: 0, top: MEMBERS_TAB_TOP }} />
+      {((selectedRoom && !space.leaves.members.open && (!upAlone || sidebarAlone)) || membersAlone) && (
+        <PullTab
+          pull={membersAlone ? 'right' : 'left'}
+          open={membersAlone}
+          target="members"
+          label={membersAlone ? 'Back' : 'Members'}
+          onClick={membersAlone ? closeMembers : openMembers}
+          style={membersAlone ? { left: 0, top: MEMBERS_TAB_TOP } : { right: 0, top: MEMBERS_TAB_TOP }}
+        />
       )}
       </div>
     </div>

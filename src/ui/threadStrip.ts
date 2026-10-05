@@ -113,3 +113,23 @@ export const DM_TAB_GAP = 12
 export const DM_TAB_BESIDE_TITLE =
   `min(calc(50% + ${TITLE_HALF_W + DM_TAB_GAP + PULLTAB_HALF_W}px), ` +
   `calc(100% - ${HEAD_PAD_X + SORT_PILL_W + DM_TAB_GAP + PULLTAB_HALF_W}px))`
+
+/**
+ * DM_TAB_BESIDE_TITLE in <main>'s coordinates rather than the strip's. The
+ * dock's tab rides a rail the size of <main> (tabRide.ts), and the strip is
+ * <main> less the domain tile on its right, so the strip's 50% and 100% are
+ * <main>'s (100% - domain) / 2 and 100% - domain. With no domain it is the
+ * constant itself.
+ */
+export function dmTabBesideTitle(domainPx: number): string {
+  if (!(domainPx > 0)) return DM_TAB_BESIDE_TITLE
+  return `min(calc((100% - ${domainPx}px) / 2 + ${TITLE_HALF_W + DM_TAB_GAP + PULLTAB_HALF_W}px), ` +
+    `calc(100% - ${domainPx}px - ${HEAD_PAD_X + SORT_PILL_W + DM_TAB_GAP + PULLTAB_HALF_W}px))`
+}
+
+/**
+ * The thread view's closed tab when the member list is not open (a phone, or
+ * a screen that shed it): on the screen's right edge, where the Members tab
+ * also is, so one slot below it -- a tab length and a gap further down.
+ */
+export const THREAD_TAB_TOP_EDGE = `calc(50% + ${SIDE_TAB_SPREAD * 1.5}px)`

@@ -60,13 +60,16 @@ console.log('== L18 on a phone, the room list and the member list can be reached
 // Operator, 2026-09-29: "When loading tc on mobile, only chanbooru shows up
 // ... user list, room list, nothing shows". The routes are proven in
 // checks/spaceOverflow; these hold that the tabs exist and use them.
-check('a closed room list shows a Rooms tab on the left edge, and it opens the room list',
-  /<PullTab pull="right" open=\{false\} target="sidebar" label="Rooms" onClick=\{openSidebar\} style=\{\{ left: 0, top: ROOMS_TAB_TOP \}\} \/>/.test(app))
-check('a closed member list shows a Members tab on the right edge, while a room is open',
-  /\{selectedRoom && !space\.leaves\.members\.open && [^\n]*\(\s*<PullTab pull="left" open=\{false\} target="members" label="Members" onClick=\{openMembers\} style=\{\{ right: 0, top: MEMBERS_TAB_TOP \}\}/.test(app))
-check('each has a way back when it is the whole screen, at its own list\'s height',
-  /\{sidebarAlone && \(\s*<PullTab pull="left" open target="sidebar" label="Back" onClick=\{closeSidebar\} style=\{\{ right: 0, top: ROOMS_TAB_TOP \}\}/.test(app) &&
-  /\{membersAlone && \(\s*<PullTab pull="right" open target="members" label="Back" onClick=\{closeMembers\} style=\{\{ left: 0, top: MEMBERS_TAB_TOP \}\}/.test(app))
+// ONE tab per list since 2026-10-05 (tabRide.ts): the same element flips edge
+// and label with the list, rather than one tab unmounting for another.
+check('the room list\'s one tab: Rooms on the left edge while shut, Back on the right edge while it is the screen',
+  /pull=\{sidebarAlone \? 'left' : 'right'\}/.test(app) && /label=\{sidebarAlone \? 'Back' : 'Rooms'\}/.test(app) &&
+  /onClick=\{sidebarAlone \? closeSidebar : openSidebar\}/.test(app) &&
+  /style=\{sidebarAlone \? \{ right: 0, top: ROOMS_TAB_TOP \} : \{ left: 0, top: ROOMS_TAB_TOP \}\}/.test(app))
+check('the member list\'s one tab: Members on the right edge while shut (a room open), Back on the left while it is the screen',
+  /\(\(selectedRoom && !space\.leaves\.members\.open && \(!upAlone \|\| sidebarAlone\)\) \|\| membersAlone\)/.test(app) &&
+  /label=\{membersAlone \? 'Back' : 'Members'\}/.test(app) &&
+  /style=\{membersAlone \? \{ left: 0, top: MEMBERS_TAB_TOP \} : \{ right: 0, top: MEMBERS_TAB_TOP \}\}/.test(app))
 {
   // "Room List has the upper position, user list has the lower position, in
   // both states." Tabs are centred on their top (translateY(-50%)), so the
@@ -75,11 +78,11 @@ check('each has a way back when it is the whole screen, at its own list\'s heigh
   check('the room list rides above the middle, the member list below, a whole tab and a gap apart',
     /50% - /.test(ROOMS_TAB_TOP) && /50% \+ /.test(MEMBERS_TAB_TOP) && SIDE_TAB_SPREAD >= PULLTAB_W + 8, { ROOMS_TAB_TOP, MEMBERS_TAB_TOP })
 }
-check('a thread filling the phone has its own Back on the left edge (its panel-edge tab was off screen)',
-  /\{openThread && upAlone === 'thread' && \(\s*<PullTab pull="right" open target="thread" label="Back" onClick=\{\(\) => setOpenThread\(null\)\} style=\{\{ left: 0 \}\}/.test(app) &&
-  /\{openThread && upAlone !== 'thread' && \(/.test(app))
+check('a thread filling the phone is closed by its tab, which rides the view\'s left edge -- the screen\'s, there -- and says Back',
+  /label=\{openThread \? \(upAlone === 'thread' \? 'Back' : 'Close thread'\) : 'Thread'\}/.test(app) &&
+  /threadTabGeometry\(space\.leaves\.members\.open, membersWidth, DIVIDER_PX, threadPanelWidth, threadPanelReveal\.shown\)/.test(app))
 check('while a thread or a DM fills the screen, the list tabs stand aside',
-  /!space\.leaves\.sidebar\.open && \(!upAlone \|\| membersAlone\)/.test(app) && /!space\.leaves\.members\.open && \(!upAlone \|\| sidebarAlone\)/.test(app))
+  /\(!space\.leaves\.sidebar\.open && \(!upAlone \|\| membersAlone\)\) \|\| sidebarAlone/.test(app) && /!space\.leaves\.members\.open && \(!upAlone \|\| sidebarAlone\)/.test(app))
 check('choosing a room (or the booru) on the phone\'s room list puts the list away',
   (app.match(/if \(sidebarAlone\) closeSidebar\(\)/g) ?? []).length === 2)
 

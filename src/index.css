@@ -2971,7 +2971,7 @@ code {
   background: var(--cpd-color-bg-canvas-default, #16181d);
   color: var(--cpd-color-text-secondary);
   cursor: pointer;
-  transition: right 420ms cubic-bezier(0.22, 0.61, 0.36, 1), box-shadow 150ms ease, color 150ms ease;
+  transition: right 420ms var(--tc-panel-ease), box-shadow 150ms ease, color 150ms ease;
 }
 /* The tab rides the CHAT COLUMN's right edge, which is the domain's left edge
    when the domain is open and the region's edge when it is not. The column is
@@ -3022,7 +3022,7 @@ code {
 .tc-dmdock {
   flex-shrink: 0;
   overflow: hidden;
-  transition: height 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  transition: height 420ms var(--tc-panel-ease);
   border-bottom: 1px solid rgba(128, 128, 128, 0.25);
   background: var(--cpd-color-bg-canvas-default);
 }
@@ -3031,7 +3031,7 @@ code {
   display: flex;
   flex-direction: column;
   transform: translateX(-100%);
-  transition: transform 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  transition: transform 420ms var(--tc-panel-ease);
 }
 .tc-dmdock[data-shown='true'] .tc-dmdock-inner { transform: translateX(0); }
 /* The dock's own bar is gone (launch-polish L9): this label rides in the
@@ -3395,7 +3395,7 @@ code {
   overflow: clip;
   border-bottom: 1px solid rgba(128, 128, 128, 0.25);
   background: var(--cpd-color-bg-canvas-default);
-  transition: height 380ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  transition: height 380ms var(--tc-panel-ease);
 }
 /* The thread READING pane owns its entire vertical space, dock included. */
 .tc-panel-thread { top: 0; bottom: 0; }
@@ -3408,12 +3408,12 @@ code {
   flex-shrink: 0;
   overflow: hidden;
   min-width: 0;
-  transition: width 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  transition: width 420ms var(--tc-panel-ease);
   background: var(--cpd-color-bg-canvas-default, #16181d);
 }
 .tc-domain-tile { display: flex; flex-direction: row; }
 .tc-threadview-tile { display: flex; }
-.tc-threads-tile { transition: height 380ms cubic-bezier(0.22, 0.61, 0.36, 1); }
+.tc-threads-tile { transition: height 380ms var(--tc-panel-ease); }
 @media (prefers-reduced-motion: reduce) {
   .tc-domain-tile, .tc-threadview-tile, .tc-threads-tile { transition: none; }
 }
@@ -3508,6 +3508,26 @@ code {
 .tc-pulltab[data-open='true'][data-pull='down'], .tc-pulltab[data-open='true'][data-pull='up'] { height: 20px; }
 .tc-pulltab[data-open='true'][data-pull='left'], .tc-pulltab[data-open='true'][data-pull='right'] { width: 20px; }
 .tc-pulltab:hover { box-shadow: 0 0 10px 1px color-mix(in srgb, var(--tc-pulltab-ink) 55%, transparent); }
+/* Inside the panel at its moving edge (tabRide.ts): ABOVE the edge of a
+   panel that comes down from the top, RIGHT of the edge of one that comes in
+   from the right -- by the tab's own height or width, so its attached side is
+   on the edge whatever size its state gives it. 'start', outside the border
+   it pulls from, is the base rules above. */
+.tc-pulltab[data-attach='above'] { transform: translate(-50%, -100%); }
+.tc-pulltab[data-attach='right'] { transform: translate(100%, -50%); }
+/* The clip and the rail a tab rides in (TabRail.tsx). The rail is the area
+   the panel moves in, translated by the panel's edge on the panel's duration
+   (set inline from its reveal) and easing; transform only, and it ends. */
+.tc-tabclip { position: absolute; z-index: 13; overflow: hidden; pointer-events: none; }
+.tc-tabrail {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition-property: transform;
+  transition-timing-function: var(--tc-panel-ease);
+}
+.tc-tabrail > .tc-pulltab { pointer-events: auto; }
+@media (prefers-reduced-motion: reduce) { .tc-tabrail { transition: none; } }
 .tc-pulltab-tip {
   position: absolute; white-space: nowrap; font-size: 11px; padding: 2px 8px;
   border-radius: 6px; background: var(--cpd-color-bg-canvas-default, #16181d);
@@ -3806,6 +3826,10 @@ code {
 /* The pill: the Direct Messages pill's face, as one rule. NavTree's DM pill
    takes its border and radius from the same two variables. */
 :root {
+  /* The one easing every sliding panel uses -- the dock, the thread strip,
+     the thread view, the domain -- and the rail their pull tabs ride
+     (tabRide.ts). One name, so a tab cannot drift off its panel's curve. */
+  --tc-panel-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
   --tc-pill-line: var(--mod-line-strong);
   --tc-pill-radius: var(--mod-pill-radius);
   /* The room list's Direct Messages section (NavTree.tsx): the height of its

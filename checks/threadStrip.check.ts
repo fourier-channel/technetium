@@ -89,7 +89,7 @@ console.log('== the tile and the tab take the SAME expression')
 // dmStrip.ts exists to end.
 check('one value is computed', /const threadStripH = threadStripCss\(\)/.test(app))
 check('the tile uses it', /height: threadListReveal\.shown \? threadStripH : 0/.test(app))
-check('the tab uses it', /top: threadStripH, marginTop: -PULLTAB_OPEN_H/.test(app))
+check('the tab\'s rail uses it, on the tile\'s own reveal (it rides that edge, tabRide.ts)', /offset=\{threadListReveal\.shown \? threadStripH : '0px'\} durationMs=\{threadListReveal\.durationMs\}/.test(app))
 check('no share of the layout survives in App to be reached for',
   !/threadsShareOfChatColumn|threadsShare\b/.test(app))
 
@@ -122,9 +122,23 @@ console.log('== the DM tab rides the strip, in the strip\'s coordinates, in the 
   }
   check('App places it on the strip only while the strip is on screen (closing included)',
     /const dmTabOnStrip = !!\(dockRoom && !space\.leaves\.dock\.open && selectedRoom && threadListReveal\.mounted\)/.test(app))
-  check('and there, in the chat column rather than in <main>',
-    /\{dockRoom && dmTabOnStrip && \(\s*\n\s*<PullTab pull="down" open=\{false\} target="dock"[^\n]*left: DM_TAB_BESIDE_TITLE/.test(app))
-  check('and never both at once', /\{dockRoom && !space\.leaves\.dock\.open && !dmTabOnStrip && \(/.test(app))
+  // Since 2026-10-05 the dock's ONE tab rides <main>'s rail (tabRide.ts), so
+  // the strip's position is translated into <main>'s coordinates: the strip
+  // is <main> less the domain tile on its right.
+  check('there, beside the title in <main>\'s coordinates (the strip less the domain)',
+    /left: seat === 'start' && dmTabOnStrip \? dmTabBesideTitle\(domainWidth\) : 'calc\(50% - 40px\)'/.test(app))
+  {
+    const { dmTabBesideTitle } = await import('../src/ui/threadStrip.ts')
+    check('with no domain it is exactly the strip\'s own expression', dmTabBesideTitle(0) === DM_TAB_BESIDE_TITLE)
+    // The same point, two ways: in the strip (width S) and in <main> (S + D).
+    const at = (expr: string, W: number) => {
+      const m = /^min\(calc\(\(100% - (\d+)px\) \/ 2 \+ (\d+)px\), calc\(100% - (\d+)px - (\d+)px\)\)$/.exec(expr)
+      return m ? Math.min((W - +m[1]) / 2 + +m[2], W - +m[3] - +m[4]) : NaN
+    }
+    const strip = (S: number) => Math.min(S / 2 + right, S - fromEnd)
+    check('with a domain open, <main>\'s expression lands where the strip\'s would',
+      [[600, 300], [900, 420], [400, 200]].every(([S, D]) => Math.abs(at(dmTabBesideTitle(D), S + D) - strip(S)) < 0.01))
+  }
 }
 
 console.log('== the strip is not a scroll container, and the header keeps its columns')

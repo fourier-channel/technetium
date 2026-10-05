@@ -8,6 +8,7 @@ import { ResizeHandle } from './ResizeHandle'
 import { dividerTone } from './dividerTone'
 import { useSpace } from './spaceContext'
 import { PanelChrome } from './PanelChrome'
+import { dockShareCss } from './tabRide'
 
 // The DM window. Across the top of the main column, its own space, and by
 // default the WINNER: it is locked and pinned in the preset so other panels
@@ -37,7 +38,9 @@ export function DmDock() {
     <div
       className="tc-dmdock"
       data-shown={shown ? 'true' : 'false'}
-      style={{ height: shown ? `${Math.round(share * 1000) / 10}%` : 0 }}
+      // The same expression the dock's pull tab rides (tabRide.ts), so the tab
+      // and the edge it rides cannot disagree.
+      style={{ height: shown ? dockShareCss(share) : 0 }}
       aria-hidden={!shown}
     >
       {dockRoom && (

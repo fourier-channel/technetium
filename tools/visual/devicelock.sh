@@ -22,4 +22,4 @@ python3 -m http.server "$port" --bind 127.0.0.1 --directory "$here" >/dev/null 2
 srv=$!
 trap 'kill $srv 2>/dev/null || true' EXIT
 for _ in $(seq 1 50); do curl -s -o /dev/null "http://127.0.0.1:$port/devicelock.html" && break; sleep 0.1; done
-node "$here/devicelock-cdp.mjs" "$shell" "http://127.0.0.1:$port/devicelock.html"
+node "$here/cdp-result.mjs" "$shell" "http://127.0.0.1:$port/devicelock.html"

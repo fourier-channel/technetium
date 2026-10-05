@@ -1,0 +1,161 @@
+<!doctype html><html><head>
+<!--#head-->
+<title>Pull tabs ride their panels -- frame-sampled</title>
+<style>
+  /* Driven by tabride.sh. Three panels, mirroring the markup and the state
+     sequence App.tsx gives them (tabRide.ts): the DM dock coming down <main>,
+     the thread strip coming down the chat column, the thread view coming in
+     from the right past the member list. Each opens and closes on the real
+     stylesheet's transitions; every animation frame records where the tab's
+     attached side is against where the panel's edge is. */
+  body { margin: 0; }
+  .h-main { position: relative; overflow: hidden; display: flex; flex-direction: column; width: 600px; height: 400px; border: 1px solid #555; margin: 8px; }
+  .h-col { position: relative; display: flex; flex-direction: column; width: 600px; height: 400px; border: 1px solid #555; margin: 8px; }
+  .h-row { position: relative; display: flex; width: 900px; height: 400px; border: 1px solid #555; margin: 8px; }
+  .h-fill { flex: 1; }
+  .h-members { width: 220px; flex-shrink: 0; }
+  .h-div { width: 7px; flex-shrink: 0; }
+</style>
+</head><body>
+<div class="h-main" id="main">
+  <div class="tc-dmdock" id="dock" data-shown="false" style="height: 0"></div>
+  <div class="tc-tabclip" style="inset: 0"><div class="tc-tabrail" id="dockrail" style="transform: translateY(0px); transition-duration: 420ms">
+    <button type="button" class="tc-pulltab" id="docktab" data-pull="down" data-open="false" data-attach="start" style="top: 0; left: calc(50% - 40px)"><span class="tc-pulltab-chevron">v</span></button>
+  </div></div>
+</div>
+<div class="h-col" id="col">
+  <div class="tc-threads-tile" id="strip" style="height: 0; transition-duration: 380ms"></div>
+  <div class="tc-tabclip" style="inset: 0"><div class="tc-tabrail" id="striprail" style="transform: translateY(0px); transition-duration: 380ms">
+    <button type="button" class="tc-pulltab" id="striptab" data-pull="down" data-open="false" data-attach="start" style="top: 0; left: calc(50% + 40px)"><span class="tc-pulltab-chevron">v</span></button>
+  </div></div>
+</div>
+<div class="h-row" id="row">
+  <div class="h-fill"></div>
+  <div class="tc-threadview-tile" id="view" style="width: 0; transition-duration: 420ms"></div>
+  <div class="h-div"></div><div class="h-members"></div>
+  <div class="tc-tabclip" style="top: 0; bottom: 0; left: 0; right: 227px"><div class="tc-tabrail" id="viewrail" style="transform: translateX(0px); transition-duration: 420ms">
+    <button type="button" class="tc-pulltab" id="viewtab" data-pull="left" data-open="false" data-attach="start" style="right: 0"><span class="tc-pulltab-chevron">v</span></button>
+  </div></div>
+</div>
+<pre id="result">running</pre>
+<script type="module">
+  const $ = (id) => document.getElementById(id)
+  const frame = () => new Promise((r) => requestAnimationFrame(r))
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+  const intersects = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
+
+  // Each panel: how App opens and closes it, and how to read its edge and
+  // its tab's attached side.
+  const panels = {
+    dock: {
+      dur: 420, tab: $('docktab'), clip: $('main'),
+      edge: () => $('dock').getBoundingClientRect().bottom,
+      side: (t, r) => (t.dataset.attach === 'above' ? r.bottom : r.top),
+      open: async () => {
+        // The dock's height and the rail move in the same render (dockShown);
+        // the tab changes side at the click.
+        Object.assign($('docktab').dataset, { pull: 'up', open: 'true', attach: 'above' })
+        $('dock').style.height = '50%'; $('dock').dataset.shown = 'true'
+        $('dockrail').style.transform = 'translateY(50%)'
+      },
+      close: async () => {
+        Object.assign($('docktab').dataset, { pull: 'down', open: 'false' })
+        $('dock').style.height = '0px'; $('dock').dataset.shown = 'false'
+        $('dockrail').style.transform = 'translateY(0px)'
+        setTimeout(() => { $('docktab').dataset.attach = 'start' }, 420) // the reveal's unmount timer
+      },
+    },
+    strip: {
+      dur: 380, tab: $('striptab'), clip: $('col'),
+      edge: () => $('strip').getBoundingClientRect().bottom,
+      side: (t, r) => (t.dataset.attach === 'above' ? r.bottom : r.top),
+      open: async () => {
+        Object.assign($('striptab').dataset, { pull: 'up', open: 'true', attach: 'above' })
+        await frame(); await frame() // useReveal: mounted, then shown two frames on
+        $('strip').style.height = '188px'; $('striprail').style.transform = 'translateY(188px)'
+      },
+      close: async () => {
+        Object.assign($('striptab').dataset, { pull: 'down', open: 'false' })
+        $('strip').style.height = '0px'; $('striprail').style.transform = 'translateY(0px)'
+        setTimeout(() => { $('striptab').dataset.attach = 'start' }, 380)
+      },
+    },
+    view: {
+      dur: 420, tab: $('viewtab'), clip: $('viewtab').parentElement.parentElement,
+      edge: () => $('view').getBoundingClientRect().left,
+      side: (t, r) => (t.dataset.attach === 'right' ? r.left : r.right),
+      open: async () => {
+        Object.assign($('viewtab').dataset, { pull: 'right', open: 'true', attach: 'right' })
+        await frame(); await frame()
+        $('view').style.width = '380px'; $('viewrail').style.transform = 'translateX(-380px)'
+      },
+      close: async () => {
+        Object.assign($('viewtab').dataset, { pull: 'left', open: 'false' })
+        $('view').style.width = '0px'; $('viewrail').style.transform = 'translateX(0px)'
+        setTimeout(() => { $('viewtab').dataset.attach = 'start' }, 420)
+      },
+    },
+  }
+
+  async function run(name, how) {
+    const p = panels[name]
+    const samples = []
+    let stop = false
+    const sample = () => {
+      if (stop) return
+      const t = p.tab.getBoundingClientRect()
+      const visible = intersects(t, p.clip.getBoundingClientRect())
+      samples.push({ ms: performance.now(), edge: p.edge(), side: p.side(p.tab, t), visible })
+      requestAnimationFrame(sample)
+    }
+    requestAnimationFrame(sample)
+    const t0 = performance.now()
+    await p[how]()
+    await sleep(p.dur + 150)
+    stop = true
+    const seen = samples.filter((s) => s.visible && s.ms >= t0)
+    const off = seen.map((s) => Math.abs(s.side - s.edge))
+    // The tab's own steps, frame to frame, against the edge's: a teleport is
+    // a tab step much larger than the edge's in the same frame.
+    let jump = 0
+    for (let i = 1; i < seen.length; i++) {
+      jump = Math.max(jump, Math.abs((seen[i].side - seen[i - 1].side) - (seen[i].edge - seen[i - 1].edge)))
+    }
+    const moving = samples.filter((s, i) => i > 0 && s.ms >= t0 && Math.abs(s.edge - samples[i - 1].edge) > 0.01).length
+    return `${name} ${how}: ${samples.length} frames, ${moving} with the edge moving, ${seen.length} with the tab in view; ` +
+      `max |tab side - panel edge| ${Math.max(0, ...off).toFixed(2)}px; max per-frame step beyond the edge's ${jump.toFixed(2)}px`
+  }
+
+  // ?pose=open|mid: no measurement; stop with every panel open, or halfway
+  // through opening, for a screenshot (render.sh) of what the tabs look like.
+  const pose = new URLSearchParams(location.search).get('pose')
+  if (pose) {
+    await frame(); await frame()
+    for (const name of ['dock', 'strip', 'view']) await panels[name].open()
+    if (pose === 'open') await sleep(600)
+    if (pose === 'mid') {
+      await sleep(190)
+      for (const el of document.querySelectorAll('.tc-dmdock, .tc-threads-tile, .tc-threadview-tile, .tc-tabrail')) {
+        const cs = getComputedStyle(el)
+        el.style.height = cs.height; el.style.width = cs.width; el.style.transform = cs.transform; el.style.transition = 'none'
+      }
+    }
+    $('result').textContent = 'posed ' + pose
+    throw new Error('posed')
+  }
+  // ?before=1: the rails do not move -- the tab is at its final place the
+  // moment the state flips, which is what drawing two tabs and swapping them
+  // did. The same measurement then shows the teleport.
+  const before = new URLSearchParams(location.search).has('before')
+  if (before) for (const id of ['dockrail', 'striprail', 'viewrail']) $(id).style.transitionDuration = '0ms'
+  // Let the closed state be painted first: a transition runs only from a
+  // state the browser has already computed, as it has in the app.
+  await frame(); await frame()
+  const out = []
+  for (const name of ['dock', 'strip', 'view']) {
+    out.push(await run(name, 'open'))
+    out.push(await run(name, 'close'))
+  }
+  $('result').textContent = (before ? 'BEFORE (tabs swapped, not ridden)\n' : 'AFTER (one tab, riding)\n') + out.join('\n')
+</script>
+</body></html>

@@ -15,6 +15,7 @@ export function PullTab({
   onClick,
   style,
   target,
+  attach = 'start',
 }: {
   pull: 'down' | 'up' | 'left' | 'right'
   // Whether the panel this tab controls is OPEN now: a closed one's tab pulls
@@ -27,6 +28,11 @@ export function PullTab({
   style?: CSSProperties
   // For tests and tooling: which panel this tab pulls.
   target: string
+  // Which side of the moving edge it sits on (tabRide.ts): outside the border
+  // it pulls from ('start'), or inside the panel at its edge -- 'above' it for
+  // a panel that comes down from the top, 'right' of it for one that comes in
+  // from the right. A transform in the stylesheet, so it costs nothing.
+  attach?: 'start' | 'above' | 'right'
 }) {
   // ONE "v", turned by the stylesheet to point where the panel moves: the
   // sideways tabs are the same tab rotated 90 degrees (launch-polish L15).
@@ -39,6 +45,7 @@ export function PullTab({
       data-pull={pull}
       data-open={open ? 'true' : 'false'}
       data-target={target}
+      data-attach={attach}
       onClick={onClick}
       aria-label={label}
       style={style}
