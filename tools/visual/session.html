@@ -53,4 +53,38 @@
     </div>
   </div>
 </div>
+<div class="h-label">the room list header with Manage session under the name card, and its dropdown open (as AnchoredPopup places it: over the button)</div>
+<div class="h-wrap" style="flex-direction: row; align-items: flex-start;">
+  <div style="width: 250px; border: 1px solid var(--mod-line); background: var(--cpd-color-bg-canvas-default)">
+    <div class="tc-panel-head"><div class="tc-me">
+      <div class="tc-me-card"><span class="tc-me-av"><span style="display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--mod-surface-2);font:700 13px var(--tc-ui-font)">S</span></span><span class="tc-me-name">saber</span></div>
+      <button type="button" class="tc-pill tc-manage-session-btn">Manage session</button>
+      <div class="tc-me-actions"><button type="button" class="tc-pill">Profile</button><button type="button" class="tc-pill">Settings</button><button type="button" class="tc-pill">Layout</button><button type="button" class="tc-pill">Log out</button></div>
+      <div class="tc-site-reset" role="group">
+        <button type="button" aria-label="Purge"><svg class="tc-site-reset-icon" viewBox="0 0 24 24" width="16" height="16"><path d="M3.5 6.5h17M9 6.5v-2a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M5.5 6.5l1.2 13a1.6 1.6 0 0 0 1.6 1.5h7.4a1.6 1.6 0 0 0 1.6-1.5l1.2-13M10 10.5v6.5M14 10.5v6.5"/></svg></button>
+        <button type="button" aria-label="Hard refresh"><svg class="tc-site-reset-icon" viewBox="0 0 24 24" width="16" height="16"><path d="M8.31 8.78L10.64 4.75Q12 2.4 13.36 4.75L16.07 9.46M16.93 6.27L16.07 9.46L12.89 8.6M18.02 12.81L20.34 16.85Q21.7 19.2 18.98 19.2L13.55 19.19M15.88 21.53L13.55 19.19L15.89 16.87M9.67 19.21L5.02 19.2Q2.3 19.2 3.66 16.85L6.38 12.15M3.19 13L6.38 12.15L7.22 15.33"/></svg></button>
+      </div>
+    </div></div>
+    <div style="height: 120px"></div>
+  </div>
+  <div class="tc-anchored-pop tc-manage-session" data-placed="true" style="position: static; max-height: 560px; animation: none">
+    <div class="tc-manage-session-body">
+      <div class="tc-manage-session-head"><strong>Manage session</strong><button type="button" class="tc-pill">Done</button></div>
+      <h3 class="tc-settings-head">This sign-in</h3>
+      <p class="tc-settings-note">@saber:41chan.net, device <code>ABCDEFGHIJ</code>.</p>
+      <dl class="tc-token-life">
+        <div class="tc-token-life-row" data-tone="ok"><dt>Access token</dt><dd>3m 41s left. It renews by itself on the first request after that.</dd></div>
+        <div class="tc-token-life-row" data-tone="ok"><dt>Refresh token</dt><dd>Issued 1m 19s ago. It has no clock: it is spent and replaced each time the access token renews, and it ends when you log out.</dd></div>
+        <div class="tc-token-life-row" data-tone="ok"><dt>Booru account</dt><dd>Signed in as saber, for 2h 14m. Its cookie's expiry renews with every booru page you load.</dd></div>
+        <div class="tc-token-life-row" data-tone="ok"><dt>Booru picture pass</dt><dd>23h 58m left. Technetium trades in a fresh one each time the access token renews.</dd></div>
+      </dl>
+      <button type="button" class="tc-pill">Read the booru's session again</button>
+      <div class="tc-encryption">
+        <h3 class="tc-settings-head">Encryption</h3>
+        <div class="tc-settings-optin"><p class="tc-settings-note">Encryption is turned on in this build. There is nothing to switch here.</p></div>
+        <p class="tc-settings-headline tc-tone-ok">This device is verified</p>
+      </div>
+    </div>
+  </div>
+</div>
 </body></html>

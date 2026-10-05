@@ -26,6 +26,7 @@ import { PersonRouterContext, createPersonRouter } from './ui/personRouter'
 import { PersonCard, type PersonCardTarget } from './ui/PersonCard'
 import { personGestures } from './ui/personGesture'
 import { SiteReset } from './ui/SiteReset'
+import { ManageSession } from './ui/ManageSession'
 import { ProfilePanel } from './ui/ProfilePanel'
 import { ProfilePanelContext } from './ui/profilePanelContext'
 import { LookStoreContext, useLook } from './ui/lookContext'
@@ -357,6 +358,9 @@ function App() {
               </span>
               <MeName userId={userId ?? ''} />
             </div>
+            {/* Directly under the avatar (operator, 2026-10-05): your tokens'
+                lives and encryption, in a dropdown over the page. */}
+            <ManageSession />
             <div className="tc-me-actions">
               <button type="button" className="tc-pill" aria-pressed={profileOpen} onClick={openProfile} title="Your picture, name and look">
                 Profile

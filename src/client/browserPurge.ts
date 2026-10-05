@@ -13,7 +13,7 @@ import { CRYPTO_STORE_PREFIX } from './storeNames'
 // encrypted direct messages. No sign-out in this client has ever deleted them
 // (sessionEnd.ts, deleteCryptoStore: never), because without them messages
 // already received cannot be read here again unless restored from a recovery
-// key; deleting them is the separately gated reset in Settings > Encryption.
+// key; deleting them is the separately gated reset in Manage session.
 // Purge keeps them, and keeps the per-browser encryption opt-in that uses
 // them -- clearing that would switch encryption off and strand the kept keys.
 // Everything else goes: the sync cache, every other database, local and

@@ -21,8 +21,8 @@ import { Pip2Link } from './Pip2Link'
 //
 // PURGE asks first -- in place, never a browser popup, which steals focus --
 // then signs out and deletes everything this client stored in the browser
-// EXCEPT the encryption keys (ruling: keys only via the reset in Settings >
-// Encryption; client/browserPurge.ts says why), and reloads.
+// EXCEPT the encryption keys (ruling: keys only via the reset at the bottom
+// of Manage session; client/browserPurge.ts says why), and reloads.
 //
 // MOUNTED ON EVERY SCREEN THAT HAS NO SESSION TOO (PIP2 claims sweep,
 // 2026-10-04: "absent on ... Technetium's signed-out screen"): the landing
@@ -130,7 +130,7 @@ function PurgeQuestion({
         Purge signs you out of Technetium and the booru, if you are signed in, and deletes everything Technetium
         stored in this browser except your encryption keys, so your encrypted messages still open when you sign
         back in. To delete the keys as well, use the reset
-        in Settings &gt; Encryption. What 41chan keeps, and why: <Pip2Link />.
+        at the bottom of Manage session. What 41chan keeps, and why: <Pip2Link />.
       </p>
       <div className="tc-site-reset-row">
         <button type="button" className="tc-pill tc-site-reset-go" disabled={purging} onClick={onGo}>

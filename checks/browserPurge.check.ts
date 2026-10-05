@@ -97,7 +97,7 @@ console.log('== hard refresh, and the question')
     "Are you sure you want to do this? While we're confident that our services are configured to work properly regardless of the age of your access token, that token itself is unique, and you are performing an irreversible action.")
   const ui = read('src/ui/SiteReset.tsx')
   check('the rectangle asks in place with that question, and says the keys stay',
-    /\{PURGE_QUESTION\}/.test(ui) && /except your encryption\s+keys/.test(ui) && /Settings &gt; Encryption/.test(ui) && !/window\.confirm|confirm\(/.test(ui))
+    /\{PURGE_QUESTION\}/.test(ui) && /except your encryption\s+keys/.test(ui) && /the reset\s+at the bottom of Manage session/.test(ui) && !/window\.confirm|confirm\(/.test(ui))
   const purgeAt = ui.indexOf('aria-label="Purge"')
   const refreshAt = ui.indexOf('aria-label="Hard refresh"')
   check('symbols, not words: the bin first, the recycling mark second, each named',

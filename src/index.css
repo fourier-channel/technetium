@@ -3088,9 +3088,12 @@ code {
 }
 /* The dialog's own controls are the house pill and the formant field; its
    links are the accent; ticks are the accent. */
-.tc-settings a { color: var(--mod-accent); }
-.tc-settings input[type='checkbox'] { accent-color: var(--mod-accent); }
-.tc-settings code {
+.tc-settings a,
+.tc-manage-session a { color: var(--mod-accent); }
+.tc-settings input[type='checkbox'],
+.tc-manage-session input[type='checkbox'] { accent-color: var(--mod-accent); }
+.tc-settings code,
+.tc-manage-session code {
   font-family: var(--mod-mono);
   font-size: 11.5px;
   line-height: 1.4;
@@ -3685,6 +3688,59 @@ code {
 .tc-site-reset-what { color: var(--mod-ink-dim); font-size: 11.5px; }
 .tc-site-reset-row { display: flex; gap: 6px; }
 .tc-site-reset-go { color: var(--mod-alarm-ink); border-color: var(--mod-alarm-line); }
+
+/* Manage session (operator, 2026-10-05): the button under the name card, full
+   width so it reads as the card's own control, and the dropdown it opens --
+   an AnchoredPopup, so it sits over the page and moves nothing. One fixed
+   width, so the countdowns and the booru reading arriving do not re-wrap it
+   sideways; the encryption section inside uses the Settings classes it always
+   used (EncryptionOptions.tsx). */
+.tc-manage-session-btn { width: 100%; }
+.tc-anchored-pop.tc-manage-session {
+  width: min(32rem, calc(100vw - 16px));
+  max-width: none;
+  padding: 0;
+  border-color: var(--mod-line-strong);
+  border-radius: var(--mod-radius);
+  background: var(--mod-surface);
+  box-shadow: var(--mod-raise-lift);
+  color: var(--mod-ink);
+  font-size: 13px;
+  line-height: 1.45;
+  scrollbar-width: thin;
+  scrollbar-color: var(--mod-ink-faint) transparent;
+}
+.tc-manage-session-body { padding: 0 14px 14px; }
+.tc-manage-session-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 -14px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--mod-line);
+  background: var(--mod-surface);
+}
+.tc-token-life { margin: 0 0 8px; }
+.tc-token-life-row {
+  display: grid;
+  grid-template-columns: 9.5rem 1fr;
+  gap: 2px 10px;
+  padding: 4px 0;
+  border-top: 1px solid var(--mod-line);
+}
+.tc-token-life-row:first-child { border-top: none; }
+.tc-token-life-row dt { font-weight: 700; color: var(--mod-ink); }
+.tc-token-life-row dd { margin: 0; color: var(--mod-ink-dim); font-variant-numeric: tabular-nums; }
+.tc-token-life-row[data-tone='ok'] dt { color: var(--mod-ok-fg); }
+.tc-token-life-row[data-tone='warn'] dt { color: var(--mod-warn-fg); }
+.tc-token-life-row[data-tone='bad'] dt { color: var(--mod-alarm-ink); }
+@media (max-width: 420px) {
+  .tc-token-life-row { grid-template-columns: 1fr; }
+}
 
 /* The server-side half of a sign-out, on the signed-out screen
    (client/signOut.ts). Fixed to the bottom of the window, out of the landing's

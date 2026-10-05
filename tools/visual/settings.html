@@ -1,22 +1,18 @@
 <!doctype html><html><head>
 <!--#head-->
-<title>Settings dialog</title>
+<title>Settings dialog and the encryption section</title>
 <style>
-  /* The dialog is fixed to the corner in the app; here the three tabs stand
+  /* The dialog is fixed to the corner in the app; here its two tabs stand
      one above the other at their REAL size, so a size that moved between
-     tabs would show as three different boxes. */
+     tabs would show as different boxes. Encryption, first, is no longer a
+     tab: it is drawn in the Manage session dropdown it moved to. */
   .tc-settings { position: static !important; margin: 12px auto; }
 </style>
 </head><body>
-<div class="h-label">Settings: Encryption</div>
-<div class="tc-settings" role="dialog">
-  <div class="tc-settings-row tc-panel-head" data-inset="true"><strong>Settings</strong><button type="button" class="tc-pill">Done</button></div>
-  <div class="tc-settings-tabs" role="tablist">
-    <button role="tab" aria-selected="true">Encryption</button>
-    <button role="tab" aria-selected="false">Server permissions</button>
-    <button role="tab" aria-selected="false">Unfinished features</button>
-  </div>
-  <div class="tc-settings-body">
+<div class="h-label">Manage session: Encryption (moved out of Settings, 2026-10-05; the token lives above it are in session.html)</div>
+<div class="tc-anchored-pop tc-manage-session" data-placed="true" style="position: static; margin: 12px auto; max-height: none; animation: none">
+  <div class="tc-manage-session-body">
+  <div class="tc-manage-session-head"><strong>Manage session</strong><button type="button" class="tc-pill">Done</button></div>
     <h3 class="tc-settings-head">Encryption</h3>
     <div class="tc-settings-optin">
       <p class="tc-settings-note">Encryption is turned on for this browser.</p>
@@ -66,7 +62,6 @@
 <div class="tc-settings" role="dialog">
   <div class="tc-settings-row tc-panel-head" data-inset="true"><strong>Settings</strong><button type="button" class="tc-pill">Done</button></div>
   <div class="tc-settings-tabs" role="tablist">
-    <button role="tab" aria-selected="false">Encryption</button>
     <button role="tab" aria-selected="true">Server permissions</button>
     <button role="tab" aria-selected="false">Unfinished features</button>
   </div>
@@ -102,7 +97,6 @@
 <div class="tc-settings" role="dialog">
   <div class="tc-settings-row tc-panel-head" data-inset="true"><strong>Settings</strong><button type="button" class="tc-pill">Done</button></div>
   <div class="tc-settings-tabs" role="tablist">
-    <button role="tab" aria-selected="false">Encryption</button>
     <button role="tab" aria-selected="false">Server permissions</button>
     <button role="tab" aria-selected="true">Unfinished features</button>
   </div>

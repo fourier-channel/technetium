@@ -51,3 +51,42 @@ function snapshot(): number {
 export function useNow(): number {
   return useSyncExternalStore(subscribe, snapshot, snapshot)
 }
+
+// ---------------------------------------------------------------------------
+// The same clock at one-second resolution, for the one surface that counts
+// down in seconds: Manage session's token lives, where the access token lives
+// five minutes and a minute's tick would show "4m" for a whole minute and
+// then jump. Its own interval, started only while something reads it -- the
+// panel is open -- so the minute clock's readers are never re-rendered every
+// second for its sake.
+// ---------------------------------------------------------------------------
+
+let currentSecond = Date.now()
+let secondTimer: ReturnType<typeof setInterval> | undefined
+const secondListeners = new Set<() => void>()
+
+function subscribeSecond(cb: () => void): () => void {
+  secondListeners.add(cb)
+  if (secondTimer === undefined) {
+    currentSecond = Date.now()
+    secondTimer = setInterval(() => {
+      currentSecond = Date.now()
+      for (const f of secondListeners) f()
+    }, 1000)
+  }
+  return () => {
+    secondListeners.delete(cb)
+    if (secondListeners.size === 0 && secondTimer !== undefined) {
+      clearInterval(secondTimer)
+      secondTimer = undefined
+    }
+  }
+}
+
+function secondSnapshot(): number {
+  return currentSecond
+}
+
+export function useNowEverySecond(): number {
+  return useSyncExternalStore(subscribeSecond, secondSnapshot, secondSnapshot)
+}

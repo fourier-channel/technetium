@@ -30,9 +30,14 @@ class PersistingOidcTokenRefresher extends OidcTokenRefresher {
     this.ownDeviceId = ownDeviceId
   }
 
+  // `expiry` is the SDK's own reading of the server's expires_in, counted
+  // from when the refresh request was sent (OidcTokenRefresher.getNewTokens);
+  // the base class declares only the two tokens, but hands this the whole
+  // object it built.
   protected async persistTokens(tokens: {
     accessToken: string
     refreshToken?: string
+    expiry?: Date
   }): Promise<void> {
     const s = loadSession()
     const verdict = persistVerdict(s, this.ownDeviceId)
@@ -50,6 +55,10 @@ class PersistingOidcTokenRefresher extends OidcTokenRefresher {
       accessToken: tokens.accessToken,
       // MAS may or may not rotate the refresh token; keep the old one if absent.
       refreshToken: tokens.refreshToken ?? s.refreshToken,
+      // Manage session's clock (session.ts). An expiry the server did not
+      // state is dropped rather than carried over from the previous token.
+      accessTokenExpiresAt: tokens.expiry ? tokens.expiry.getTime() : undefined,
+      refreshTokenIssuedAt: tokens.refreshToken && tokens.refreshToken !== s.refreshToken ? Date.now() : s.refreshTokenIssuedAt,
     })
     console.log('Token refreshed and session updated')
     // The booru's cookie was minted from the PREVIOUS access token (zero-click

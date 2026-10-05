@@ -170,6 +170,9 @@ export function ClientProvider({ children }: { children: ReactNode }) {
   // Path 1: exchange the MAS authorization code, persist the session, sync.
   async function completeLogin(code: string, state: string) {
     try {
+      // Before the request, as the SDK's refresher does: a token's life is
+      // counted from when it was asked for, so it errs early, never late.
+      const requestedAt = Date.now()
       const result = await sdk.completeAuthorizationCodeGrant(code, state)
       const accessToken = result.tokenResponse.access_token
       const homeserverUrl = result.homeserverUrl
@@ -188,6 +191,8 @@ export function ClientProvider({ children }: { children: ReactNode }) {
         redirectUri: REDIRECT_URI,
         idTokenClaims: result.idTokenClaims,
       }
+      const issuedAt = requestedAt
+      const expiresIn = result.tokenResponse.expires_in
       saveSession({
         homeserverUrl,
         accessToken,
@@ -195,6 +200,8 @@ export function ClientProvider({ children }: { children: ReactNode }) {
         userId: myUserId,
         deviceId: myDeviceId,
         oidc,
+        accessTokenExpiresAt: typeof expiresIn === 'number' ? issuedAt + expiresIn * 1000 : undefined,
+        refreshTokenIssuedAt: result.tokenResponse.refresh_token ? issuedAt : undefined,
       })
 
       setUserId(myUserId)
