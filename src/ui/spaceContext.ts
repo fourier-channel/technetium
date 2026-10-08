@@ -14,6 +14,8 @@ export interface SpaceApi {
   pushDivider: (axis: Axis, at: number, deltaFraction: number) => void
   // Push a panel's edge; resolved against the latest space (drag-safe).
   pushEdge: (id: PanelId, axis: Axis, side: Side, deltaFraction: number) => void
+  // A drag's step: the edge to a position, a fraction of the space (L29).
+  dragEdgeTo: (id: PanelId, axis: Axis, side: Side, target: number) => void
   setPanelFlag: (id: PanelId, flag: 'locked' | 'pinned', value: boolean) => void
   /** Member-list element scale; clamped, and carried by the UI-export number. */
   setMemberScale: (v: number) => void

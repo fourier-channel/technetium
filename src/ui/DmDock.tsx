@@ -20,7 +20,7 @@ import { dockShareCss } from './tabRide'
 // messages to a new user stay in view whatever that user clicks next.
 export function DmDock() {
   const { client } = useClient()
-  const { space, dockRoom, pushEdge, editMode } = useSpace()
+  const { space, dockRoom, editMode } = useSpace()
   const panel = space.leaves.dock
   const shown = panel.open && !!dockRoom
   // Height as a share of the main column's height; the column measures itself.
@@ -66,8 +66,7 @@ export function DmDock() {
               alike -- a locked dock refuses, a pinned one warps. */}
           <div className="tc-dmdock-grip">
             <ResizeHandle
-              vertical
-              onDrag={(d) => pushEdge('dock', 'y', 'hi', d / Math.max(1, window.innerHeight))}
+              edge={{ id: 'dock', axis: 'y', side: 'hi' }}
               tone={dividerTone(space, 'dock')}
               label="Direct message height"
             />

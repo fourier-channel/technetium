@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { RoomEvent, type MatrixEvent, type Room } from 'matrix-js-sdk'
 import { useClient } from '../client/clientContextValue'
 import { directRoomIds } from '../client/dm'
-import { bringBackPanel, clampMemberScale, closeDomain, closeInColumn, closeThreadView, defaultSpace, deserialize, dismiss, moveDivider, openDomain, openInColumn, openThreadView, present, pushEdge, putAwayPanel, serialize, setFlag, setMin, setViewport, singleSlot, type PanelId, type Space } from './space'
+import { bringBackPanel, clampMemberScale, closeDomain, closeInColumn, closeThreadView, defaultSpace, deserialize, dismiss, dragEdgeTo, moveDivider, openDomain, openInColumn, openThreadView, present, pushEdge, putAwayPanel, serialize, setFlag, setMin, setViewport, singleSlot, type PanelId, type Space } from './space'
 import { currentViewport, useStoredSpace } from './spaceState'
 import { dropPreset, putPreset, setDefaultPreset, setMobilePreset, setOverflow as setStoreOverflow } from './presets'
 import { SpaceCtx, type SpaceApi } from './spaceContext'
@@ -57,6 +57,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     setEditMode,
     pushDivider: (axis, at, d) => setSpace((prev) => moveDivider(prev, axis, at, d)),
     pushEdge: (id, axis, side, d) => setSpace((prev) => pushEdge(prev, id, axis, side, d)),
+    dragEdgeTo: (id, axis, side, target) => setSpace((prev) => dragEdgeTo(prev, id, axis, side, target)),
     setPanelFlag: (id, flag, value) => setSpace((prev) => setFlag(prev, id, flag, value)),
     setMemberScale: (v) => setSpace((prev) => ({ ...prev, memberScale: clampMemberScale(v) })),
     setPanelMin: (id, min) => setSpace((prev) => setMin(prev, id, min)),

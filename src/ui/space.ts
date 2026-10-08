@@ -324,6 +324,30 @@ export function pushEdge(s: Space, id: PanelId, axis: Axis, side: Side, delta: n
   return moveDivider(s, axis, side === 'hi' ? hi(l, axis) : lo(l, axis), delta)
 }
 
+// Where one of a panel's edges is, as a fraction of the space.
+export function edgeAt(s: Space, id: PanelId, axis: Axis, side: Side): number {
+  const l = s.leaves[id]
+  return side === 'hi' ? hi(l, axis) : lo(l, axis)
+}
+
+// Put one of a panel's edges AT a position: where a drag wants it, which is
+// where the edge was when the pointer went down plus how far the pointer has
+// travelled since (launch-polish L29). Resolved against the space it is
+// applied to, like pushEdge -- an echo or a reflow mid-drag moves the start,
+// not the target.
+//
+// A TARGET rather than a stream of deltas, because a delta the model refuses
+// is lost: pushed into a minimum, the divider stopped while the pointer went
+// on, and on the way back the divider moved at once, a wall's width away from
+// the pointer that was dragging it. With a target the divider waits at the
+// wall and picks the pointer up again where it is.
+export function dragEdgeTo(s: Space, id: PanelId, axis: Axis, side: Side, target: number): Space {
+  const l = s.leaves[id]
+  if (!l.open) return s
+  const at = edgeAt(s, id, axis, side)
+  return moveDivider(s, axis, at, target - at)
+}
+
 export function setFlag(s: Space, id: PanelId, flag: 'locked' | 'pinned', value: boolean): Space {
   if (s.leaves[id][flag] === value) return s
   const n = clone(s)

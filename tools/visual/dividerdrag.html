@@ -1,0 +1,92 @@
+<!doctype html>
+<!-- launch-polish L29: does a dragged panel follow the hand, and does the name
+     card keep its height as the room list's wall crosses 300px?
+
+     Driven by dividerdrag.sh. Measures on this tree's own stylesheet in
+     headless Chromium:
+       A. a panel's size one frame after a drag step, with the root's
+          data-tc-resizing set (as edgeDrag.ts sets it while a divider is
+          held) and without it (as every drag step was before);
+       B. the name card's height at room-list widths either side of 300px.
+     Proves the stylesheet's half. Does NOT prove the React tree sets the
+     attribute (checks/dividerDrag.check.ts holds the source) or anything
+     about a real window's frame pacing. -->
+<html>
+<head>
+<!--#head-->
+<style>
+  .h-col { width: 300px; border-right: 1px solid #444; }
+  .h-av { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #555; }
+  #stage { position: relative; height: 400px; width: 600px; display: flex; flex-direction: column; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="tc-dmdock" id="dock" style="height: 100px"><div class="tc-dmdock-inner"></div></div>
+  <div style="display:flex; flex:1">
+    <div style="flex:1"></div>
+    <div class="tc-threadview-tile" id="view" style="width: 100px; transition-duration: 420ms"></div>
+  </div>
+</div>
+<div class="h-col" id="col">
+  <div class="tc-panel-head"><div class="tc-me" id="me">
+    <div class="tc-me-card"><span class="tc-me-av"><span class="h-av">S</span></span><span class="tc-me-name">@saber:41chan.net</span></div>
+    <div class="tc-me-actions">
+      <button type="button" class="tc-pill">Profile</button>
+      <button type="button" class="tc-pill">Settings</button>
+      <button type="button" class="tc-pill">Layout</button>
+      <button type="button" class="tc-pill">Log out</button>
+    </div>
+  </div></div>
+</div>
+<pre id="result">running</pre>
+<script type="module">
+  const $ = (id) => document.getElementById(id)
+  const frame = () => new Promise((r) => requestAnimationFrame(() => r()))
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+  // One drag step: the size changes by 120px; how far has the panel got one
+  // frame later? A panel that follows the hand is all the way there.
+  async function step(el, prop, from, to, held) {
+    // Start from a SETTLED size: no transition into it, so one step cannot
+    // inherit the motion of the one before.
+    el.style.transitionProperty = 'none'
+    el.style[prop] = from + 'px'
+    el.getBoundingClientRect()
+    await frame()
+    el.style.transitionProperty = ''
+    await frame(); await frame()
+    if (held) document.documentElement.dataset.tcResizing = prop === 'height' ? 'y' : 'x'
+    else delete document.documentElement.dataset.tcResizing
+    el.style[prop] = to + 'px'
+    await frame()
+    const got = el.getBoundingClientRect()[prop]
+    delete document.documentElement.dataset.tcResizing
+    el.style[prop] = to + 'px'
+    await sleep(500)
+    // getBoundingClientRect includes the dock's 1px bottom border.
+    return `${got.toFixed(1)}px of ${to}px one frame after the step (from ${from}px)`
+  }
+
+  const out = []
+  await frame(); await frame()
+  out.push('A. one drag step of 120px')
+  out.push('  dock height, divider NOT held (every step before L29): ' + await step($('dock'), 'height', 100, 220, false))
+  out.push('  dock height, divider held:                             ' + await step($('dock'), 'height', 100, 220, true))
+  out.push('  thread view width (inline duration), NOT held:         ' + await step($('view'), 'width', 100, 220, false))
+  out.push('  thread view width (inline duration), held:             ' + await step($('view'), 'width', 100, 220, true))
+
+  out.push('B. the name card\'s height as the room list is dragged')
+  const heights = []
+  for (const w of [220, 260, 290, 299, 301, 310, 360, 460]) {
+    $('col').style.width = w + 'px'
+    await frame()
+    const h = $('me').getBoundingClientRect().height
+    heights.push(h)
+    out.push(`  width ${w}px: ${h.toFixed(1)}px`)
+  }
+  out.push(`  spread: ${(Math.max(...heights) - Math.min(...heights)).toFixed(1)}px`)
+  $('result').textContent = out.join('\n')
+</script>
+</body>
+</html>

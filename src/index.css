@@ -3640,7 +3640,6 @@ code {
   flex-direction: column;
   gap: 5px;
   padding: 6px 8px 7px;
-  container: tc-me / inline-size;
 }
 .tc-me-card {
   display: flex;
@@ -3670,20 +3669,21 @@ code {
   font-weight: 700;
   color: var(--mod-ink);
 }
-/* One row, four equal pills filling the gutter-to-gutter width; at a very
-   narrow room list a label ellipsizes rather than wrapping the header. */
+/* Four equal pills, two by two, at EVERY width. Four do not fit one row at
+   the width the room list opens at on a laptop (18% of the window: about
+   250px), and a header of "PRO... SETT..." is no header -- so they used to sit
+   in one row above 300px and two by two below it. That made the header a pill
+   row taller or shorter whenever the room list's wall was dragged across
+   300px, and the whole room list under it jumped with it mid-drag
+   (launch-polish L29: "it looks like all the dynamic resizing from the
+   profile/settings/etc buttons"). One shape: the header is the same height
+   at every width, and dragging the wall moves nothing but the wall. */
 .tc-me-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 4px;
 }
-/* Four pills since the Profile pill (L24) do not fit one row at the width the
-   room list opens at on a laptop (18% of the window: about 250px), and a
-   header of "PRO... SETT..." is no header. Under 300px they sit two by two. */
-@container tc-me (max-width: 300px) {
-  .tc-me-actions { display: grid; grid-template-columns: 1fr 1fr; }
-}
 .tc-me-actions > .tc-pill {
-  flex: 1 1 0;
   min-width: 0;
   padding-inline: 4px;
   overflow: hidden;
@@ -4078,6 +4078,23 @@ code {
   .tc-divider-rail { transition: none; }
   .tc-divider .tc-divider-rail { transform: none !important; }
 }
+
+/* While a divider is held (launch-polish L29; edgeDrag.ts sets the attribute
+   on pointerdown and clears it on release). The panels that come and go ease
+   their size over ~400ms because that is how they ARRIVE; during a drag the
+   same transition made them trail the pointer and settle after it stopped.
+   Every transition, not a list of the ones known today: anything whose size
+   follows the layout must follow the hand, including a panel added later. */
+:root[data-tc-resizing] *,
+:root[data-tc-resizing] *::before,
+:root[data-tc-resizing] *::after {
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+}
+/* The drag's cursor everywhere the pointer goes, and no text selection
+   painted across the panels it passes. */
+:root[data-tc-resizing='x'] * { cursor: col-resize !important; user-select: none; }
+:root[data-tc-resizing='y'] * { cursor: row-resize !important; user-select: none; }
 
 /* ---------------------------------------------------------------------------
    The bubble animators (ui-depth-v1 U5).

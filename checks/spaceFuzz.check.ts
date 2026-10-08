@@ -2,7 +2,7 @@
 // After every step the space must be a valid tiling, and closing an OPEN tile
 // must always succeed -- "the close button did nothing" is what the operator
 // hit, and it is the model refusing an infeasible result somewhere upstream.
-import { defaultSpace, openInColumn, closeInColumn, openDomain, closeDomain, openThreadView, closeThreadView, moveDivider, dividers, validTiling, openLeaves, type Space } from '../src/ui/space.ts'
+import { defaultSpace, openInColumn, closeInColumn, openDomain, closeDomain, openThreadView, closeThreadView, moveDivider, dragEdgeTo, dividers, validTiling, openLeaves, type PanelId, type Side, type Axis, type Space } from '../src/ui/space.ts'
 
 let seed = 20260906
 const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff }
@@ -19,6 +19,13 @@ const ops: Op[] = [
   { name: 'openThreadView', run: (s) => openThreadView(s, 0.38) },
   { name: 'closeThreadView', run: (s) => closeThreadView(s), expectChange: (s) => s.leaves.thread.open },
   { name: 'drag', run: (s) => { const d = dividers(s); if (!d.length) return s; const x = pick(d); return moveDivider(s, x.axis, x.at, (rnd() - 0.5) * 0.2) } },
+  // The gesture every divider uses (L29): a panel's edge to a target, which
+  // may be past a wall or off the screen entirely.
+  { name: 'dragTo', run: (s) => {
+    const edges: [PanelId, Axis, Side][] = [['sidebar', 'x', 'hi'], ['members', 'x', 'lo'], ['thread', 'x', 'lo'], ['domain', 'x', 'lo'], ['dock', 'y', 'hi']]
+    const [id, axis, side] = pick(edges)
+    return dragEdgeTo(s, id, axis, side, rnd() * 1.4 - 0.2)
+  } },
 ]
 
 let failures = 0

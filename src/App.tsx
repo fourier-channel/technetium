@@ -61,7 +61,7 @@ import { BootScreen } from './onboarding/BootScreen'
 // mounts the three-pane layout (nav tree | timeline+composer | member list).
 function App() {
   const { client, status, error, userId, login, logout } = useClient()
-  const { space, pushEdge, editMode, setEditMode, showInDock, openThreadPane, closeThreadPane, openThreadList, closeThreadList, openDomain, closeDomain, dockRoom, closeDock, openSidebar, closeSidebar, openMembers, closeMembers } = useSpace()
+  const { space, editMode, setEditMode, showInDock, openThreadPane, closeThreadPane, openThreadList, closeThreadList, openDomain, closeDomain, dockRoom, closeDock, openSidebar, closeSidebar, openMembers, closeMembers } = useSpace()
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   // The panel filling a one-slot screen, or null when the chat is up (or the
   // screen holds more than one panel).
@@ -545,7 +545,7 @@ function App() {
                   push it -- and it is the wall the tone rule is written around:
                   pull the domain out and this is what turns orange. */}
               <ResizeHandle
-                onDrag={(dx) => pushEdge('domain', 'x', 'lo', dx / vw)}
+                edge={{ id: 'domain', axis: 'x', side: 'lo' }}
                 tone={dividerTone(space, 'domain')}
                 label="Domain width"
               />
@@ -569,7 +569,7 @@ function App() {
           style={{ width: threadPanelReveal.shown ? threadPanelWidth : 0, transitionDuration: `${threadPanelReveal.durationMs}ms` }}
         >
           <ResizeHandle
-            onDrag={(dx) => pushEdge('thread', 'x', 'lo', dx / vw)}
+            edge={{ id: 'thread', axis: 'x', side: 'lo' }}
             tone={dividerTone(space, 'thread')}
             label="Thread view width"
           />
@@ -614,7 +614,7 @@ function App() {
       {space.leaves.members.open && (
         <>
           <ResizeHandle
-            onDrag={(dx) => pushEdge('members', 'x', 'lo', dx / vw)}
+            edge={{ id: 'members', axis: 'x', side: 'lo' }}
             tone={dividerTone(space, 'members')}
             label="Member list width"
           />

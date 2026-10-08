@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import type { Room } from 'matrix-js-sdk'
 import { NavTree } from './NavTree'
 import { useSpace } from './spaceContext'
+import { useEdgeDrag } from './edgeDrag'
 import { PanelChrome } from './PanelChrome'
 
 // ---------------------------------------------------------------------------
@@ -45,33 +46,9 @@ export function Sidebar({
 
   const onDefaultWidth = useCallback((w: number) => setDefaultWidth(w), [])
 
-  const startResize = (e: React.PointerEvent) => {
-    if (panelLocked || e.button !== 0) return
-    e.preventDefault()
-    // Capture the pointer, as ResizeHandle already does. Without it, dragging
-    // RIGHTWARD takes the cursor over the chanbooru IFRAME that fills the dead
-    // space, and an iframe swallows the pointer stream: the window listeners
-    // below simply stop hearing from it and the drag dies mid-gesture, while
-    // dragging left over ordinary DOM worked fine. Capture routes every later
-    // event to this element whatever it passes over.
-    const grip = e.currentTarget as HTMLElement
-    try { grip.setPointerCapture(e.pointerId) } catch { /* not fatal; the drag just stays interruptible */ }
-    let lastX = e.clientX
-    const onMove = (me: PointerEvent) => {
-      // Deltas, applied to the latest layout: a drag fires faster than React
-      // renders, so an absolute width from a stale closure would jump.
-      const dx = me.clientX - lastX
-      lastX = me.clientX
-      if (dx !== 0) pushEdge('sidebar', 'x', 'hi', dx / window.innerWidth)
-    }
-    const onUp = () => {
-      try { grip.releasePointerCapture(e.pointerId) } catch { /* already gone */ }
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-  }
+  // The room list's wall drags through the same gesture as every other
+  // divider (edgeDrag.ts, L29); a locked width makes it inert.
+  const drag = useEdgeDrag({ id: 'sidebar', axis: 'x', side: 'hi' }, !panelLocked)
 
   // The model can CLOSE this panel when the screen cannot hold it (space.ts,
   // reflow). Honouring that is the difference between a minimum that means
@@ -134,7 +111,7 @@ export function Sidebar({
         role="separator"
         aria-orientation="vertical"
         aria-label="Room list width"
-        onPointerDown={startResize}
+        {...drag}
         onContextMenu={(e) => {
           e.preventDefault()
           setMenu({ x: e.clientX, y: e.clientY })

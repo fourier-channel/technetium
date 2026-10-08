@@ -1,9 +1,9 @@
-import { useRef } from 'react'
 import type { DividerTone } from './dividerTone'
+import { useEdgeDrag, type EdgeRef } from './edgeDrag'
 
-// A drag grip -- the divider between two panels. Horizontal by default (reports
-// dx); `vertical` reports dy. Pointer capture, so a fast drag that leaves the
-// strip keeps dragging.
+// A drag grip -- the divider between two panels. It moves one panel's edge
+// (`edge`), through the one drag gesture every divider shares (edgeDrag.ts:
+// a target, not steps; no easing while held). Vertical when the edge is on y.
 //
 // `tone` is what the divider is OUTLINED in, and it belongs to the panel this
 // grip leads: green while that panel is standing furniture, orange while it is
@@ -13,33 +13,17 @@ import type { DividerTone } from './dividerTone'
 export const DIVIDER_PX = 7
 
 export function ResizeHandle({
-  onDrag,
-  vertical = false,
+  edge,
   tone = 'neutral',
   label,
 }: {
-  onDrag: (delta: number) => void
-  vertical?: boolean
+  edge: EdgeRef
   tone?: DividerTone
   // What this divider resizes, for anyone not looking at the screen.
   label?: string
 }) {
-  const start = useRef(0)
-  const pos = (e: React.PointerEvent<HTMLDivElement>) => (vertical ? e.clientY : e.clientX)
-  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    start.current = pos(e)
-    e.currentTarget.setPointerCapture(e.pointerId)
-  }
-  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
-    const d = pos(e) - start.current
-    start.current = pos(e)
-    if (d !== 0) onDrag(d)
-  }
-  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
-  }
+  const vertical = edge.axis === 'y'
+  const drag = useEdgeDrag(edge)
   return (
     <div
       className="tc-divider"
@@ -48,9 +32,7 @@ export function ResizeHandle({
       role="separator"
       aria-orientation={vertical ? 'horizontal' : 'vertical'}
       aria-label={label}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
+      {...drag}
     >
       {/* The rail. Its own element rather than a pseudo-element on the grip,
           because it SQUASHES under the pointer and a transform on the grip
