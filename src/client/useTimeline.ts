@@ -19,6 +19,7 @@ import {
   buildRelationIndex,
   effectiveContent,
   isRelationOnlyEvent,
+  mergeReactions,
   resolveReply,
   type ReactionTally,
   type ReplyRef,
@@ -60,6 +61,11 @@ export interface TimelineItem {
   // Aggregated m.annotation reactions, in first-seen key order. Absent when
   // the event has none, so the footer renders nothing.
   reactions?: ReactionTally[]
+  // The event a NEW reaction is sent to, when that is not `id`. A gallery's
+  // row is keyed by whichever of its images the window met first, which is
+  // not a fixed thing to annotate; it reacts to its first image, the one that
+  // carries the caption (launch-polish L27).
+  reactTo?: string
   // A user-authored reply target (thread fallbacks are excluded). `event` is
   // null when the target is outside the loaded window.
   replyTo?: ReplyRef
@@ -318,14 +324,26 @@ export function toItems(events: MatrixEvent[], opts: ToItemsOptions = {}): Timel
           }
           if (slot >= 0) cells[slot] = m
         }
-        out.push({
+        const gallery: TimelineItem = {
           event: ev,
           kind: 'gallery',
           id: evId,
           cells,
           layout: tag.layout ?? 'grid',
           content: ev.getOriginalContent(),
-        })
+        }
+        // A gallery is one post on screen and several events on the server,
+        // each of which can be reacted to on its own -- this client used to
+        // send to whichever the row was keyed by, other clients send to the
+        // image they clicked. Its tallies are all of those together, and it
+        // had none at all until L27 (operator, 2026-10-08: "emojis aren't
+        // attaching to the correct post on a gallery, so they don't ever get
+        // shown").
+        const reactions = mergeReactions(cells.map((c) => rel.reactions.get(c?.getId() ?? '')))
+        if (reactions.length > 0) gallery.reactions = reactions
+        const anchor = cells.find((c) => c !== null)?.getId()
+        if (anchor && anchor !== evId) gallery.reactTo = anchor
+        out.push(gallery)
         continue
       }
     }

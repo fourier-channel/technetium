@@ -35,6 +35,11 @@ export interface ReactionTally {
   // The local user's own annotation event id -- required to redact it when
   // toggling the reaction off.
   myEventId: string | null
+  // EVERY annotation of the local user's this tally stands for. One on a
+  // single message; on a gallery, whose tallies are the union of its images'
+  // (mergeReactions), there can be one per image -- and un-reacting must take
+  // all of them back, or the emoji stays lit after you turned it off.
+  myEventIds: string[]
   // Senders in first-seen order, for the hover tooltip.
   senders: string[]
 }
@@ -159,7 +164,7 @@ export function buildRelationIndex(
       }
       let tally = perTarget.get(rel.key)
       if (!tally) {
-        tally = { key: rel.key, count: 0, mine: false, myEventId: null, senders: [] }
+        tally = { key: rel.key, count: 0, mine: false, myEventId: null, myEventIds: [], senders: [] }
         perTarget.set(rel.key, tally)
       }
       tally.count += 1
@@ -167,6 +172,7 @@ export function buildRelationIndex(
       if (myUserId && sender === myUserId) {
         tally.mine = true
         tally.myEventId = ev.getId() ?? null
+        if (tally.myEventId) tally.myEventIds.push(tally.myEventId)
       }
     }
   }
@@ -177,6 +183,32 @@ export function buildRelationIndex(
   }
 
   return { byId, edits, reactions: flat }
+}
+
+// One set of tallies for several events that are read as ONE post: a gallery
+// is a batch of m.image events, each a real event other clients can react to
+// on its own (launch-polish L27). Keys keep their first-seen order across the
+// list; a person who reacted with the same key on two of the images counts
+// once, as they would on a single message.
+export function mergeReactions(lists: (ReactionTally[] | undefined)[]): ReactionTally[] {
+  const byKey = new Map<string, ReactionTally>()
+  for (const list of lists) {
+    for (const t of list ?? []) {
+      let m = byKey.get(t.key)
+      if (!m) {
+        m = { key: t.key, count: 0, mine: false, myEventId: null, myEventIds: [], senders: [] }
+        byKey.set(t.key, m)
+      }
+      for (const s of t.senders) if (!m.senders.includes(s)) m.senders.push(s)
+      m.count = m.senders.length
+      if (t.mine) {
+        m.mine = true
+        m.myEventId ??= t.myEventId
+        for (const id of t.myEventIds) if (!m.myEventIds.includes(id)) m.myEventIds.push(id)
+      }
+    }
+  }
+  return [...byKey.values()]
 }
 
 // Effective content of an event with its winning edit applied.

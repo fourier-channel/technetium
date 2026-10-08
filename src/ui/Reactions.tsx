@@ -43,20 +43,28 @@ function useReactionToggle(
   client: MatrixClient | null,
   roomId: string,
 ): { toggle: (key: string, existing?: ReactionTally) => Promise<void>; sendable: boolean } {
-  const sendable = isSendable(item.id)
+  // A gallery names the image it reacts to (TimelineItem.reactTo, L27);
+  // everything else reacts to itself.
+  const targetId = item.reactTo ?? item.id
+  const sendable = isSendable(targetId)
 
   const toggle = async (key: string, existing?: ReactionTally) => {
     if (!client || !sendable) return
     try {
-      if (existing?.mine && existing.myEventId) {
+      const mine = existing?.mine
+        ? existing.myEventIds.length > 0 ? existing.myEventIds : existing.myEventId ? [existing.myEventId] : []
+        : []
+      if (mine.length > 0) {
         // Un-reacting is redacting your OWN annotation -- which is why S1
-        // captures myEventId rather than just a boolean.
-        await client.redactEvent(roomId, existing.myEventId)
+        // captures the ids rather than just a boolean. ALL of them: on a
+        // gallery you may have the same emoji on two of its images, and
+        // taking back one would leave it lit.
+        for (const id of mine) await client.redactEvent(roomId, id)
       } else {
         // threadId null: an annotation must not carry an m.thread relation --
         // an event can only have one m.relates_to.
         await client.sendEvent(roomId, null, EventType.Reaction, {
-          'm.relates_to': { rel_type: RelationType.Annotation, event_id: item.id, key },
+          'm.relates_to': { rel_type: RelationType.Annotation, event_id: targetId, key },
         })
       }
     } catch (err) {
