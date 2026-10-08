@@ -6,6 +6,7 @@ import { useTimeline, type TimelineItem, type GalleryLayout } from '../client/us
 import type { ReplyRef } from '../client/relations'
 import { eventPreview } from '../client/eventPreview'
 import { renderMessageBody } from '../client/messageBody'
+import { hasCaption } from '../client/mediaCaption'
 import { bubbleTone } from '../client/bubbleTone'
 import { parseMxc } from '../client/media'
 import { AuthedImage } from './AuthedImage'
@@ -552,6 +553,11 @@ export function Row({
     (kind === 'message' &&
       item.content.msgtype === 'm.image' &&
       (!!encFile || !!parseMxc(typeof item.content.url === 'string' ? item.content.url : '')))
+  // The words that came with the picture (L26). A gallery's ride on its FIRST
+  // image, where the composer puts them; a single picture's on itself, with
+  // any edit applied.
+  const captionSource = kind === 'gallery' ? (cells?.[0]?.getContent() ?? null) : isMediaRow ? item.content : null
+  const captionContent = hasCaption(captionSource) ? captionSource : null
 
   // A face typed into the message flashes over the sender's avatar. Text
   // messages only -- there is nothing to read a face out of a picture.
@@ -877,6 +883,7 @@ export function Row({
                 <span className="tc-row-time">{time}</span>
               </>
             )}
+            {captionContent && <MediaCaption content={captionContent} />}
             {previewUrl && (
               <LinkPreview client={client} url={previewUrl} enabled={linkPreviewsEnabled} />
             )}
@@ -1017,7 +1024,6 @@ const GALLERY_GAP = 3
 function GalleryBody({ cells, layout, thread }: { cells: (MatrixEvent | null)[]; layout: GalleryLayout; thread?: LightboxThread }) {
   const n = cells.length
   const { open } = useLightbox()
-  const openProfile = useProfileOpener()
   // Present (non-null, valid) images in cell order, plus a map from cell index
   // to its position in that list, so clicking a cell opens the lightbox at the
   // right spot and prev/next steps through the batch's real images only.
@@ -1032,10 +1038,6 @@ function GalleryBody({ cells, layout, thread }: { cells: (MatrixEvent | null)[];
     presentIndexByCell.set(idx, present.length)
     present.push(li)
   })
-  const first = cells[0]
-  const fc = first?.getContent()
-  const caption = first && typeof fc?.filename === 'string' ? renderMessageBody(first) : null
-
   let gridStyle: React.CSSProperties
   let cellPlacement: (idx: number) => React.CSSProperties = () => ({})
 
@@ -1096,18 +1098,29 @@ function GalleryBody({ cells, layout, thread }: { cells: (MatrixEvent | null)[];
           </div>
         ))}
       </div>
-      {caption && (
-        <div style={{ fontSize: 14, wordBreak: 'break-word', marginTop: 4 }}>
-          {caption.html !== undefined ? (
-            <span
-              className="tc-message-html"
-              {...messageBodyHandlers(openProfile)}
-              dangerouslySetInnerHTML={{ __html: caption.html }}
-            />
-          ) : (
-            <span style={{ whiteSpace: 'pre-wrap' }}>{linkify(caption.text ?? '')}</span>
-          )}
-        </div>
+    </div>
+  )
+}
+
+// The words that came with a picture (launch-polish L26). Drawn by the ROW,
+// under the picture and its rail together, for a single picture, an encrypted
+// one and a gallery alike -- one place, so the three cannot drift again. Inside
+// the body column it would widen that column and push the reactions off the
+// picture's edge (L6); under the whole line it costs them nothing.
+function MediaCaption({ content }: { content: IContent }) {
+  const openProfile = useProfileOpener()
+  const caption = renderMessageBody(content)
+  return (
+    <div className="tc-media-caption">
+      {caption.html !== undefined ? (
+        // Sanitized by DOMPurify in renderMessageBody -- safe to inject.
+        <span
+          className="tc-message-html"
+          {...messageBodyHandlers(openProfile)}
+          dangerouslySetInnerHTML={{ __html: caption.html }}
+        />
+      ) : (
+        <span style={{ whiteSpace: 'pre-wrap' }}>{linkify(caption.text ?? '')}</span>
       )}
     </div>
   )

@@ -454,6 +454,16 @@ code {
   white-space: nowrap;
 }
 
+/* The words that came with a picture (launch-polish L26): under the picture
+   and its rail, the body's size, wrapping inside the column rather than
+   widening it. */
+.tc-media-caption {
+  display: block;
+  margin-top: 4px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
 /* ---------------------------------------------------------------------------
    Row footer (W2.4 design note): reaction pills + thread chip + (W2.6)
    receipts cluster, in one wrapping flex row under the body.
