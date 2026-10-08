@@ -62,6 +62,11 @@ reading had to be chosen it is stated below.
 | L23 | "Standardize Left vs Right click user avatars across the various panels. Left Click -> Perform Chat Action (where appropriate) Right Click -> Profile preview." | DONE `d2ba5c3` |
 | L24 | "Begin work on an actual profile panel, with its button to the left of the settings button under the current user information panel. Profile: Set avatar options. change avatar. mask shape. border/glow effect. occasional animation (like a spin or a flip, or sucked into a black hole. played on adding a line of text to chat, AND a randomized timer, not persisting forever.) Set name font, name color." | BEGUN `9bcd4a8` |
 | L25 | "Currently, @ing a user just places a clickable link in chat to that user's "matrix.to/" address--which seems incorrect. have it open that user's profile instead." | DONE `f04e0e3` |
+| L26 | Operator, 2026-10-08: "image posts on the matrix server are swallowing any text that came with them. This is funny because it's the whole reason I decided to make this chat client and also the first feature I added." | DONE `556fe89` |
+| L27 | "emojis aren't attaching to the 'correct' post on a gallery, so they don't ever get shown." | DONE `d5c475e` |
+| L28 | "I don't seem to be able to do @room or anything from Technetium." | DONE `374f8c2` |
+| L29 | "the grab-and-drag bars between panels are kinda janky, it looks like all the dynamic resizing from the profile/settings/etc buttons." | DONE `cb78b39` |
+| L30 | "We're also going to take a radical step and move DMs from the room list and put them in the user list. You're only going to be having conversations with people in the server, so kinda silly for them to be with the rooms, even though yes technically they are rooms." | DONE `b6a473a` |
 
 ---
 
@@ -188,6 +193,43 @@ avatar plays when a line is just said, then up to twice more at gaps seeded
 from the line inside three minutes, then never; seeded so every viewer sees
 the same moments. "Begin work" is taken literally: this is the first cut.
 
+**L26, "swallowing any text".** The words were on the server all along: the
+composer has sent MSC2530 captions since 2026-06-27. The timeline drew a
+caption only under a gallery, and a single picture is never one. One rule
+(filename present, body different) and one place that draws it, the row,
+under the picture and its reactions together -- inside the picture's column
+it would widen it and push the reactions off the picture's edge (L6).
+
+**L27, "the correct post on a gallery".** A gallery is one post on screen and
+several events on the server, and other clients react to the image they
+clicked. So the correct post is the gallery as a whole: its tallies are the
+union over its images, a person counted once per emoji, and a new reaction
+goes to the first image, the one carrying the caption. Un-reacting takes
+back every one of yours.
+
+**L28, "@room or anything".** Measured against a local Synapse of
+production's version before anything changed: a message carrying m.mentions
+is judged by it alone, so "@room" with a picked name, or in a reply, pinged
+nobody. Read as: @room offered in the picker (also for "@everyone" and
+"@here"), last so a bare "@" and Enter cannot call a room by accident; sent
+whenever the words say it and the room's level allows it; never on an edit;
+a reason shown to someone below the level; and a line that calls on you
+marked where it lands. The server's display-name fallback is not copied.
+
+**L29, "janky ... the profile/settings/etc buttons".** Three causes, all
+fixed: the name card's four pills changed from one row to two at 300px, so
+the room list jumped whenever its wall crossed that width (now two by two at
+every width); the panels that come and go eased their size on every drag
+step (now no transition runs while a divider is held); and a drag was a
+stream of deltas that lost what a wall refused (now a target: where the edge
+started plus the pointer's travel).
+
+**L30, "move DMs ... to the user list".** Moved whole, not redrawn: the
+section as it was, under the user list's "+ DM". The room tree and the
+counts it reads stay one instance each, shared, because both do network
+work. A closed panel shows nothing where the closed section kept waiting
+faces in view, so the Members tab glows while a conversation waits.
+
 ---
 
 ## Ledger
@@ -214,3 +256,8 @@ One line per landed step, appended as it lands.
 | L24 `9bcd4a8` | The Profile panel and the look (mask, edge, animation, name face and colour) in the profile field net.41chan.look, read by everyone, closed-set validated, cached ten minutes, re-read when a preview opens. AvatarDisc is three layers so an edge follows any mask. O-in6 closed. | Seen: every mask with every edge, the palette, faces, animations frozen mid-run, the panel at 940 and 390px. PENDING OPERATOR VERIFICATION: a save against the live server and a second account seeing it. |
 | L25 `f04e0e3` | A click on an @mention opens that person's profile preview (left or right); any other link in a formatted body opens in a new tab instead of navigating the client away. | PENDING OPERATOR VERIFICATION: clicks in a browser. |
 | review `b9eccd5` `973cd8f` `619b104` `6ac9189` `a40ec2f` | An adversarial review of L19-L25 (102 agents: 7 finders, two skeptics per finding and a third on a split, three critic rounds) confirmed 38 defects and rejected 6; all 38 fixed in five commits by area, each fix with a check that a mutation restoring the bug turns red (65 mutations, all caught). The serious ones: a rate-limited power-levels write retried the pre-pause read and deleted changes made during the pause; protocol-relative and relative links still navigated the client in place; reduced motion never stopped a look's animation (cascade weight, measured in headless Chromium); the chat-actions menu opened displaced and clipped in the DM dock and off screen from the member list, and took no focus; on iOS a tap could no longer reach anyone's profile. Twelve were checks that stayed green with their feature broken. | PENDING OPERATOR VERIFICATION, as for L19-L25 themselves: none of it exercised in a browser or against the live server. |
+| L26 `556fe89` | hasCaption (client/mediaCaption.ts) and one MediaCaption drawn by the row for a single, an encrypted and a gallery picture; the gallery's own caption removed. | checks/mediaCaption (6 failures on the old Timeline). PENDING OPERATOR VERIFICATION: a captioned picture in the browser. |
+| L27 `d5c475e` | mergeReactions over a gallery's images; TimelineItem.reactTo, the first image; myEventIds on every tally, all redacted on un-react. | checks/galleryReactions (7 failures on the old code). PENDING OPERATOR VERIFICATION: reacting to a gallery in the browser. |
+| L28 `374f8c2` | client/roomMention.ts: picker entry, word match, level check (creators included), m.mentions block, mentionsMe. Every text send, reply and caption carries m.mentions.room when said and allowed; rows calling on you marked. | Proven on a local Synapse 1.152.1: the reply and picked-name shapes that did not ping now do; a power-0 sender is not given room. checks/roomMention (old composer 7 failures; 3 rule mutations caught). Seen rendered: the picker's @room entry and refusal (tools/visual/l30-react.html). PENDING OPERATOR VERIFICATION: the row mark in the running app. |
+| L29 `cb78b39` | ui/edgeDrag.ts, the one gesture for every divider; space.ts dragEdgeTo; root data-tc-resizing turns transitions off; .tc-me-actions two by two always. | Measured in headless Chromium (tools/visual/dividerdrag.sh): a held 120px step 114 -> 220px one frame later; the name card 84.3-110.6px -> 110.6px at every width. spaceFuzz with a dragTo op. PENDING OPERATOR VERIFICATION: a real drag in the app. |
+| L30 `b6a473a` | ui/DmList.tsx in the user list; RoomIcon.tsx shared; navShared.ts holds the one tree and the one counts poller, run by App; MembersPullTab glows while a conversation waits. | checks/dmInUserList (13 failures on the old tree). Seen rendered with a fake client: the shut section with two waiting faces at 220px, the glowing tab. PENDING OPERATOR VERIFICATION: the user list against a live account. |

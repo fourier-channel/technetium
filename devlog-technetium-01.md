@@ -4291,3 +4291,64 @@ behind it can.
 **Still open.** The deploy, and a live pass: a second account joining and
 leaving a room while the list is open, and a profile card showing no
 presence line.
+
+## 2026-10-08 -- captions, gallery reactions, @room, dividers, DMs in the user list
+
+Five asks in one message, launch-polish L26-L30; one commit each on main:
+`556fe89`, `d5c475e`, `374f8c2`, `cb78b39`, `b6a473a`. Not deployed.
+
+**Captions (L26).** "Image posts are swallowing any text that came with
+them" -- the first feature this client ever had. The words were on the
+server the whole time: the composer has sent MSC2530 captions since
+2026-06-27. Only the gallery drew one, and a single picture is never a
+gallery, so every one-picture post with words lost them, for as long as the
+feature has existed. One rule, one place it is drawn, under the picture and
+its reactions together.
+
+**Gallery reactions (L27).** The gallery's row was built with no reaction
+lookup at all, so nothing anyone added to a gallery was ever drawn. The row
+now shows the union of its images' reactions, and a new one goes to the
+first image.
+
+**@room (L28).** Measured on a local homeserver at production's version
+before changing anything: "@room" typed alone pings; "@room" with a picked
+name, or in a reply, does not; neither does a sender below the room's level.
+The client offered @room nowhere, and a caption dropped picked names.
+
+**Dividers (L29).** "It looks like all the dynamic resizing from the
+profile/settings/etc buttons" was exactly right: the four pills under the
+name went from one row to two at 300px, and the room list jumped a pill row
+every time its wall crossed that width. Two more causes underneath, both
+fixed: arrival transitions running on every drag step, and refused drag
+deltas lost at a wall.
+
+**DMs in the user list (L30).** The section moved whole. The room tree and
+the per-room counts became one shared instance, since the user list would
+otherwise have run a second copy of both.
+
+**draft-27 (gotcha) -- m.mentions switches off the body rules.** Since
+MSC3952 a message that carries m.mentions is judged by it alone: the old
+"body contains @room" rule stops applying. Any send that adds m.mentions for
+one reason (a picked name, a reply) must also carry `room` when the words say
+@room, or the @room silently notifies nobody. Measured, not assumed.
+
+**draft-28 (gotcha) -- an arrival transition is also a drag lag.** A panel
+that eases its size to arrive eases it on every drag step too, and trails
+the hand. Turn transitions off while a divider is held. And drive a drag by
+TARGET (start plus travel), not by deltas: a delta the model refuses at a
+wall is lost, and the divider comes apart from the pointer.
+
+**draft-29 (gotcha) -- a breakpoint in a header is a jump under a drag.** A
+width rule that changes a header's height reflows everything below it at
+the moment a drag crosses the width. A header in a resizable panel keeps one
+shape at every width.
+
+**draft-30 (decision) -- a hook that does network work has one owner.** When
+a second surface needs what a fetching or polling hook provides, the hook is
+lifted to one instance and shared, and a check walks the source for a
+second caller. Two copies double the traffic from every tab, invisibly.
+
+**Still open.** The deploy, and a live pass of all five: a captioned single
+picture, a reaction on a gallery from another client, @room in a reply
+pinging a second account, a drag across the room list's old 300px, and a DM
+arriving while the user list is put away.
