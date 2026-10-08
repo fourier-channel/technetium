@@ -932,6 +932,28 @@ code {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* @room (L28): the one entry that calls on everyone, in the colour of the
+   "@" it lights on everyone's room list. */
+.tc-mention-item[data-room='true'] .tc-mention-name { color: var(--tc-unread); }
+/* Offered, but not to this person: the reason, not a dead entry. */
+.tc-mention-note {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 8px;
+  font-size: 13px;
+  opacity: 0.75;
+}
+.tc-mention-note .tc-mention-id { white-space: normal; }
+
+/* A message that calls on YOU -- your name in m.mentions, or an @room from
+   someone the room lets notify everyone (L28): marked the way the room list's
+   "@" is, so the row it lit for can be found. A wash and an inset line, both
+   paint-only: the row's box is untouched (no-forced-reflow). */
+.tc-row[data-mentions-me='true'] {
+  background: color-mix(in srgb, var(--tc-unread) 8%, transparent);
+  box-shadow: inset 2px 0 0 var(--tc-unread);
+}
 
 /* Room header info (W3.2): name, joined count, topic on ONE line. A room with
    a paragraph-long topic must not push the timeline down, so the topic

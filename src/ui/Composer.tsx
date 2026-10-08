@@ -7,7 +7,7 @@ import {
   type ChangeEvent,
   type DragEvent,
 } from 'react'
-import type { Room, RoomMember } from 'matrix-js-sdk'
+import type { Room } from 'matrix-js-sdk'
 import { useClient } from '../client/clientContextValue'
 import { formatMessage } from '../client/messageFormat'
 import { type EncryptedFileInfo } from '../client/encryptedFile'
@@ -26,7 +26,17 @@ import { buildReplyContent } from '../client/replyContent'
 import { buildEditContent, editableBody } from '../client/editContent'
 import { useTypingSender } from '../client/useTyping'
 import { mentionQueryAt, type MentionTarget } from '../client/mentions'
-import { MentionPicker } from './MentionPicker'
+import {
+  ROOM_MENTION,
+  containsRoomMention,
+  mentionsBlock,
+  offersRoomMention,
+  type MentionsBlock,
+  roomMentionPermission,
+  roomMentionRefusal,
+} from '../client/roomMention'
+import { roomCreators } from '../client/roomFacts'
+import { MentionPicker, type MentionEntry } from './MentionPicker'
 import { panelEnterSends } from './composerEnter'
 import '../composer.css'
 
@@ -104,13 +114,25 @@ export function Composer({
   // Where to restore the caret after an emoji insert (applied post-render).
   const caretRef = useRef<number | null>(null)
 
-  // Room members matching the current `@` query. Capped: a popup taller than
-  // the composer is worse than one that asks for another letter.
-  const mentionMatches = useMemo(() => {
-    if (!mentionQuery) return []
+  // Whether I may notify the whole room (L28). Read from room state at the
+  // moment it is asked, never cached: a promotion takes effect on the next
+  // keystroke rather than on the next reload.
+  const roomPermission = () =>
+    roomMentionPermission(
+      room.currentState.getStateEvents('m.room.power_levels', '')?.getContent(),
+      client?.getUserId() ?? '',
+      roomCreators(room),
+    )
+
+  // Room members matching the current `@` query, and @room when the query
+  // could be asking for it. Capped: a popup taller than the composer is worse
+  // than one that asks for another letter. @room goes LAST, so a bare "@" and
+  // Enter can never notify a whole room by accident.
+  const { mentionMatches, roomRefusal } = useMemo(() => {
+    if (!mentionQuery) return { mentionMatches: [] as MentionEntry[], roomRefusal: null }
     const q = mentionQuery.query.toLowerCase()
     const me = client?.getUserId()
-    return room
+    const members: MentionEntry[] = room
       .getJoinedMembers()
       .filter((m) => m.userId !== me)
       .filter((m) => {
@@ -120,12 +142,31 @@ export function Composer({
         )
       })
       .sort((a, b) => (a.name || a.userId).localeCompare(b.name || b.userId))
-      .slice(0, 8)
+      .slice(0, 7)
+      .map((member) => ({ kind: 'member', member }))
+    if (!offersRoomMention(q)) return { mentionMatches: members, roomRefusal: null }
+    const perm = roomPermission()
+    return perm.allowed
+      ? { mentionMatches: [...members, { kind: 'room' } as MentionEntry], roomRefusal: null }
+      : { mentionMatches: members, roomRefusal: roomMentionRefusal(perm) }
+    // roomPermission reads the room it closes over; room is the dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room, client, mentionQuery])
 
-  // Replace the `@query` under the caret with the member's display name.
-  const pickMention = (member: RoomMember) => {
+  // Replace the `@query` under the caret with the member's display name, or
+  // with "@room".
+  const pickMention = (entry: MentionEntry) => {
     if (!mentionQuery) return
+    if (entry.kind === 'room') {
+      const before = text.slice(0, mentionQuery.start)
+      const after = text.slice(mentionQuery.start + 1 + mentionQuery.query.length)
+      setText(`${before}${ROOM_MENTION} ${after}`)
+      caretRef.current = before.length + ROOM_MENTION.length + 1
+      setMentionQuery(null)
+      setMentionIndex(0)
+      return
+    }
+    const member = entry.member
     const label = `@${member.name || member.userId}`
     const before = text.slice(0, mentionQuery.start)
     const after = text.slice(mentionQuery.start + 1 + mentionQuery.query.length)
@@ -292,9 +333,12 @@ export function Composer({
     // what every other Matrix client reads. Emitting both would publish a
     // plaintext address for ciphertext nobody can use.
     encrypted: Omit<EncryptedFileInfo, 'url'> | null = null,
+    // The caption's m.mentions, on the picture that carries the caption.
+    mentions: MentionsBlock = {},
   ) => {
     const captioned = !!caption && caption.plain.length > 0
     return {
+      ...(captioned ? mentions : {}),
       msgtype: 'm.image',
       ...(encrypted ? { file: { ...encrypted, url } } : { url }),
       info,
@@ -338,8 +382,14 @@ export function Composer({
           const target = mode.target.getSender()
           if (target && target !== client.getUserId()) mentionIds.add(target)
         }
-        const mentions =
-          mentionIds.size > 0 ? { 'm.mentions': { user_ids: [...mentionIds] } } : {}
+        // @room rides along whenever the words say it and the room lets me
+        // (L28). Without it, any message that ALSO names someone or answers
+        // someone carries m.mentions without `room`, and the server then
+        // notifies nobody of the @room. Never on an edit: that would call the
+        // whole room a second time for a typo fix.
+        const everyone =
+          mode.kind !== 'edit' && containsRoomMention(plain) && roomPermission().allowed
+        const mentions = mentionsBlock(mentionIds, everyone)
 
         if (mode.kind === 'edit') {
           // An edit is a NEW event relating to the original, so it is sent to
@@ -369,7 +419,7 @@ export function Composer({
             } as unknown as Parameters<typeof client.sendMessage>[2],
           )
           clearMode()
-        } else if (mentionIds.size > 0) {
+        } else if (mentions['m.mentions']) {
           // Explicit content only when m.mentions has to ride along, so the
           // ordinary send path stays byte-for-byte what it was.
           await client.sendMessage(
@@ -407,7 +457,16 @@ export function Composer({
     // first. Sent sequentially; on failure we stop and keep the unsent images
     // (and the caption) so nothing is lost.
     const batchId = crypto.randomUUID()
-    const caption = input.length > 0 ? formatMessage(input) : null
+    // The caption is formatted like any message, picked names included -- it
+    // used to drop them, so a name picked into a caption arrived as plain
+    // text that pinged nobody (L28).
+    const caption = input.length > 0 ? formatMessage(input, { mentions: pickedMentions }) : null
+    const captionMentions = caption
+      ? mentionsBlock(
+          caption.mentionedUserIds ?? [],
+          containsRoomMention(caption.plain) && roomPermission().allowed,
+        )
+      : {}
     setText('')
     setAttachments([])
 
@@ -440,7 +499,7 @@ export function Composer({
               index: i,
               count: atts.length,
               layout,
-            }, up.encrypted)
+            }, up.encrypted, cap ? captionMentions : {})
             return client.sendMessage(
               room.roomId,
               threadId ?? null,
@@ -461,6 +520,8 @@ export function Composer({
     if (failed) {
       setAttachments(remaining) // restore unsent
       if (input.length > 0) setText(input) // restore caption
+    } else {
+      setPickedMentions([])
     }
     setSending(false)
     taRef.current?.focus()
@@ -604,6 +665,7 @@ export function Composer({
         matches={mentionMatches}
         activeIndex={Math.min(mentionIndex, Math.max(0, mentionMatches.length - 1))}
         onPick={pickMention}
+        note={roomRefusal}
       />
 
       <ComposerModeBanner mode={mode} onCancel={clearMode} />

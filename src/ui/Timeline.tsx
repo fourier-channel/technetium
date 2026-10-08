@@ -7,6 +7,8 @@ import type { ReplyRef } from '../client/relations'
 import { eventPreview } from '../client/eventPreview'
 import { renderMessageBody } from '../client/messageBody'
 import { hasCaption } from '../client/mediaCaption'
+import { mentionsMe, roomMentionPermission } from '../client/roomMention'
+import { roomCreators } from '../client/roomFacts'
 import { bubbleTone } from '../client/bubbleTone'
 import { parseMxc } from '../client/media'
 import { AuthedImage } from './AuthedImage'
@@ -558,6 +560,21 @@ export function Row({
   // any edit applied.
   const captionSource = kind === 'gallery' ? (cells?.[0]?.getContent() ?? null) : isMediaRow ? item.content : null
   const captionContent = hasCaption(captionSource) ? captionSource : null
+  // Does this line call on ME (L28)? Your name in its m.mentions, or an @room
+  // from someone the room lets notify everyone -- the questions the server's
+  // push rules ask, so the row is marked exactly when the room list's "@" lit
+  // for it. A gallery is asked through its first image, like its caption.
+  const myId = client?.getUserId() ?? ''
+  const mentionSource = kind === 'gallery' ? (cells?.[0]?.getContent() ?? null) : kind === 'message' ? item.content : null
+  const callsOnMe =
+    !!myId &&
+    senderId !== myId &&
+    mentionsMe(mentionSource, myId, () => {
+      const r = client?.getRoom(roomId)
+      if (!r) return false
+      const pl = r.currentState.getStateEvents('m.room.power_levels', '')?.getContent()
+      return roomMentionPermission(pl, senderId, roomCreators(r)).allowed
+    })
 
   // A face typed into the message flashes over the sender's avatar. Text
   // messages only -- there is nothing to read a face out of a picture.
@@ -757,6 +774,7 @@ export function Row({
       data-grouped={head ? undefined : 'true'}
       data-speaker={speaks && !narrow ? 'true' : undefined}
       data-narrow={narrow ? 'true' : undefined}
+      data-mentions-me={callsOnMe ? 'true' : undefined}
       style={{ padding: '4px 0' }}
     >
       {/* Water left by a squirt. Renders null when dry, which is nearly always
