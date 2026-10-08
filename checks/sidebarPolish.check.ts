@@ -15,6 +15,9 @@ const read = (p: string) => readFileSync(new URL('../' + p, import.meta.url), 'u
 const app = read('src/App.tsx')
 const css = read('src/index.css')
 const nav = read('src/ui/NavTree.tsx')
+// The Direct Messages section moved to the user list in launch-polish L30;
+// its line is still the header pills' kin.
+const dmList = read('src/ui/DmList.tsx')
 
 console.log('== L13 who you are: avatar framed, name to its right, in a panel; pills below')
 const me = /<div className="tc-me">[\s\S]*?<\/div>\n\s*<\/div>\n/.exec(app)?.[0] ?? ''
@@ -33,7 +36,7 @@ check('the header sits on the room list\'s 8px gutter', /\.tc-me \{[^}]*padding:
 // box that grows is a stadium that cuts into the faces; the section's own
 // fixed radius (checks/dmShape.check.ts) is the same stadium only while shut.
 check('the Direct Messages section and .tc-pill share one line',
-  /border: '1px solid var\(--tc-pill-line\)'/.test(nav) &&
+  /border: '1px solid var\(--tc-pill-line\)'/.test(dmList) &&
   /\.tc-pill \{[^}]*border: 1px solid var\(--tc-pill-line\);[^}]*border-radius: var\(--tc-pill-radius\);/.test(css))
 
 console.log('== L14 the room list\'s left edge')
@@ -66,8 +69,10 @@ check('the room list\'s one tab: Rooms on the left edge while shut, Back on the 
   /pull=\{sidebarAlone \? 'left' : 'right'\}/.test(app) && /label=\{sidebarAlone \? 'Back' : 'Rooms'\}/.test(app) &&
   /onClick=\{sidebarAlone \? closeSidebar : openSidebar\}/.test(app) &&
   /style=\{sidebarAlone \? \{ right: 0, top: ROOMS_TAB_TOP \} : \{ left: 0, top: ROOMS_TAB_TOP \}\}/.test(app))
-check('the member list\'s one tab: Members on the right edge while shut (a room open), Back on the left while it is the screen',
-  /\(\(selectedRoom && !space\.leaves\.members\.open && \(!upAlone \|\| sidebarAlone\)\) \|\| membersAlone\)/.test(app) &&
+// Since L30 the tab shows with no room open too: the user list holds the
+// Direct Messages section, so it always has something in it.
+check('the member list\'s one tab: Members on the right edge while shut, Back on the left while it is the screen',
+  /\(\(!space\.leaves\.members\.open && \(!upAlone \|\| sidebarAlone\)\) \|\| membersAlone\)/.test(app) &&
   /label=\{membersAlone \? 'Back' : 'Members'\}/.test(app) &&
   /style=\{membersAlone \? \{ left: 0, top: MEMBERS_TAB_TOP \} : \{ right: 0, top: MEMBERS_TAB_TOP \}\}/.test(app))
 {

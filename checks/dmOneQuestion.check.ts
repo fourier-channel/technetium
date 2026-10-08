@@ -16,7 +16,8 @@ function check(name: string, cond: boolean, extra?: unknown) {
 
 console.log('== the two surfaces ask the same function')
 const menu = readFileSync(new URL('../src/ui/RoomContextMenu.tsx', import.meta.url), 'utf8')
-const nav = readFileSync(new URL('../src/ui/NavTree.tsx', import.meta.url), 'utf8')
+// The DM strip lives in the user list since launch-polish L30 (DmList.tsx).
+const nav = readFileSync(new URL('../src/ui/DmList.tsx', import.meta.url), 'utf8')
 check('the context menu asks isDirect', /\bisDirect\(/.test(menu))
 check('the DM strip asks isDirect', /\bisDirect\(/.test(nav))
 check('the context menu does NOT re-derive it from m.direct',

@@ -1,0 +1,18 @@
+<!doctype html>
+<!-- Mounts the REAL components touched by launch-polish L28/L30 -- DmList,
+     MembersPullTab, MentionPicker -- with a fake client, through the dev
+     server (Vite transforms the TSX), so the React tree's own output is what
+     gets looked at. Open http://127.0.0.1:5173/tools/visual/l30-react.html
+     Proves what these components draw for these inputs; does NOT prove
+     anything against a live homeserver. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>html, body { margin: 0; background: var(--cpd-color-bg-canvas-default, #1b1a17); }</style>
+</head>
+<body>
+<div id="root"></div>
+<pre id="result" style="color:#ccc">running</pre>
+<script type="module" src="./l30-react.tsx"></script>
+</body>
+</html>

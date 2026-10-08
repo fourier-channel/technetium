@@ -16,6 +16,7 @@ import { compareByStanding, honorificFor, maxPower, type MergedMember } from '..
 import { useFlipList } from './flip'
 import { usePopEnter } from './pop'
 import { UserLine } from './UserLine'
+import { DmList } from './DmList'
 import { useSpace } from './spaceContext'
 import { MEMBER_SCALE_MAX, MEMBER_SCALE_MIN } from './space'
 import { useReducedMotion } from './reducedMotion'
@@ -50,11 +51,14 @@ const HONOR_COLOR: Record<string, string> = {
 export function MemberList({
   room,
   onOpenRoom,
+  onSelectRoom,
   width = 220,
 }: {
   room: Room | null
   // Navigates to a room by id -- how "start a DM" actually OPENS the DM.
   onOpenRoom?: (roomId: string) => void
+  // Opens a conversation from the Direct Messages section (L30).
+  onSelectRoom?: (room: Room) => void
   // From the layout; 220 is the preset.
   width?: number
 }) {
@@ -229,6 +233,11 @@ export function MemberList({
           </button>
         )}
       </div>
+
+      {/* Your conversations, under the button that starts one (L30): they
+          moved here from the room list, because every one of them is with a
+          person on this server. */}
+      {onSelectRoom && <DmList onSelectRoom={onSelectRoom} />}
 
       {room && canApprove && knockers.length > 0 && (
         <div style={{ padding: '0 6px 6px' }}>

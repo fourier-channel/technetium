@@ -40,6 +40,10 @@ import { LightboxProvider } from './ui/Lightbox'
 import { RoomListSettingsProvider } from './ui/RoomListSettingsProvider'
 import { useReadMarker } from './client/useReadMarker'
 import { useMediaTagSync } from './client/useMediaTags'
+import { useNavTree } from './client/useNavTree'
+import { useRoomNotifications } from './client/useRoomNotifications'
+import { NavSharedContext, type NavShared } from './ui/navShared'
+import { MembersPullTab } from './ui/DmList'
 import { DomainView } from './ui/DomainView'
 import { domainEnabled } from './client/domainMode'
 import { threadStripCss, dmTabBesideTitle, ROOMS_TAB_TOP, MEMBERS_TAB_TOP, THREAD_TAB_TOP_EDGE } from './ui/threadStrip'
@@ -276,6 +280,15 @@ function App() {
   // Keep the media-tag store fed from room state for every room, so any image
   // anywhere in the tree can resolve its tags without props being threaded.
   useMediaTagSync(client)
+  // The room tree and the per-room counts, run ONCE and shared by the room
+  // list and the user list's Direct Messages section (navShared.ts, L30):
+  // both do network work, and a second copy would double it from every tab.
+  const navTree = useNavTree(client)
+  const notifs = useRoomNotifications(client)
+  const navShared = useMemo<NavShared>(
+    () => ({ nav: { tree: navTree.tree, loading: navTree.loading, stale: navTree.stale }, notifs }),
+    [navTree.tree, navTree.loading, navTree.stale, notifs],
+  )
 
   if (status === 'awaiting_login') {
     // Both doors begin the OIDC/MAS sign-in; Create account asks MAS to open
@@ -318,6 +331,7 @@ function App() {
 
   // status === 'ready' or 'syncing' (with client) -- three-pane layout.
   return (
+    <NavSharedContext.Provider value={navShared}>
     <PersonRouterContext.Provider value={personRouter}>
     <LookStoreContext.Provider value={lookStore}>
     <ProfilePanelContext.Provider value={openProfile}>
@@ -624,6 +638,13 @@ function App() {
               openRoomById(roomId)
               if (membersAlone) closeMembers()
             }}
+            // A conversation chosen from the Direct Messages section (L30):
+            // into the dock, and on a phone the list puts itself away, as
+            // the room list does when a room is chosen.
+            onSelectRoom={(room) => {
+              selectRoom(room)
+              if (membersAlone) closeMembers()
+            }}
             width={membersWidth}
           />
         </>
@@ -651,8 +672,12 @@ function App() {
           style={sidebarAlone ? { right: 0, top: ROOMS_TAB_TOP } : { left: 0, top: ROOMS_TAB_TOP }}
         />
       )}
-      {((selectedRoom && !space.leaves.members.open && (!upAlone || sidebarAlone)) || membersAlone) && (
-        <PullTab
+      {/* Shown with no room selected too: the user list holds the Direct
+          Messages section (L30), so it always has something in it -- and its
+          tab glows while a conversation is waiting, which is how a message
+          reaches someone whose user list is put away. */}
+      {((!space.leaves.members.open && (!upAlone || sidebarAlone)) || membersAlone) && (
+        <MembersPullTab
           pull={membersAlone ? 'right' : 'left'}
           open={membersAlone}
           target="members"
@@ -683,6 +708,7 @@ function App() {
     </ProfilePanelContext.Provider>
     </LookStoreContext.Provider>
     </PersonRouterContext.Provider>
+    </NavSharedContext.Provider>
   )
 }
 

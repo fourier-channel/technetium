@@ -4,7 +4,8 @@
 // a taller stadium whose ends cut into the faces at the corners. The radius
 // is now FIXED at half the COLLAPSED height, so shut it is the same stadium
 // and open it is a rounded rectangle. The value lives in index.css and is
-// used in NavTree.tsx; this reads both (D-tc01). The look is rendered in
+// used in DmList.tsx (the user list's section since launch-polish L30; it
+// was NavTree.tsx's); this reads both (D-tc01). The look is rendered in
 // tools/visual/dmshape.html, before and after, shut and open at 1-3 rows.
 import { readFileSync } from 'node:fs'
 
@@ -15,7 +16,7 @@ function check(name: string, cond: boolean, extra?: unknown) {
 }
 const read = (p: string) => readFileSync(new URL('../' + p, import.meta.url), 'utf8')
 const css = read('src/index.css')
-const nav = read('src/ui/NavTree.tsx')
+const nav = read('src/ui/DmList.tsx')
 
 const head = /--tc-dm-head-h:\s*(\d+)px;/.exec(css)
 check('the header height is defined once, in pixels', !!head && css.match(/--tc-dm-head-h:/g)?.length === 1, head?.[0])

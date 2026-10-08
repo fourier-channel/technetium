@@ -16,6 +16,7 @@ export function PullTab({
   style,
   target,
   attach = 'start',
+  waiting = false,
 }: {
   pull: 'down' | 'up' | 'left' | 'right'
   // Whether the panel this tab controls is OPEN now: a closed one's tab pulls
@@ -33,6 +34,10 @@ export function PullTab({
   // a panel that comes down from the top, 'right' of it for one that comes in
   // from the right. A transform in the stylesheet, so it costs nothing.
   attach?: 'start' | 'above' | 'right'
+  // Something behind this tab wants the user: the Members tab while a
+  // conversation is waiting and the user list is put away (L30). The same
+  // glow a waiting face wears.
+  waiting?: boolean
 }) {
   // ONE "v", turned by the stylesheet to point where the panel moves: the
   // sideways tabs are the same tab rotated 90 degrees (launch-polish L15).
@@ -46,6 +51,7 @@ export function PullTab({
       data-open={open ? 'true' : 'false'}
       data-target={target}
       data-attach={attach}
+      data-waiting={waiting ? 'true' : undefined}
       onClick={onClick}
       aria-label={label}
       style={style}

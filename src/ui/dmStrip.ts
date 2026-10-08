@@ -1,4 +1,7 @@
 import type { CSSProperties } from 'react'
+import type { TreeNode } from '../client/spaces'
+import type { NotifCounts, NotifMap } from '../client/notificationCounts'
+import type { DmFilter } from './roomListSettings'
 
 // Geometry for the DM strip's faces.
 //
@@ -89,4 +92,57 @@ export function dmFaceStyle(state: DmFaceState): CSSProperties {
 // property worth naming.
 export function isCircular(box: DmFaceBox): boolean {
   return box.width === box.height && box.borderRadius === '50%'
+}
+
+// ---------------------------------------------------------------------------
+// Which conversations the Direct Messages section shows. Moved here from
+// NavTree.tsx with the section itself (launch-polish L30), and pure, so the
+// user list that now holds it and the Members tab that glows for it ask one
+// question the same way.
+// ---------------------------------------------------------------------------
+
+// A DM's tooltip names the person, since the icon no longer shows a label.
+export function dmTitle(node: TreeNode, isDm: boolean, counts: NotifCounts | undefined): string {
+  const member = isDm ? node.room?.getAvatarFallbackMember() : undefined
+  const who = member?.name || node.name || node.roomId
+  if (node.membership === 'invite') return `${who} -- invitation waiting, click to accept`
+  if (!counts || counts.total < 1) return who
+  const ping = counts.highlight > 0 ? `, ${counts.highlight} ping` : ''
+  return `${who} (${counts.total} unread${ping})`
+}
+
+// Which orphan rooms the DM strip shows under the current filter. A room
+// with a message waiting ALWAYS shows: a filter that can hide the pulse it
+// exists to surface would be a mute nobody asked for.
+export function dmStripRooms(
+  rooms: TreeNode[],
+  filter: DmFilter,
+  isFavorite: (roomId: string) => boolean,
+  notifs: NotifMap,
+  isMutedNow: (roomId: string) => boolean,
+): TreeNode[] {
+  // An invite IS a waiting message -- the server keeps no unread count for a
+  // room you have not joined, so membership is the only signal it sends.
+  const waiting = (n: TreeNode) =>
+    !isMutedNow(n.roomId) &&
+    (n.membership === 'invite' || (notifs.get(n.roomId)?.total ?? 0) > 0)
+  if (filter === 'all') return rooms
+  if (filter === 'favorites') return rooms.filter((n) => isFavorite(n.roomId) || waiting(n))
+  // recent: the most recently active dozen, by the room's own clock.
+  const ts = (n: TreeNode) => n.room?.getLastActiveTimestamp() ?? 0
+  const recent = new Set(
+    [...rooms].sort((a, b) => ts(b) - ts(a)).slice(0, 12).map((n) => n.roomId),
+  )
+  return rooms.filter((n) => recent.has(n.roomId) || waiting(n))
+}
+
+// The rows a CLOSED strip still shows. Collapsing tucks away the quiet
+// conversations; it must never tuck away the pulse -- same law as the
+// filter above, applied to the disclosure itself.
+export function dmWaitingRooms(rooms: TreeNode[], notifs: NotifMap, isMutedNow: (roomId: string) => boolean): TreeNode[] {
+  return rooms.filter(
+    (n) =>
+      !isMutedNow(n.roomId) &&
+      (n.membership === 'invite' || (notifs.get(n.roomId)?.total ?? 0) > 0),
+  )
 }

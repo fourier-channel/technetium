@@ -946,6 +946,17 @@ code {
 }
 .tc-mention-note .tc-mention-id { white-space: normal; }
 
+/* The Direct Messages section's one-line result of an invite (L30), as the
+   room list drew it. */
+.tc-dm-notice {
+  margin: 6px 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  color: var(--cpd-color-text-secondary);
+}
+
 /* A message that calls on YOU -- your name in m.mentions, or an @room from
    someone the room lets notify everyone (L28): marked the way the room list's
    "@" is, so the row it lit for can be found. A wash and an inset line, both
@@ -3540,6 +3551,12 @@ code {
 .tc-pulltab[data-open='true'][data-pull='down'], .tc-pulltab[data-open='true'][data-pull='up'] { height: 20px; }
 .tc-pulltab[data-open='true'][data-pull='left'], .tc-pulltab[data-open='true'][data-pull='right'] { width: 20px; }
 .tc-pulltab:hover { box-shadow: 0 0 10px 1px color-mix(in srgb, var(--tc-pulltab-ink) 55%, transparent); }
+/* A conversation is waiting behind the Members tab (L30): the waiting face's
+   own ping glow, static -- an infinite pulse here would cost a core at idle. */
+.tc-pulltab[data-waiting='true'],
+.tc-pulltab[data-waiting='true']:hover {
+  box-shadow: 0 0 0 2px var(--tc-unread), 0 0 12px 2px rgba(255, 150, 40, 0.75);
+}
 /* Inside the panel at its moving edge (tabRide.ts): ABOVE the edge of a
    panel that comes down from the top, RIGHT of the edge of one that comes in
    from the right -- by the tab's own height or width, so its attached side is

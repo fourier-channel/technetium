@@ -2,24 +2,22 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Room } from 'matrix-js-sdk'
 import { useClient } from '../client/clientContextValue'
 import { computeRevealOrder, type TreeNode } from '../client/spaces'
-import { useNavTree } from '../client/useNavTree'
-import { useRoomNotifications, type NotifMap, type NotifCounts } from '../client/useRoomNotifications'
-import { useRoomListSettings, nextDmFilter, type DmFilter } from './roomListSettings'
+import type { NavTree as NavTreeShape } from '../client/spaces'
+import type { NotifMap, NotifCounts } from '../client/useRoomNotifications'
+import { useNavShared } from './navShared'
+import { useRoomListSettings } from './roomListSettings'
 import { UserPicker } from './UserPicker'
 import { describeInviteError } from '../client/userDirectory'
 import { useFlipList, type FlipControl } from './flip'
 import { useThreadDrag } from './threadDrag'
 import { arrangeSiblings, roomOrderScope } from './roomOrder'
 import { useReducedMotion } from './reducedMotion'
-import { AuthedImage } from './AuthedImage'
+import { EpicycleReveal, RoomIcon } from './RoomIcon'
+import { frHash } from './frHash'
 import { RoomContextMenu } from './RoomContextMenu'
 import { reportAlways } from '../client/report'
 import { adoptDm, pendingDmInviter } from '../client/dm'
-// One source for the DM strip's geometry; see dmStrip.ts for why it is not
-// three literals sitting in this file.
-import { DM_AVATAR, dmFaceStyle } from './dmStrip'
 import { configureRoomEncryptionNow } from '../client/roomEncryptionConfig'
-import { isDirect } from '../client/roomClass'
 
 // Room-list row metrics. Vertical pitch = ROW_HEIGHT + 2 * ROW_MARGIN_Y.
 // Tightened 2026-08-13 (32px -> 28px) to fit more of the tree on screen.
@@ -31,56 +29,7 @@ const NAV_PAD_X = 4
 const NAV_CHEVRON_W = 10
 const NAV_CHEVRON_SLOT = NAV_CHEVRON_W + 6
 
-// Stable empty set for the no-client case, so the prop identity does not churn.
-const EMPTY_ROOM_IDS: ReadonlySet<string> = new Set()
-
-// A DM's tooltip names the person, since the icon no longer shows a label.
-function dmTitle(node: TreeNode, isDm: boolean, counts: NotifCounts | undefined): string {
-  const member = isDm ? node.room?.getAvatarFallbackMember() : undefined
-  const who = member?.name || node.name || node.roomId
-  if (node.membership === 'invite') return `${who} -- invitation waiting, click to accept`
-  if (!counts || counts.total < 1) return who
-  const ping = counts.highlight > 0 ? `, ${counts.highlight} ping` : ''
-  return `${who} (${counts.total} unread${ping})`
-}
-
 // Membership/join classification for a node's visual + click behavior.
-// Which orphan rooms the DM strip shows under the current filter. A room
-// with a message waiting ALWAYS shows: a filter that can hide the pulse it
-// exists to surface would be a mute nobody asked for.
-function dmStripRooms(
-  rooms: TreeNode[],
-  filter: DmFilter,
-  isFavorite: (roomId: string) => boolean,
-  notifs: NotifMap,
-  isMutedNow: (roomId: string) => boolean,
-): TreeNode[] {
-  // An invite IS a waiting message -- the server keeps no unread count for a
-  // room you have not joined, so membership is the only signal it sends.
-  const waiting = (n: TreeNode) =>
-    !isMutedNow(n.roomId) &&
-    (n.membership === 'invite' || (notifs.get(n.roomId)?.total ?? 0) > 0)
-  if (filter === 'all') return rooms
-  if (filter === 'favorites') return rooms.filter((n) => isFavorite(n.roomId) || waiting(n))
-  // recent: the most recently active dozen, by the room's own clock.
-  const ts = (n: TreeNode) => n.room?.getLastActiveTimestamp() ?? 0
-  const recent = new Set(
-    [...rooms].sort((a, b) => ts(b) - ts(a)).slice(0, 12).map((n) => n.roomId),
-  )
-  return rooms.filter((n) => recent.has(n.roomId) || waiting(n))
-}
-
-// The rows a CLOSED strip still shows. Collapsing tucks away the quiet
-// conversations; it must never tuck away the pulse -- same law as the
-// filter above, applied to the disclosure itself.
-function dmWaitingRooms(rooms: TreeNode[], notifs: NotifMap, isMutedNow: (roomId: string) => boolean): TreeNode[] {
-  return rooms.filter(
-    (n) =>
-      !isMutedNow(n.roomId) &&
-      (n.membership === 'invite' || (notifs.get(n.roomId)?.total ?? 0) > 0),
-  )
-}
-
 type Mode = 'joined' | 'joinable' | 'knock'
 function nodeMode(node: TreeNode): Mode {
   if (node.membership === 'join') return 'joined'
@@ -102,12 +51,13 @@ function measureText(text: string, font: string): number {
 }
 // Default panel width: fit the WIDEST room name -- unless it's more than 1.5x the
 // second-widest (an outlier), in which case fall back to the second-widest.
-function computeDefaultPanelWidth(tree: ReturnType<typeof useNavTree>['tree']): number {
+// Only names this list DRAWS: the conversations outside every space are the
+// user list's now (L30), and were only ever drawn here as faces anyway.
+function computeDefaultPanelWidth(tree: NavTreeShape | null): number {
   if (!tree) return 260
   const names: string[] = []
   const walk = (nodes: TreeNode[]) => nodes.forEach((n) => { names.push(n.name); walk(n.children) })
   walk(tree.spaces)
-  for (const r of tree.orphanRooms) names.push(r.name)
   const font = '600 13px "Space Grotesk", system-ui, sans-serif'
   const widths = names.map((n) => measureText(n, font)).sort((a, b) => b - a)
   if (widths.length === 0) return 260
@@ -137,27 +87,14 @@ export function NavTree({
   onSelectBooru?: () => void
 }) {
   const { client } = useClient()
-  const { tree, loading, stale } = useNavTree(client)
-  const notifs = useRoomNotifications(client)
-  const { animationsEnabled, setAnimationsEnabled, soundEnabled, setSoundEnabled, soundVolume, setSoundVolume, isMutedNow, isFavorite, dmFilter, setDmFilter } =
+  // The tree and the counts are held once, by App, and shared with the user
+  // list's Direct Messages section (navShared.ts, L30).
+  const { nav: { tree, loading, stale }, notifs } = useNavShared()
+  const { animationsEnabled, setAnimationsEnabled, soundEnabled, setSoundEnabled, soundVolume, setSoundVolume } =
     useRoomListSettings()
-  // Recomputed each render rather than memoized on `client`: m.direct changes
-  // when a DM is created, and a memo keyed on the client would never see it.
-  // The map is a handful of entries, so this is cheaper than the subscription
-  // that would be needed to do it "properly".
-  // Which rooms are DMs, asked of the server's own verdict first. The class is
-  // written into the immutable create event at creation (2026-09-07); m.direct
-  // remains the fallback for rooms that predate the stamp, which is every DM
-  // on this server today. Still recomputed each render for the same reason as
-  // before: a memo keyed on the client would never see a new DM.
-  const dmIds = client
-    ? new Set(client.getRooms().filter((r) => isDirect(client, r)).map((r) => r.roomId))
-    : EMPTY_ROOM_IDS
   const reduced = useReducedMotion()
   const animate = animationsEnabled && !reduced
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
-  const [dmOpen, setDmOpen] = useState(false)
-  const [dmRevealKey, setDmRevealKey] = useState(0)
   const [menu, setMenu] = useState<{ node: TreeNode; x: number; y: number; conversation: boolean } | null>(null)
   // The invite picker's target: a joined room/space whose menu offered it.
   const [inviteNode, setInviteNode] = useState<TreeNode | null>(null)
@@ -437,170 +374,6 @@ export function NavTree({
           </div>
         </div>
       </div>
-      {/* Direct Messages: a top pill; expanded, DMs are icon-only, wrapping
-          horizontally, and pushing the room list down (intended reflow). */}
-      {tree.orphanRooms.length > 0 && (
-        <div
-          style={{
-            margin: '2px 4px 6px',
-            // The whole section is ONE container that grows downwards. Its
-            // radius is FIXED at half its COLLAPSED height (--tc-dm-radius,
-            // index.css): collapsed that is a true stadium, the pill it has
-            // always looked like; opened, it is a rounded rectangle whose
-            // corners clear the faces. It used to take the pill radius
-            // (999px), which a browser clamps to half of WHATEVER height the
-            // box has -- so the opened section became a stadium too, and its
-            // semicircular ends cut into the faces at the corners (operator,
-            // 2026-10-05: "the DM window, shape is wrong").
-            // The line is .tc-pill's (index.css), so the header's pills are
-            // this section's kin.
-            border: '1px solid var(--tc-pill-line)',
-            borderRadius: 'var(--tc-dm-radius)',
-            // Deliberately NOT overflow:hidden. The waiting glow reaches ~16px
-            // past a face, and a face near the pill's edge would have had its
-            // glow sliced off by the corner -- clipping the one thing the strip
-            // exists to show. Nothing inside paints its own background, so the
-            // rounded corners stay clean without it. The body's own collapse
-            // clip lives on the grid row below.
-            background: dmOpen ? 'var(--cpd-color-bg-subtle-secondary)' : 'transparent',
-            transition: animate ? 'background-color 240ms ease' : undefined,
-          }}
-        >
-          <button
-            type="button"
-            onClick={() =>
-              setDmOpen((o) => {
-                if (!o) setDmRevealKey((k) => k + 1) // replay icon reveals on open
-                return !o
-              })
-            }
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              width: '100%',
-              // The collapsed face's height, the one the radius is half of
-              // (plus the border): fixed, so the two cannot drift apart.
-              boxSizing: 'border-box',
-              height: 'var(--tc-dm-head-h)',
-              padding: '0 10px',
-              // The section is the CONTAINER; this is its header face.
-              borderRadius: 0,
-              cursor: 'pointer',
-              border: 'none',
-              background: 'transparent',
-              color: 'var(--cpd-color-text-secondary)',
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: 0.4,
-              textTransform: 'uppercase',
-            }}
-          >
-            <span style={{ fontSize: 9, opacity: 0.7 }}>{dmOpen ? '▾' : '▸'}</span>
-            Direct Messages
-            <span style={{ marginLeft: 'auto', opacity: 0.7 }}>{tree.orphanRooms.length}</span>
-          </button>
-          {dmOpen && (
-            <button
-              type="button"
-              onClick={() => setDmFilter(nextDmFilter(dmFilter))}
-              title={'Cycle which conversations show: Recent -> Favorites Only -> All'}
-              style={{
-                display: 'block',
-                margin: '4px 0 0 10px',
-                padding: '2px 9px',
-                borderRadius: 999,
-                border: '1px solid rgba(128,128,128,0.35)',
-                background: 'transparent',
-                color: 'var(--cpd-color-text-secondary)',
-                fontSize: 10,
-                letterSpacing: 0.4,
-                textTransform: 'uppercase',
-                cursor: 'pointer',
-              }}
-            >
-              {dmFilter === 'recent' ? 'Recent' : dmFilter === 'favorites' ? 'Favorites Only' : 'All'}
-            </button>
-          )}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateRows: dmOpen || dmWaitingRooms(tree.orphanRooms, notifs, isMutedNow).length > 0 ? '1fr' : '0fr',
-              transition: animate ? 'grid-template-rows 240ms ease' : undefined,
-            }}
-          >
-            <div style={{ overflow: 'hidden', minHeight: 0 }}>
-              {/* gap widened from 7 (operator: too tightly packed). */}
-              {/* Padding is set by the GLOW, not the face: it reaches ~16px,
-                  so a tighter inset would let it touch the pill's border. */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 13, padding: '10px 12px 12px' }}>
-                {(dmOpen
-                  ? dmStripRooms(tree.orphanRooms, dmFilter, isFavorite, notifs, isMutedNow)
-                  : dmWaitingRooms(tree.orphanRooms, notifs, isMutedNow)
-                ).map((node) => {
-                  // A DM is drawn as the PERSON on the other end. Reduced to
-                  // icons, a DM has nothing else to identify it: DM rooms
-                  // almost never carry an avatar of their own, so the room
-                  // avatar path left every one of them as a generic initial.
-                  const isDm = dmIds.has(node.roomId)
-                  const counts = isMutedNow(node.roomId) ? undefined : notifs.get(node.roomId)
-                  const invited = node.membership === 'invite'
-                  // A DM invite is a personal summons: ping-grade, not merely
-                  // unread. It carries no server-side count, so membership is
-                  // the whole signal.
-                  const unread = invited || (counts?.total ?? 0) > 0
-                  const ping = invited || (counts?.highlight ?? 0) > 0
-                  return (
-                    <button
-                      key={`${node.roomId}:${dmRevealKey}`}
-                      type="button"
-                      onClick={async () => {
-                        // Cache-revived nodes carry room: null until the live
-                        // refresh lands; resolve by id at click time so the
-                        // click is never a silent no-op (seen live 2026-09-05).
-                        // Opening an invited conversation means accepting it:
-                        // the invite was personal, and the click is the answer.
-                        if (node.membership === 'invite' && client) {
-                          // Read the is_direct flag BEFORE the join replaces
-                          // our member event, then mirror the inviter's
-                          // m.direct entry -- without this the accepted DM is
-                          // a DM for one side only (seen live 2026-09-05:
-                          // ticker and room-chrome on the acceptor's side).
-                          const inviter = pendingDmInviter(client, node.roomId)
-                          try {
-                            await client.joinRoom(node.roomId)
-                          } catch (err) {
-                            reportAlways('dm: accept invite', err)
-                            return
-                          }
-                          if (inviter) await adoptDm(client, inviter, node.roomId)
-                          // Joining an already-encrypted room does not build
-                          // the outbound encryptor on its own; do it so the
-                          // first reply does not fail (roomEncryptionConfig.ts).
-                          // NOT awaited: opening the conversation must never
-                          // wait on key setup, and the SDK re-resolves members
-                          // on send anyway.
-                          void configureRoomEncryptionNow(client, node.roomId, { waitForUserId: inviter })
-                        }
-                        const live = client?.getRoom(node.roomId) ?? node.room ?? null
-                        if (live) onSelectRoom?.(live)
-                      }}
-                      onContextMenu={(e) => onContext(node, e, true)}
-                      title={dmTitle(node, isDm, counts)}
-                      style={dmFaceStyle({ ping, unread })}
-                      className={ping ? 'tc-dm-waiting tc-dm-waiting--ping' : unread ? 'tc-dm-waiting' : undefined}
-                    >
-                      <EpicycleReveal seed={node.roomId} size={DM_AVATAR} play={animate}>
-                        <RoomIcon node={node} size={DM_AVATAR} isDm={isDm} />
-                      </EpicycleReveal>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
       {onSelectBooru && (
         <BooruRow active={booruActive} onSelect={onSelectBooru} />
       )}
@@ -1089,11 +862,6 @@ const FR_COMPOSITES: Record<number, string> = {
   4: squarePartialPath(4),
   5: squarePartialPath(5),
 }
-function frHash(s: string): number {
-  let h = 0
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
-  return Math.abs(h)
-}
 
 function FourierReveal({ children, seed, play }: { children: React.ReactNode; seed: string; play: boolean }) {
   if (!play) return <>{children}</>
@@ -1174,121 +942,6 @@ function RoomName({
       {at}
       {label}
       {count}
-    </span>
-  )
-}
-
-// Icon to the left of a room/space name: a user-set emoji/glyph override
-// (right-click -> Set icon), else the room/space avatar, else a generated
-// initial. Spaces get a rounded-square frame, rooms a circle.
-// Epicycle icon reveal (Ask 2026-07-19): a green-glow ring; a clock hand sweeps
-// once, its spark tracing the N-harmonic composite drawn as a POLAR wavy loop
-// (squarer with more harmonics -- precomputed, same per-room count as the name);
-// the ring blips out and the real icon zooms from a point to slightly-larger-
-// than-the-ring, then settles in. Green = #00b200 (the landing "Fourier green").
-function polarWaveLoop(harmonics: number): string {
-  const cx = 12, cy = 12, baseR = 7, amp = 1.9, samples = 96
-  const pts: string[] = []
-  for (let i = 0; i <= samples; i++) {
-    const th = (i / samples) * Math.PI * 2
-    let v = 0
-    for (let k = 0; k < harmonics; k++) {
-      const n = 2 * k + 1
-      v += Math.sin(n * th) / n
-    }
-    v *= 4 / Math.PI
-    const r = baseR + amp * v
-    pts.push(`${(cx + r * Math.cos(th)).toFixed(2)},${(cy + r * Math.sin(th)).toFixed(2)}`)
-  }
-  return 'M' + pts.join(' L') + 'Z'
-}
-const EPI_LOOPS: Record<number, string> = {
-  2: polarWaveLoop(2),
-  3: polarWaveLoop(3),
-  4: polarWaveLoop(4),
-  5: polarWaveLoop(5),
-}
-
-function EpicycleReveal({
-  children,
-  seed,
-  size = 20,
-  play,
-}: {
-  children: React.ReactNode
-  seed: string
-  size?: number
-  play: boolean
-}) {
-  if (!play) return <>{children}</>
-  const harmonics = 2 + (frHash(seed) % 4)
-  return (
-    <span className="epi" style={{ width: size, height: size, flexShrink: 0 }}>
-      <svg className="epi-svg" viewBox="0 0 24 24" aria-hidden="true">
-        <circle className="epi-ring" cx="12" cy="12" r="9" />
-        <path className="epi-wave" pathLength={1} d={EPI_LOOPS[harmonics]} />
-        <g className="epi-hand-g">
-          <line className="epi-hand" x1="12" y1="12" x2="12" y2="4.2" />
-          <circle className="epi-spark" cx="12" cy="4.2" r="1.3" />
-        </g>
-      </svg>
-      <span className="epi-poof" aria-hidden="true" />
-      <span className="epi-icon">{children}</span>
-    </span>
-  )
-}
-
-function RoomIcon({ node, size = 20, isDm = false }: { node: TreeNode; size?: number; isDm?: boolean }) {
-  const { getIcon } = useRoomListSettings()
-  const override = getIcon(node.roomId)
-  // getAvatarFallbackMember() returns the other party ONLY for a genuine
-  // two-person DM (it counts non-functional members and gives up above two),
-  // and it reads the sliding-sync heroes, so it works without the roster
-  // loaded. undefined for a group room -- which then falls through to the
-  // room's own avatar, as before.
-  const dmMember = isDm ? (node.room?.getAvatarFallbackMember() ?? null) : null
-  const avatarMxc = dmMember?.getMxcAvatarUrl() ?? node.room?.getMxcAvatarUrl() ?? null
-
-  const frame: React.CSSProperties = {
-    width: size,
-    height: size,
-    flexShrink: 0,
-    borderRadius: node.isSpace ? 6 : '50%',
-    overflow: 'hidden',
-    display: 'grid',
-    placeItems: 'center',
-    fontSize: Math.round(size * 0.62),
-    lineHeight: 1,
-    background: 'var(--cpd-color-bg-subtle-primary)',
-    color: 'var(--cpd-color-text-secondary)',
-  }
-
-  // A DM with no avatar falls back to the PERSON's initial, not the room's --
-  // an unavatared DM room is usually named after its members anyway, but the
-  // member name is the one that is always right.
-  const initial =
-    (dmMember?.name || dmMember?.userId || node.name || node.roomId)
-      .replace(/^[#!@]/, '')
-      .charAt(0)
-      .toUpperCase() || '#'
-
-  if (override)
-    return (
-      <span style={frame} aria-hidden>
-        {override}
-      </span>
-    )
-  if (avatarMxc)
-    return (
-      <span style={frame} aria-hidden>
-        {/* Avatars come from the homeserver's authenticated media (the fourier-auth
-            content gate 403s them); degrade to the initial if even that fails. */}
-        <AuthedImage mxc={avatarMxc} width={180} fill transparentLoading alt="" fallback={initial} />
-      </span>
-    )
-  return (
-    <span style={frame} aria-hidden>
-      {initial}
     </span>
   )
 }
