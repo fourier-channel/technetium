@@ -1,7 +1,7 @@
 {
   "build_stamp": null,
-  "hydrated_at": "2026-09-30T23:38:40Z",
-  "hydrated_hash": "sha256c:66f1707f3990ec999d19ec60e98e9f57e456c19793ea531c6f90e6c7631d2ee9",
+  "hydrated_at": "2026-10-09T02:41:03Z",
+  "hydrated_hash": "sha256c:fe7e3d2f1c7742ad2721774647745a74490036e42de65d60a72040e4c1fca95d",
   "pinned": null,
   "source": "coherence://brain/CLAUDE-technetium.md"
 }
