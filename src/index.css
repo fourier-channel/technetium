@@ -3615,6 +3615,11 @@ code {
   color: var(--mod-warn-fg);
   background: none; border: 0; padding: 0 6px; cursor: help;
 }
+.tc-beta-build {
+  margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--mod-warn-line);
+  font-size: 11px; color: var(--cpd-color-text-secondary);
+  font-variant-numeric: tabular-nums; user-select: all;
+}
 .tc-beta-title:focus-visible { outline: 1px solid var(--mod-warn-fg); outline-offset: 1px; border-radius: 3px; }
 .tc-beta-notice {
   max-width: min(420px, calc(100vw - 32px));
