@@ -3599,6 +3599,29 @@ code {
 }
 .tc-booru-frame-iframe { flex: 1; min-height: 0; width: 100%; border: 0; background: var(--cpd-color-bg-canvas-default, #16181d); }
 .tc-booru-frame-hint { display: flex; align-items: center; gap: 12px; }
+
+/* The beta strip (ui/BetaBanner.tsx): one centred line, amber because beta is
+   NEAR on the formant axis (working, not finished), never the critical red. The
+   notice behind the title is a popup over the page, so the strip's height never
+   changes and nothing below it moves (no-forced-reflow-law). */
+.tc-beta-strip {
+  flex-shrink: 0; display: flex; justify-content: center;
+  padding: 2px 14px;
+  background: var(--mod-warn-bg);
+  border-bottom: 1px solid var(--mod-warn-line);
+}
+.tc-beta-title {
+  font: 700 11.5px/1.5 var(--tc-ui-font, sans-serif); letter-spacing: 0.08em;
+  color: var(--mod-warn-fg);
+  background: none; border: 0; padding: 0 6px; cursor: help;
+}
+.tc-beta-title:focus-visible { outline: 1px solid var(--mod-warn-fg); outline-offset: 1px; border-radius: 3px; }
+.tc-beta-notice {
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 10px 12px; font-size: 12.5px; line-height: 1.45;
+  color: var(--cpd-color-text-primary);
+  border-color: var(--mod-warn-line);
+}
 .tc-booru-frame-signin { margin-left: auto; font-size: 11px; padding: 2px 9px; border-radius: 999px; border: 1px solid rgba(128, 128, 128, 0.4); background: transparent; color: inherit; cursor: pointer; }
 .tc-booru-frame-signin:hover { color: var(--tc-unread, #ff9628); border-color: var(--tc-unread, #ff9628); }
 

@@ -18,7 +18,7 @@ another homeserver it works as a plain client; those features stay dormant.
 
 ## Status
 
-**Alpha, deployed, in daily use by its community.** Single-developer software
+**Beta, deployed, in daily use by its community.** Single-developer software
 that changes constantly. There is no stable version and no support; the
 in-app banner asks for bug reports. If you need a mature Matrix client today,
 use [Element](https://element.io).

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useRef, type PointerEventHandler, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { placeUnfurl } from './popupPlacement'
 import { isTypingTarget } from './axisKeys'
@@ -44,6 +44,9 @@ export function AnchoredPopup({
   id,
   className,
   children,
+  takeFocus = true,
+  onPointerEnter,
+  onPointerLeave,
 }: {
   anchorRef: RefObject<HTMLElement | null>
   onClose: () => void
@@ -52,8 +55,17 @@ export function AnchoredPopup({
   id?: string
   className?: string
   children: ReactNode
+  /** False for a popup opened by HOVER: it must not take focus from wherever
+   *  the reader is typing, nor hand focus to its control when it closes. Read
+   *  once, at mount; a popup that changes its mind is remounted (key). */
+  takeFocus?: boolean
+  /** On the popup itself, for a hover popup whose control it covers (it
+   *  unfurls over its control) and so must count as still being hovered. */
+  onPointerEnter?: PointerEventHandler<HTMLDivElement>
+  onPointerLeave?: PointerEventHandler<HTMLDivElement>
 }) {
   const popRef = useRef<HTMLDivElement>(null)
+  const focusing = useRef(takeFocus)
   // The latest onClose, for listeners that outlive a render.
   const onCloseRef = useRef(onClose)
   useEffect(() => {
@@ -64,6 +76,7 @@ export function AnchoredPopup({
     const pop = popRef.current
     const anchor = anchorRef.current
     if (!pop || !anchor) return
+    const takesFocus = focusing.current
     let raf = 0
     let closed = false
     const close = () => {
@@ -107,7 +120,7 @@ export function AnchoredPopup({
     place()
     // Into the popup, so a keyboard reader lands where the content is; the
     // portal puts it at the end of <body>, which Tab would never reach.
-    pop.focus({ preventScroll: true })
+    if (takesFocus) pop.focus({ preventScroll: true })
 
     // Gone from view -- scrolled out, or slid past an edge that clips it --
     // means gone: an IntersectionObserver with no root clips by EVERY
@@ -163,7 +176,7 @@ export function AnchoredPopup({
       // However it closed -- Escape, "collapse", "hide" -- a keyboard reader
       // goes back to the control that opened it, not to the top of the page.
       const active = document.activeElement
-      if (anchor.isConnected && (active === document.body || active === null || pop.contains(active))) {
+      if (takesFocus && anchor.isConnected && (active === document.body || active === null || pop.contains(active))) {
         anchor.focus({ preventScroll: true })
       }
     }
@@ -192,6 +205,8 @@ export function AnchoredPopup({
       onMouseUp={stop}
       onWheel={stop}
       onContextMenu={stop}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
       onFocus={stop}
       onBlur={stop}
       onKeyDown={stop}

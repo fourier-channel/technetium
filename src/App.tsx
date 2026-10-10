@@ -55,7 +55,7 @@ import { usePinnedFold } from './client/pinnedFold'
 import { partitionPinned, stripOpensForPins } from './ui/threadPins'
 import { flipIdOf } from './ui/flip'
 import { AuthLanding } from './onboarding/AuthLanding'
-import { AlphaBanner } from './ui/AlphaBanner'
+import { BetaBanner } from './ui/BetaBanner'
 import { AvatarDisc } from './ui/AvatarDisc'
 import { AuthedImage } from './ui/AuthedImage'
 import { BootScreen } from './onboarding/BootScreen'
@@ -351,7 +351,7 @@ function App() {
       </div>
     )}
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'sans-serif' }}>
-      <AlphaBanner />
+      <BetaBanner />
       <div style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative' }}>
       <Sidebar
         selectedRoomId={selectedRoom?.roomId}

@@ -1,0 +1,33 @@
+<!doctype html><html><head>
+<!--#head-->
+<title>Beta strip</title>
+<style>
+  /* The popup is placed by AnchoredPopup's JS in the app; here it is pinned
+     under the title by hand so the stylesheet's shape can be seen. */
+  .h-pop { position: static !important; margin: 6px auto 0; animation: none !important; }
+  .h-shell { display:flex; flex-direction:column; font-family: sans-serif; }
+  .h-row { height: 60px; display:flex; align-items:center; padding: 0 12px; font-size:13px;
+           color: var(--cpd-color-text-secondary); border-bottom: 1px solid rgba(128,128,128,.2); }
+</style>
+</head><body>
+<div class="h-label">Header, notice closed</div>
+<div class="h-shell">
+  <div class="tc-beta-strip" role="note"><button type="button" class="tc-beta-title">TECHNETIUM BETA</button></div>
+  <div class="h-row">rooms | chat | members</div>
+</div>
+<div class="h-label">Notice open (hover or tap)</div>
+<div class="h-shell">
+  <div class="tc-beta-strip" role="note"><button type="button" class="tc-beta-title" aria-expanded="true">TECHNETIUM BETA</button></div>
+  <div class="tc-anchored-pop tc-beta-notice h-pop" data-placed>
+    Things <strong>will</strong> be broken. Submit bug reports in <strong>#botsbotsbots</strong>
+    &mdash; and <em>&ldquo;I&rsquo;m not sure what I should be clicking on&rdquo;</em> is not only
+    a valid issue, it is the single most valuable piece of feedback you can send.
+  </div>
+</div>
+<div class="h-label">Booru panel, signed in (no strip) / sign-in failed (strip carries the button)</div>
+<div class="tc-booru-frame" style="height:auto"><div class="h-row">booru iframe</div></div>
+<div class="tc-booru-frame" style="height:auto">
+  <div class="tc-booru-frame-hint"><button type="button" class="tc-booru-frame-signin">Sign in to see the pictures</button></div>
+  <div class="h-row">booru iframe</div>
+</div>
+</body></html>

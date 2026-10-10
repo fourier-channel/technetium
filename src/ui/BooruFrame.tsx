@@ -16,8 +16,10 @@ import { ensureBooruSession } from '../client/booruSession'
 // focus. The full answer is the queued login merge (one identity, no second
 // sign-in); this is the honest bridge until then.
 //
-// The next action stays obvious (onboarding law): one line above the frame
-// says where the rooms are. The frame is the content, not a preview of it.
+// Nothing is printed above the frame (operator, 2026-10-10): the room list
+// beside it is the next action, and a line restating that cost every screen a
+// row. The strip appears only to carry the sign-in offer. The frame is the
+// content, not a preview of it.
 const BOORU_URL = (import.meta.env.VITE_BOORU_URL as string | undefined) ?? 'https://booru.41chan.net/'
 const BOORU_LOGIN_URL = (import.meta.env.VITE_BOORU_LOGIN_URL as string | undefined) ?? 'https://booru.41chan.net/fourier/login'
 
@@ -60,14 +62,13 @@ export function BooruFrame() {
 
   return (
     <div className="tc-booru-frame">
-      <div className="tc-booru-frame-hint">
-        <span>chanbooru, while you look around -- pick a room on the left when you are ready.</span>
-        {session === 'failed' && (
+      {session === 'failed' && (
+        <div className="tc-booru-frame-hint">
           <button type="button" className="tc-booru-frame-signin" onClick={signIn} data-testid="booru-signin">
             Sign in to see the pictures
           </button>
-        )}
-      </div>
+        </div>
+      )}
       {session !== 'pending' && (
         <iframe
           key={generation}
