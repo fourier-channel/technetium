@@ -147,7 +147,7 @@ export function UserPicker({
       <div
         onClick={(e) => e.stopPropagation()}
         className="tc-modal"
-        style={{ maxHeight: '70vh', display: 'flex', flexDirection: 'column' }}
+        style={{ maxHeight: '70dvh', display: 'flex', flexDirection: 'column' }}
       >
         <div className="tc-modal-title" style={{ marginBottom: 10 }}>{title}</div>
 

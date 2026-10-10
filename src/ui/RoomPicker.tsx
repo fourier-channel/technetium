@@ -74,7 +74,7 @@ export function RoomPicker({
         style={{
           width: 380,
           maxWidth: 'calc(100vw - 32px)',
-          maxHeight: '70vh',
+          maxHeight: '70dvh',
           display: 'flex',
           flexDirection: 'column',
           padding: 16,

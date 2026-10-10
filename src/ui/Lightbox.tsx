@@ -309,7 +309,7 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
             onClick={(e) => e.stopPropagation()}
             style={{
               maxWidth: '92vw',
-              maxHeight: '92vh',
+              maxHeight: '92dvh',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',

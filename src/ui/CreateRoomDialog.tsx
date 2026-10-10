@@ -138,7 +138,7 @@ export function CreateRoomDialog({
       <div
         onClick={(e) => e.stopPropagation()}
         className="tc-modal"
-        style={{ maxHeight: '80vh', overflowY: 'auto' }}
+        style={{ maxHeight: '80dvh', overflowY: 'auto' }}
       >
         <div className="tc-modal-title">
           Create a {isSpace ? 'space' : 'room'}

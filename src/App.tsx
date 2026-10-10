@@ -350,7 +350,7 @@ function App() {
         `}</style>
       </div>
     )}
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'sans-serif' }}>
+    <div className="tc-screen" style={{ display: 'flex', flexDirection: 'column', fontFamily: 'sans-serif' }}>
       <BetaBanner />
       <div style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative' }}>
       <Sidebar

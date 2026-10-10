@@ -15,7 +15,7 @@ const BARS = [0, 1, 2, 3, 4, 5, 6]
 
 export function BootScreen({ label }: { label: string }) {
   return (
-    <div style={shell}>
+    <div className="tc-screen" style={shell}>
       <style>{`
         @keyframes bootBar { 0%,100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
         @media (prefers-reduced-motion: reduce) { .boot-bar { animation: none !important; transform: scaleY(0.7); } }
@@ -52,7 +52,6 @@ export function BootScreen({ label }: { label: string }) {
 }
 
 const shell: CSSProperties = {
-  height: '100vh',
   width: '100%',
   display: 'grid',
   placeItems: 'center',

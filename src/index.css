@@ -62,6 +62,15 @@
   }
 }
 
+/* THE VISIBLE SCREEN, not the largest one. On a phone 100vh is the height with
+   the browser's toolbar HIDDEN, so a shell that tall runs under the toolbar
+   while it shows -- the composer sat just below the fold (operator,
+   2026-10-10). 100dvh tracks what is visible; 100vh stays first as the
+   fallback for a browser without it. checks/viewportHeight.check.ts refuses a
+   bare vh height anywhere in src/. */
+.tc-screen { height: 100vh; height: 100dvh; }
+.tc-screen-min { min-height: 100vh; min-height: 100dvh; }
+
 #root {
   width: 100%;
   max-width: none;

@@ -28,7 +28,7 @@ import { SiteReset } from '../ui/SiteReset'
 
 export function AuthLanding({ onProceed }: { onProceed: (intent?: 'create') => void }) {
   return (
-    <div style={shell}>
+    <div className="tc-screen-min" style={shell}>
       <style>{`
         @keyframes tcRise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
         @media (prefers-reduced-motion: reduce) { .tc-rise { animation: none !important; } }
@@ -130,9 +130,8 @@ function Button({
 
 const shell: CSSProperties = {
   position: 'relative',
-  // At least the screen, and taller when her intro and the doors need it: a
-  // short phone scrolls rather than clipping the doors.
-  minHeight: '100vh',
+  // At least the visible screen (.tc-screen-min), and taller when her intro
+  // and the doors need it: a short phone scrolls rather than clipping the doors.
   boxSizing: 'border-box',
   paddingBlock: 24,
   width: '100%',
