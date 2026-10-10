@@ -272,7 +272,7 @@ export function Timeline({ room, onOpenThread, onOpenRoom, threadListOpen, onTog
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <header className="tc-panel-head tc-titlebar">
         {headLead}
-        <RoomHeaderInfo client={client} room={room} />
+        <RoomHeaderInfo key={room.roomId} client={client} room={room} />
         <div className="tc-titlebar-tools">
           {!atStart && (
             <button

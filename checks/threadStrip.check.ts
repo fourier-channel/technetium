@@ -70,7 +70,8 @@ check('an expanded tab is deeper than a collapsed one', PULLTAB_OPEN_H > PULLTAB
 
 // TOUCH (operator, 2026-10-10): the same numbers in the coarse-pointer block,
 // and the press areas they make never reach a neighbour's.
-const touch = /@media \(pointer: coarse\) \{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
+// The coarse-pointer block that holds the tabs: the stylesheet has others.
+const touch = [...css.matchAll(/@media \(pointer: coarse\) \{\n([\s\S]*?)\n\}/g)].map((m) => m[1]).find((b) => b.includes('.tc-pulltab')) ?? ''
 const inTouch = (sel: string) => new RegExp(`${sel.replace(/[.[\]()]/g, (c) => '\\' + c)}\\s*\\{([^}]*)\\}`).exec(touch)?.[1] ?? ''
 check(`on touch, sideways tabs are ${PULLTAB_TOUCH_CLOSED_H}px deep closed and ${PULLTAB_TOUCH_OPEN_H}px open`,
   px(inTouch(".tc-pulltab[data-pull='left'], .tc-pulltab[data-pull='right']"), 'width') === PULLTAB_TOUCH_CLOSED_H &&

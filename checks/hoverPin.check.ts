@@ -1,10 +1,10 @@
-// The beta strip's notice: hover previews (mouse only), a click pins, the next
+// A hover-pin popup (the beta notice, a room's topic): hover previews (mouse only), a click pins, the next
 // click closes, a press outside or Escape closes whatever opened it.
 //
-// WHAT THIS CANNOT SEE: that BetaBanner wires these events to these handlers,
+// WHAT THIS CANNOT SEE: that useHoverPin wires these events to these handlers,
 // or how the popup looks. Those are tools/visual/betabanner.html (the shape)
 // and a real browser (the behaviour).
-import { nextNotice, type NoticeEvent, type NoticeState } from '../src/ui/betaNotice.ts'
+import { nextHoverPin, type HoverPinEvent, type HoverPinState } from '../src/ui/hoverPin.ts'
 
 let failures = 0
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -12,11 +12,11 @@ function check(name: string, cond: boolean, extra?: unknown) {
   else { failures++; console.log('  FAIL ' + name, extra ?? '') }
 }
 
-const run = (events: NoticeEvent[], from: NoticeState = 'closed') => events.reduce(nextNotice, from)
-const enter = (pointerType: string): NoticeEvent => ({ kind: 'enter', pointerType })
-const leave = (pointerType: string): NoticeEvent => ({ kind: 'leave', pointerType })
-const click: NoticeEvent = { kind: 'click' }
-const dismiss: NoticeEvent = { kind: 'dismiss' }
+const run = (events: HoverPinEvent[], from: HoverPinState = 'closed') => events.reduce(nextHoverPin, from)
+const enter = (pointerType: string): HoverPinEvent => ({ kind: 'enter', pointerType })
+const leave = (pointerType: string): HoverPinEvent => ({ kind: 'leave', pointerType })
+const click: HoverPinEvent = { kind: 'click' }
+const dismiss: HoverPinEvent = { kind: 'dismiss' }
 
 check('a mouse hovering previews the notice', run([enter('mouse')]) === 'hover')
 check('and leaving closes the preview', run([enter('mouse'), leave('mouse')]) === 'closed')

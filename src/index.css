@@ -1010,7 +1010,45 @@ code {
   font-size: 12px;
   font-weight: 400;
   color: var(--cpd-color-text-secondary, #a8b0bd);
+  /* A button (hover or tap opens the whole topic), drawn as the text it was. */
+  background: none; border: 0; padding: 0; margin: 0;
+  font-family: inherit; text-align: left; cursor: pointer;
 }
+.tc-room-header-topic:hover { color: var(--cpd-color-text-primary); }
+/* The whole topic, as written: its line breaks are its rules' lines. */
+.tc-topic-full {
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  max-width: min(480px, calc(100vw - 32px));
+  font-size: 13px; line-height: 1.5;
+}
+/* The pencil: on the topic's line, for whoever may change it. */
+.tc-room-header-edit {
+  flex-shrink: 0; align-self: center;
+  display: inline-grid; place-items: center;
+  width: 22px; height: 22px; padding: 0; margin: 0;
+  border: 0; border-radius: 6px; background: none;
+  color: var(--cpd-color-text-secondary, #a8b0bd); cursor: pointer;
+}
+.tc-room-header-edit:hover, .tc-room-header-edit[aria-expanded='true'] { color: var(--mod-accent); background: var(--cpd-color-bg-subtle-secondary, rgba(128, 128, 128, 0.16)); }
+.tc-room-header-edit:focus-visible { outline: 1px solid var(--mod-accent); outline-offset: 1px; }
+/* Touch: a 32px press area around the 22px pencil, as a ::before -- the
+   pencil itself must not grow, or it would make the info row taller than the
+   24px titlebar and lift the name off centre in rooms where it shows. */
+.tc-room-header-edit { position: relative; }
+@media (pointer: coarse) { .tc-room-header-edit::before { content: ''; position: absolute; inset: -5px; } }
+.tc-topic-editor { width: min(440px, calc(100vw - 32px)); }
+.tc-topic-editor-body { display: flex; flex-direction: column; gap: 8px; }
+.tc-topic-editor-label { font-size: 12px; color: var(--cpd-color-text-secondary); }
+.tc-topic-editor-text {
+  box-sizing: border-box; width: 100%; resize: vertical; min-height: 6em;
+  font: 13px/1.5 var(--tc-ui-font, sans-serif);
+  color: var(--cpd-color-text-primary); background: var(--cpd-color-bg-canvas-default, #16181d);
+  border: 1px solid var(--mod-line, rgba(128, 128, 128, 0.35)); border-radius: 8px; padding: 8px 10px;
+}
+.tc-topic-editor-text:focus { outline: 1px solid var(--mod-accent); outline-offset: 0; }
+.tc-topic-editor-error { font-size: 12px; color: var(--mod-alarm-ink, #d6483b); }
+.tc-topic-editor-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.tc-pill.tc-topic-editor-save:not(:disabled) { color: var(--mod-accent); border-color: var(--mod-accent); }
 
 /* Presence dot (W4.5). Rendered ONLY when the server actually told us a state
    -- unknown draws nothing at all, because a grey "offline" dot on every row
