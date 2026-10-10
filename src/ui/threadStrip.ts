@@ -52,6 +52,21 @@ export const PULLTAB_CLOSED_H = 16
 export const PULLTAB_OPEN_H = 20
 
 /**
+ * On a TOUCH screen (pointer: coarse) the same tabs were too thin to hit with
+ * a thumb, flush against the screen's edge (operator, 2026-10-10: "my fat
+ * American thumbs cannot hit them reliably"). There the sideways tabs are
+ * drawn deeper, and every tab answers a press over PULLTAB_TOUCH_HIT px,
+ * reaching INTO the screen the way the tab pulls -- away from the edge, where
+ * a thumb lands -- and PULLTAB_TOUCH_HIT_SPILL px past each end along its
+ * edge. The length and the spacing do not change: two tabs share an edge on
+ * a phone, and the check holds their hit areas apart. A mouse sees none of it.
+ */
+export const PULLTAB_TOUCH_CLOSED_H = 24
+export const PULLTAB_TOUCH_OPEN_H = 28
+export const PULLTAB_TOUCH_HIT = 44
+export const PULLTAB_TOUCH_HIT_SPILL = 6
+
+/**
  * Air between the card and the strip's bottom edge. The "Hide threads" tab
  * (an EXPANDED tab, PULLTAB_OPEN_H) rides INSIDE that edge, so this is the
  * tab's lane plus clearance -- less than that and the tab sits on the focused

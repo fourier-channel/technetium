@@ -16,6 +16,7 @@
 import { readFileSync } from 'node:fs'
 import {
   THREAD_CARD_H, THREAD_HEAD_H, THREAD_TRACK_PAD_TOP, THREAD_TRACK_PAD_BOTTOM, PULLTAB_W, PULLTAB_CLOSED_H, PULLTAB_OPEN_H,
+  PULLTAB_TOUCH_CLOSED_H, PULLTAB_TOUCH_OPEN_H, PULLTAB_TOUCH_HIT, PULLTAB_TOUCH_HIT_SPILL, SIDE_TAB_SPREAD,
   DM_TAB_BESIDE_TITLE, TITLE_HALF_W, PULLTAB_HALF_W, SORT_PILL_W, HEAD_PAD_X, threadStripHeight, threadStripCss,
 } from '../src/ui/threadStrip.ts'
 
@@ -66,6 +67,25 @@ check(`collapsed tabs are ${PULLTAB_CLOSED_H}px deep, expanded ${PULLTAB_OPEN_H}
   px(tabRule(".tc-pulltab[data-open='true'][data-pull='down'], .tc-pulltab[data-open='true'][data-pull='up']"), 'height') === PULLTAB_OPEN_H &&
   px(tabRule(".tc-pulltab[data-open='true'][data-pull='left'], .tc-pulltab[data-open='true'][data-pull='right']"), 'width') === PULLTAB_OPEN_H)
 check('an expanded tab is deeper than a collapsed one', PULLTAB_OPEN_H > PULLTAB_CLOSED_H)
+
+// TOUCH (operator, 2026-10-10): the same numbers in the coarse-pointer block,
+// and the press areas they make never reach a neighbour's.
+const touch = /@media \(pointer: coarse\) \{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
+const inTouch = (sel: string) => new RegExp(`${sel.replace(/[.[\]()]/g, (c) => '\\' + c)}\\s*\\{([^}]*)\\}`).exec(touch)?.[1] ?? ''
+check(`on touch, sideways tabs are ${PULLTAB_TOUCH_CLOSED_H}px deep closed and ${PULLTAB_TOUCH_OPEN_H}px open`,
+  px(inTouch(".tc-pulltab[data-pull='left'], .tc-pulltab[data-pull='right']"), 'width') === PULLTAB_TOUCH_CLOSED_H &&
+  px(inTouch(".tc-pulltab[data-open='true'][data-pull='left'], .tc-pulltab[data-open='true'][data-pull='right']"), 'width') === PULLTAB_TOUCH_OPEN_H,
+  touch.slice(0, 200))
+const hits = ['right', 'left', 'down', 'up'].map((d) => inTouch(`.tc-pulltab[data-pull='${d}']::before`))
+check(`on touch, every tab presses over ${PULLTAB_TOUCH_HIT}px, ${PULLTAB_TOUCH_HIT_SPILL}px past each end`,
+  hits.every((h, i) => px(h, i < 2 ? 'width' : 'height') === PULLTAB_TOUCH_HIT &&
+    new RegExp(`(${i < 2 ? 'top|bottom' : 'left|right'}): -${PULLTAB_TOUCH_HIT_SPILL}px`).test(h)), hits)
+check('and the press area is deeper than the tab it belongs to', PULLTAB_TOUCH_HIT > PULLTAB_TOUCH_OPEN_H)
+check('two tabs sharing a phone edge never press over each other',
+  PULLTAB_W + 2 * PULLTAB_TOUCH_HIT_SPILL < SIDE_TAB_SPREAD, [PULLTAB_W + 2 * PULLTAB_TOUCH_HIT_SPILL, SIDE_TAB_SPREAD])
+const acrossApart = [...app.matchAll(/'calc\(50% ([+-]) (\d+)px\)'/g)].map((m) => (m[1] === '+' ? 1 : -1) * Number(m[2]))
+check('nor do the two tabs across the top of the chat (Direct message, Threads)',
+  acrossApart.length === 2 && Math.abs(acrossApart[0] - acrossApart[1]) > PULLTAB_W + 2 * PULLTAB_TOUCH_HIT_SPILL, acrossApart)
 check('collapsed is formant green, expanded formant orange, border and chevron alike -- by state, not direction',
   /\.tc-pulltab \{\s*--tc-pulltab-ink: var\(--mod-accent\);/.test(css) &&
   /\.tc-pulltab\[data-open='true'\] \{ --tc-pulltab-ink: var\(--mod-active-fg\); \}/.test(css) &&

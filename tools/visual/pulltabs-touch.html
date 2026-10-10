@@ -1,0 +1,23 @@
+<!doctype html><html><head>
+<!--#head-->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pull tabs on a phone</title>
+<style>
+  /* A phone's one slot, with the side tabs where App puts them
+     (threadStrip.ts ROOMS_TAB_TOP / MEMBERS_TAB_TOP). */
+  .h-phone { position: relative; width: 390px; height: 700px; overflow: hidden;
+             background: var(--cpd-color-bg-canvas-default); }
+  .h-chat { position: absolute; inset: 0; padding: 12px 20px; font-size: 13px;
+            color: var(--cpd-color-text-secondary); }
+</style>
+</head><body>
+<div class="h-phone">
+  <div class="h-chat" id="chat">chat column</div>
+  <button type="button" class="tc-pulltab" data-pull="right" data-open="false" data-target="sidebar" id="rooms"
+    style="left: 0; top: calc(50% - 36px)"><span aria-hidden="true" class="tc-pulltab-chevron">v</span></button>
+  <button type="button" class="tc-pulltab" data-pull="left" data-open="false" data-target="members" id="members"
+    style="right: 0; top: calc(50% + 36px)"><span aria-hidden="true" class="tc-pulltab-chevron">v</span></button>
+  <button type="button" class="tc-pulltab" data-pull="left" data-open="false" data-target="thread" id="thread"
+    style="right: 0; top: calc(50% + 108px)"><span aria-hidden="true" class="tc-pulltab-chevron">v</span></button>
+</div>
+</body></html>

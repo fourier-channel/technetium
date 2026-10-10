@@ -3560,6 +3560,19 @@ code {
 .tc-pulltab[data-open='true'][data-pull='down'], .tc-pulltab[data-open='true'][data-pull='up'] { height: 20px; }
 .tc-pulltab[data-open='true'][data-pull='left'], .tc-pulltab[data-open='true'][data-pull='right'] { width: 20px; }
 .tc-pulltab:hover { box-shadow: 0 0 10px 1px color-mix(in srgb, var(--tc-pulltab-ink) 55%, transparent); }
+/* TOUCH (threadStrip.ts PULLTAB_TOUCH_*; operator, 2026-10-10): the sideways
+   tabs drawn deeper, and every tab's press area 44px deep, reaching into the
+   screen the way it pulls and 6px past each end -- a ::before, so nothing
+   around the tab moves and its look is its own. A mouse keeps the L15 sizes. */
+@media (pointer: coarse) {
+  .tc-pulltab[data-pull='left'], .tc-pulltab[data-pull='right'] { width: 24px; }
+  .tc-pulltab[data-open='true'][data-pull='left'], .tc-pulltab[data-open='true'][data-pull='right'] { width: 28px; }
+  .tc-pulltab::before { content: ''; position: absolute; }
+  .tc-pulltab[data-pull='right']::before { left: 0; top: -6px; bottom: -6px; width: 44px; }
+  .tc-pulltab[data-pull='left']::before { right: 0; top: -6px; bottom: -6px; width: 44px; }
+  .tc-pulltab[data-pull='down']::before { top: 0; left: -6px; right: -6px; height: 44px; }
+  .tc-pulltab[data-pull='up']::before { bottom: 0; left: -6px; right: -6px; height: 44px; }
+}
 /* A conversation is waiting behind the Members tab (L30): the waiting face's
    own ping glow, static -- an infinite pulse here would cost a core at idle. */
 .tc-pulltab[data-waiting='true'],
