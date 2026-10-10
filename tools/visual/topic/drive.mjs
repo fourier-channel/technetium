@@ -26,6 +26,19 @@ const clickSel = async (sel) => { const c = await center(sel); if (!c) return fa
 const text = (sel) => ev(`document.querySelector('${sel}')?.innerText ?? null`)
 
 await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'dark' }] }); await send('Page.navigate', { url }); await sleep(1200)
+
+// A tab that hangs over the title bar (Threads, Direct message) must take a
+// click from a mouse that reached it across the topic line.
+{
+  await ev('window.topic = "Rules for this room, which run long enough to reach under the tabs that hang from the top border"; window.emit()'); await sleep(200)
+  const t = await center('#threadstab'); const topic = await ev(`(() => { const r = document.querySelector('.tc-room-header-topic').getBoundingClientRect(); return [r.left, r.right, r.top + r.height / 2] })()`)
+  for (let x = topic[0] + 4; x < t[0]; x += 12) { await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y: topic[2] }); await sleep(16) }
+  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: t[0], y: t[1] }); await sleep(40)
+  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: t[0], y: t[1], button: 'left', clickCount: 1 }); await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: t[0], y: t[1], button: 'left', clickCount: 1 }); await sleep(200)
+  expect('a tab over the title bar takes a click from a mouse that crossed the topic', (await ev('window.tabClicks || 0')) === 1, await ev('window.tabClicks || 0'))
+  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 680, y: 580 }); await sleep(400)
+  await ev('window.topic = "Rules:\\n1. Be kind\\n2. No spam"; window.emit()'); await sleep(200)
+}
 expect('the header shows the topic on one line', (await text('.tc-room-header-topic')) === 'Rules: 1. Be kind 2. No spam', await text('.tc-room-header-topic'))
 expect('and a pencil for someone who may change it', (await ev(`document.querySelector('.tc-room-header-edit')?.getAttribute('aria-label')`)) === 'Edit the room topic')
 
@@ -74,7 +87,7 @@ expect('a room with no topic offers to add one, and shows no empty topic', (awai
 await ev('window.topic = "Rules"; window.emit()'); await sleep(200)
 await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 })
 await send('Page.reload'); await sleep(1200)
-const box = await ev(`(() => { const p = document.querySelector('.tc-room-header-edit').getBoundingClientRect(); const i = document.querySelector('.tc-room-header-info').getBoundingClientRect(); const h = document.querySelector('.tc-titlebar').getBoundingClientRect(); return { coarse: matchMedia('(pointer: coarse)').matches, pencil: [p.width, p.height], info: i.height, bar: h.height, hit: document.elementFromPoint(p.right + 3, p.top + p.height / 2)?.className } })()`)
+const box = await ev(`(() => { const p = document.querySelector('.tc-room-header-edit').getBoundingClientRect(); const i = document.querySelector('.tc-room-header-info').getBoundingClientRect(); const h = document.querySelector('.tc-titlebar').getBoundingClientRect(); return { coarse: matchMedia('(pointer: coarse)').matches, pencil: [p.width, p.height], info: i.height, bar: h.height, hit: document.elementFromPoint(p.left - 3, p.top + p.height / 2)?.className } })()`)
 expect('on touch the pencil stays 22px and the row fits the bar', box.coarse && box.pencil[0] === 22 && box.pencil[1] === 22 && box.info <= box.bar, box)
 expect('while a press 3px beside it still lands on it', box.hit === 'tc-room-header-edit', box.hit)
 chrome.kill(); rmSync(profile, { recursive: true, force: true }); process.exit(fails ? 1 : 0)
