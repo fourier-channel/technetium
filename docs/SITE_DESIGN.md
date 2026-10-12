@@ -1,3 +1,4 @@
+<!-- phase:S-649543 -->
 # How this site is different, and why
 
 A guide to 41chan for people who will run it, and eventually for people who use
@@ -339,7 +340,7 @@ model, a human editor, or is metadata -- and a tag can be several at once. The
 UI does not colour tags by which model produced them; provenance is recorded
 because it is true, not because it should be decorated.
 
-For the operational detail of all seven gates, see `docs/CONTENT_GATING.md`
+For the operational detail of all twelve gates, see `docs/CONTENT_GATING.md`
 in chanbooru, published beside this page.
 
 ---
