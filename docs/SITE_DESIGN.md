@@ -324,16 +324,18 @@ returns and counts them and declines to draw them, which is why a stock Danbooru
 page can report more results than it shows. Here they are removed from the query.
 
 **Private tags are never published to the page.** Creator-supplied tags marked
-private do not reach the DOM. The deliberate consequence: a viewer's blacklist
+private do not reach the DOM. The deliberate consequence: a viewer's blocklist
 cannot match a tag that viewer is not allowed to see -- you cannot filter on what
 you cannot be shown, and the alternative is disclosing it. A creator can open
 that door per person with a tag grant, which is a whitelist on their own tag.
 
-**Some words do not exist here.** A banished-tag list removes terms from the
-vocabulary for everyone, admins included unless they switch a reveal on; an
-enforced blacklist hides the same material from every viewer's view without
-touching any account's own list. Both are distinct from the content gating
-that decides who may see a post at all.
+**Some words do not exist here.** A banished tag is removed from the
+vocabulary for everyone, admins included, and every post carrying it is
+withheld from everyone but the pipeline; moderating them happens in sampling's
+troll jail panel, never on the booru. A viewer's own **blocklist** is a
+different thing: a filter they keep, lock and edit, applied in their browser
+to what they are already allowed to see. Neither is the content gating that
+decides who may see a post at all.
 
 **Tags carry provenance.** Every tag records whether it came from a creator, a
 model, a human editor, or is metadata -- and a tag can be several at once. The
