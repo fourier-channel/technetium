@@ -11,6 +11,18 @@
 #   ./deploy.sh --rollback  swap 'current' and 'previous'. Run twice, it undoes
 #                           itself. No new version: each release keeps its own.
 #   ./deploy.sh --status    print where each link points and the release history.
+#   ./deploy.sh --announce [notes-file]
+#                           have Fourier-chan announce the LIVE version again (a
+#                           promote does it by itself); a notes file, one note per
+#                           line, replaces the commits' Release-note trailers.
+#
+# EVERY PROMOTE IS ANNOUNCED (operator, 2026-10-13): Fourier-chan says the
+# version, the build and what is new in #botsbotsbots, through her own hub
+# socket as her own user (fourier-guide), never through a token. "What is new"
+# is the Release-note trailers of the commits since the last live build
+# (tools/release/announcement.ts); a commit that changes what users see
+# carries one. A failed announcement leaves the promote in place and says how
+# to send it again.
 #
 # VERSIONS ARE CALVER, ASSIGNED AT PROMOTE (operator, 2026-10-10): the UTC date
 # of the promote, YYYY.MM.DD, and YYYY.MM.DD.2, .3 for a second and third
@@ -108,6 +120,42 @@ asset_of() { grep -o 'assets/index-[A-Za-z0-9_-]*\.js' | head -n 1; }
 # The version a release.json carries, or nothing.
 version_of() { grep -o '"version":"[^"]*"' | cut -d'"' -f4 || true; }
 
+# Fourier-chan says the release in #botsbotsbots: announce <version> <commit>
+# <since-commit|-> [notes-file]. The text is built here, copied to the box,
+# and handed to her socket by a script that reads it from a file -- nothing
+# in it is ever part of a command line.
+announce() {
+  local msg remote_msg
+  msg="$(mktemp)"
+  node tools/release/announce.ts "$@" > "$msg" || { rm -f "$msg"; return 1; }
+  echo ">> Fourier-chan, in #botsbotsbots:"
+  sed 's/^/   | /' "$msg"
+  remote_msg="/tmp/tc-announce-$1.txt"
+  scp -q "$msg" "${REMOTE}:${remote_msg}" || { rm -f "$msg"; return 1; }
+  rm -f "$msg"
+  ssh "$REMOTE" bash -s -- "$remote_msg" <<'ANNOUNCE_EOF'
+set -euo pipefail
+trap 'rm -f "$1"' EXIT
+chmod 644 "$1"
+runuser -u fourier-guide -- python3 - "$1" <<'PY'
+import sys
+sys.path.insert(0, '/opt/fourier/hub')
+from client import HubClient
+ROOM = '!OYabPCKaQKwJzEJxUC:41chan.net'  # botsbotsbots
+body = open(sys.argv[1], encoding='utf-8').read().rstrip('\n')
+hub = HubClient('/run/fourier-hub/guide.sock')
+try:
+    sent = hub.say(ROOM, body)
+    print('   sent:', sent.get('event_id', sent) if isinstance(sent, dict) else sent)
+finally:
+    hub.close()
+PY
+ANNOUNCE_EOF
+}
+
+# The commit a release was built from, or - when it has none to diff from.
+commit_of() { case "$1" in -|*-dirty) echo - ;; *) echo "${1##*-}" ;; esac; }
+
 # The next free CalVer for today (UTC), from the tags origin holds.
 next_version() {
   git fetch -q --tags origin
@@ -142,6 +190,7 @@ case "${1:-}" in
     [ "$P" != "$(remote target "$REMOTE_BASE" current)" ] || die "the preview ($P) already is production. Run ./deploy.sh to publish a new one."
     case "$P" in *-dirty) die "preview $P was built from an uncommitted tree, so it has no commit to version. Commit, run ./deploy.sh, then --promote." ;; esac
     COMMIT="${P##*-}"
+    SINCE="$(commit_of "$(remote target "$REMOTE_BASE" current)")"
     git rev-parse -q --verify "${COMMIT}^{commit}" > /dev/null || die "commit $COMMIT (from release $P) is not in this checkout. git fetch, then --promote."
     VERSION="$(remote release-json "$REMOTE_BASE" "$P" | version_of)"
     NEW_TAG=0
@@ -163,6 +212,15 @@ case "${1:-}" in
       git push -q origin "v$VERSION" || die "production is v$VERSION but the tag did not push: git push origin v$VERSION"
       echo ">> tagged v$VERSION at $COMMIT and pushed"
     fi
+    announce "$VERSION" "$COMMIT" "$SINCE" || die "v$VERSION is live but Fourier-chan's announcement did not go out (see above). Send it again: ./deploy.sh --announce"
+    ;;
+  --announce)
+    C="$(remote target "$REMOTE_BASE" current)"
+    [ "$C" != "-" ] || die "nothing is live to announce."
+    VERSION="$(remote release-json "$REMOTE_BASE" "$C" | version_of)"
+    [ -n "$VERSION" ] || die "the live release $C has no version (it predates versioning); promote a new build instead."
+    if [ -n "${2:-}" ]; then [ -f "$2" ] || die "no notes file $2"; fi
+    announce "$VERSION" "$(commit_of "$C")" "$(commit_of "$(remote target "$REMOTE_BASE" previous)")" ${2:+"$2"} || die "the announcement did not go out (see above)."
     ;;
   --rollback)
     remote rollback "$REMOTE_BASE"
@@ -175,7 +233,7 @@ case "${1:-}" in
     remote status "$REMOTE_BASE"
     ;;
   *)
-    echo "usage: ./deploy.sh [--promote | --rollback | --status]" >&2
+    echo "usage: ./deploy.sh [--promote | --rollback | --status | --announce [notes-file]]" >&2
     exit 2
     ;;
 esac
