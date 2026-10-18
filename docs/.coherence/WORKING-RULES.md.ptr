@@ -1,7 +1,7 @@
 {
   "build_stamp": null,
-  "hydrated_at": "2026-09-24T04:13:44Z",
-  "hydrated_hash": "sha256c:fd2e4dc8c7ac73054ba17ef605478163dc09f6f2bb9b73678372e8d18e981713",
+  "hydrated_at": "2026-10-18T23:46:32Z",
+  "hydrated_hash": "sha256c:866ebac3e3780ffc4943b746f90683a11daa9c4654428c19e503696d198d056c",
   "pinned": null,
   "source": "coherence://brain/WORKING-RULES.md"
 }
