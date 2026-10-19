@@ -25,7 +25,7 @@ which point a collector grabs them to schedule for deletion."
 | P5 | A collector schedules expired old files for deletion | HANDED to chanbooru; schedules, never deletes |
 | P6 | "Keep it" is the default; the next time, the dialog starts on the last choice; ask to keep only for a compelling reason | DONE technetium `1ec09d6` (account data `net.41chan.replace_prefs`) |
 | P7 | Originals kept 24 h regardless; "don't keep" can be undone inside that window; no "refresh" loophole | technetium `1ec09d6` (card offers only what the booru allows); the window, anchored to the replacement and enforced server-side, HANDED to chanbooru |
-| P8 | A repost of the same picture is the same picture: replaced everywhere | fourier-tunnel `6bbf571` (canon repoint of every copy + `index/replaced/<old md5>.json`), technetium `1ec09d6` (versioned URLs, live refetch), fourier-auth `9fd3fb3` (forget door + Worker `v`) -- **the forget door is a new route: WAITING on the operator** |
+| P8 | A repost of the same picture is the same picture: replaced everywhere | fourier-tunnel `6bbf571` (canon repoint of every copy + `index/replaced/<old md5>.json`), technetium `1ec09d6` (versioned URLs, live refetch), fourier-auth `9fd3fb3` (forget door + Worker `v`; route approved by the operator 2026-10-19: "a fairly handy tool for forcing a refresh on any given link"), wired in fourier-tunnel `2ea1099`; fourier-auth deploy waits on its owner |
 
 ## Readings chosen
 
@@ -66,8 +66,7 @@ which point a collector grabs them to schedule for deletion."
 
 - chanbooru: the creator-replacement door, retention fields, creator-only
   later change, the collector.
-- Operator: the forget door is a NEW ROUTE (ruling 2026-09-24). Approve it,
-  or take the no-route alternative: a short gate TTL on canon index entries,
-  with Neru-chan waiting past it before writing file versions.
+- fourier-auth `9fd3fb3` and the Worker deploy (fourier-sampling-85's, after
+  the 2026-10-19 booru-visibility incident clears).
 - Then: `bridge.replace.enabled: true` on the box, `VITE_REPLACE_PICTURE=1`,
   and a first live replacement on one of the operator's own posts.
