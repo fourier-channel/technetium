@@ -70,7 +70,9 @@ const bur = (status: Bur['status'], extra: Partial<Bur> = {}): Bur => ({ id: 1, 
   check('admin, pending: approve and reject', a.approve && a.reject)
   const f = burActions(bur('failed'), BOORU_ADMIN)
   check('admin, failed: approve again, no reject', f.approve && !f.reject)
-  for (const s of ['processing', 'approved', 'rejected'] as const) {
+  const rej = burActions(bur('rejected'), BOORU_ADMIN)
+  check('admin, rejected: approvable, as upstream (operator ruling 2026-10-19), no reject', rej.approve && !rej.reject)
+  for (const s of ['processing', 'approved'] as const) {
     const x = burActions(bur(s), BOORU_ADMIN)
     check(`admin, ${s}: nothing`, !x.approve && !x.reject)
   }

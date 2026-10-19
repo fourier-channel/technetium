@@ -87,14 +87,15 @@ export interface BurActions {
  * What the card offers this viewer. Pure.
  *
  * The booru's own per-viewer answer wins when present. Otherwise: Admin may
- * approve a pending or failed BUR (a failed one can be approved again) and
- * reject a pending one; nobody else is offered anything. An unknown level
- * (null: not signed in to the booru, or the profile read failed) offers
- * nothing -- unmeasured is not permitted.
+ * approve a pending, failed or REJECTED BUR -- a rejected request stays
+ * approvable, as upstream has it (operator ruling via chanbooru, 2026-10-19)
+ * -- and reject a pending one; nobody else is offered anything. An unknown
+ * level (null: not signed in to the booru, or the profile read failed)
+ * offers nothing -- unmeasured is not permitted.
  */
 export function burActions(bur: Bur, viewerLevel: number | null): BurActions {
   const admin = viewerLevel !== null && viewerLevel >= BOORU_ADMIN
-  const approvable = bur.status === 'pending' || bur.status === 'failed'
+  const approvable = bur.status === 'pending' || bur.status === 'failed' || bur.status === 'rejected'
   const rejectable = bur.status === 'pending'
   return {
     approve: approvable && (bur.canApprove ?? admin),
@@ -112,7 +113,7 @@ export function burStatusText(status: BurStatus): string {
     case 'approved':
       return 'approved and applied'
     case 'rejected':
-      return 'rejected; nothing changed'
+      return 'rejected; nothing changed, and an admin can still approve it'
     case 'failed':
       return 'failed part-way; an admin can approve it again'
   }
