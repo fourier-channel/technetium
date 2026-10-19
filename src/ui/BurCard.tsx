@@ -4,6 +4,8 @@ import {
   burActions,
   burPageUrl,
   burStatusText,
+  BurRefusal,
+  lineStateText,
   readBur,
   rejectBur,
   viewerBooruLevel,
@@ -13,9 +15,10 @@ import { useOnScreen } from './useOnScreen'
 
 // The card under Neru-chan's "Filed BUR #n" reply (client/booruBur.ts says
 // where the pointer comes from and who may decide). Read live, as the viewer:
-// what the BUR says, where it stands, and -- for an admin -- Approve and
-// Reject. Fixed-height rows like the poll's, so a status changing never
-// re-lays-out the message.
+// what the BUR says line by line and how far each line got, who asked (as the
+// booru's own text, never as an identity), where it stands, and -- where the
+// booru's per-viewer flags allow -- Approve and Reject. A refusal is shown in
+// the booru's own words, and a line it names is marked where it stands.
 //
 // LIVE, NOT REMEMBERED. Re-read while on screen: every 3 s while the booru is
 // running it, every 30 s while it waits (another admin may decide it on the
@@ -29,6 +32,7 @@ export function BurCard({ id }: { id: number }) {
   const [bur, setBur] = useState<Bur | null>(null)
   const [level, setLevel] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [lineErrors, setLineErrors] = useState<Map<number, string>>(new Map())
   const [busy, setBusy] = useState<'approve' | 'reject' | null>(null)
   const [tick, setTick] = useState(0)
 
@@ -36,8 +40,11 @@ export function BurCard({ id }: { id: number }) {
     if (!onScreen) return
     let alive = true
     let timer: ReturnType<typeof setTimeout> | undefined
-    void Promise.all([readBur(id), viewerBooruLevel()])
-      .then(([b, l]) => {
+    void readBur(id)
+      .then(async (b) => {
+        // The booru's per-viewer flags decide; the level is only asked for
+        // when a booru too old to send them answers without.
+        const l = b.canApprove === undefined || b.canReject === undefined ? await viewerBooruLevel() : null
         if (!alive) return
         setBur(b)
         setLevel(l)
@@ -58,9 +65,13 @@ export function BurCard({ id }: { id: number }) {
   const decide = (verb: 'approve' | 'reject') => {
     setBusy(verb)
     setError(null)
+    setLineErrors(new Map())
     void (verb === 'approve' ? approveBur(id) : rejectBur(id))
       .then((b) => setBur(b))
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : String(err))
+        if (err instanceof BurRefusal) setLineErrors(err.lineErrors)
+      })
       .finally(() => {
         setBusy(null)
         // Re-read either way: a refusal may still have changed the status,
@@ -89,11 +100,24 @@ export function BurCard({ id }: { id: number }) {
             : 'reading…'}
         </span>
       </div>
+      {bur?.reason && <div className="tc-bur-reason">{bur.reason}</div>}
       {bur && bur.lines.length > 0 && (
         <ol className="tc-bur-script">
-          {bur.lines.map((line, i) => (
-            <li key={i}>{line}</li>
-          ))}
+          {bur.lines.map((l) => {
+            const state = lineStateText(l)
+            const refused = lineErrors.get(l.line)
+            return (
+              <li key={l.line} value={l.line} data-state={l.state ?? undefined} data-refused={refused ? 'true' : undefined}>
+                <span className="tc-bur-line">{l.command}</span>
+                {state && <span className="tc-bur-line-state"> -- {state}</span>}
+                {refused && <div className="tc-bur-line-error">{refused}</div>}
+                {l.error && <div className="tc-bur-line-error">{l.error}{l.remedy ? ` ${l.remedy}` : ''}</div>}
+                {l.skippedReasons.map((r) => (
+                  <div key={r.message} className="tc-bur-line-note">{r.count} skipped: {r.message}</div>
+                ))}
+              </li>
+            )
+          })}
         </ol>
       )}
       {(actions.approve || actions.reject) && (

@@ -1184,6 +1184,13 @@ code {
   overflow: auto;
 }
 .tc-bur-script li { white-space: pre-wrap; overflow-wrap: anywhere; }
+.tc-bur-line-state { color: var(--cpd-color-text-secondary, #a8b0bd); font-family: var(--tc-ui-font, inherit); }
+.tc-bur-script li[data-state='failed'] .tc-bur-line-state,
+.tc-bur-script li[data-refused='true'] .tc-bur-line { color: var(--cpd-color-text-critical-primary, #d6483b); }
+.tc-bur-line-error { font-family: var(--tc-ui-font, inherit); color: var(--cpd-color-text-critical-primary, #d6483b); }
+.tc-bur-line-note { font-family: var(--tc-ui-font, inherit); color: var(--cpd-color-text-secondary, #a8b0bd); }
+.tc-bur-reason { font-size: 12px; color: var(--cpd-color-text-secondary, #a8b0bd); white-space: pre-wrap; overflow-wrap: anywhere; }
+.tc-bur[data-status='partial'] .tc-bur-status { color: var(--mod-active-fg, inherit); }
 .tc-bur-actions { display: flex; gap: 8px; }
 .tc-bur-btn {
   height: 28px;

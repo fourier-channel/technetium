@@ -168,8 +168,8 @@ export async function writeBooruTags(
     throw new Error(
       `the booru refused the tag edit on post ${postId} (HTTP ${res.status}). ` +
         'Fix: a 403 is usually the Cloudflare challenge or a missing booru session ' +
-        '(ensureBooruSession); a 422 after a retry is the booru rejecting the tags ' +
-        'themselves, or an account without permission to edit them.',
+        '(ensureBooruSession); a 422 is the booru rejecting the tags themselves, ' +
+        'or an account without permission to edit them.',
     )
   }
   return parsePostTags((await res.json()) as PostTagJson)

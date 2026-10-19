@@ -12,8 +12,10 @@
 //     preflight carries no cookie, and the booru's Caddy rule refuses it;
 //     the real verb rides as _method;
 //   - the CSRF token in the BODY (authenticity_token), fetched once per session;
-//   - ONE retry on 422 with a fresh token: a replaced session invalidates the
-//     cached one; a second 422 is the booru refusing the write itself.
+//   - ONE retry with a fresh token when the booru says the token is stale:
+//     403 with error ActionController::InvalidAuthenticityToken (chanbooru
+//     ca05bee43 -- never a 422; a 422 is the booru refusing the write itself,
+//     and is never retried). A replaced session invalidates the cached token.
 import { BOORU_ORIGIN } from './booruUrl'
 import { booruCsrfToken, resetBooruCsrf } from './booruCsrf'
 
@@ -52,12 +54,23 @@ export async function postAsViewer(
   const csrf = await booruCsrfToken(fetchImpl)
   if (!csrf) throw new NoBooruSession()
   let res = await send(csrf)
-  if (res.status === 422) {
+  if (await staleToken(res)) {
     resetBooruCsrf()
     const fresh = await booruCsrfToken(fetchImpl)
     if (fresh && fresh !== csrf) res = await send(fresh)
   }
   return res
+}
+
+/** Is this answer the booru saying the CSRF token is stale? Reads a clone. */
+export async function staleToken(res: Response): Promise<boolean> {
+  if (res.status !== 403) return false
+  try {
+    const j = (await res.clone().json()) as Record<string, unknown>
+    return j.error === 'ActionController::InvalidAuthenticityToken'
+  } catch {
+    return false
+  }
 }
 
 /** GET a booru JSON path as the viewer. Resolves the Response. */
