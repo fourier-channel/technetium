@@ -4382,3 +4382,21 @@ Read the create event's sender and `additional_creators` as well.
 the card (the booru's per-viewer fields and its CORS for the BUR routes are
 with chanbooru), and the dimmed + seen in a live room.
 
+**Later the same day -- creators replace their pictures.** Ledger:
+`docs/plan/PICTURE_REPLACE_PLAN.md`. Commits: technetium `a0b004a` (held),
+`a5815de`; fourier-tunnel `22bf6ab`; promoted as v2026.10.19.2.
+
+A creator edits their own picture message to carry a new file. The message
+then shows it, and Neru-chan points the booru post at it. The original stays on
+the booru's record, and the creator chooses whether the old file is kept or
+expires. The booru side is with chanbooru, so the action is held.
+
+**draft-33 (gotcha) -- an old URL cannot be made to change.** A download served
+immutable for a year, behind a gate that caches its index for a day, keeps its
+bytes for anyone who already fetched it. To show different bytes, change the
+URL. In Matrix that means an edit.
+
+**draft-34 (gotcha) -- a media edit carries a url in its fallback.** A bridge
+that handles `m.image` without looking at `m.relates_to` treats every picture
+edit as a new picture. Consume edits first.
+
