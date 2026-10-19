@@ -4352,3 +4352,33 @@ second caller. Two copies double the traffic from every tab, invisibly.
 picture, a reaction on a gallery from another client, @room in a reply
 pinging a second account, a drag across the room list's old 300px, and a DM
 arriving while the user list is put away.
+
+## 2026-10-19 -- BURs through Neru-chan, decided from a card in chat
+
+Ledger: `docs/plan/BUR_PLAN.md`. Commits: fourier-tunnel `59d76d3`,
+technetium `ef05e14`; promoted as v2026.10.19.
+
+Anyone at Voice or higher in the bots room can now have Neru-chan file a booru
+bulk update request with `!bur <reason>` followed by script lines. Her reply
+carries a pointer to the BUR, and Technetium draws it as a card that reads the
+BUR live from the booru as the viewer, where an admin approves or rejects it
+as themselves. She files and never approves.
+
+The + now means something. The rank rule that the member list and the timeline
+share draws a rank held in this room at full strength and a rank held only
+elsewhere dimmed. The timeline used to draw this room's rank alone, and the
+member list let a higher rank elsewhere hide the one held here.
+
+**draft-31 (decision) -- a bot files, a person approves.** A BUR runs as the
+booru's system user once approved. Anything that lets a bot approve on a lower
+rank's say-so promotes that rank to admin. The trust line stays where the
+approval happens, so Voice only gets to ask.
+
+**draft-32 (gotcha) -- a creator in room v12 is not in users.** A power-level
+check that reads `users[sender]` alone sees the room's own creator as level 0.
+Read the create event's sender and `additional_creators` as well.
+
+**Still open.** A live `!bur` from a Voice account, an admin deciding one from
+the card (the booru's per-viewer fields and its CORS for the BUR routes are
+with chanbooru), and the dimmed + seen in a live room.
+
