@@ -1,0 +1,19 @@
+<!doctype html>
+<!-- Mounts the REAL MessageVerbsProvider and MessageActionBar over a fake room,
+     for three messages: a plain one, a thread root, and a reply inside a
+     thread. ?level=N sets the viewer's power level (default 49). Served by
+     the dev server: http://127.0.0.1:5173/tools/visual/startthread-react.html
+     Proves which verbs the bar offers and what Start thread calls; nothing
+     against a live homeserver. Harness only. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>html, body { margin: 0; background: var(--cpd-color-bg-canvas-default, #1b1a17); color: #ccc; font: 13px system-ui; }
+  .case { position: relative; margin: 28px 16px 8px; padding-top: 6px; } .case .tc-row-actions { position: static; opacity: 1; visibility: visible; }</style>
+</head>
+<body>
+<div id="root"></div>
+<pre id="result" style="color:#ccc; white-space: pre-wrap; padding: 0 16px">running</pre>
+<script type="module" src="./startthread-react.tsx"></script>
+</body>
+</html>

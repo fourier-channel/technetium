@@ -9,6 +9,7 @@ import { buildForwardContent, isForwardable } from '../client/forwardContent'
 import { RoomPicker } from './RoomPicker'
 import { ReplacePicture } from './ReplacePicture'
 import { canReplacePicture, replaceEnabled } from '../client/pictureReplace'
+import { canStartThreads, mayOfferStartThread } from '../client/threadStart'
 import { MessageActionsProvider } from './MessageActionBar'
 import { useComposerMode } from './composerMode'
 import { ReactTargetContext } from './reactTarget'
@@ -31,7 +32,9 @@ function isActionable(kind: string): boolean {
   return kind === 'message' || kind === 'gallery'
 }
 
-export function MessageVerbsProvider({ room, children }: { room: Room | null; children: ReactNode }) {
+// `onStartThread` is given only where a thread can be started from: the room
+// timeline. The thread panel leaves it out, because threads do not nest.
+export function MessageVerbsProvider({ room, children, onStartThread }: { room: Room | null; children: ReactNode; onStartThread?: (roomId: string, rootId: string) => void }) {
   const { client } = useClient()
   const { reply, edit } = useComposerMode()
   const myUserId = client?.getUserId() ?? null
@@ -70,6 +73,25 @@ export function MessageVerbsProvider({ room, children }: { room: Room | null; ch
           label: 'Reply',
           icon: '↩', // leftwards arrow with hook
           onSelect: () => reply(item.event),
+        }
+      },
+      (item) => {
+        if (!isActionable(item.kind) || !onStartThread || !room) return null
+        if (!mayOfferStartThread(item.event)) return null
+        // Starting a thread takes the room's thread level (49 unless the room
+        // says otherwise; client/threadStart.ts). The server refuses below it
+        // whatever client asks, so the verb is hidden rather than shown-and-
+        // failing. Asked here, when the bar is built, not memoised: a
+        // promotion then shows on the next hover.
+        if (!canStartThreads(room, myUserId)) return null
+        const rootId = item.event.getId()!
+        return {
+          id: 'start-thread',
+          label: 'Start thread',
+          icon: '\u2937', // arrow curving off to the right: a branch
+          // Opens the thread panel on this message; the composer's first reply
+          // there is what creates the thread.
+          onSelect: () => onStartThread(room.roomId, rootId),
         }
       },
       (item) => {
@@ -149,7 +171,7 @@ export function MessageVerbsProvider({ room, children }: { room: Room | null; ch
         }
       },
     ],
-    [reply, edit, myUserId, canRedactOthers, canPin, pinned, togglePin, replaceOn, roomEncrypted],
+    [reply, edit, myUserId, canRedactOthers, canPin, pinned, togglePin, replaceOn, roomEncrypted, onStartThread, room],
   )
 
   const confirmDelete = async () => {

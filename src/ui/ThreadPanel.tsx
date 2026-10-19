@@ -57,6 +57,16 @@ export function ThreadPanel({
   const { singleSlot: alone } = useSpace()
   const roomLabel = useRoomLabel(roomId, room?.name)
 
+  // A thread STARTED here does not exist until its first reply lands, so the
+  // panel watches the room for it to be born; until then it shows the message
+  // alone (rootEv below) and the composer whose first send creates it.
+  useEffect(() => {
+    if (!room || thread) return
+    const born = (t: { id: string }) => { if (t.id === rootId) forceRefresh((n) => n + 1) }
+    room.on(ThreadEvent.New, born)
+    return () => { room.off(ThreadEvent.New, born) }
+  }, [room, thread, rootId])
+
   // Re-render on any change to this thread (new replies, edits).
   useEffect(() => {
     if (!thread) return

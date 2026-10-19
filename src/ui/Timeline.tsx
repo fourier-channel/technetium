@@ -431,7 +431,7 @@ export function Timeline({ room, onOpenThread, onOpenRoom, threadListOpen, onTog
               />
             )}
             <ReceiptsContext.Provider value={receipts}>
-            <MessageVerbsProvider room={room}>
+            <MessageVerbsProvider room={room} onStartThread={onOpenThread}>
               {/* Branched at the CALL SITE, not inside Row: an early return
                   above Row's hooks breaks rules-of-hooks (G-tp17), and neither
                   a separator nor a membership change is a message -- no
