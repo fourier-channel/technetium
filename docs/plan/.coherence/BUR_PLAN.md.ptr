@@ -1,7 +1,7 @@
 {
   "build_stamp": null,
-  "hydrated_at": "2026-10-19T04:12:47Z",
-  "hydrated_hash": "sha256c:76da89da1b30cf1f0c83c361526021d442dd3612fefcd3de552378b3e58b296e",
+  "hydrated_at": "2026-10-19T16:28:46Z",
+  "hydrated_hash": "sha256c:4f909fbc60a7d8a08c3f860113640b6f5ab4a0c5b624dd44c546aa7c46592619",
   "pinned": null,
   "source": "coherence://brain/BUR_PLAN.md"
 }

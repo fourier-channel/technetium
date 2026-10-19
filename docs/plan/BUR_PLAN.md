@@ -26,9 +26,9 @@ After the research report came back, the operator added:
 | id | ask | state |
 | --- | --- | --- |
 | B1 | Report on chanbooru's BUR system and how it relates to fourier-tunnel | DONE, given in the session (summary under "What the booru does") |
-| B2 | Hand anything on chanbooru that needs fixing now to the chanbooru session | HANDED 2026-10-19 to chanbooru-cc (items below); it accepted and queued them behind its current gate |
+| B2 | Hand anything on chanbooru that needs fixing now to the chanbooru session | HANDED 2026-10-19; batch A LIVE chanbooru `ca05bee43` (per-viewer flags, per-line results, partial, 422 shape, retired-forum handling); B (creator privacy) and C (approver reach counts) to come |
 | B3 | Neru-chan files a BUR when someone at Voice (PL 25) or higher in the bots room commands her | DONE fourier-tunnel `59d76d3`, deployed and switched on 2026-10-19 |
-| B4 | An admin approves it, on a surface modelled on what already exists | DONE technetium `ef05e14`, promoted as v2026.10.19 |
+| B4 | An admin approves it, on a surface modelled on what already exists | DONE technetium `ef05e14`; to the live contract `026aa8b` (v2026.10.19.5); fourier-tunnel `561fa3c` |
 | B5 | A trusted person's + is active in the bots room and present-but-dimmed in other rooms | DONE technetium `ef05e14`, promoted as v2026.10.19 |
 
 ---
