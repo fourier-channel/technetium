@@ -26,6 +26,10 @@ which point a collector grabs them to schedule for deletion."
 | P6 | "Keep it" is the default; the next time, the dialog starts on the last choice; ask to keep only for a compelling reason | DONE technetium `1ec09d6` (account data `net.41chan.replace_prefs`) |
 | P7 | Originals kept 24 h regardless; "don't keep" can be undone inside that window; no "refresh" loophole | technetium `1ec09d6` (card offers only what the booru allows); the window, anchored to the replacement and enforced server-side, HANDED to chanbooru |
 | P8 | A repost of the same picture is the same picture: replaced everywhere | fourier-tunnel `6bbf571` (canon repoint of every copy + `index/replaced/<old md5>.json`), technetium `1ec09d6` (versioned URLs, live refetch), fourier-auth `9fd3fb3` (forget door + Worker `v`; route approved by the operator 2026-10-19: "a fairly handy tool for forcing a refresh on any given link"), wired in fourier-tunnel `2ea1099`; fourier-auth container and Worker `3d8b385e` deployed 2026-10-19 06:03 UTC, the door answering from inside the tunnel and unpublished on the host |
+| P9 | Security, from the chanbooru design pass: the new picture must be the editor's own upload; only copies that really carry the old bytes, named by her own tag state or the booru, are re-pointed | DONE fourier-tunnel `09efc6f` |
+| P10 | "Autotag right after": the new picture is re-checked like a new upload (tags, rating, gate 1, quarantine), no hidden hold; the old auto rows are never re-sent | DONE fourier-tunnel `6eea885` |
+| P11 | "Keep the old ones": a new picture with no prompt leaves the old creator tags in place | DONE fourier-tunnel `6eea885` |
+| P12 | The original posted again after a replacement is a copy of the replaced post, never a new post | booru side HANDED to chanbooru; canon's `index/replaced/<old md5>.json` is the tunnel's half |
 
 ## Readings chosen
 
