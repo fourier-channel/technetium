@@ -1,0 +1,34 @@
+<!doctype html><html><head>
+<!--#head-->
+<title>BUR cards</title>
+<style>.h-log { padding: 10px 16px 24px; max-width: 760px; display: flex; flex-direction: column; gap: 14px; }</style>
+</head><body>
+<div class="h-label">BUR cards (BurCard.tsx markup, one per status, as an admin and as anyone else)</div>
+<div class="h-log">
+  <div><span style="white-space:pre-wrap">Filed BUR #77 for voice: 2 lines. Nothing changes until an admin approves it.</span>
+    <div class="tc-bur" data-status="pending">
+      <div class="tc-bur-head"><a class="tc-bur-title" href="#">BUR #77</a><span class="tc-bur-status">waiting for an admin</span></div>
+      <ol class="tc-bur-script"><li>alias old_tag -&gt; new_tag</li><li>update some_rather_long_tag_name_(series) -&gt; another_tag third_tag -fourth_tag</li></ol>
+      <div class="tc-bur-actions"><button type="button" class="tc-bur-btn" data-verb="approve">Approve</button><button type="button" class="tc-bur-btn" data-verb="reject">Reject</button></div>
+    </div></div>
+  <div class="tc-bur" data-status="processing">
+    <div class="tc-bur-head"><a class="tc-bur-title" href="#">BUR #78</a><span class="tc-bur-status">approving&#8230;</span></div>
+    <ol class="tc-bur-script"><li>imply a -&gt; b</li></ol>
+    <div class="tc-bur-actions"><button type="button" class="tc-bur-btn" data-verb="approve" disabled>Approve</button><button type="button" class="tc-bur-btn" data-verb="reject" disabled>Reject</button></div>
+  </div>
+  <div class="tc-bur" data-status="approved">
+    <div class="tc-bur-head"><a class="tc-bur-title" href="#">BUR #79</a><span class="tc-bur-status">approved and applied</span></div>
+    <ol class="tc-bur-script"><li>rename x -&gt; y</li></ol>
+  </div>
+  <div class="tc-bur" data-status="failed">
+    <div class="tc-bur-head"><a class="tc-bur-title" href="#">BUR #80</a><span class="tc-bur-status">failed part-way; an admin can approve it again</span></div>
+    <ol class="tc-bur-script"><li>nuke z</li></ol>
+    <div class="tc-bur-actions"><button type="button" class="tc-bur-btn" data-verb="approve">Approve</button></div>
+    <div class="tc-bur-error">the booru refused to approve BUR #80 (HTTP 403): Access denied. Fix: approving needs the level its lines need (Admin for nearly all of them); a 403 can also be a missing booru session -- open the booru panel once, then try again.</div>
+  </div>
+  <div class="tc-bur" data-status="unknown">
+    <div class="tc-bur-head"><a class="tc-bur-title" href="#">BUR #81</a><span class="tc-bur-status">could not be read</span></div>
+    <div class="tc-bur-error">the booru would not show BUR #81 (HTTP 404). Fix: a 403 or 404 is usually a missing booru session -- open the booru panel once to sign in there, then reopen this room.</div>
+  </div>
+</div>
+</body></html>

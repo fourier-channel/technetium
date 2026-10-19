@@ -12,7 +12,7 @@ import { usePersonOpeners } from './personRouter'
 import { usePresence } from '../client/usePresence'
 import type { PresenceState } from '../client/presence'
 import { useMembers } from '../client/useMembers'
-import { compareByStanding, honorificFor, maxPower, type MergedMember } from '../client/members'
+import { compareByStanding, honorificFor, maxPower, shownHonorific, type MergedMember } from '../client/members'
 import { useFlipList } from './flip'
 import { usePopEnter } from './pop'
 import { UserLine } from './UserLine'
@@ -402,8 +402,11 @@ function MemberRow({
   scale: number
 }) {
   const rich = density === 'rich'
-  // Honorific IDENTITY = highest power the member holds anywhere in the space.
-  const identityHonor = honorificFor(maxPower(member))
+  // Does this view honor the current room's context?
+  //   'room' / 'all-highlight' -> yes (Server Defaults, honor room-specific).
+  //   'all'                    -> no  (Server Defaults, override room-specific):
+  //                               everyone full strength regardless of room.
+  const honorsRoom = mode === 'room' || mode === 'all-highlight'
 
   // Two INDEPENDENT visual signals — kept decoupled on purpose:
   //   presentHere   -> NAME strength: white when in the viewed room, grey when not.
@@ -412,16 +415,21 @@ function MemberRow({
   // A member can be present here (white name) yet hold authority elsewhere (grey
   // badge). The prior single-flag version chained these together, so fixing the
   // badge dragged the name grey too — that's the regression this undoes.
+  //
+  // WHICH glyph is members.ts shownHonorific, the same rule the timeline's
+  // rows use: a rank held HERE wins and is backed; otherwise the highest rank
+  // held elsewhere, unbacked. 'all' ignores the room: highest rank, full strength.
   const presentHere = presentIn(room, member.id)
-  const plHere = room ? (member.powerByRoom[room.roomId] ?? 0) : 0
-  const authorityHere =
-    identityHonor !== null && honorificFor(plHere) === identityHonor
-
-  // Does this view honor the current room's context?
-  //   'room' / 'all-highlight' -> yes (Server Defaults, honor room-specific).
-  //   'all'                    -> no  (Server Defaults, override room-specific):
-  //                               everyone full strength regardless of room.
-  const honorsRoom = mode === 'room' || mode === 'all-highlight'
+  const shown = honorsRoom
+    ? shownHonorific(
+        room ? (member.powerByRoom[room.roomId] ?? null) : null,
+        Object.entries(member.powerByRoom)
+          .filter(([id]) => id !== room?.roomId)
+          .map(([, pl]) => pl),
+      )
+    : { glyph: honorificFor(maxPower(member)), here: true }
+  const identityHonor = shown.glyph
+  const authorityHere = shown.here
 
   // NAME greys only when honoring the room AND the member isn't in it. Room mode
   // is filtered to present members, so its names are always full strength.

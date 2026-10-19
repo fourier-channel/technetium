@@ -1156,6 +1156,50 @@ code {
 .tc-poll-footer { font-size: 11px; color: var(--cpd-color-text-secondary, #a8b0bd); }
 @media (prefers-reduced-motion: reduce) { .tc-poll-fill { transition: none; } }
 
+/* BUR cards under Neru-chan's filing replies (BurCard.tsx). Same box
+   language as the poll; the status word is the only thing that changes. */
+.tc-bur {
+  max-width: 420px;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+.tc-bur-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.tc-bur-title { font-weight: 600; color: var(--tc-link); text-decoration: none; }
+.tc-bur-title:hover { text-decoration: underline; }
+.tc-bur-status { color: var(--cpd-color-text-secondary, #a8b0bd); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-bur[data-status='approved'] .tc-bur-status { color: var(--mod-active-fg, inherit); }
+.tc-bur[data-status='failed'] .tc-bur-status { color: var(--cpd-color-text-critical-primary, #d6483b); }
+.tc-bur-script {
+  margin: 0;
+  padding-left: 22px;
+  font-family: var(--cpd-font-family-mono, ui-monospace, monospace);
+  font-size: 12px;
+  max-height: 180px;
+  overflow: auto;
+}
+.tc-bur-script li { white-space: pre-wrap; overflow-wrap: anywhere; }
+.tc-bur-actions { display: flex; gap: 8px; }
+.tc-bur-btn {
+  height: 28px;
+  padding: 0 14px;
+  border: 1px solid rgba(128, 128, 128, 0.4);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.tc-bur-btn[data-verb='approve'] { border-color: var(--tc-link); }
+.tc-bur-btn:disabled { cursor: default; opacity: 0.6; }
+.tc-bur-btn:focus-visible { outline: 2px solid var(--tc-link); outline-offset: 1px; }
+.tc-bur-error { font-size: 12px; color: var(--cpd-color-text-critical-primary, #d6483b); }
+
 
 /* Day separators (W6.1). A rule with the date centred on it. */
 .tc-day-separator {

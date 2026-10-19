@@ -20,7 +20,8 @@ import { detectFace } from '../client/faces'
 import { SenderIdentity } from './SenderIdentity'
 import { UserLine } from './UserLine'
 import { decoratedName, displayDecoration } from './displayDecoration'
-import { honorificFor } from '../client/members'
+import { shownHonorific } from '../client/members'
+import { useLevelElsewhere } from './useLevelElsewhere'
 import type { PresenceState } from '../client/presence'
 import { MemberEvent } from './MemberEvent'
 import { useLightbox, type LightboxItem, type LightboxThread } from './lightboxContext'
@@ -42,6 +43,8 @@ import { SearchPanel } from './SearchPanel'
 import { LinkPreview } from './LinkPreview'
 import { firstLink } from '../client/urlPreview'
 import { isPollStart } from '../client/polls'
+import { burPointer } from '../client/booruBur'
+import { BurCard } from './BurCard'
 import { PollBody } from './PollBody'
 import { useLinkPreviewPref } from './linkPreviewPref'
 import { RoomHeaderInfo } from './RoomHeaderInfo'
@@ -726,6 +729,17 @@ export function Row({
         <span style={{ whiteSpace: 'pre-wrap' }}>{linkify(rendered.text ?? '')}</span>
       )
     }
+    // A filing reply from Neru-chan points at a BUR; the card under it reads
+    // the BUR live and is where an admin decides it (client/booruBur.ts).
+    const burId = burPointer(content, event.getSender())
+    if (burId !== null) {
+      body = (
+        <>
+          {body}
+          <BurCard id={burId} />
+        </>
+      )
+    }
   } else if (isPollStart(event)) {
     // A poll arrives as its own event type, so it is classified 'other' by
     // toItems and would otherwise render as `[m.poll.start]`.
@@ -801,6 +815,7 @@ export function Row({
           avatarMxc={senderAvatar}
           presence={presence}
           powerLevel={senderMember?.powerLevel}
+          roomId={roomId}
           onOpenProfile={openProfile}
           onOpenInteractions={openInteractions}
         />
@@ -1263,16 +1278,17 @@ function ReplyPill({ replyTo }: { replyTo: ReplyRef }) {
 // parts are decided here because only a row knows them: the guild decoration,
 // and the honorific from this room's power level.
 //
-// ROOM-LOCAL POWER, deliberately. The member list shows the highest rank a
-// person holds anywhere in the space, because that list is about the space.
-// Inside a thread the question is who this is HERE, and that is the room's own
-// power level -- the cheap answer and the right one.
+// THE SAME RANK RULE AS THE MEMBER LIST (members.ts shownHonorific, operator
+// 2026-10-19): the rank held in this room at full strength; with none here,
+// the highest rank held in another space room, dimmed -- so a + given in
+// #botsbotsbots is seen, faintly, wherever its holder speaks.
 function SenderUserLine({
   userId,
   name,
   avatarMxc,
   presence,
   powerLevel,
+  roomId,
   onOpenProfile,
   onOpenInteractions,
 }: {
@@ -1281,11 +1297,14 @@ function SenderUserLine({
   avatarMxc: string | null
   presence?: PresenceState
   powerLevel?: number
+  roomId: string
   onOpenProfile?: (userId: string, x: number, y: number) => void
   onOpenInteractions?: (userId: string, x: number, y: number) => void
 }) {
   const dec = displayDecoration(userId)
-  const honorific = powerLevel === undefined ? null : honorificFor(powerLevel)
+  const elsewhere = useLevelElsewhere(userId, roomId)
+  const shown = shownHonorific(powerLevel ?? null, [elsewhere])
+  const honorific = shown.glyph
   return (
     <div
       className="tc-ident-row tc-ident-row-narrow"
@@ -1300,6 +1319,7 @@ function SenderUserLine({
         avatarMxc={avatarMxc}
         presence={presence}
         honorific={honorific}
+        honorificColor={honorific && !shown.here ? 'var(--cpd-color-text-secondary)' : undefined}
         size="md"
       >
         {dec.guild !== null && <span className="tc-ident-guild">{dec.guild}</span>}

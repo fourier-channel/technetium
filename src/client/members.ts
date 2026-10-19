@@ -11,6 +11,32 @@ export function honorificFor(powerLevel: number): Honorific {
   return null
 }
 
+// WHICH RANK A ROW DRAWS, AND AT WHAT STRENGTH (operator, 2026-10-19, on
+// giving trusted people a + in #botsbotsbots: "visibly active when they are
+// in that room, and present-but-dimmed in other rooms").
+//
+// A rank held in the room being viewed is drawn at full strength, even when
+// the person ranks higher somewhere else -- the + someone holds in the BUR
+// room is what matters there, and a dimmed @ from another room would hide
+// it. With no rank here, the highest rank they hold in any other space room
+// is drawn dimmed: present, but not backed here. With no rank anywhere,
+// nothing. Pure, and the member list and the timeline both ask it, so the
+// two can never draw one person two ways (D-tc01).
+export interface ShownHonorific {
+  glyph: Honorific
+  // True when the glyph is backed by the viewed room's own power level.
+  here: boolean
+}
+
+export function shownHonorific(levelHere: number | null, levelsElsewhere: Iterable<number>): ShownHonorific {
+  const local = levelHere === null ? null : honorificFor(levelHere)
+  if (local) return { glyph: local, here: true }
+  let max = 0
+  for (const pl of levelsElsewhere) if (pl > max) max = pl
+  const away = honorificFor(max)
+  return { glyph: away, here: false }
+}
+
 // Human-readable standing for an honorific tier. Hoisted here (from
 // DomainUserMenu) so the shared ProfileCard, the member list and the domain
 // menu all name a tier the same way.
@@ -114,6 +140,32 @@ function partitionRooms(client: MatrixClient): { spaceRooms: Room[]; orphanRooms
     else orphanRooms.push(r)
   }
   return { spaceRooms, orphanRooms }
+}
+
+// One person's highest power level across the space rooms OTHER than
+// `exceptRoomId` -- the "elsewhere" half of shownHonorific, for a surface that
+// draws one person rather than the whole list. Same rooms and the same rule
+// as the member list: space rooms only, joined members only. A member the
+// client has not loaded (lazy members under sliding sync) is read from the
+// room's power levels instead, so an unloaded roster never hides a rank.
+export function highestLevelElsewhere(client: MatrixClient, userId: string, exceptRoomId: string | null): number {
+  let max = 0
+  for (const room of partitionRooms(client).spaceRooms) {
+    if (room.roomId === exceptRoomId) continue
+    const m = room.getMember(userId)
+    let pl: number
+    if (m) {
+      if (m.membership !== 'join') continue
+      pl = m.powerLevel
+    } else {
+      const c = room.currentState.getStateEvents('m.room.power_levels', '')?.getContent() as
+        | { users?: Record<string, number> }
+        | undefined
+      pl = typeof c?.users?.[userId] === 'number' ? c.users[userId] : 0
+    }
+    if (pl > max) max = pl
+  }
+  return max
 }
 
 export function createMatrixSpaceSource(client: MatrixClient): MemberSource {
