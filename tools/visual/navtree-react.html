@@ -1,0 +1,18 @@
+<!doctype html>
+<!-- Mounts the REAL NavTree over a fake tree: the 41chan space holding two
+     rooms and two sub-spaces, each with rooms of its own. Served by the dev
+     server: open http://127.0.0.1:5173/tools/visual/navtree-react.html
+     Reports where each row's icon sits, so "a sub-space's icon is halfway
+     between the space's and its rooms'" is measured, not asserted. Proves
+     what NavTree draws for this tree; nothing against a live homeserver. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>html, body { margin: 0; background: var(--cpd-color-bg-canvas-default, #1b1a17); }</style>
+</head>
+<body>
+<div id="root" style="width: 280px"></div>
+<pre id="result" style="color:#ccc; padding: 0 12px">running</pre>
+<script type="module" src="./navtree-react.tsx"></script>
+</body>
+</html>

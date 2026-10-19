@@ -499,7 +499,15 @@ function TreeRow({
   // exactly that slot: a child's icon sits under its parent's icon, and a
   // child space's chevron under its parent's icon. A room one level down
   // starts 14px further left than it did.
-  const indent = NAV_PAD_X + depth * NAV_CHEVRON_SLOT
+  //
+  // A SUB-space steps back half a slot (operator, 2026-10-19: sub-spaces "only
+  // exist as anchors"; their icons sit "about halfway between the 41chan space
+  // and the rooms", which "restores the directory dropdown style"). Without it
+  // a sub-space's icon lands in the same column as its own rooms' icons and
+  // stops reading as a folder: 41chan's icon at 20px, a sub-space's and its
+  // rooms' both at 36px. With it the sub-space's icon is at 28px. Rooms never
+  // move.
+  const indent = NAV_PAD_X + depth * NAV_CHEVRON_SLOT - (node.isSpace && depth > 0 ? NAV_CHEVRON_SLOT / 2 : 0)
   const mode = nodeMode(node)
   const [busy, setBusy] = useState(false)
   const [knocked, setKnocked] = useState(false)
