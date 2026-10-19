@@ -5259,3 +5259,31 @@ select.tc-input { padding-right: 4px; }
   .tc-prof-preview { position: static; order: -1; }
   .tc-prof-label { flex-basis: 100%; }
 }
+
+/* Replace picture (ReplacePicture.tsx): the delete dialog's box language. */
+.tc-replace-scrim { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; background: rgba(0, 0, 0, 0.5); }
+.tc-replace {
+  width: 400px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 18px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-family: var(--tc-ui-font, inherit);
+  color: var(--cpd-color-text-primary);
+  background: var(--cpd-color-bg-canvas-default);
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55);
+}
+.tc-replace-title { font-size: 15px; font-weight: 700; }
+.tc-replace-note { margin: 0; font-size: 13px; color: var(--cpd-color-text-secondary); }
+.tc-replace-preview { max-width: 100%; max-height: 240px; object-fit: contain; border-radius: 8px; align-self: center; }
+.tc-replace-choice { border: 1px solid rgba(128, 128, 128, 0.3); border-radius: 8px; padding: 6px 10px 8px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.tc-replace-choice legend { padding: 0 4px; color: var(--cpd-color-text-secondary); }
+.tc-replace-choice label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.tc-replace-error { margin: 0; font-size: 12px; color: var(--cpd-color-text-critical-primary, #d6483b); }
+.tc-replace-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.tc-replace-actions [data-primary='true'] { border-color: var(--tc-link); }

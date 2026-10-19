@@ -7,6 +7,8 @@ import { eventPreview } from '../client/eventPreview'
 import { usePinnedEvents } from '../client/usePinnedEvents'
 import { buildForwardContent, isForwardable } from '../client/forwardContent'
 import { RoomPicker } from './RoomPicker'
+import { ReplacePicture } from './ReplacePicture'
+import { canReplacePicture, replaceEnabled } from '../client/pictureReplace'
 import { MessageActionsProvider } from './MessageActionBar'
 import { useComposerMode } from './composerMode'
 import { ReactTargetContext } from './reactTarget'
@@ -43,6 +45,12 @@ export function MessageVerbsProvider({ room, children }: { room: Room | null; ch
   const { pinned, canPin, toggle: togglePin } = usePinnedEvents(client, room)
   // The item whose content is being forwarded, while the room picker is open.
   const [forwarding, setForwarding] = useState<{ content: IContent } | null>(null)
+  // The picture message being replaced, while its dialog is open.
+  const [replacing, setReplacing] = useState<{ event: MatrixEvent; content: IContent } | null>(null)
+  // Held until the booru takes creator replacements (client/pictureReplace.ts).
+  // Read once per mount, like domain mode: the switch says a reload is needed.
+  const [replaceOn] = useState(() => replaceEnabled())
+  const roomEncrypted = room?.hasEncryptionStateEvent() ?? false
 
   // May the local user redact OTHER people's messages here? Own messages are
   // always redactable by their sender.
@@ -78,6 +86,19 @@ export function MessageVerbsProvider({ room, children }: { room: Room | null; ch
           label: 'Edit',
           icon: '✎', // lower right pencil
           onSelect: () => edit(item.event, item.content),
+        }
+      },
+      (item) => {
+        // Your own picture, given a new file: an edit Neru-chan carries to the
+        // booru post (client/pictureReplace.ts). Single pictures only -- a
+        // gallery row is several messages.
+        if (!replaceOn || item.kind !== 'message') return null
+        if (!canReplacePicture({ content: item.content, sender: item.event.getSender(), me: myUserId, eventId: item.id, roomEncrypted })) return null
+        return {
+          id: 'replace-picture',
+          label: 'Replace picture',
+          icon: '⇄',
+          onSelect: () => setReplacing({ event: item.event, content: item.content }),
         }
       },
       (item) => {
@@ -128,7 +149,7 @@ export function MessageVerbsProvider({ room, children }: { room: Room | null; ch
         }
       },
     ],
-    [reply, edit, myUserId, canRedactOthers, canPin, pinned, togglePin],
+    [reply, edit, myUserId, canRedactOthers, canPin, pinned, togglePin, replaceOn, roomEncrypted],
   )
 
   const confirmDelete = async () => {
@@ -174,6 +195,14 @@ export function MessageVerbsProvider({ room, children }: { room: Room | null; ch
               .catch((err) => console.error('Forward failed:', err))
           }}
           onClose={() => setForwarding(null)}
+        />
+      )}
+      {replacing && client && (
+        <ReplacePicture
+          client={client}
+          target={replacing.event}
+          current={replacing.content}
+          onClose={() => setReplacing(null)}
         />
       )}
       {pendingDelete && (

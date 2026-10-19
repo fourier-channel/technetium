@@ -1,0 +1,20 @@
+<!doctype html><html><head>
+<!--#head-->
+<title>Replace picture</title>
+</head><body>
+<div class="tc-replace-scrim" role="dialog">
+  <div class="tc-replace">
+    <div class="tc-replace-title">Replace picture</div>
+    <p class="tc-replace-note">Your message will show the new picture, and its booru post will be updated to it. The original is kept on the booru&apos;s record.</p>
+    <button type="button" class="tc-pill">Choose a different picture</button>
+    <img class="tc-replace-preview" alt="" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='200'><rect width='300' height='200' fill='%233a6f56'/></svg>">
+    <fieldset class="tc-replace-choice">
+      <legend>The old version</legend>
+      <label><input type="radio" name="o" checked> Keep it</label>
+      <label><input type="radio" name="o"> Let it expire, then be deleted</label>
+    </fieldset>
+    <p class="tc-replace-error">The new picture was not sent, so nothing changed. Fix: check the connection and press Replace again -- what already uploaded is reused.</p>
+    <div class="tc-replace-actions"><button type="button" class="tc-pill">Cancel</button><button type="button" class="tc-pill" data-primary="true">Replace</button></div>
+  </div>
+</div>
+</body></html>

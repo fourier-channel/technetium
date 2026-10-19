@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useClient } from '../client/clientContextValue'
 import { applyDomainOptIn, domainOptInStore, domainEnabled } from '../client/domainMode'
+import { replaceEnabled, replaceOptInStore } from '../client/pictureReplace'
 import { clientTokenSource } from '../client/masSessions'
 import { loadSession } from '../client/session'
 import { observeServerAdmin, type AdminFacts } from '../client/serverAdmin'
@@ -22,6 +23,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   // the feature is actually offered also depends on the build, which this
   // panel says out loud rather than leaving the switch looking broken.
   const [domainOn, setDomainOn] = useState(() => domainEnabled())
+  const [replaceOn, setReplaceOn] = useState(() => replaceEnabled())
+  const [replaceNote, setReplaceNote] = useState<string | null>(null)
   const [domainPass, setDomainPass] = useState('')
   const [domainNote, setDomainNote] = useState<string | null>(null)
   const [admin, setAdmin] = useState<AdminFacts | null>(null)
@@ -150,6 +153,29 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             {/* Not cosmetic: App reads the answer once per mount, so a session
                 that started without it has the control unrendered. */}
             <p className="tc-settings-note">A reload is needed either way.</p>
+          </div>
+          <div className="tc-settings-optin">
+            <p className="tc-settings-note">
+              Replace picture is not finished: the booru does not take the new version yet, so the message changes and
+              the booru post does not. Turning it on here affects this browser only.
+            </p>
+            <button
+              className="tc-pill"
+              type="button"
+              onClick={() => {
+                try {
+                  if (replaceOn) replaceOptInStore.remove()
+                  else replaceOptInStore.write('1')
+                  setReplaceOn(!replaceOn)
+                  setReplaceNote(replaceOn ? 'Off after a reload.' : 'On after a reload.')
+                } catch {
+                  setReplaceNote('This browser refused to store the setting, so nothing changed.')
+                }
+              }}
+            >
+              {replaceOn ? 'Turn Replace picture off' : 'Turn Replace picture on'}
+            </button>
+            {replaceNote && <p className="tc-settings-note tc-tone-warn">{replaceNote}</p>}
           </div>
         </>
       )}
