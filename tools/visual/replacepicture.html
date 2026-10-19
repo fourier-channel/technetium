@@ -5,16 +5,23 @@
 <div class="tc-replace-scrim" role="dialog">
   <div class="tc-replace">
     <div class="tc-replace-title">Replace picture</div>
-    <p class="tc-replace-note">Your message will show the new picture, and its booru post will be updated to it. The original is kept on the booru&apos;s record.</p>
+    <p class="tc-replace-note">Your message, its booru post and every repost of it will show the new picture.</p>
     <button type="button" class="tc-pill">Choose a different picture</button>
     <img class="tc-replace-preview" alt="" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='200'><rect width='300' height='200' fill='%233a6f56'/></svg>">
     <fieldset class="tc-replace-choice">
       <legend>The old version</legend>
+      <label><input type="radio" name="o"> Don&apos;t keep it</label>
       <label><input type="radio" name="o" checked> Keep it</label>
-      <label><input type="radio" name="o"> Let it expire, then be deleted</label>
+      <p class="tc-replace-note">Please keep old versions only if you have a compelling reason to. Either way the old version stays for 24 hours, and until then you can change your mind from the note Neru-chan posts.</p>
     </fieldset>
     <p class="tc-replace-error">The new picture was not sent, so nothing changed. Fix: check the connection and press Replace again -- what already uploaded is reused.</p>
     <div class="tc-replace-actions"><button type="button" class="tc-pill">Cancel</button><button type="button" class="tc-pill" data-primary="true">Replace</button></div>
+  </div>
+</div>
+<div style="position:fixed;left:16px;top:16px;width:420px;z-index:3000;background:var(--cpd-color-bg-canvas-default);padding:8px">
+  <div class="tc-bur tc-replacement" data-status="expire">
+    <div class="tc-bur-head"><span class="tc-bur-title">Old version</span><span class="tc-bur-status">The old version is deleted in 23 h 12 min unless you keep it.</span></div>
+    <div class="tc-bur-actions"><button type="button" class="tc-bur-btn">Keep the old version</button></div>
   </div>
 </div>
 </body></html>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useClient } from '../client/clientContextValue'
 import { fetchEncryptedMediaSrc, fetchMediaSrc, type ThumbSize } from '../client/media'
+import { useFileVersion } from './useFileVersion'
 import type { EncryptedFileInfo } from '../client/encryptedFile'
 import { reportIgnored } from '../client/report'
 
@@ -83,6 +84,9 @@ export function AuthedImage({
   // A lazy image starts un-requested and becomes requested once it is near the
   // viewport; an eager one is requested from the start.
   const [near, setNear] = useState(!lazy)
+  // A replaced picture's new file version: in the deps below, so the picture
+  // refetches under its new URL the moment the replacement lands (useFileVersion.ts).
+  const version = useFileVersion(file ? null : mxc)
   const boxRef = useRef<HTMLSpanElement | null>(null)
 
   useEffect(() => {
@@ -191,7 +195,7 @@ export function AuthedImage({
     }
     // file.url identifies the ciphertext; the key travels with it, so a changed
     // file object means different bytes and must refetch.
-  }, [client, mxc, file, mimetype, width, roomId, retryTick, near])
+  }, [client, mxc, file, mimetype, width, roomId, retryTick, near, version])
 
   // The box this image occupies, and the single authority for it: the
   // placeholder and the loaded picture must agree exactly or the row resizes

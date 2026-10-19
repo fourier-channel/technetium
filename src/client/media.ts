@@ -1,4 +1,5 @@
 import type { MatrixClient } from 'matrix-js-sdk'
+import { fileVersionOf } from './fileVersions'
 import { decryptAttachment, type EncryptedFileInfo } from './encryptedFile'
 import { createLimiter } from './concurrency'
 
@@ -99,6 +100,11 @@ export function mediaUrl(
   // the branch avatars never take -- which is why avatars were never affected.
   const encrypted = roomId ? (client.getRoom(roomId)?.hasEncryptionStateEvent() ?? false) : false
   if (roomId && encrypted) q.set('room_id', roomId)
+  // A REPLACED picture's file version (fileVersions.ts): the same mxc now
+  // serves a new file, and only a new URL reaches a browser that cached the
+  // old one as immutable. Pictures never replaced carry none.
+  const version = fileVersionOf(client, mxc)
+  if (version) q.set('v', version)
   const qs = q.toString()
   return qs ? `${path}?${qs}` : path
 }

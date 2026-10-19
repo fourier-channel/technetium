@@ -5287,3 +5287,29 @@ select.tc-input { padding-right: 4px; }
 .tc-replace-error { margin: 0; font-size: 12px; color: var(--cpd-color-text-critical-primary, #d6483b); }
 .tc-replace-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .tc-replace-actions [data-primary='true'] { border-color: var(--tc-link); }
+
+/* `?preset=default` saying what it did (LayoutResetNotice). An overlay, so it
+   moves nothing (no-forced-reflow); no animation, so it costs nothing idle. */
+.tc-layout-reset-notice {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--cpd-color-text-primary);
+  background: var(--cpd-color-bg-canvas-default, #101317);
+  border: 1px solid var(--tc-line, rgb(255 255 255 / 10%));
+  box-shadow: 0 6px 24px rgb(0 0 0 / 45%);
+}
+/* The replacement card's status is a sentence with a deadline in it: it wraps
+   rather than being cut off, and the title never breaks. */
+.tc-bur-title { white-space: nowrap; }
+.tc-replacement .tc-bur-status { white-space: normal; overflow: visible; }

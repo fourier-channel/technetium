@@ -29,7 +29,7 @@
 // still applies only its own delta. That is why old_tag_string is sent and why
 // no Ruby needed writing.
 import { BOORU_ORIGIN } from './booruUrl'
-import { booruCsrfToken, resetBooruCsrf } from './booruCsrf'
+import { NoBooruSession, postAsViewer } from './booruWrite'
 // THE GRAMMAR IS CANON (formant/tagedit.js, hydrated). applyEdit and the two
 // refusals below were defined here first; the booru's own page now runs the
 // same bytes, so "what an edit means" cannot drift between the two surfaces
@@ -147,42 +147,21 @@ export async function writeBooruTags(
   const refusal = refuseEdit(postId, seenTagString, edit)
   if (refusal) throw new Error(refusal)
 
-  const send = async (csrf: string | null): Promise<Response> => {
-    const body = new URLSearchParams(editFields(seenTagString, edit, csrf))
-    return fetchImpl(`${BOORU_ORIGIN}/posts/${postId}.json?only=${FIELDS}`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: body.toString(),
-    })
-  }
-
-  // No token, no point sending: Rails will refuse it, every time. Fail here
-  // with the reason instead of letting it come back as an opaque 422 from a
-  // request that never had a chance.
-  const csrf = await booruCsrfToken(fetchImpl)
-  if (!csrf) {
-    throw new Error(
-      'could not read a CSRF token from the booru, so the edit would be refused. ' +
-        'Fix: this usually means there is no booru session in this browser -- open ' +
-        'the booru panel once to run the sign-in exchange, then try again.',
-    )
-  }
-
-  let res = await send(csrf)
-  // A 422 here is nearly always the token: Rails masks it per call but every
-  // mask validates against ONE session, so a session replaced since the fetch
-  // (a re-login, an expiry, another tab) invalidates the cached copy and would
-  // otherwise refuse every edit for the life of the page. Drop it and ask
-  // once more. Only once -- a second 422 is the booru rejecting the TAGS, and
-  // retrying that forever is how a client hammers a server over its own bug.
-  if (res.status === 422) {
-    resetBooruCsrf()
-    const fresh = await booruCsrfToken(fetchImpl)
-    if (fresh && fresh !== csrf) res = await send(fresh)
+  // The write itself is booruWrite.ts's: the cookie, the simple POST with
+  // _method=put (editFields carries it), the token in the body, one retry.
+  let res: Response
+  try {
+    res = await postAsViewer(`/posts/${postId}.json?only=${FIELDS}`, (csrf) => editFields(seenTagString, edit, csrf), fetchImpl)
+  } catch (err) {
+    if (err instanceof NoBooruSession) {
+      throw new Error(
+        'could not read a CSRF token from the booru, so the edit would be refused. ' +
+          'Fix: this usually means there is no booru session in this browser -- open ' +
+          'the booru panel once to run the sign-in exchange, then try again.',
+        { cause: err },
+      )
+    }
+    throw err
   }
 
   if (!res.ok) {

@@ -23,7 +23,7 @@
 // button (powerLevels.ts), and the booru's refusal still speaks if the two
 // ever disagree.
 import { BOORU_ORIGIN } from './booruUrl'
-import { booruCsrfToken, resetBooruCsrf } from './booruCsrf'
+import { NoBooruSession, postAsViewer } from './booruWrite'
 import { reportIgnored } from './report'
 
 /** The content key on Neru-chan's reply. */
@@ -196,34 +196,21 @@ export function resetViewerBooruLevel(): void {
 }
 
 async function decide(id: number, verb: 'approve' | 'reject', fetchImpl: typeof fetch): Promise<Bur> {
-  const send = (csrf: string) => {
-    const body = new URLSearchParams({ authenticity_token: csrf })
-    // Reject is DELETE /bulk_update_requests/:id. Sent as a POST carrying
-    // _method for the same reason a tag edit is: a real DELETE is not a
-    // CORS-simple method and its preflight carries no cookie.
-    if (verb === 'reject') body.set('_method', 'delete')
-    const path = verb === 'approve' ? `/bulk_update_requests/${id}/approve.json` : `/bulk_update_requests/${id}.json`
-    return fetchImpl(`${BOORU_ORIGIN}${path}`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
-    })
-  }
-  const csrf = await booruCsrfToken(fetchImpl)
-  if (!csrf) {
-    throw new Error(
-      `could not read a CSRF token from the booru, so the ${verb} would be refused. ` +
-        'Fix: open the booru panel once to sign in there, then try again.',
-    )
-  }
-  let res = await send(csrf)
-  // Same single retry as a tag edit: a replaced session invalidates the
-  // cached token, and a second 422 is the booru refusing the BUR itself.
-  if (res.status === 422) {
-    resetBooruCsrf()
-    const fresh = await booruCsrfToken(fetchImpl)
-    if (fresh && fresh !== csrf) res = await send(fresh)
+  // Reject is DELETE /bulk_update_requests/:id, sent as a POST carrying
+  // _method like every other write here (booruWrite.ts).
+  const path = verb === 'approve' ? `/bulk_update_requests/${id}/approve.json` : `/bulk_update_requests/${id}.json`
+  let res: Response
+  try {
+    res = await postAsViewer(path, {}, fetchImpl, verb === 'approve' ? 'post' : 'delete')
+  } catch (err) {
+    if (err instanceof NoBooruSession) {
+      throw new Error(
+        `could not read a CSRF token from the booru, so the ${verb} would be refused. ` +
+          'Fix: open the booru panel once to sign in there, then try again.',
+        { cause: err },
+      )
+    }
+    throw err
   }
   if (!res.ok) {
     let why: string | null = null

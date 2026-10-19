@@ -45,6 +45,8 @@ import { firstLink } from '../client/urlPreview'
 import { isPollStart } from '../client/polls'
 import { burPointer } from '../client/booruBur'
 import { BurCard } from './BurCard'
+import { replacementPointer } from '../client/booruReplacement'
+import { ReplacementCard } from './ReplacementCard'
 import { PollBody } from './PollBody'
 import { useLinkPreviewPref } from './linkPreviewPref'
 import { RoomHeaderInfo } from './RoomHeaderInfo'
@@ -737,6 +739,17 @@ export function Row({
         <>
           {body}
           <BurCard id={burId} />
+        </>
+      )
+    }
+    // Her reply to a creator's replacement: what happens to the old version,
+    // and the creator's chance to change their mind (client/booruReplacement.ts).
+    const replacementId = replacementPointer(content, event.getSender())
+    if (replacementId !== null) {
+      body = (
+        <>
+          {body}
+          <ReplacementCard id={replacementId} />
         </>
       )
     }

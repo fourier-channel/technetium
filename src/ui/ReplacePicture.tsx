@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import type { IContent, MatrixClient, MatrixEvent } from 'matrix-js-sdk'
 import { sendAttachment, type UploadStash } from '../client/attachmentUpload'
 import { makeThumbnail } from '../client/imageThumbnail'
-import { buildPictureEdit, type OldFileChoice } from '../client/pictureReplace'
+import { buildPictureEdit, REPLACE_PREFS_TYPE, startingChoice, type OldFileChoice } from '../client/pictureReplace'
 import { readImageSize } from './imageSize'
 
 // The dialog behind "Replace picture" (client/pictureReplace.ts says what a
@@ -28,7 +28,10 @@ export function ReplacePicture({
 }) {
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
-  const [oldFile, setOldFile] = useState<OldFileChoice>('keep')
+  // Starts on the last choice this account made (account data), else keep.
+  const [oldFile, setOldFile] = useState<OldFileChoice>(() =>
+    startingChoice(client.getAccountData(REPLACE_PREFS_TYPE as never)?.getContent()),
+  )
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const stash = useRef<UploadStash>(new Map())
@@ -74,6 +77,13 @@ export function ReplacePicture({
             }) as unknown as Parameters<typeof client.sendMessage>[2],
           ),
       })
+      // Remember the choice for next time. A failure here loses only the
+      // memory, never the replacement, so it is reported and passed.
+      if (startingChoice(client.getAccountData(REPLACE_PREFS_TYPE as never)?.getContent()) !== oldFile) {
+        void client
+          .setAccountData(REPLACE_PREFS_TYPE as never, { old_file: oldFile } as never)
+          .catch((err: unknown) => console.warn('[tc] replace: the old-version choice was not remembered:', err))
+      }
       close()
     } catch (err) {
       console.error('Picture replacement failed:', err)
@@ -91,8 +101,7 @@ export function ReplacePicture({
       <div className="tc-replace" onClick={(e) => e.stopPropagation()}>
         <div className="tc-replace-title">Replace picture</div>
         <p className="tc-replace-note">
-          Your message will show the new picture, and its booru post will be updated to it. The original is kept on the
-          booru&apos;s record.
+          Your message, its booru post and every repost of it will show the new picture.
         </p>
         <input
           ref={inputRef}
@@ -108,13 +117,17 @@ export function ReplacePicture({
         <fieldset className="tc-replace-choice" disabled={busy}>
           <legend>The old version</legend>
           <label>
+            <input type="radio" name="old-file" checked={oldFile === 'expire'} onChange={() => setOldFile('expire')} />
+            Don&apos;t keep it
+          </label>
+          <label>
             <input type="radio" name="old-file" checked={oldFile === 'keep'} onChange={() => setOldFile('keep')} />
             Keep it
           </label>
-          <label>
-            <input type="radio" name="old-file" checked={oldFile === 'expire'} onChange={() => setOldFile('expire')} />
-            Let it expire, then be deleted
-          </label>
+          <p className="tc-replace-note">
+            Please keep old versions only if you have a compelling reason to. Either way the old version stays for 24
+            hours, and until then you can change your mind from the note Neru-chan posts.
+          </p>
         </fieldset>
         {error && <p className="tc-replace-error">{error}</p>}
         <div className="tc-replace-actions">

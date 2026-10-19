@@ -28,6 +28,18 @@ export const REPLACE_CHOICE_KEY = 'net.41chan.replace'
 
 export type OldFileChoice = 'keep' | 'expire'
 
+// THE CHOICE IS REMEMBERED (operator, 2026-10-19: "'Keep It' can be the
+// default, however the next time it asks it will stay on whatever was
+// chosen"). Server-side, in account data, so it follows the account to every
+// device -- remembered, in the coherence rule's sense.
+export const REPLACE_PREFS_TYPE = 'net.41chan.replace_prefs'
+
+/** The choice to start the dialog on: the last one made, else keep. Pure. */
+export function startingChoice(prefs: unknown): OldFileChoice {
+  const v = prefs && typeof prefs === 'object' ? (prefs as Record<string, unknown>).old_file : undefined
+  return v === 'expire' ? 'expire' : 'keep'
+}
+
 export const replaceOptInStore: OptInStore = {
   read: () => (typeof localStorage === 'undefined' ? null : localStorage.getItem(REPLACE_OPT_IN_KEY)),
   write: (v) => { if (typeof localStorage !== 'undefined') localStorage.setItem(REPLACE_OPT_IN_KEY, v) },

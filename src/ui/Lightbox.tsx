@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { LightboxContext, type LightboxItem, type LightboxThread } from './lightboxContext'
 import { useClient } from '../client/clientContextValue'
 import { fetchMediaSrc, parseMxc } from '../client/media'
+import { useFileVersion } from './useFileVersion'
 import { MediaTags } from './MediaTags'
 import { axisFromKey, isTypingTarget, BOTH } from './axisKeys'
 import { flatIndex, stepImage, totalImages } from './mediaSequence'
@@ -148,6 +149,10 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
     [thread, index],
   )
 
+  // A replaced picture refetches under its new file version (useFileVersion.ts).
+  const curMxc = items && index >= 0 && index < items.length ? items[index].mxc : null
+  const version = useFileVersion(curMxc)
+
   // Fetch the current image full-res whenever it changes; revoke the prior blob.
   useEffect(() => {
     const cur = items && index >= 0 && index < items.length ? items[index] : null
@@ -188,7 +193,7 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
         revokeRef.current = null
       }
     }
-  }, [client, items, index])
+  }, [client, items, index, version])
 
   // Keyboard, per the formant axis grammar: Escape leaves the innermost open
   // thing, left/right walk the set you opened, up/down walk the conversation
