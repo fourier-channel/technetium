@@ -1,0 +1,19 @@
+<!doctype html>
+<!-- Mounts the REAL SpaceProvider (and its `?preset=default` reset) over a
+     fake client whose account data hides the sidebar two ways: the live
+     layout, and the Desk preset this device starts from. Served by the dev
+     server: open http://127.0.0.1:5173/tools/visual/presetreset-react.html?preset=default
+     Proves what the provider does with that account data and that address:
+     what it writes, what it shows, what the address bar is left with. Does
+     NOT prove anything against a live homeserver. Harness only. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>html, body { margin: 0; background: var(--cpd-color-bg-canvas-default, #1b1a17); color: #ccc; font: 13px system-ui; }</style>
+</head>
+<body>
+<div id="root"></div>
+<pre id="result" style="color:#ccc; white-space: pre-wrap; padding: 0 16px">running</pre>
+<script type="module" src="./presetreset-react.tsx"></script>
+</body>
+</html>

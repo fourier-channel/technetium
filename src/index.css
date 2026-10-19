@@ -5304,9 +5304,11 @@ select.tc-input { padding-right: 4px; }
   border-radius: 8px;
   font-size: 13px;
   line-height: 1.4;
-  color: var(--cpd-color-text-primary);
-  background: var(--cpd-color-bg-canvas-default, #101317);
-  border: 1px solid var(--tc-line, rgb(255 255 255 / 10%));
+  /* The modal's tokens: Formant is dark-only, and the Compound canvas token
+     follows the OS light/dark preference. */
+  color: var(--mod-ink);
+  background: var(--mod-surface);
+  border: 1px solid var(--mod-line-strong);
   box-shadow: 0 6px 24px rgb(0 0 0 / 45%);
 }
 /* The replacement card's status is a sentence with a deadline in it: it wraps

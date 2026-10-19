@@ -1,11 +1,12 @@
 import { domainEnabled } from '../client/domainMode'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { RoomEvent, type MatrixEvent, type Room } from 'matrix-js-sdk'
 import { useClient } from '../client/clientContextValue'
 import { directRoomIds } from '../client/dm'
-import { bringBackPanel, clampMemberScale, closeDomain, closeInColumn, closeThreadView, defaultSpace, deserialize, dismiss, dragEdgeTo, moveDivider, openDomain, openInColumn, openThreadView, present, pushEdge, putAwayPanel, serialize, setFlag, setMin, setViewport, singleSlot, type PanelId, type Space } from './space'
-import { currentViewport, useStoredSpace } from './spaceState'
-import { dropPreset, putPreset, setDefaultPreset, setMobilePreset, setOverflow as setStoreOverflow } from './presets'
+import { bringBackPanel, clampMemberScale, closeDomain, closeInColumn, closeThreadView, defaultSpace, deserialize, dismiss, dragEdgeTo, moveDivider, openDomain, openInColumn, openThreadView, present, pushEdge, putAwayPanel, reflow, serialize, setFlag, setMin, setViewport, singleSlot, type PanelId, type Space } from './space'
+import { currentViewport, deviceIsMobile, readLayoutStore, useStoredSpace } from './spaceState'
+import { dropPreset, MAX_PRESETS, putPreset, resetStamp, resetToDefault, setDefaultPreset, setMobilePreset, setOverflow as setStoreOverflow, wantsDefaultReset, withoutResetParam } from './presets'
+import { LayoutResetNotice } from './LayoutResetNotice'
 import { SpaceCtx, type SpaceApi } from './spaceContext'
 
 // The real-estate contract for the whole screen (see space.ts), and the DM
@@ -14,8 +15,8 @@ import { SpaceCtx, type SpaceApi } from './spaceContext'
 // wins, and a new user's first message from Fourier-chan must reach them
 // whatever they are clicking on.
 export function SpaceProvider({ children }: { children: ReactNode }) {
-  const { client } = useClient()
-  const { space, setSpace, chooseSpace, store, setStore } = useStoredSpace(client)
+  const { client, status } = useClient()
+  const { space, setSpace, adaptSpace, chooseSpace, store, setStore } = useStoredSpace(client)
   // One step of undo for applying a preset, importing a number, or resetting:
   // the layout as it was immediately before. STATE rather than a ref, because
   // the Revert button's enabled-ness is read during render and a ref would
@@ -25,6 +26,38 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
   const oneSlot = singleSlot(space)
   const [editMode, setEditMode] = useState(false)
   const [dockRoom, setDockRoom] = useState<Room | null>(null)
+
+  // `?preset=default` (presets.ts resetToDefault): read once, after the first
+  // sync, because before it the account data -- the layout and its presets --
+  // has not arrived and there would be nothing to save first. The parameter
+  // leaves the address bar either way, so a reload does not reset again.
+  const [resetNotice, setResetNotice] = useState<string | null>(null)
+  const resetRead = useRef(false)
+  useEffect(() => {
+    if (status !== 'ready' || !client || resetRead.current) return
+    resetRead.current = true
+    if (!wantsDefaultReset(window.location.search)) return
+    window.history.replaceState(window.history.state, '', withoutResetParam(window.location.href))
+    // Deferred a microtask: setState directly in an effect body (G-tc01).
+    queueMicrotask(() => {
+      const def = setViewport(defaultSpace(), currentViewport())
+      const r = resetToDefault(readLayoutStore(client), serialize(defaultSpace()), deviceIsMobile(), resetStamp(new Date()))
+      if (r.kind === 'full') {
+        // Shown, not saved: nothing the user had is overwritten, and the
+        // default puts the Layout controls back on screen to make room.
+        adaptSpace(reflow(def))
+        setResetNotice(`Showing the default layout in this tab only. All ${MAX_PRESETS} presets are in use, so your current layout could not be saved first, and nothing was changed. Delete a preset under Layout, then open the link again.`)
+        return
+      }
+      chooseSpace(def)
+      setStore(r.store)
+      setResetNotice(r.kept.length
+        ? `Layout reset to Default. What you had is saved as ${r.kept.map((p) => `the preset "${p.name}"`).join(' and ')}, under Layout.`
+        : 'Layout reset to Default.')
+    })
+    // Once per load; the handlers are read when it runs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, client])
 
   useEffect(() => {
     if (!client) return
@@ -132,6 +165,11 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
   })
   }, [space, editMode, dockRoom, setSpace, chooseSpace, store, setStore, oneSlot, undoCode])
 
-  return <SpaceCtx.Provider value={api}>{children}</SpaceCtx.Provider>
+  return (
+    <SpaceCtx.Provider value={api}>
+      {children}
+      {resetNotice && <LayoutResetNotice text={resetNotice} onDismiss={() => setResetNotice(null)} />}
+    </SpaceCtx.Provider>
+  )
 }
 

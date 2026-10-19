@@ -126,3 +126,74 @@ export function isMobileBrowser(env: { ua?: string; coarsePointer?: boolean; wid
   if (/Android|iPhone|iPad|iPod|Windows Phone|IEMobile|Mobile Safari|Silk/i.test(ua)) return true
   return !!env.coarsePointer && (env.width ?? Number.POSITIVE_INFINITY) <= 820
 }
+
+// ---- Back to the default, from the address bar ---------------------------
+//
+// The Layout controls and the site reset live in panels a user can put away,
+// and the layout is account data every device reads, so a layout can hide
+// every way back to itself on every device at once. `?preset=default` is the
+// way in no layout can hide (operator, 2026-10-19). It loses nothing:
+// "Applying default should make a save of the previous state and then save
+// the default as current preset."
+
+export const DEFAULT_PRESET = 'Default'
+const RESET_PARAM = 'preset'
+
+// The query string, never the fragment: one place, the one the login's
+// ?code&state already uses.
+export function wantsDefaultReset(search: string): boolean {
+  return new URLSearchParams(search).get(RESET_PARAM)?.trim().toLowerCase() === 'default'
+}
+
+// This address without the reset, as a path, so a reload does not reset again
+// and a link copied from the bar does not carry it.
+export function withoutResetParam(href: string): string {
+  const u = new URL(href)
+  u.searchParams.delete(RESET_PARAM)
+  return u.pathname + u.search + u.hash
+}
+
+// Minutes, local time: what the person who just reset will recognise.
+export function resetStamp(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+export type DefaultReset =
+  | { kind: 'reset'; store: LayoutStore; kept: Preset[] }
+  // Refused, and nothing written: saving the earlier layout needs `needed`
+  // presets and MAX_PRESETS is the ceiling. Resetting anyway would drop it.
+  | { kind: 'full'; needed: number }
+
+// Everything the reset overwrites is saved first, unless a preset already
+// holds it: the live layout, and a "Default" preset of the user's own. Then the
+// default is the live layout, the Default preset, and what THIS kind of device
+// (phone or not) starts from -- so a start preset pointed at the layout that
+// hid everything cannot bring it back on the next load.
+export function resetToDefault(s: LayoutStore, defaultCode: string, isMobile: boolean, stamp: string): DefaultReset {
+  if (!isCode(defaultCode)) throw new Error(`resetToDefault: ${JSON.stringify(defaultCode)} is not a layout code`)
+  const keep: Preset[] = []
+  const heldElsewhere = (code: string, except?: string) =>
+    s.presets.some((p) => p.code === code && p.name !== except) || keep.some((p) => p.code === code)
+  const freeName = (base: string) => {
+    const taken = (n: string) => s.presets.some((p) => p.name === n) || keep.some((p) => p.name === n)
+    let n = cleanName(base)
+    for (let i = 2; taken(n); i++) n = cleanName(`${base} (${i})`)
+    return n
+  }
+  if (isCode(s.code) && s.code !== defaultCode && !heldElsewhere(s.code)) {
+    keep.push({ name: freeName(`Before reset ${stamp}`), code: s.code })
+  }
+  const own = findPreset(s, DEFAULT_PRESET)
+  if (own && own.code !== defaultCode && !heldElsewhere(own.code, own.name)) {
+    keep.push({ name: freeName(`Default before ${stamp}`), code: own.code })
+  }
+  const needed = s.presets.length + keep.length + (own ? 0 : 1)
+  if (needed > MAX_PRESETS) return { kind: 'full', needed }
+
+  let next = s
+  for (const p of keep) next = putPreset(next, p.name, p.code)
+  next = putPreset(next, DEFAULT_PRESET, defaultCode)
+  next = isMobile ? setMobilePreset(next, DEFAULT_PRESET) : setDefaultPreset(next, DEFAULT_PRESET)
+  return { kind: 'reset', store: { ...next, code: defaultCode }, kept: keep }
+}
