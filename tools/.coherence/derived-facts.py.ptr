@@ -1,7 +1,7 @@
 {
   "build_stamp": null,
-  "hydrated_at": null,
-  "hydrated_hash": "sha256c:4395bee66caff64cacaa37a64e216e12f4d5f8233a2dc5119bc73ed7e5c86968",
+  "hydrated_at": "2026-10-24T16:34:38Z",
+  "hydrated_hash": "sha256c:9ec2c4925b964146aa7f3b5e31384257110a86159ee7ad3323da52181ed4260e",
   "pinned": null,
   "source": "coherence://brain/derived-facts.py"
 }

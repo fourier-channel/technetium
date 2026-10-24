@@ -45,8 +45,11 @@ import sys
 # The number must not be a fragment of a larger one. Without the lookbehind,
 # the section heading "### 22.5 Test environment" reads as "5 Test", and the
 # branch note "8/8 tests" reads as a count of 8 -- both were live in the org's
-# master reference on the day this was written.
-_LEAD = r"(?<![\d./\\-])"
+# master reference on the day this was written. Nor the tail of a word:
+# "`python3 tests/check_compose_mounts.py`" read as a count of 3 in
+# synapse-deploy's README (2026-10-24), so a letter before the number is
+# excluded too.
+_LEAD = r"(?<![\w./\\-])"
 
 COUNT_PATTERNS = (
     # PLURAL ONLY, deliberately. "a Windows 10 test target" and "one test file"
