@@ -13,8 +13,8 @@
  * hypothetical; this file exists because a measured audit found two of them
  * already drifted, in the one semantic that most needed to be stable.
  *
- * DO NOT EDIT A DELIVERED COPY. Canon lives in fourier-basis under
- * docs/design/formant/, alongside a README explaining the scope and the audit.
+ * DO NOT EDIT A DELIVERED COPY. Canon lives in fourier-channel/fourier-formant,
+ * alongside a README explaining the scope and the audit.
  * A consumer that edits its own copy is drift, the pointer sidecar in
  * docs/.coherence/ makes that machine-checkable, and hydration deliberately
  * refuses to overwrite an edited copy rather than destroying the only copy of
