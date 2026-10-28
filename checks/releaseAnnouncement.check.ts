@@ -4,6 +4,7 @@
 // WHAT THIS CANNOT SEE: the room. deploy.sh sends the text through her hub
 // socket, and the hub's own say is what reaches Matrix.
 import { addressIn, announcement, releaseNotes } from '../tools/release/announcement.ts'
+import { BUG_REPORT } from '../src/client/bugReport.ts'
 
 let failures = 0
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -29,6 +30,9 @@ check('it names the build', text.includes('(build abc1234)'))
 check('with no notes it says so instead of an empty list',
   /tuning under the hood/.test(announcement('v', 'c', [])) && !/What's new/.test(announcement('v', 'c', [])))
 check('it is ASCII', /^[\x00-\x7f]*$/.test(text))
+check('a problem goes to the bug intake, not this room (tc.149)',
+  text.includes(`Send ${BUG_REPORT.command} `) && text.includes(` in ${BUG_REPORT.room} or in a DM with me.`) &&
+  !/this room/.test(text), text)
 
 check('a URL is refused', addressIn(['See https://example.test']) !== null)
 check('a host is refused', addressIn(['now on tc.41chan.net']) !== null)

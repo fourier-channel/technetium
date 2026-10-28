@@ -16,7 +16,13 @@
 // note naming one is refused here rather than said in the room. ASCII here,
 // like all committed content; the room renders it as typed.
 //
+// Her sign-off says where a problem goes: !bugreport in the help room or a
+// DM with her (client/bugReport.ts, the beta notice's words too). It used to
+// say "right here in this room" -- #botsbotsbots, where the intake does not
+// listen (tc.149).
+//
 // Pure, so checks/releaseAnnouncement holds it.
+import { BUG_REPORT } from '../../src/client/bugReport.ts'
 
 const TRAILER = /^Release-note:[ \t]*(.+?)[ \t]*$/gm
 const ADDRESS = /(https?:\/\/|www\.|\b[a-z0-9-]+\.(?:net|com|org|io|dev|app)\b|\b\d{1,3}(?:\.\d{1,3}){3}\b)/i
@@ -48,6 +54,6 @@ export function announcement(version: string, commit: string, notes: readonly st
   } else {
     lines.push("This one's tuning under the hood -- nothing new to learn, just a cleaner signal.")
   }
-  lines.push('', "Spot something off? Tell me right here in this room, with what you did and what you saw.", `(build ${commit})`)
+  lines.push('', `Spot something off? Send ${BUG_REPORT.command} with what you did and what you saw, in ${BUG_REPORT.room} or in a DM with me.`, `(build ${commit})`)
   return lines.join('\n')
 }
