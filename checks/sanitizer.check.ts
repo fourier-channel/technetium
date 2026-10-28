@@ -273,5 +273,74 @@ console.log('\n-- plaintext path is never treated as HTML --')
   check('raw text preserved verbatim for React to escape', plain.text === '<script>alert(1)</script>')
 }
 
+// tc.148. The floor is the release that fixed the two advisories below
+// (technetium#49, #50; bumped in d239dc0). package.json says ^3.4.17, but a
+// stale node_modules or a hand-edited lockfile can still load an older copy,
+// and the check runs against what is LOADED, not what is declared.
+console.log('\n-- dompurify is at or above the advisory floor (3.4.17) --')
+{
+  const FLOOR = [3, 4, 17]
+  const have = String(DOMPurify.version ?? '').split('.').map((n) => parseInt(n, 10))
+  const atLeast = (a: number[], b: number[]) => {
+    for (let i = 0; i < b.length; i++) {
+      const x = Number.isFinite(a[i]) ? a[i] : -1
+      if (x !== b[i]) return x > b[i]
+    }
+    return true
+  }
+  check(`loaded dompurify ${DOMPurify.version} >= ${FLOOR.join('.')}`, atLeast(have, FLOOR), DOMPurify.version)
+}
+
+// The client uses neither SAFE_FOR_TEMPLATES nor IN_PLACE (grep src/ before
+// relying on that), so these exercise the LIBRARY on the exact proof of each
+// advisory: they fail on 3.4.13 and pass on 3.4.17. A fresh instance each, so
+// the hook below never reaches the instance renderMessageBody uses.
+console.log('\n-- the two advisories the 3.4.17 floor exists for --')
+{
+  // GHSA-cg2g-xh64-v4q7: SAFE_FOR_TEMPLATES left an expression split across
+  // a removed element inside an attached shadow root.
+  const purify = DOMPurify(dom.window as any)
+  const doc = dom.window.document
+  const host = doc.createElement('div')
+  const shadow = host.attachShadow({ mode: 'open' })
+  shadow.appendChild(doc.createTextNode('$'))
+  shadow.appendChild(doc.createElement('object'))
+  shadow.appendChild(doc.createTextNode('{alert(1)}'))
+  purify.sanitize(host, { IN_PLACE: true, SAFE_FOR_TEMPLATES: true })
+  shadow.normalize()
+  check(
+    'GHSA-cg2g: split template expression in a shadow root does not reassemble',
+    !(shadow.textContent ?? '').includes('${alert(1)}'),
+    shadow.textContent,
+  )
+}
+{
+  // GHSA-mrv2-3pqr-j5jr: an IN_PLACE hook that removed a parent or a later
+  // sibling left the detached subtree's handlers armed.
+  const doc = dom.window.document
+  for (const mode of ['parent', 'nextSibling'] as const) {
+    const purify = DOMPurify(dom.window as any)
+    const box = doc.createElement('div')
+    box.innerHTML =
+      '<div id=root><figure><img class=bad src=a.png><img id=evil src=x onerror=alert(1)></figure><p>ok</p></div>'
+    doc.body.appendChild(box)
+    const root = box.querySelector('#root') as Element
+    const evil = box.querySelector('#evil') as Element
+    purify.addHook('afterSanitizeAttributes', (node: Element) => {
+      if (node.getAttribute && node.getAttribute('class') === 'bad') {
+        if (mode === 'parent') node.parentNode?.parentNode?.removeChild(node.parentNode)
+        if (mode === 'nextSibling') node.nextElementSibling?.remove()
+      }
+    })
+    purify.sanitize(root, { IN_PLACE: true })
+    box.remove()
+    check(
+      `GHSA-mrv2: a hook removing the ${mode} leaves no handler armed`,
+      evil.getAttribute('onerror') === null,
+      evil.getAttribute('onerror'),
+    )
+  }
+}
+
 console.log('\n' + (failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'))
 process.exit(failures === 0 ? 0 : 1)
