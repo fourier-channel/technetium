@@ -15,6 +15,12 @@
 // the two together, so a rename on either side fails the gate instead of
 // sending reports into a room she is not listening in.
 //
+// Plain words, not a link through openRoomById (App.tsx) or the profile's DM
+// opener: those open a room the client already has. A fresh member who reads
+// the notice is not yet in "matrix help" and has no DM with her, so a link
+// would retry and then do nothing. Naming the room as the list shows it works
+// for that member; tc.117 (a built-in composer) is what replaces this.
+//
 // Pure, so the harness can load it (O-tp9).
 // ---------------------------------------------------------------------------
 
