@@ -30,14 +30,17 @@
   overflow-y: auto;
 }
 
-/* FOCUS IS AMBER, not the app's link blue.
+/* FOCUS IS ORANGE, not the app's link blue: formant's raise ring is the
+   activity orange (--mod-raise-ring), and a box being typed into is activity.
+   It was amber, which says there seems to be a problem (operator 2026-10-29:
+   "Orange is not amber").
    Both the outline and the border move, because leaving the border blue under
-   an amber ring reads as two focus states disagreeing. */
+   an orange ring reads as two focus states disagreeing. */
 .tc-composer-input:focus,
 .tc-composer-input:focus-visible {
-  outline: 2px solid var(--mod-warn-fg);
+  outline: 2px solid var(--mod-active-fg);
   outline-offset: -1px;
-  border-color: var(--mod-warn-fg);
+  border-color: var(--mod-active-fg);
 }
 
 /* --- Send ----------------------------------------------------------------- */

@@ -176,6 +176,12 @@
    *   green + orange   current, with something else to say
    *   amber   NEAR -- a different axis entirely, degraded but not failed
    *
+   * Restated by the operator 2026-10-29, after a design doc was found still
+   * calling orange "urgency": "we use the bright orange for 'done, with
+   * something to say', amber is for 'there seems to be a problem'", e.g.
+   * "sampler: reporter live heap 2309 of its 3072 MB limit". Orange is not
+   * urgency and never a warning; a problem is amber or red.
+   *
    * So orange and green both mean working. Orange is the one that says work is
    * happening here. A lamp lit green with an orange mark beside it is the
    * grammar for "this is current AND something is going on".
@@ -439,6 +445,20 @@
   /* A system stack on purpose: these render at 11-13px in dense grids, and a
    * webfont buys nothing there while costing a flash. */
   --mod-mono:           ui-monospace, "SFMono-Regular", "Menlo", monospace;
+  /* THE HOUSE FACE: Hammersmith One, the front page's, and the body and
+   * headings of every public 41chan.net page. It was named by hand on each of
+   * those pages and in the docs renderer and never extracted here -- an
+   * omission, not a ruling (operator 2026-10-29: "Isn't hammersmith one the
+   * font used on the front page? Why would it not be a token.").
+   *
+   * The token names the FAMILY and no bytes. The font is self-hosted per
+   * origin (SIL OFL 1.1, /fonts/hammersmith-one-latin.woff2), because it was
+   * once loaded from Google and sent every visitor's address there before the
+   * page drew; a url() in this file would resolve on no origin but one. So a
+   * surface that uses it declares its own @font-face over its own copy.
+   * It has ONE weight, 400; anything heavier is the browser's synthetic bold
+   * (the front page's title asks for 700 and gets exactly that). */
+  --mod-face:           "Hammersmith One", sans-serif;
 }
 
 /* The sweep's motion: the gradient layer crosses the element once per period.
