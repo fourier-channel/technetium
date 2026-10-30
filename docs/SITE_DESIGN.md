@@ -376,20 +376,24 @@ and writes the declarations into each page instead, and the command that
 compares the two is that repository's gate -- so a page painting from something
 other than canon fails a commit rather than going quietly out of step.
 
-Three rules govern how the loud colours are spent, and they hold on every
+Four rules govern how the loud colours are spent, and they hold on every
 surface:
 
 - **Green is structure.** Headings, links, and anything you can act on. It
   means IMPORTANT.
-- **Orange is done, with something to say.** Work happening, or something
-  finished that has news attached. It is not urgency, and it is never a
-  warning.
+- **Green is getting there.** In terms of completion, green is done with
+  something still to do -- the fill that is rising. On a lamp, healthy.
+- **Orange is complete, and the next thing to do.** Full completion, ready to
+  go; and on a screen, the correct or next action -- the one thing it points
+  people towards. It is not urgency, and it is never a warning.
 - **Amber is a problem.** "There seems to be a problem": degraded, or close to
   a limit, but not failed -- a process nearing its memory ceiling, say. Red is
   the failure itself.
 
+The sampling calendar is the worked example: a day's green border says it is
+fully indexed, and its orange fill says everything in it has been captured.
 Orange and amber sit close together on the wheel and mean opposite things:
-orange says the work is going well, amber says it may not be.
+orange says it is finished, or go here; amber says something may be wrong.
 
 They are easy to invert and expensive to leave inverted. These generated pages
 had green as the body text colour with orange on every heading, every link and

@@ -168,29 +168,27 @@
   --mod-lamp-unlit:     #2b3441;
 
   /* --- activity --------------------------------------------------------- */
-  /* ORANGE IS NOT ON THE WARN AXIS, and reading it as one inverts it. Operator
-   * ruling 2026-09-01, written down because it had already been guessed wrong:
+  /* ORANGE IS NOT ON THE WARN AXIS, and reading it as one inverts it.
+   * Operator ruling 2026-10-29, which replaces the 09-01 table and the same
+   * day's first wording ("done, with something to say"):
    *
-   *   green   current / healthy -- a steady state, nothing to do
-   *   orange  working properly, and calling attention to something being DONE
-   *   green + orange   current, with something else to say
-   *   amber   NEAR -- a different axis entirely, degraded but not failed
+   *   green   in completion terms, done with something still to do, or
+   *           getting there -- the fill that is rising. On a lamp, healthy.
+   *   orange  FULL completion, ready to go. And on a screen, the correct or
+   *           NEXT action: the one thing it points people towards.
+   *   amber   "there seems to be a problem" -- degraded or near a limit, not
+   *           failed, e.g. "sampler: reporter live heap 2309 of its 3072 MB
+   *           limit". Red is the failure itself.
    *
-   * Restated by the operator 2026-10-29, after a design doc was found still
-   * calling orange "urgency": "we use the bright orange for 'done, with
-   * something to say', amber is for 'there seems to be a problem'", e.g.
-   * "sampler: reporter live heap 2309 of its 3072 MB limit". Orange is not
-   * urgency and never a warning; a problem is amber or red.
-   *
-   * So orange and green both mean working. Orange is the one that says work is
-   * happening here. A lamp lit green with an orange mark beside it is the
-   * grammar for "this is current AND something is going on".
+   * The worked example is fourier-sampling's calendar: a day's green border
+   * says it is fully indexed, and its orange fill says everything in it has
+   * been captured. Orange is not urgency and never a warning.
    *
    * Extracted on the second use: fourier-sampling has drawn autotagger activity
    * in it since the provenance tokens were written, and the fourier-coherence
    * wave draws a beating composite in it. Same meaning, two surfaces. The wave
-   * had #ff9900 and provenance had #ff9d3c -- two oranges for one idea, which is
-   * this file's founding complaint. --mod-auto-fg stays as the provenance
+   * had #ff9900 and provenance had #ff9d3c -- two oranges for one token, which
+   * is this file's founding complaint. --mod-auto-fg stays as the provenance
    * application of the same semantic. */
   --mod-active-fg:      #ff9d3c;
   --mod-active-line:    #4a3218;
