@@ -29,6 +29,14 @@
 #
 #     git config core.hooksPath .githooks
 #
+# EXCEPT in fourier-basis on Windows: there .githooks/pre-commit is a symlink,
+# checked out as a 23-byte text file (no symlinks without elevation), and Git
+# for Windows skips a hook not starting with "#!" with nothing but a hint. So
+# leave hooksPath unset there and put a two-line shim in .git/hooks/pre-commit:
+#
+#     #!/usr/bin/env bash
+#     exec "$(git rev-parse --show-toplevel)/tools/git-pre-commit" "$@"
+#
 # That setting is per-checkout config, so it drifts -- which is the useful part.
 # A checkout with the hook uninstalled is exactly the kind of divergence
 # `coherence sweep` exists to observe, so the gate's own installation becomes
@@ -40,24 +48,59 @@ repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
 repo_name="$(basename "$repo_root")"
 
 # Where coherence lives. An explicit override first, then the sibling checkout,
-# which is the layout on every machine that has one.
+# which is the layout on every machine that has one. A relative override is
+# read from here, the worktree root, and pinned: the gate runs from another
+# directory below, and an unpinned ../fourier-coherence passed this check and
+# then named a directory one level too high. COHERENCE_PYTHON is pinned the
+# same way below.
 home="${COHERENCE_HOME:-$(dirname "$repo_root")/fourier-coherence}"
-column="${COHERENCE_COLUMN:-coherence.vesper.yaml}"
+case "$home" in
+  /*|[A-Za-z]:*) ;;
+  *) home="$repo_root/$home" ;;
+esac
 
-if [ ! -d "$home" ] || [ ! -f "$home/$column" ]; then
+# The box decides the defaults, so a commit works without anyone's environment.
+# devwin (Git Bash) has its own column, and python3 there is the Store stub that
+# exits 9009 with no output; the agent's venv is the interpreter it runs on.
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*)
+    column="${COHERENCE_COLUMN:-coherence.mirror.yaml}"
+    py="${COHERENCE_PYTHON:-$home/.venv/Scripts/python.exe}" ;;
+  *)
+    column="${COHERENCE_COLUMN:-coherence.vesper.yaml}"
+    py="${COHERENCE_PYTHON:-python3}" ;;
+esac
+# The same pinning for the interpreter, when it is a path rather than a name: a
+# relative bin/py passed `command -v` from here and was not found after the cd.
+case "$py" in
+  /*|[A-Za-z]:*) ;;
+  */*) py="$repo_root/$py" ;;
+esac
+
+if [ ! -d "$home" ] || [ ! -f "$home/$column" ] || ! command -v "$py" >/dev/null 2>&1; then
   # A MISSING PREREQUISITE IS A FAILURE WITH AN INSTRUCTION, NOT A SKIP. The
   # doctrine is explicit, and the alternative -- pass quietly when the checker is
   # absent -- turns "I did not check" into "it passed", which is rule 1 violated
   # by the tool meant to enforce it.
   echo "pre-commit: cannot reach coherence, so this commit was NOT gated." >&2
-  echo "  looked for: $home/$column" >&2
+  echo "  looked for: $home/$column, run by $py" >&2
   echo "  fix:  export COHERENCE_HOME=/path/to/fourier-coherence" >&2
+  echo "        (and COHERENCE_COLUMN / COHERENCE_PYTHON if this box differs)" >&2
   echo "  or:   git commit --no-verify   (and know that it was not checked)" >&2
   exit 1
 fi
 
-out="$(cd "$home" && python3 -m coherence.cli gate \
-        --config "$column" --repo "$repo_name" --class-a-only 2>&1)"
+# Run from the directory that holds the checkouts, with coherence on the import
+# path. vesper's and hetzner's columns name an absolute root, but devwin's
+# mirror column says `root: .`, which resolves against the working directory:
+# run from coherence's own checkout it found no fourier-basis and every devwin
+# commit read "no attached repo matched". --path is the checkout being
+# committed: by name alone the gate judged the column's copy, so a commit in any
+# second clone was gated on somebody else's tree.
+out="$(cd "$(dirname "$repo_root")" && PYTHONPATH="$home" \
+        "$py" -m coherence.cli gate \
+        --config "$home/$column" --repo "$repo_name" --path "$repo_root" \
+        --class-a-only 2>&1)"
 status=$?
 
 if [ $status -eq 0 ]; then
@@ -66,9 +109,15 @@ fi
 
 echo "$out" >&2
 echo >&2
-case $status in
-  1) echo "pre-commit: NO-GO -- a check failed. Nothing was committed." >&2 ;;
-  3) echo "pre-commit: NO-GO -- PARTIAL. Something was not measured, which is not a pass." >&2 ;;
+# A verdict is the gate's own NO-GO line, not the exit code alone: Python exits
+# 1 on a crash at import, which read here as "a check failed" over a traceback,
+# and the devwin installer kept a hook that refused every commit (fifth review,
+# 2026-10-31).
+verdict=no
+printf '%s\n' "$out" | grep -q '^NO-GO -- ' && verdict=yes
+case $verdict$status in
+  yes1) echo "pre-commit: NO-GO -- a check failed. Nothing was committed." >&2 ;;
+  yes3) echo "pre-commit: NO-GO -- PARTIAL. Something was not measured, which is not a pass." >&2 ;;
   *) echo "pre-commit: coherence could not reach a verdict (exit $status)." >&2 ;;
 esac
 echo "  Fix what it names, or commit with --no-verify if you know better." >&2
