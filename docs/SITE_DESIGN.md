@@ -361,10 +361,11 @@ In the operator's words:
 > button is the same place as action A on another surface. If you want to change
 > option B, the menu is exactly where you expect it to be."
 
-So it holds two things: a token vocabulary -- colours, radii, spacing -- and a
-grammar of where things go and how they behave. The second has never had a home
-in most projects, and it is the one that makes three separately-built surfaces
-feel like one site.
+So it holds two things: a token vocabulary -- colours, typefaces, radii,
+spacing -- and a grammar of where things go and how they behave. Every font is
+a token, so a change to the site's design switches every surface at once. The
+second has never had a home in most projects, and it is the one that makes
+three separately-built surfaces feel like one site.
 
 The public pages on 41chan.net -- the one you are reading included -- joined on
 2026-09-17, and they were the last surface in the estate still painting from
