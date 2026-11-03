@@ -1,0 +1,157 @@
+# What technetium holds about a person, for `coherence erase`.
+#
+# Specification: fourier-basis docs/design/DATA_ERASURE.md section 4; the
+# inventory rows cited are DATA_ERASURE_INVENTORY/fourier.md section 1.7 and
+# section 4, and matrix.md section 5.
+#
+# Technetium has no server of its own. It holds (a) Matrix account data and
+# profile fields it WRITES as the user, which live in Synapse (declared tc.*
+# here because the keys and shapes are Technetium's; the rows are erased with
+# the account by the Synapse side), and (b) browser stores the server cannot
+# reach, erased by the client itself at request time. The served build holds
+# no person data.
+
+# The client-side purge. Its tracked file is the adapter for section (b);
+# a server-side run has nothing to execute here (inventory 1.7: "the server
+# cannot reach them").
+adapter: src/client/browserPurge.ts
+
+stores:
+  # ---- (a) server-side: Synapse account data written with setAccountData ----
+  # matrix.md 5a. Rows live in Synapse account_data (and profiles).
+
+  # m.direct, the DM map: other people's mxids -> DM room ids.
+  - id: tc.account-data.direct
+    where: Synapse postgres account_data, type m.direct (written by src/client/dm.ts:80, dmClose.ts:154)
+    holds: [mxid, dm_room_ids]
+    locate: "account_data rows for the subject's user_id with account_data_type m.direct"
+    fields:
+      content: {fate: GONE}
+
+  # m.ignored_user_list: the mxids the person ignores.
+  - id: tc.account-data.ignored-users
+    where: Synapse postgres account_data, type m.ignored_user_list (src/client/ignoredUsers.ts)
+    holds: [mxid]
+    locate: "account_data rows for the subject's user_id with account_data_type m.ignored_user_list"
+    fields:
+      content: {fate: GONE}
+
+  # Layout, ticker, pinned-fold, replace preferences: client preferences that
+  # follow the user across devices. None names another person.
+  - id: tc.account-data.layout
+    where: Synapse postgres account_data, type net.41chan.tc.layout (src/ui/spaceState.ts:9)
+    holds: [mxid]
+    locate: "account_data rows for the subject's user_id with that account_data_type"
+    fields:
+      content: {fate: GONE}
+
+  - id: tc.account-data.ticker
+    where: Synapse postgres account_data, type net.41chan.tc.ticker (src/ui/tickerCollapse.ts:7)
+    holds: [mxid]
+    locate: "account_data rows for the subject's user_id with that account_data_type"
+    fields:
+      content: {fate: GONE}
+
+  - id: tc.account-data.pinned-folded
+    where: Synapse postgres account_data, type net.41chan.tc.pinned_folded (src/client/pinnedFold.ts:20)
+    holds: [mxid]
+    locate: "account_data rows for the subject's user_id with that account_data_type"
+    fields:
+      content: {fate: GONE}
+
+  - id: tc.account-data.replace-prefs
+    where: Synapse postgres account_data, type net.41chan.replace_prefs (src/client/pictureReplace.ts:35)
+    holds: [mxid]
+    locate: "account_data rows for the subject's user_id with that account_data_type"
+    fields:
+      content: {fate: GONE}
+
+  # im.ponies.user_emotes is READ only (emojiPacks.ts:88-91); no write was
+  # found, but another client could have written one, so it is declared.
+  - id: tc.account-data.user-emotes
+    where: Synapse postgres account_data, type im.ponies.user_emotes (read at src/client/emojiPacks.ts:88)
+    holds: [mxid]
+    locate: "account_data rows for the subject's user_id with that account_data_type"
+    fields:
+      content: {fate: GONE}
+
+  # Secret storage, cross-signing and key backup are written by the SDK
+  # (keyBackup.ts, recovery.ts, secretStorageKey.ts). Inventory marks them
+  # INFERRED; the types are the Matrix-standard ones.
+  - id: tc.account-data.crypto
+    where: Synapse postgres account_data, types m.secret_storage.*, m.cross_signing.*, m.megolm_backup.v1 (matrix-js-sdk, driven by src/client/keyBackup.ts, recovery.ts)
+    holds: [mxid]
+    locate: "account_data rows for the subject's user_id with those account_data_type values"
+    fields:
+      content: {fate: GONE}
+
+  # MSC4133 extended profile field, plus displayname and avatar_url.
+  - id: tc.profile
+    where: Synapse postgres profiles, displayname, avatar_url and fields net.41chan.look (src/client/profile.ts:22, look.ts:31, lookStore.ts:187)
+    holds: [mxid, display_name, avatar_mxc]
+    locate: "the profiles row for the subject's user_id"
+    fields:
+      displayname: {fate: GONE}
+      avatar_url: {fate: GONE}
+      net.41chan.look: {fate: GONE}
+
+  # ---- (b) the person's browser: the server cannot reach these ----
+  # matrix.md 5b, fourier.md 1.7 browser table. Erased at request time by the
+  # client's executePurge (src/client/browserPurge.ts); the panel shows the
+  # receipt and says other devices keep theirs until purged there. No bound:
+  # nothing here outlives the purge on the device that ran it.
+
+  - id: tc.browser.session
+    where: the person's browser, localStorage matrix-client:session (src/client/session.ts:13)
+    holds: [mxid]
+    fields:
+      access_token: {fate: GONE}
+      refresh_token: {fate: GONE}
+      userId: {fate: GONE}
+      deviceId: {fate: GONE}
+      idTokenClaims: {fate: GONE}
+
+  - id: tc.browser.preferences
+    where: the person's browser, localStorage net.41chan.* (spatial_local, spatial_settings, e2ee_opt_out, domain_opt_in, replace_picture_opt_in, show_system_events, link_previews, member_list_display, media_tag_prefs, room_list_settings, chat_background, server_shape, egress_consent)
+    holds: [mxid]
+    fields:
+      net.41chan.*: {fate: GONE}
+
+  - id: tc.browser.oidc-state
+    where: the person's browser, sessionStorage mx_oidc_* (src/client/oidcAuthorize.ts:56)
+    holds: [mxid]
+    fields:
+      mx_oidc_state: {fate: GONE}
+
+  - id: tc.browser.sync-cache
+    where: the person's browser, IndexedDB matrix-js-sdk:<syncDbName> (src/client/buildClient.ts:33)
+    holds: [mxid, display_name, dm_room_ids]
+    fields:
+      rooms_and_events: {fate: GONE}
+
+  # The one exception, by operator ruling 2026-10-03: "Keys only via the
+  # reset". Purge keeps the device's E2EE keys; deleting them is the separately
+  # gated reset in Manage session. They are the person's own, on their own
+  # device, and unreadable to anyone else.
+  - id: tc.browser.crypto-store
+    where: the person's browser, IndexedDB matrix-js-sdk::matrix-sdk-crypto* (src/client/crypto.ts:195, storeNames.ts:7)
+    holds: [mxid]
+    fields:
+      device_keys:
+        fate: KEEP
+        reason: RULE
+        reader:
+          at: "src/client/browserPurge.ts:24 keepsDatabase keeps the crypto store; the keys go only through the reset"
+          token: keepsDatabase
+
+  - id: tc.browser.cache
+    where: the person's browser, Cache API (cleared by executePurge, src/client/browserPurge.ts)
+    holds: [mxid]
+    fields:
+      cached_files: {fate: GONE}
+
+# /srv/tc is the served static build (index.html, assets, release.json,
+# releases/, preview/, history/ on 41chan); it carries no person data.
+paths:
+  - path: /srv/tc
+    holds: []
