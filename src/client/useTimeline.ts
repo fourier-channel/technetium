@@ -259,6 +259,12 @@ export function rendersAsItem(ev: MatrixEvent, opts: ToItemsOptions = {}): boole
   // Dropped before anything else looks at it, so a hidden system event cannot
   // break a sender cluster in two or strand a day separator above nothing.
   if (!opts.showSystemEvents && isSystemEvent(ev.getType())) return false
+  // The SDK keeps every redaction in the live timeline. What it removed shows
+  // as its own "(message deleted)" row; the redaction itself is never one, or
+  // it draws as a literal `[m.room.redaction]` beside it -- and position-prune
+  // (synapse-deploy) redacts about 90 old positions per room on its first run.
+  // Not a system event: showing those must not bring these back.
+  if (ev.getType() === 'm.room.redaction') return false
   // Edits and reactions modify another event; they are never rows of their
   // own. Without this they render as duplicate messages and `[m.reaction]`
   // junk -- which is exactly what the client does today.
