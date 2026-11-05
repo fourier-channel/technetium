@@ -26,6 +26,9 @@ import { BUG_REPORT } from '../../src/client/bugReport.ts'
 
 const TRAILER = /^Release-note:[ \t]*(.+?)[ \t]*$/gm
 const ADDRESS = /(https?:\/\/|www\.|\b[a-z0-9-]+\.(?:net|com|org|io|dev|app)\b|\b\d{1,3}(?:\.\d{1,3}){3}\b)/i
+const RECORD = '\x1e'
+const FIELD = '\x1f'
+export const LOG_FORMAT = '%x1e%h%x1f%s%x1f%B%x1f'
 
 /** Every Release-note trailer in a stretch of `git log --format=%B` output, in order, once each. */
 export function releaseNotes(log: string): string[] {
@@ -44,6 +47,24 @@ export function releaseNotes(log: string): string[] {
 /** A note that names an address, or null when none does. */
 export function addressIn(notes: readonly string[]): string | null {
   return notes.find((n) => ADDRESS.test(n)) ?? null
+}
+
+/**
+ * The commits in a stretch of log that touch src/ and carry no note, as
+ * `<sha> <subject>`. The log is `git log --name-only --format=` LOG_FORMAT.
+ *
+ * A WARNING, NEVER A GATE: touching src/ is a weak proxy. A comment-only change
+ * lands here (d33f272) beside a real miss (2ece881, whose note had to be added
+ * after the fact), so a refusal would only teach sessions to write junk notes.
+ */
+export function unannounced(log: string): string[] {
+  const out: string[] = []
+  for (const record of log.split(RECORD).slice(1)) {
+    const [sha = '', subject = '', body = '', files = ''] = record.split(FIELD)
+    const touchesSrc = files.split('\n').some((f) => f.startsWith('src/'))
+    if (touchesSrc && releaseNotes(body).length === 0) out.push(`${sha} ${subject}`)
+  }
+  return out
 }
 
 export function announcement(version: string, commit: string, notes: readonly string[]): string {

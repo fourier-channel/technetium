@@ -156,6 +156,15 @@ ANNOUNCE_EOF
 # The commit a release was built from, or - when it has none to diff from.
 commit_of() { case "$1" in -|*-dirty) echo - ;; *) echo "${1##*-}" ;; esac; }
 
+# Warn, before anything is announced, about commits that touch src/ with no
+# Release-note: the announcement is built from those trailers, and a promote only
+# printed it after the flip, when a miss was already "tuning under the hood"
+# (2ece881). A warning and never a refusal: tools/release/announcement.ts says why.
+notes_check() {
+  [ "$1" != "-" ] || return 0
+  node tools/release/missing-notes.ts "$1" "$2" || echo ">> could not check for missing release notes ($1..$2); read the commits by hand" >&2
+}
+
 # The next free CalVer for today (UTC), from the tags origin holds.
 next_version() {
   git fetch -q --tags origin
@@ -182,6 +191,7 @@ case "${1:-}" in
     echo ">> preview -> ${RELEASE}"
     remote preview "$REMOTE_BASE" "$RELEASE"
     remote prune "$REMOTE_BASE" "$KEEP" > /dev/null
+    notes_check "$(commit_of "$(remote target "$REMOTE_BASE" current)")" HEAD
     echo ">> production untouched. Click through build.tc.41chan.net, then ./deploy.sh --promote"
     ;;
   --promote)
@@ -199,6 +209,7 @@ case "${1:-}" in
       NEW_TAG=1
       remote stamp "$REMOTE_BASE" "$P" "$VERSION"
     fi
+    notes_check "$SINCE" "$COMMIT"
     echo ">> promoting $P as v$VERSION"
     remote promote "$REMOTE_BASE"
     want="$(ssh "$REMOTE" cat -- "${REMOTE_BASE}/current/index.html" | asset_of)"

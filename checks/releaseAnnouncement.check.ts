@@ -3,7 +3,7 @@
 //
 // WHAT THIS CANNOT SEE: the room. deploy.sh sends the text through her hub
 // socket, and the hub's own say is what reaches Matrix.
-import { addressIn, announcement, releaseNotes } from '../tools/release/announcement.ts'
+import { addressIn, announcement, releaseNotes, unannounced } from '../tools/release/announcement.ts'
 import { BUG_REPORT } from '../src/client/bugReport.ts'
 
 let failures = 0
@@ -33,6 +33,20 @@ check('it is ASCII', /^[\x00-\x7f]*$/.test(text))
 check('a problem goes to the bug intake, not this room (tc.149)',
   text.includes(`Send ${BUG_REPORT.command} `) && text.includes(` in ${BUG_REPORT.room} or in a DM with me.`) &&
   !/this room/.test(text), text)
+
+// The stretch the promote warns about, in the shape `git log --format=LOG_FORMAT
+// --name-only` prints: a record separator, then sha, subject, body, then the files.
+const rec = (sha: string, subject: string, body: string, ...files: string[]) =>
+  `\x1e${sha}\x1f${subject}\x1f${subject}\n\n${body}\n\x1f\n\n${files.join('\n')}\n`
+const stretch = [
+  rec('aaa1111', 'timeline: a fix', 'No note here.', 'src/ui/Timeline.tsx', 'checks/x.check.ts'),
+  rec('bbb2222', 'topic: editable', 'Release-note: Tap a topic.', 'src/ui/Header.tsx'),
+  rec('ccc3333', 'hydrate: pointer', 'Plumbing.', 'docs/WORKING-RULES.md'),
+  rec('ddd4444', 'mentions it', 'see the Release-note: rule above', 'src/client/a.ts'),
+].join('')
+check('a commit touching src/ with no note is listed, with its subject; a noted one and a docs one are not',
+  JSON.stringify(unannounced(stretch)) === JSON.stringify(['aaa1111 timeline: a fix', 'ddd4444 mentions it']), unannounced(stretch))
+check('an empty stretch lists nothing', unannounced('').length === 0)
 
 check('a URL is refused', addressIn(['See https://example.test']) !== null)
 check('a host is refused', addressIn(['now on tc.41chan.net']) !== null)
