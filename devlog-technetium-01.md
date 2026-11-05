@@ -4400,3 +4400,24 @@ URL. In Matrix that means an edit.
 that handles `m.image` without looking at `m.relates_to` treats every picture
 edit as a new picture. Consume edits first.
 
+
+## 2026-11-05 -- frequent processes turned into skills, and a note warning at release
+
+The operator asked which processes the org runs often enough to become skills.
+Eighty-two session transcripts were mined and five working sessions consulted.
+Five skills were built, attacked and evaluated, and live in canon: deploy,
+paste block, workflow, take-back and machine triage. They are linked per
+machine, not carried in this repo, because this repo is public.
+
+One change landed here. Commit `e8300c4`: `deploy.sh` now warns at preview and
+at promote about a code commit with no `Release-note:` trailer, after `2ece881`
+shipped without one and needed a note after the fact (`26777f3`).
+
+**Verified.** The warning's logic and the gate. **Not verified.** A real
+preview or promote carrying the warning end to end.
+
+**draft-35 (gotcha) -- a trigger eval that stops at the first tool measures
+the setup too.** Six of 15 prompts loaded their skill in round one, and 45 of 45
+after a rewording. The test setup changed between rounds as well, so the jump
+is not all wording. Held-out prompts gave 24 of 30, which is the number to
+quote.
