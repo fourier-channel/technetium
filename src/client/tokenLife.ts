@@ -118,12 +118,19 @@ function notSignedIn(account: NonNullable<BooruStatus['booru']>['account'], boor
     // Linked, yet not signed in: only signing out of the booru leaves that.
     case 'linked':
       return { label, tone: 'unknown', text: `You signed out of your booru account${name ? `, ${name}` : ''}.`, link: { href: viaMatrix, text: name ? `Continue as ${name}` : 'Sign back in' } }
-    // A second factor the account's owner set; Matrix is only one (chanbooru
-    // SessionLoader#load_matrix_account).
+    // A second factor the account's owner set; Matrix stands in for the
+    // password only, so the same link asks for the code (chanbooru
+    // SessionsController#new).
     case 'two_factor':
-      return { label, tone: 'unknown', text: `Not signed in: your booru account${name ? `, ${name},` : ''} has two-factor sign-in, so Matrix does not sign it in.`, link: { href: `${booruOrigin}/login`, text: 'Sign in with its password and code' } }
+      return { label, tone: 'unknown', text: `Not signed in: your booru account${name ? `, ${name},` : ''} has two-factor sign-in, so Matrix does not sign it in alone.`, link: { href: viaMatrix, text: `Continue${name ? ` as ${name}` : ''} with your two-factor code` } }
+    // Deactivated by the site staff: it keeps the Matrix ID, so no new account
+    // is made under the name, and only an administrator restores it.
+    case 'deleted':
+      return { label, tone: 'warn', text: 'Not signed in: your booru account was deactivated by the site staff. If you want it back, ask an administrator in the 41chan chat.' }
+    // An account made before Matrix sign-in, under the same name. It may be
+    // the viewer's own: signing in to it there offers to link it.
     case 'taken':
-      return { label, tone: 'warn', text: `Not signed in: the booru name ${name ?? 'of your Matrix username'} belongs to another account.`, link: signIn }
+      return { label, tone: 'warn', text: `Not signed in: a booru account named ${name ?? 'as your Matrix username'} already exists and is not linked to your Matrix ID. If it is yours, sign in to it with its password and tick the box to link it.`, link: signIn }
     case 'invalid':
       return { label, tone: 'warn', text: `Not signed in: your Matrix username can't be a booru name${account?.reason ? ` (it ${account.reason})` : ''}.`, link: signIn }
     default:
