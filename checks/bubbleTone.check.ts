@@ -58,6 +58,11 @@ console.log('\n-- thinking --')
     tone('(if anyone is still reading this)') === 'thinking')
   check('trailing off is a thought', tone('i suppose so...') === 'thinking')
   check('a real ellipsis counts too', tone('hm…') === 'thinking')
+  check('a leading ellipsis is a thought', tone('...testing') === 'thinking')
+  check('a leading real ellipsis is a thought', tone('\u2026or maybe not') === 'thinking')
+  check('a leading ellipsis beats a question mark', tone('...really?') === 'thinking')
+  check('a leading ellipsis beats a shout', tone('...WAIT FOR IT') === 'thinking')
+  check('an ellipsis in the middle is not a thought', tone('well... fine') === 'standard')
 
   // The brackets are the stronger signal: an aside that happens to ask is
   // still an aside.

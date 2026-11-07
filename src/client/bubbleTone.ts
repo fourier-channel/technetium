@@ -8,8 +8,9 @@
 // bubbles do not care where the answer comes from.
 //
 // Conventions people already use, not ones invented here: a trailing '?' asks,
-// a trailing '!' or all-caps shouts, and a wholly parenthesised or trailing-off
-// line is an aside. Nothing new to learn, and nothing to opt into.
+// a trailing '!' or all-caps shouts, and a wholly parenthesised line, or one
+// that trails off or picks up with an ellipsis, is an aside. Nothing new to
+// learn, and nothing to opt into.
 //
 // Pure, so the harness can load it (O-tp9).
 // ---------------------------------------------------------------------------
@@ -25,8 +26,10 @@ export function bubbleTone(body: string): BubbleTone {
   if (!text) return 'standard'
 
   // An aside, first: "(if anyone is still reading)" is a thought even when it
-  // ends in a question mark, because the brackets are the stronger signal.
-  if (/^\(.*\)$/s.test(text) || /(\.\.\.|…)$/.test(text)) return 'thinking'
+  // ends in a question mark, because the brackets are the stronger signal. An
+  // ellipsis at EITHER end is a thought: "i suppose so..." trails off, and
+  // "...or maybe not" picks a thought back up (operator, 2026-11-07).
+  if (/^\(.*\)$/s.test(text) || /^(\.\.\.|\u2026)|(\.\.\.|\u2026)$/.test(text)) return 'thinking'
 
   // Volume beats interrogation, so "WHAT?!" shouts rather than asks -- which is
   // how it reads out loud.
