@@ -106,7 +106,7 @@ function TokenLives() {
     ? [
         accessTokenLine(session.accessTokenExpiresAt, now),
         refreshTokenLine(!!session.refreshToken, session.refreshTokenIssuedAt, now),
-        ...booruLines(booru, now),
+        ...booruLines(booru, now, BOORU_ORIGIN),
       ]
     : [{ label: 'This sign-in', tone: 'bad', text: 'No session is stored in this browser any more. Log out and sign in again.' }]
 
@@ -121,7 +121,10 @@ function TokenLives() {
         {lines.map((l) => (
           <div key={l.label} className="tc-token-life-row" data-tone={l.tone}>
             <dt>{l.label}</dt>
-            <dd>{l.text}</dd>
+            <dd>
+              {l.text}
+              {l.link && <> <a href={l.link.href} target="_blank" rel="noopener noreferrer">{l.link.text}</a></>}
+            </dd>
           </div>
         ))}
       </dl>

@@ -29,6 +29,8 @@ export interface LifeLine {
   label: string
   text: string
   tone: LifeTone
+  // The one thing to do about it, where there is one.
+  link?: { href: string; text: string }
 }
 
 // "4m 05s", "1h 07m", "3d 2h": the two largest units, which is what a person
@@ -76,7 +78,15 @@ export function refreshTokenLine(held: boolean, issuedAt: number | undefined, no
 // What modulation/session_status answers, as far as this panel reads it.
 // Everything optional: it is another service's JSON.
 export interface BooruStatus {
-  booru?: { signed_in?: boolean; name?: string | null; started_at?: number | null }
+  booru?: {
+    signed_in?: boolean
+    name?: string | null
+    started_at?: number | null
+    // Present when this browser is signed in to Matrix and not to the booru:
+    // the booru account that goes with the Matrix username, and why it is
+    // not signed in (chanbooru MatrixAccount).
+    account?: { state?: string; name?: string | null; reason?: string | null } | null
+  }
   matrix?: {
     linked?: boolean
     info?: { expires_at?: number | null } | null
@@ -91,7 +101,33 @@ export type BooruRead =
   | { state: 'failed'; why: string }
   | { state: 'read'; status: BooruStatus; readAt: number }
 
-export function booruLines(read: BooruRead | null, now: number): LifeLine[] {
+// Every Matrix account has a booru account under the same name, made and
+// signed in the first time the booru is shown (operator, 2026-11-07). When it
+// is not signed in, the line says why and links the way on; the booru's own
+// sign-in page says the rest, so no second copy of its words is kept here.
+function notSignedIn(account: NonNullable<BooruStatus['booru']>['account'], booruOrigin: string): LifeLine {
+  const label = 'Booru account'
+  const signIn = { href: `${booruOrigin}/login`, text: "Open the booru's sign-in page" }
+  // Lifts a sign-out and signs the Matrix username's account in, making it
+  // first if there is none (chanbooru SessionsController#new).
+  const viaMatrix = `${booruOrigin}/login?matrix=1`
+  const name = account?.name
+  switch (account?.state) {
+    case 'available':
+      return { label, tone: 'warn', text: 'Not signed in: your booru account has not been made yet.', link: { href: viaMatrix, text: 'Create your booru account with the same name as your Matrix username' } }
+    // Linked, yet not signed in: only signing out of the booru leaves that.
+    case 'linked':
+      return { label, tone: 'unknown', text: `You signed out of your booru account${name ? `, ${name}` : ''}.`, link: { href: viaMatrix, text: name ? `Continue as ${name}` : 'Sign back in' } }
+    case 'taken':
+      return { label, tone: 'warn', text: `Not signed in: the booru name ${name ?? 'of your Matrix username'} belongs to another account.`, link: signIn }
+    case 'invalid':
+      return { label, tone: 'warn', text: `Not signed in: your Matrix username can't be a booru name${account?.reason ? ` (it ${account.reason})` : ''}.`, link: signIn }
+    default:
+      return { label, tone: 'unknown', text: 'Not signed in in this browser.', link: signIn }
+  }
+}
+
+export function booruLines(read: BooruRead | null, now: number, booruOrigin: string): LifeLine[] {
   if (read === null || read.state === 'reading') {
     return [{ label: 'Booru', tone: 'unknown', text: "Reading the booru's session..." }]
   }
@@ -115,7 +151,7 @@ export function booruLines(read: BooruRead | null, now: number): LifeLine[] {
       text: `Signed in${acct.name ? ` as ${acct.name}` : ''}${since}. Its cookie's expiry renews with every booru page you load.`,
     })
   } else {
-    lines.push({ label: 'Booru account', tone: 'unknown', text: 'Not signed in in this browser.' })
+    lines.push(notSignedIn(acct?.account, booruOrigin))
   }
   const pass = status.matrix
   const exp = pass?.info?.expires_at

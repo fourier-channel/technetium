@@ -77,24 +77,36 @@ console.log('== the booru, as session_status says it')
     matrix: { linked: true, info: { expires_at: serverNow + 5 * 3600 } },
     now: serverNow,
   }
-  const lines = booruLines({ state: 'read', status, readAt }, T + 30_000)
+  const lines = booruLines({ state: 'read', status, readAt }, T + 30_000, 'https://b')
   const acct = lines.find((l) => l.label === 'Booru account')
   const pass = lines.find((l) => l.label === 'Booru picture pass')
   check('the account: signed in as whom, for how long, aged by our clock since the read',
     acct?.tone === 'ok' && /^Signed in as saber, for 1h 00m\./.test(acct.text), acct)
   check('the pass: its life by the booru\'s own count, aged since the read, whatever our clock says',
     pass?.tone === 'ok' && /^4h 59m left\./.test(pass.text), pass)
-  const ended = booruLines({ state: 'read', status, readAt }, T + 5 * 3600_000 + 60_000)
+  const ended = booruLines({ state: 'read', status, readAt }, T + 5 * 3600_000 + 60_000, 'https://b')
   check('a pass past its end says ended, and what happens next',
     ended.find((l) => l.label === 'Booru picture pass')?.tone === 'warn' && /^Ended 1m 00s ago/.test(ended.find((l) => l.label === 'Booru picture pass')!.text))
-  const noInfo = booruLines({ state: 'read', status: { ...status, matrix: { linked: true, info: null } }, readAt }, T)
+  const noInfo = booruLines({ state: 'read', status: { ...status, matrix: { linked: true, info: null } }, readAt }, T, 'https://b')
   check('an expiry the booru does not publish is said to be unpublished, not invented',
     noInfo.find((l) => l.label === 'Booru picture pass')?.tone === 'unknown' && !/left/.test(noInfo.find((l) => l.label === 'Booru picture pass')!.text))
-  const none = booruLines({ state: 'read', status: { booru: { signed_in: false }, matrix: { linked: false }, now: serverNow }, readAt }, T)
+  const none = booruLines({ state: 'read', status: { booru: { signed_in: false }, matrix: { linked: false }, now: serverNow }, readAt }, T, 'https://b')
   check('no account and no pass: both said', /Not signed in/.test(none[0].text) && /^None/.test(none[1].text), none)
-  const failed = booruLines({ state: 'failed', why: 'HTTP 403' }, T)
+  check('no account said: the booru sign-in page is linked', none[0].link?.href === 'https://b/login', none[0])
+  const acctLine = (account: object) => booruLines({ state: 'read', status: { booru: { signed_in: false, account }, matrix: { linked: true }, now: serverNow }, readAt }, T, 'https://b')[0]
+  const fresh = acctLine({ state: 'available', name: 'alice' })
+  check('an account not made yet: the link makes it, in the words asked for',
+    fresh.link?.href === 'https://b/login?matrix=1' && fresh.link.text === 'Create your booru account with the same name as your Matrix username', fresh)
+  const out = acctLine({ state: 'linked', name: 'alice' })
+  check('signed out of the booru: says so, and continues as that account', /signed out of your booru account, alice/.test(out.text) && out.link?.href === 'https://b/login?matrix=1' && out.link.text === 'Continue as alice', out)
+  const taken = acctLine({ state: 'taken', name: 'alice' })
+  check('a name another account holds: says so, and links the sign-in page, not the maker', /alice belongs to another account/.test(taken.text) && taken.link?.href === 'https://b/login', taken)
+  const invalid = acctLine({ state: 'invalid', name: 'x=y', reason: "can't contain '='" })
+  check("a name the booru refuses: says why in the booru's words", /\(it can't contain '='\)/.test(invalid.text) && invalid.link?.href === 'https://b/login', invalid)
+  check('a state this panel does not know: the plain line, never a guess', acctLine({ state: 'merged' }).text === 'Not signed in in this browser.')
+  const failed = booruLines({ state: 'failed', why: 'HTTP 403' }, T, 'https://b')
   check('a failed read names its reason and the remedy', failed.length === 1 && failed[0].tone === 'bad' && /HTTP 403/.test(failed[0].text) && /Read it again/.test(failed[0].text), failed)
-  check('reading is said as reading, never as a state', booruLines({ state: 'reading' }, T)[0].tone === 'unknown' && booruLines(null, T)[0].tone === 'unknown')
+  check('reading is said as reading, never as a state', booruLines({ state: 'reading' }, T, 'https://b')[0].tone === 'unknown' && booruLines(null, T, 'https://b')[0].tone === 'unknown')
 }
 
 console.log('== the read itself')
