@@ -26,6 +26,10 @@ import type { PresenceState } from '../client/presence'
 import { MemberEvent } from './MemberEvent'
 import { useLightbox, type LightboxItem, type LightboxThread } from './lightboxContext'
 import { buildMediaSequence, imageMeta, lightboxItem, type MediaSequence } from './mediaSequence'
+import { useInterfacePrefs } from '../client/interfaceStore'
+import { shownTone, type InterfacePrefs } from '../client/interfacePrefs'
+import { useMediaTagLine } from '../client/useMediaTags'
+import { booruPostUrl } from '../client/booruUrl'
 import { linkify } from './linkify'
 import { useChatBackground } from './chatBackground'
 import { ChatBackdrop, ChatBackgroundMenu } from './ChatBackground'
@@ -491,13 +495,36 @@ export function Timeline({ room, onOpenThread, onOpenRoom, threadListOpen, onTog
   )
 }
 
-export function Row({
+// The row as the person chose to see the conversation (Settings -> Interface
+// Options): the client as designed, or IRC style. Branched HERE, above every
+// hook, so each shape keeps its own hooks in a fixed order; switching modes
+// remounts the rows, which is what a different drawing is.
+export function Row(props: RowProps) {
+  const { client } = useClient()
+  const { prefs } = useInterfacePrefs(client)
+  if (prefs.mode === 'irc') return <IrcRow item={props.item} onOpenThread={props.onOpenThread} sequence={props.sequence} />
+  return <BubbleRow {...props} prefs={prefs} />
+}
+
+interface RowProps {
+  item: TimelineItem
+  onOpenThread?: (roomId: string, rootId: string) => void
+  sequence?: MediaSequence
+  narrow?: boolean
+  presence?: PresenceState
+}
+
+function BubbleRow({
   item,
   onOpenThread,
   sequence,
   narrow = false,
   presence,
+  prefs,
 }: {
+  // Styled off: every line is the plain bubble (INTERFACE_OPTIONS IO8). The
+  // tone is still read; only the drawing changes.
+  prefs: InterfacePrefs
   item: TimelineItem
   onOpenThread?: (roomId: string, rootId: string) => void
   sequence?: MediaSequence
@@ -565,21 +592,7 @@ export function Row({
   // any edit applied.
   const captionSource = kind === 'gallery' ? (cells?.[0]?.getContent() ?? null) : isMediaRow ? item.content : null
   const captionContent = hasCaption(captionSource) ? captionSource : null
-  // Does this line call on ME (L28)? Your name in its m.mentions, or an @room
-  // from someone the room lets notify everyone -- the questions the server's
-  // push rules ask, so the row is marked exactly when the room list's "@" lit
-  // for it. A gallery is asked through its first image, like its caption.
-  const myId = client?.getUserId() ?? ''
-  const mentionSource = kind === 'gallery' ? (cells?.[0]?.getContent() ?? null) : kind === 'message' ? item.content : null
-  const callsOnMe =
-    !!myId &&
-    senderId !== myId &&
-    mentionsMe(mentionSource, myId, () => {
-      const r = client?.getRoom(roomId)
-      if (!r) return false
-      const pl = r.currentState.getStateEvents('m.room.power_levels', '')?.getContent()
-      return roomMentionPermission(pl, senderId, roomCreators(r)).allowed
-    })
+  const callsOnMe = rowCallsOnMe(item, client, senderId, roomId)
 
   // A face typed into the message flashes over the sender's avatar. Text
   // messages only -- there is nothing to read a face out of a picture.
@@ -590,10 +603,11 @@ export function Row({
 
   // Bubbles are for words. A picture in a speech bubble is not a speech bubble,
   // and a gallery's geometry is its own.
-  const bubble =
+  const detected =
     kind === 'message' && !isMediaRow
       ? bubbleTone(typeof item.content.body === 'string' ? item.content.body : '')
       : null
+  const bubble = shownTone(detected, prefs)
 
   // U5. Every toned bubble opens as the ordinary pill and then becomes
   // something -- the burst, the cloud, or a pill with question marks rising off
@@ -654,13 +668,9 @@ export function Row({
     }
   }, [speaks, narrow, senderLook.anim, reducedMotion, animationsEnabled, item.id, event])
 
-  let body: React.ReactNode
-  if (kind === 'gallery' && cells) {
-    body = <GalleryBody cells={cells} layout={layout ?? 'grid'} thread={thread} />
-  } else if (kind === 'message') {
-    const content = item.content
-    const mxc = typeof content.url === 'string' ? content.url : ''
-    if (content.msgtype === 'm.image' && encFile) {
+  const body = rowBody(item, client, openProfile, {
+    gallery: (cells) => <GalleryBody cells={cells} layout={layout ?? 'grid'} thread={thread} />,
+    encrypted: (content, encFile) => {
       // Encrypted picture. No thumbnail exists on this server for encrypted
       // media and none can (H3), so this is the full-size download, decrypted
       // here. No MediaTags either: the tag hub is keyed on a public mxc, and an
@@ -672,7 +682,7 @@ export function Row({
       // whole picture. Falls back to the full image, which is what an older
       // message or another client without thumbnails will give us.
       const thumb = encryptedThumbnailOf(content)
-      body = (
+      return (
         <div>
           <AuthedImage
             file={thumb ? thumb.file : encFile}
@@ -685,11 +695,12 @@ export function Row({
           />
         </div>
       )
-    } else if (content.msgtype === 'm.image' && parseMxc(mxc)) {
+  },
+  image: (mxc, content) => {
       // Image message: render the picture inline via the gateway as a thumbnail
       // (320 snaps to the gateway's allowed sizes). Click opens the full-res
       // image in the lightbox via an authed full fetch.
-      body = (
+      return (
         // The picture and its line of tags are one column: the line's
         // top-left sits on the picture's bottom-left and it is never wider
         // than the picture, so the reactions beside it stay on the picture's
@@ -710,84 +721,8 @@ export function Row({
           <MediaTags mxc={mxc} roomId={event.getRoomId()} />
         </div>
       )
-    } else {
-    // item.content, not event.getContent(): the effective content with the
-    // winning edit applied (S1). isReply strips the spec's "> " fallback quote.
-    const rendered = renderMessageBody(item.content, { isReply: !!item.replyTo })
-    body =
-      rendered.html !== undefined ? (
-        // Sanitized by DOMPurify in renderMessageBody — safe to inject.
-        // The click/key handlers are DELEGATED: an innerHTML subtree cannot
-        // carry React handlers, so spoiler reveal is resolved by walking up
-        // from the event target (W2.L2).
-        // A hidden spoiler reveals on the first click; a mention opens the
-        // person's preview; any other link a new tab (messageLinks.ts).
-        <span
-          className="tc-message-html"
-          {...messageBodyHandlers(openProfile)}
-          dangerouslySetInnerHTML={{ __html: rendered.html }}
-        />
-      ) : (
-        <span style={{ whiteSpace: 'pre-wrap' }}>{linkify(rendered.text ?? '')}</span>
-      )
-    }
-    // A filing reply from Neru-chan points at a BUR; the card under it reads
-    // the BUR live and is where an admin decides it (client/booruBur.ts).
-    const burId = burPointer(content, event.getSender())
-    if (burId !== null) {
-      body = (
-        <>
-          {body}
-          <BurCard id={burId} />
-        </>
-      )
-    }
-    // Her reply to a creator's replacement: what happens to the old version,
-    // and the creator's chance to change their mind (client/booruReplacement.ts).
-    const replacementId = replacementPointer(content, event.getSender())
-    if (replacementId !== null) {
-      body = (
-        <>
-          {body}
-          <ReplacementCard id={replacementId} />
-        </>
-      )
-    }
-  } else if (isPollStart(event)) {
-    // A poll arrives as its own event type, so it is classified 'other' by
-    // toItems and would otherwise render as `[m.poll.start]`.
-    body = <PollBody client={client} room={client?.getRoom(event.getRoomId() ?? '') ?? null} event={event} />
-  } else if (kind === 'encrypted') {
-    // Not "Encrypted" -- WHY it is unreadable, and whether the user can do
-    // anything about it (D-tp16). An unreadable message and a lost message look
-    // identical from where the reader sits, so the difference between "verify
-    // this device" and "this can never be recovered" has to be on the row.
-    // Whether anything could have decrypted this. With the engine absent the
-    // row must say so, not report a failure that never happened (E10).
-    const why = explainUnreadable(event.decryptionFailureReason, !!client?.getCrypto())
-    body = (
-      <span
-        style={{
-          fontStyle: 'italic',
-          opacity: why.outlook === 'pending' ? 0.55 : 0.75,
-          color:
-            why.outlook === 'actionable'
-              ? 'var(--cpd-color-text-critical-primary, #d6483b)'
-              : undefined,
-        }}
-      >
-        {why.outlook === 'pending' ? '🔓' : '🔒'} {why.text}
-      </span>
-    )
-  } else if (kind === 'redacted') {
-    body = <span style={{ fontStyle: 'italic', opacity: 0.6 }}>(message deleted)</span>
-  } else {
-    body = (
-      <span style={{ fontStyle: 'italic', opacity: 0.5 }}>
-        [{event.getType()}]
-      </span>
-    )
-  }
+    },
+  })
 
   // The first message of a run: the one that carries the avatar and the name.
   const head = item.showHeader !== false
@@ -802,7 +737,9 @@ export function Row({
       data-speaker={speaks && !narrow ? 'true' : undefined}
       data-narrow={narrow ? 'true' : undefined}
       data-mentions-me={callsOnMe ? 'true' : undefined}
-      style={{ padding: '4px 0' }}
+      // The space between messages is the person's (IO10): half of it above
+      // the row and half below, so it is the same between every two rows.
+      style={{ padding: 'calc(var(--tc-row-gap, 8px) / 2) 0' }}
     >
       {/* Water left by a squirt. Renders null when dry, which is nearly always
           -- it sits on every row, so the empty path is the cheap one. */}
@@ -866,7 +803,12 @@ export function Row({
             picture or not: resolveAnchor takes the LAST match on screen, and a
             person's most recent line is where you think of them as being.
             Only the speaking line's box is a control. */}
-        <div className="tc-row-speak">
+        <div
+          className="tc-row-speak"
+          // A shape that reaches past its box keeps that much room around it
+          // (IO4; index.css --tc-clear).
+          data-clear={bubble === 'yelling' || bubble === 'thinking' ? bubble : undefined}
+        >
           {!narrow && (
           <span
             ref={avRef}
@@ -885,14 +827,16 @@ export function Row({
             className={bubble ? 'tc-bubble' : 'tc-row-body'}
             data-bubble={bubble ?? undefined}
             // Only the line the avatar is speaking points at it; the lines above
-            // keep their tone and effects and lose the arrow (L12).
-            data-tail={bubble && !speaks && !narrow ? 'off' : undefined}
+            // keep their tone and effects and lose the arrow (L12), so the tail
+            // leaves a line the moment the avatar moves down to a newer one
+            // (IO6). A narrow panel draws no avatar, so nothing has a tail.
+            data-tail={bubble && (!speaks || narrow) ? 'off' : undefined}
             data-phase={bubble ? fx.phase : undefined}
             style={{ fontSize: 14, wordBreak: 'break-word', minWidth: 0 }}
           >
             {/* The shape layer and the question marks. Nothing at all for a
                 plain pill, and nothing for a row with no bubble. */}
-            {bubble && <BubbleFx tone={bubble} phase={fx.phase} seed={item.id} />}
+            {bubble && <BubbleFx tone={bubble} phase={fx.phase} seed={item.id} tail={speaks && !narrow} />}
             {/* Everything the reader actually reads, one positioned block above
                 the shape layer. Without it the layer paints over the words. */}
             <span className={bubble ? 'tc-bubble-ink' : undefined}>
@@ -949,6 +893,342 @@ export function Row({
       </div>
     </div>
   )
+}
+
+// IRC style (INTERFACE_OPTIONS IO11, operator 2026-11-07: "just the person's
+// username in < > with their honorific attached to the front. No avatars, no
+// fancy bubbles, just chat in the box, even, close spacing. Image posts would
+// render as links to the booru post(s). Very, very minimalistic.").
+//
+// One line per message, every line: a dim time, <~name>, the words. What a
+// message SAYS is the same rowBody the bubbles use; only the drawing differs.
+// Kept, as text on the line, because they cost no height and dropping them
+// would lose meaning: the reply it answers, (edited), reactions, a thread's
+// reply count. The hover actions stay (they overlay, never take room). Gone:
+// avatars, bubbles, tails, effects, receipts, link previews, the tag line.
+function IrcRow({
+  item,
+  onOpenThread,
+  sequence,
+}: {
+  item: TimelineItem
+  onOpenThread?: (roomId: string, rootId: string) => void
+  sequence?: MediaSequence
+}) {
+  const { event, kind, cells } = item
+  const { open } = useLightbox()
+  const { client } = useClient()
+  const actions = useMessageActions(item)
+  const openProfile = useProfileOpener()
+  const openInteractions = useInteractionTarget()
+  const roomId = event.getRoomId() ?? ''
+  const senderId = event.getSender() ?? '(unknown)'
+  const senderMember = client?.getRoom(roomId)?.getMember(senderId) ?? null
+  const senderName = decoratedName(senderMember?.name || senderId, displayDecoration(senderId))
+  // The member list's rank rule (members.ts shownHonorific): this room's rank
+  // at full strength, else the highest held elsewhere in the space, dimmed.
+  const elsewhere = useLevelElsewhere(senderId, roomId)
+  const rank = shownHonorific(senderMember?.powerLevel ?? null, [elsewhere])
+  const time = new Date(event.getTs()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const stop = sequence?.stopOf.get(item.id)
+  const thread: LightboxThread | undefined =
+    sequence && stop !== undefined ? { stops: sequence.stops, stop } : undefined
+  const callsOnMe = rowCallsOnMe(item, client, senderId, roomId)
+  const isMedia = kind === 'gallery' || (kind === 'message' && item.content.msgtype === 'm.image')
+  const captionSource = kind === 'gallery' ? (cells?.[0]?.getContent() ?? null) : isMedia ? item.content : null
+  const caption = hasCaption(captionSource) ? renderMessageBody(captionSource) : null
+
+  const body = rowBody(item, client, openProfile, {
+    gallery: (gcells) => {
+      const present = gcells.map(lightboxItem)
+      const items = present.filter((x): x is LightboxItem => x !== null)
+      return (
+        <span className="tc-irc-pictures">
+          {present.map((li, idx) =>
+            li ? (
+              <IrcPicture
+                key={gcells[idx]?.getId() ?? idx}
+                mxc={li.mxc}
+                roomId={roomId}
+                onOpen={() => open(items, items.indexOf(li), thread)}
+              />
+            ) : null,
+          )}
+        </span>
+      )
+    },
+    encrypted: () => (
+      // An encrypted picture is never on the booru (a direct message's
+      // contents are not its business), so there is no post to link to.
+      <IrcEncryptedPicture item={item} roomId={roomId} />
+    ),
+    image: (mxc) => (
+      <IrcPicture mxc={mxc} roomId={roomId} onOpen={() => open([{ mxc, roomId, ...imageMeta(event) }], 0, thread)} />
+    ),
+  })
+
+  return (
+    <div
+      className="tc-row tc-irc-row"
+      data-event-id={item.id}
+      data-mentions-me={callsOnMe ? 'true' : undefined}
+    >
+      <MessageActionBar actions={actions} />
+      <span className="tc-irc-time">{time}</span>{' '}
+      <span
+        className="tc-irc-nick"
+        data-user-anchor={senderId}
+        {...personGestures(senderId, openInteractions, openProfile)}
+      >
+        {'<'}
+        {rank.glyph && (
+          <span className="tc-irc-rank" data-elsewhere={rank.here ? undefined : 'true'}>
+            {rank.glyph}
+          </span>
+        )}
+        {senderName}
+        {'>'}
+      </span>{' '}
+      {item.replyTo && <ReplyPill replyTo={item.replyTo} />}
+      <span className="tc-irc-text">{body}</span>
+      {caption && (
+        <>
+          {' '}
+          {caption.html !== undefined ? (
+            // Sanitized by DOMPurify in renderMessageBody -- safe to inject.
+            <span
+              className="tc-message-html tc-irc-caption"
+              {...messageBodyHandlers(openProfile)}
+              dangerouslySetInnerHTML={{ __html: caption.html }}
+            />
+          ) : (
+            <span className="tc-irc-caption" style={{ whiteSpace: 'pre-wrap' }}>
+              {linkify(caption.text ?? '')}
+            </span>
+          )}
+        </>
+      )}
+      {item.editedTs !== undefined && (
+        <>
+          {' '}
+          <span className="tc-edited-marker" title={`Edited ${new Date(item.editedTs).toLocaleString()}`}>
+            (edited)
+          </span>
+        </>
+      )}
+      {(item.reactions?.length ?? 0) > 0 && roomId && (
+        <>
+          {' '}
+          <ReactionPills item={item} client={client} roomId={roomId} />
+        </>
+      )}
+      {event.isThreadRoot && (
+        <>
+          {' '}
+          <ThreadChip event={event} onOpen={onOpenThread} plain />
+        </>
+      )}
+    </div>
+  )
+}
+
+// A picture, in IRC style: a link to its booru post once the booru names one,
+// read through the same tag hub as the tag line under a picture. Until then,
+// or when it never will, the line says which, and opens the picture itself.
+function IrcPicture({ mxc, roomId, onOpen }: { mxc: string; roomId: string; onOpen: () => void }) {
+  const line = useMediaTagLine(mxc, roomId)
+  const postId = line.set?.postId
+  if (typeof postId === 'number' && Number.isInteger(postId) && postId > 0) {
+    return (
+      <a
+        className="tc-irc-link"
+        href={booruPostUrl(postId)}
+        target="_blank"
+        rel="noreferrer noopener"
+        title="Open this post on the booru"
+      >
+        booru post #{postId}
+      </a>
+    )
+  }
+  const why =
+    line.view === 'loading'
+      ? 'finding its booru post'
+      : line.view === 'failed'
+        ? 'the booru did not answer'
+        : line.view === 'tags' || line.view === 'none'
+          ? 'no booru post yet'
+          : null
+  return (
+    <button type="button" className="tc-irc-link" onClick={onOpen} title="Open the picture">
+      [picture{why ? `: ${why}` : ''}]
+    </button>
+  )
+}
+
+// An encrypted picture, in IRC style: a word on the line until asked for, then
+// the picture under it. Not shown by default because the mode is words only;
+// not left unreachable because an encrypted picture opens nowhere else.
+function IrcEncryptedPicture({ item, roomId }: { item: TimelineItem; roomId: string }) {
+  const [shown, setShown] = useState(false)
+  const content = item.content
+  const file = encryptedFileOf(content)
+  const thumb = encryptedThumbnailOf(content)
+  if (!file) return null
+  return (
+    <>
+      <button type="button" className="tc-irc-link" onClick={() => setShown((v) => !v)}>
+        [encrypted picture: {shown ? 'hide' : 'show'}]
+      </button>
+      {shown && (
+        <span className="tc-irc-reveal">
+          <AuthedImage
+            file={thumb ? thumb.file : file}
+            mimetype={thumb ? thumb.mimetype : undefined}
+            mxc={(thumb ? thumb.file.url : file.url) ?? ''}
+            roomId={roomId}
+            reserve={reserveBox(content)}
+            alt={typeof content.body === 'string' ? content.body : undefined}
+          />
+        </span>
+      )}
+    </>
+  )
+}
+
+// Does this line call on ME (L28)? Your name in its m.mentions, or an @room
+// from someone the room lets notify everyone -- the questions the server's
+// push rules ask, so the row is marked exactly when the room list's "@" lit
+// for it. A gallery is asked through its first image, like its caption. One
+// answer for both drawings of a row.
+function rowCallsOnMe(
+  item: TimelineItem,
+  client: ReturnType<typeof useClient>['client'],
+  senderId: string,
+  roomId: string,
+): boolean {
+  const myId = client?.getUserId() ?? ''
+  const { kind, cells } = item
+  const mentionSource = kind === 'gallery' ? (cells?.[0]?.getContent() ?? null) : kind === 'message' ? item.content : null
+  return (
+    !!myId &&
+    senderId !== myId &&
+    mentionsMe(mentionSource, myId, () => {
+      const r = client?.getRoom(roomId)
+      if (!r) return false
+      const pl = r.currentState.getStateEvents('m.room.power_levels', '')?.getContent()
+      return roomMentionPermission(pl, senderId, roomCreators(r)).allowed
+    })
+  )
+}
+
+// What a row SAYS, for both drawings of it (D-tc01): the words, the cards a
+// bot's reply carries, a poll, why an event cannot be read. Only a picture is
+// drawn differently by each, so the caller hands in how.
+interface RowMedia {
+  gallery: (cells: (MatrixEvent | null)[]) => ReactNode
+  encrypted: (content: IContent, file: NonNullable<ReturnType<typeof encryptedFileOf>>) => ReactNode
+  image: (mxc: string, content: IContent) => ReactNode
+}
+
+function rowBody(
+  item: TimelineItem,
+  client: ReturnType<typeof useClient>['client'],
+  openProfile: ReturnType<typeof useProfileOpener>,
+  media: RowMedia,
+): ReactNode {
+  const { event, kind, cells } = item
+  let body: ReactNode
+  if (kind === 'gallery' && cells) {
+    body = media.gallery(cells)
+  } else if (kind === 'message') {
+    const content = item.content
+    const mxc = typeof content.url === 'string' ? content.url : ''
+    const encFile = encryptedFileOf(content)
+    if (content.msgtype === 'm.image' && encFile) {
+      body = media.encrypted(content, encFile)
+    } else if (content.msgtype === 'm.image' && parseMxc(mxc)) {
+      body = media.image(mxc, content)
+    } else {
+      // item.content, not event.getContent(): the effective content with the
+      // winning edit applied (S1). isReply strips the spec's "> " fallback quote.
+      const rendered = renderMessageBody(item.content, { isReply: !!item.replyTo })
+      body =
+        rendered.html !== undefined ? (
+          // Sanitized by DOMPurify in renderMessageBody -- safe to inject.
+          // The click/key handlers are DELEGATED: an innerHTML subtree cannot
+          // carry React handlers, so spoiler reveal is resolved by walking up
+          // from the event target (W2.L2).
+          // A hidden spoiler reveals on the first click; a mention opens the
+          // person's preview; any other link a new tab (messageLinks.ts).
+          <span
+            className="tc-message-html"
+            {...messageBodyHandlers(openProfile)}
+            dangerouslySetInnerHTML={{ __html: rendered.html }}
+          />
+        ) : (
+          <span style={{ whiteSpace: 'pre-wrap' }}>{linkify(rendered.text ?? '')}</span>
+        )
+    }
+    // A filing reply from Neru-chan points at a BUR; the card under it reads
+    // the BUR live and is where an admin decides it (client/booruBur.ts).
+    const burId = burPointer(content, event.getSender())
+    if (burId !== null) {
+      body = (
+        <>
+          {body}
+          <BurCard id={burId} />
+        </>
+      )
+    }
+    // Her reply to a creator's replacement: what happens to the old version,
+    // and the creator's chance to change their mind (client/booruReplacement.ts).
+    const replacementId = replacementPointer(content, event.getSender())
+    if (replacementId !== null) {
+      body = (
+        <>
+          {body}
+          <ReplacementCard id={replacementId} />
+        </>
+      )
+    }
+  } else if (isPollStart(event)) {
+    // A poll arrives as its own event type, so it is classified 'other' by
+    // toItems and would otherwise render as `[m.poll.start]`.
+    body = <PollBody client={client} room={client?.getRoom(event.getRoomId() ?? '') ?? null} event={event} />
+  } else if (kind === 'encrypted') {
+    // Not "Encrypted" -- WHY it is unreadable, and whether the user can do
+    // anything about it (D-tp16). An unreadable message and a lost message look
+    // identical from where the reader sits, so the difference between "verify
+    // this device" and "this can never be recovered" has to be on the row.
+    // Whether anything could have decrypted this. With the engine absent the
+    // row must say so, not report a failure that never happened (E10).
+    const why = explainUnreadable(event.decryptionFailureReason, !!client?.getCrypto())
+    body = (
+      <span
+        style={{
+          fontStyle: 'italic',
+          opacity: why.outlook === 'pending' ? 0.55 : 0.75,
+          color:
+            why.outlook === 'actionable'
+              ? 'var(--cpd-color-text-critical-primary, #d6483b)'
+              : undefined,
+        }}
+      >
+        {why.outlook === 'pending' ? '🔓' : '🔒'} {why.text}
+      </span>
+    )
+  } else if (kind === 'redacted') {
+    body = <span style={{ fontStyle: 'italic', opacity: 0.6 }}>(message deleted)</span>
+  } else {
+    body = (
+      <span style={{ fontStyle: 'italic', opacity: 0.5 }}>
+        [{event.getType()}]
+      </span>
+    )
+  }
+
+  return body
 }
 
 // W2.4's designed footer region: one wrapping flex row under the body, holding
@@ -1175,7 +1455,7 @@ function MediaCaption({ content }: { content: IContent }) {
 // "N replies" chip under a thread-root message. Reads the live reply count from
 // the event's Thread and re-renders on thread updates. Click-to-open wiring lands
 // in Phase 2 (an onOpen prop threaded from App to open the thread panel).
-function ThreadChip({ event, onOpen }: { event: MatrixEvent; onOpen?: (roomId: string, rootId: string) => void }) {
+function ThreadChip({ event, onOpen, plain = false }: { event: MatrixEvent; onOpen?: (roomId: string, rootId: string) => void; plain?: boolean }) {
   const thread = event.getThread()
   const [count, setCount] = useState(thread?.length ?? 0)
 
@@ -1192,14 +1472,23 @@ function ThreadChip({ event, onOpen }: { event: MatrixEvent; onOpen?: (roomId: s
   }, [thread])
 
   if (!thread || count < 1) return null
+  const openIt = () => {
+    const rootId = event.getId()
+    const roomId = event.getRoomId()
+    if (rootId && roomId && onOpen) onOpen(roomId, rootId)
+  }
+  // IRC style: the count as words on the line, nothing drawn round it.
+  if (plain) {
+    return (
+      <button type="button" className="tc-irc-link" onClick={openIt}>
+        [{count} {count === 1 ? 'reply' : 'replies'}]
+      </button>
+    )
+  }
   return (
     <button
       type="button"
-      onClick={() => {
-        const rootId = event.getId()
-        const roomId = event.getRoomId()
-        if (rootId && roomId && onOpen) onOpen(roomId, rootId)
-      }}
+      onClick={openIt}
       style={{
         alignSelf: 'flex-start',
         fontSize: 12,

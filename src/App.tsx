@@ -59,6 +59,7 @@ import { BetaBanner } from './ui/BetaBanner'
 import { AvatarDisc } from './ui/AvatarDisc'
 import { AuthedImage } from './ui/AuthedImage'
 import { BootScreen } from './onboarding/BootScreen'
+import { InterfaceVars } from './ui/InterfaceVars'
 
 // Thin shell: render purely by client lifecycle status. All auth/client logic
 // lives in ClientProvider; App reflects the current phase and, when ready,
@@ -337,6 +338,7 @@ function App() {
     <ProfilePanelContext.Provider value={openProfile}>
     <LightboxProvider>
     <RoomListSettingsProvider>
+    {client && <InterfaceVars client={client} />}
     {booting && (
       <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 3, zIndex: 2000, overflow: 'hidden' }}>
         <div

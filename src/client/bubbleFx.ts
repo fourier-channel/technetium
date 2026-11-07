@@ -7,10 +7,10 @@ import type { BubbleTone } from './bubbleTone'
 // Every one of the three plays the SAME opening: the ordinary pill, in that
 // tone's own colours. What each does next is the whole of the feature:
 //
-//   yelling      pops from the pill into the jagged burst, keeping the pill's
+//   yelling      pops from the pill into the double ring, keeping the pill's
 //                border colour and fill -- the old one threw both away, which
 //                is most of why it read as cheap.
-//   thinking     morphs from the pill into cloudy bubbles.
+//   thinking     morphs from the pill into a cloud drawn to its size.
 //   questioning  stays a pill, and question marks float up and over it, fading
 //                in as they spawn and out as they go.
 //

@@ -154,8 +154,11 @@ console.log('\n-- ThreadList applies the room pins LAST, and every consumer read
   const sliding = readFileSync('src/client/slidingSync.ts', 'utf8')
   check('sliding sync asks for the pin state, or no client would ever see a pin',
     /\['net\.41chan\.thread\.pins', ''\]/.test(sliding))
-  const sync = readFileSync('src/client/pinSync.ts', 'utf8')
-  check('a failed save is reported, not swallowed', /reportAlways\(`\$\{subject\}: save/.test(sync) && !/catch\(\(\) => \{\}\)/.test(sync))
+  // The pins' sync is the string-list face of echoSync, which does the writing.
+  const pins = readFileSync('src/client/pinSync.ts', 'utf8')
+  const sync = readFileSync('src/client/echoSync.ts', 'utf8')
+  check('the pins write through the one echo sync', /makeEchoSync</.test(pins))
+  check('a failed save is reported, not swallowed', /reportAlways\(`\$\{subject\}: save/.test(sync) && !/catch\(\(\) => \{\}\)/.test(sync + pins))
 }
 
 if (failures > 0) {

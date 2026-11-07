@@ -30,7 +30,10 @@ console.log('\n-- where it is drawn --')
 {
   const timeline = readFileSync('src/ui/Timeline.tsx', 'utf8')
   const gallery = /function GalleryBody[\s\S]*?\n}\n/.exec(timeline)?.[0] ?? ''
-  const row = /export function Row\([\s\S]*?\n}\n/.exec(timeline)?.[0] ?? ''
+  // Row picks the chat style; the bubble row is the one with a picture-and-rail
+  // line, and the IRC row reads the same rule for its caption on one line.
+  const row = /function BubbleRow\([\s\S]*?\n}\n/.exec(timeline)?.[0] ?? ''
+  const irc = /function IrcRow\([\s\S]*?\n}\n/.exec(timeline)?.[0] ?? ''
   check('found the gallery and the row', gallery.length > 0 && row.length > 0)
   check('the gallery no longer draws a caption of its own (one place, not two)',
     !/caption/i.test(gallery.replace(/\/\/.*$/gm, '')), gallery.length)
@@ -47,6 +50,9 @@ console.log('\n-- where it is drawn --')
   const railLine = row.indexOf('tc-row-time-rail')
   const drawn = row.indexOf('<MediaCaption')
   check('drawn after the picture-and-rail line, not inside it', railLine > 0 && drawn > railLine)
+  check('IRC style decides a caption by the same rule, from the same source',
+    /hasCaption\(captionSource\)/.test(irc) && /kind === 'gallery' \? \(cells\?\.\[0\]\?\.getContent\(\)/.test(irc) &&
+    !/typeof\s+\w+\?*\.filename === 'string'/.test(irc))
 }
 
 console.log('\n-- what the composer sends --')

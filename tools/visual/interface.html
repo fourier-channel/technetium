@@ -1,0 +1,80 @@
+<!doctype html><html><head>
+<!--#head-->
+<title>IRC style and Interface Options</title>
+<style>
+  /* IRC rows as IrcRow (Timeline.tsx) emits them, then the Settings dialog on
+     its Interface Options tab in both chat styles. The dialog is fixed to the
+     corner in the app; pinned here so the whole panel is in the shot. */
+  .h-log { padding: 6px 0 16px; max-width: 760px; }
+  .tc-settings { position: static !important; margin: 10px auto; height: auto !important; overflow: visible !important; }
+  .tc-settings-body { overflow: visible !important; }
+  .h-pair { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+  .h-pair > .tc-settings { margin: 10px 0; }
+</style>
+</head><body>
+<div class="h-label">IRC style: text, a rank, a mention, a reply, reactions, pictures, a thread, an edit, a long wrap</div>
+<div class="h-log">
+  <div class="tc-row tc-irc-row"><span class="tc-irc-time">04:12</span> <span class="tc-irc-nick">&lt;<span class="tc-irc-rank">~</span>saber&gt;</span> <span class="tc-irc-text">the gate is green</span></div>
+  <div class="tc-row tc-irc-row"><span class="tc-irc-time">04:13</span> <span class="tc-irc-nick">&lt;<span class="tc-irc-rank" data-elsewhere="true">+</span>kestrel&gt;</span> <span class="tc-irc-text">nice. promoting now?</span> <div class="tc-reactions" role="group"><button class="tc-reaction" data-mine="true"><span class="tc-reaction-key">&#x1F44D;</span><span class="tc-reaction-count">2</span></button><button class="tc-reaction"><span class="tc-reaction-key">&#x1F389;</span><span class="tc-reaction-count">1</span></button></div></div>
+  <div class="tc-row tc-irc-row" data-mentions-me="true"><span class="tc-irc-time">04:14</span> <span class="tc-irc-nick">&lt;nobu&gt;</span> <button class="tc-reply-pill"><span class="tc-reply-pill-arrow">&#x21B1;</span><span class="tc-reply-pill-name">kestrel</span><span class="tc-reply-pill-text">nice. promoting now?</span></button><span class="tc-irc-text"><span class="tc-message-html"><p>saber: yes, once the preview looks right</p></span></span></div>
+  <div class="tc-row tc-irc-row"><span class="tc-irc-time">04:15</span> <span class="tc-irc-nick">&lt;nobu&gt;</span> <span class="tc-irc-text"><span class="tc-irc-pictures"><a class="tc-irc-link" href="#">booru post #48211</a> <a class="tc-irc-link" href="#">booru post #48212</a> <button type="button" class="tc-irc-link">[picture: finding its booru post]</button></span></span> <span class="tc-irc-caption">two from last night</span> <button type="button" class="tc-irc-link">[3 replies]</button></div>
+  <div class="tc-row tc-irc-row"><span class="tc-irc-time">04:16</span> <span class="tc-irc-nick">&lt;<span class="tc-irc-rank">@</span>kestrel&gt;</span> <span class="tc-irc-text">a long line that runs on past the width of the box, so that it has to wrap, and the wrapped part should sit under the words rather than under the time stamp, the way a hanging indent does in every IRC client people remember fondly</span> <span class="tc-edited-marker">(edited)</span></div>
+  <div class="tc-row tc-irc-row"><span class="tc-irc-time">04:17</span> <span class="tc-irc-nick">&lt;saber&gt;</span> <span class="tc-irc-text"><span class="tc-message-html"><p>first paragraph</p><p>second paragraph</p></span></span></div>
+</div>
+
+<div class="h-label">Settings, Interface Options: Bubbles (one colour picked, spacing moved) / IRC style (bubble controls off)</div>
+<div class="h-pair">
+<div class="tc-settings">
+  <div class="tc-settings-row tc-panel-head" data-inset="true"><strong>Settings</strong><button type="button" class="tc-pill">Done</button></div>
+  <div class="tc-settings-tabs" role="tablist"><button type="button" role="tab" aria-selected="true">Interface Options</button><button type="button" role="tab" aria-selected="false">Server permissions</button><button type="button" role="tab" aria-selected="false">Unfinished features</button></div>
+  <div class="tc-settings-body">
+    <div class="tc-io">
+      <h3 class="tc-settings-head">Chat style</h3>
+      <div class="tc-io-modes" role="radiogroup">
+        <button type="button" role="radio" class="tc-io-mode" aria-checked="true"><strong>Bubbles</strong><span>Avatars, names and speech bubbles.</span></button>
+        <button type="button" role="radio" class="tc-io-mode" aria-checked="false"><strong>IRC style</strong><span>One line per message: &lt;name&gt; and the words. Pictures are links to their booru posts.</span></button>
+      </div>
+      <fieldset class="tc-io-bubbles">
+        <legend class="tc-settings-head">Bubbles</legend>
+        <label class="tc-io-check"><input id="a1" type="checkbox" checked><span>Styled bubbles<span class="tc-settings-note"> -- a shout, a thought and a question each get their own shape.</span></span></label>
+        <div class="tc-io-colors">
+          <div class="tc-io-color"><input id="c1" type="color" value="#808080"><label for="c1">Plain</label><button type="button" class="tc-pill" disabled>Reset</button></div>
+          <div class="tc-io-color"><input id="c2" type="color" value="#d0402a"><label for="c2">Exclamation</label><button type="button" class="tc-pill">Reset</button></div>
+          <div class="tc-io-color"><input id="c3" type="color" value="#aaa8a0"><label for="c3">Thought</label><button type="button" class="tc-pill" disabled>Reset</button></div>
+          <div class="tc-io-color"><input id="c4" type="color" value="#6096dc"><label for="c4">Question</label><button type="button" class="tc-pill" disabled>Reset</button></div>
+        </div>
+        <div class="tc-io-spacing"><label for="s1">Space between messages</label><input id="s1" type="range" min="0" max="24" value="14"><output>14px</output></div>
+      </fieldset>
+      <div class="tc-io-reset"><button type="button" class="tc-pill">Reset all to defaults</button><p class="tc-settings-note">Saved to your account, so these follow you to every device.</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="tc-settings">
+  <div class="tc-settings-row tc-panel-head" data-inset="true"><strong>Settings</strong><button type="button" class="tc-pill">Done</button></div>
+  <div class="tc-settings-tabs" role="tablist"><button type="button" role="tab" aria-selected="true">Interface Options</button></div>
+  <div class="tc-settings-body">
+    <div class="tc-io">
+      <h3 class="tc-settings-head">Chat style</h3>
+      <div class="tc-io-modes" role="radiogroup">
+        <button type="button" role="radio" class="tc-io-mode" aria-checked="false"><strong>Bubbles</strong><span>Avatars, names and speech bubbles.</span></button>
+        <button type="button" role="radio" class="tc-io-mode" aria-checked="true"><strong>IRC style</strong><span>One line per message: &lt;name&gt; and the words. Pictures are links to their booru posts.</span></button>
+      </div>
+      <fieldset class="tc-io-bubbles" disabled>
+        <legend class="tc-settings-head">Bubbles</legend>
+        <p class="tc-settings-note">IRC style draws every message the same way, close together. These apply when the chat style is Bubbles.</p>
+        <label class="tc-io-check"><input id="b1" type="checkbox"><span>Styled bubbles<span class="tc-settings-note"> -- a shout, a thought and a question each get their own shape.</span></span></label>
+        <div class="tc-io-colors">
+          <div class="tc-io-color"><input id="d1" type="color" value="#808080"><label for="d1">Plain</label><button type="button" class="tc-pill" disabled>Reset</button></div>
+          <div class="tc-io-color" data-unseen="true"><input id="d2" type="color" value="#d0402a"><label for="d2">Exclamation</label><button type="button" class="tc-pill" disabled>Reset</button></div>
+          <div class="tc-io-color" data-unseen="true"><input id="d3" type="color" value="#aaa8a0"><label for="d3">Thought</label><button type="button" class="tc-pill" disabled>Reset</button></div>
+          <div class="tc-io-color" data-unseen="true"><input id="d4" type="color" value="#6096dc"><label for="d4">Question</label><button type="button" class="tc-pill" disabled>Reset</button></div>
+        </div>
+        <div class="tc-io-spacing"><label for="s2">Space between messages</label><input id="s2" type="range" min="0" max="24" value="8"><output>8px (default)</output></div>
+      </fieldset>
+      <div class="tc-io-reset"><button type="button" class="tc-pill">Reset all to defaults</button><p class="tc-settings-note">Saved to your account, so these follow you to every device.</p></div>
+    </div>
+  </div>
+</div>
+</div>
+</body></html>

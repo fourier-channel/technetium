@@ -42,8 +42,8 @@ check('every line keeps its interaction anchor, picture or not',
 check('only the speaking line\'s avatar box is a control -- the person gestures, and only there (L23)',
   /\{\.\.\.\(speaks \? personGestures\(senderId, openInteractions, openProfile\) : \{\}\)\}/.test(row) &&
   !/role=\{/.test(row.slice(row.indexOf('className="tc-row-av"'), row.indexOf('<AvatarDisc'))))
-check('the lines the avatar has left lose their arrow, not their bubble',
-  /data-tail=\{bubble && !speaks && !narrow \? 'off' : undefined\}/.test(row) &&
+check('the lines the avatar has left lose their arrow, not their bubble -- and the narrow panel, which draws no avatar, has none to point',
+  /data-tail=\{bubble && \(!speaks \|\| narrow\) \? 'off' : undefined\}/.test(row) &&
   /\.tc-bubble\[data-tail='off'\]::before,\s*\n\.tc-bubble\[data-tail='off'\]::after \{\s*content: none;/.test(css))
 check('the avatar travels from the line that had it, by transform, and not under reduced motion',
   /speakerByRun\.get\(runHead\)/.test(timeline) && /if \(!was \|\| was === item\.id \|\| reducedMotion\) return/.test(timeline) &&

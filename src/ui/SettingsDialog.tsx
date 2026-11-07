@@ -6,9 +6,12 @@ import { clientTokenSource } from '../client/masSessions'
 import { loadSession } from '../client/session'
 import { observeServerAdmin, type AdminFacts } from '../client/serverAdmin'
 import { ServerPermissions } from './ServerPermissions'
+import { InterfaceOptions } from './InterfaceOptions'
 
-// Settings: what this account ADMINISTERS -- server permissions, and the
-// unfinished features an administrator can try on one browser. Encryption
+// Settings: how the conversation is drawn (Interface Options, first and open
+// by default, for everyone -- INTERFACE_OPTIONS IO6), then what this account
+// ADMINISTERS -- server permissions, and the unfinished features an
+// administrator can try on one browser. Encryption
 // and the sign-in itself moved to Manage session, under your name in the
 // room list (operator, 2026-10-05); the panel says so to anyone who opens it
 // looking for them.
@@ -18,7 +21,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   // U8. Which tab is up, and whether the server says this account administers
   // it. `null` until asked -- absent is not "no" (VERIFICATION-DOCTRINE rule 8),
   // and the panel says which of the three answers it got.
-  const [tab, setTab] = useState<'server' | 'features'>('server')
+  const [tab, setTab] = useState<'interface' | 'server' | 'features'>('interface')
   // Domain mode's per-browser switch. `domainOn` is what is STORED; whether
   // the feature is actually offered also depends on the build, which this
   // panel says out loud rather than leaving the switch looking broken.
@@ -57,26 +60,37 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         <button type="button" className="tc-pill" onClick={onClose}>Done</button>
       </div>
 
-      {/* The tab strip appears only once there is more than one tab to pick
-          from, which on most accounts is never. */}
-      {admin?.verdict === 'admin' && (
-        <div className="tc-settings-tabs" role="tablist" aria-label="Settings sections">
-          <button type="button" role="tab" aria-selected={tab === 'server'} onClick={() => setTab('server')}>
-            Server permissions
-          </button>
-          <button type="button" role="tab" aria-selected={tab === 'features'} onClick={() => setTab('features')}>
-            Unfinished features
-          </button>
-        </div>
-      )}
+      {/* Interface Options is everyone's; the two after it ride the strip
+          only for an account the server says administers it. */}
+      <div className="tc-settings-tabs" role="tablist" aria-label="Settings sections">
+        <button type="button" role="tab" aria-selected={tab === 'interface'} onClick={() => setTab('interface')}>
+          Interface Options
+        </button>
+        {admin?.verdict === 'admin' && (
+          <>
+            <button type="button" role="tab" aria-selected={tab === 'server'} onClick={() => setTab('server')}>
+              Server permissions
+            </button>
+            <button type="button" role="tab" aria-selected={tab === 'features'} onClick={() => setTab('features')}>
+              Unfinished features
+            </button>
+          </>
+        )}
+      </div>
       <div className="tc-settings-body">
-      {/* Where encryption went. Said here because this is where people will
-          look for it, and an empty panel would read as encryption gone. */}
-      <p className="tc-settings-note">
-        Encryption and this sign-in are under <strong>Manage session</strong>, below your name in the room list.
-      </p>
-      {admin === null && <p className="tc-settings-note">Checking what this account administers...</p>}
-      {admin !== null && admin.verdict !== 'admin' && <p className="tc-settings-note">{admin.because} Nothing else here applies to it.</p>}
+      {tab === 'interface' && client && <InterfaceOptions client={client} />}
+      {tab === 'interface' && (
+        <>
+          {/* Where encryption went. Said here because this is where people
+              will look for it, and a panel without it would read as
+              encryption gone. */}
+          <p className="tc-settings-note">
+            Encryption and this sign-in are under <strong>Manage session</strong>, below your name in the room list.
+          </p>
+          {admin === null && <p className="tc-settings-note">Checking what this account administers...</p>}
+          {admin !== null && admin.verdict !== 'admin' && <p className="tc-settings-note">{admin.because}</p>}
+        </>
+      )}
       {tab === 'server' && admin?.verdict === 'admin' && client && (
         <>
           {/* Said out loud on the panel, because the honest answer to "make
