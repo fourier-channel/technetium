@@ -14,7 +14,9 @@ import {
   isRelationOnlyEvent,
   readRelatesTo,
   resolveReply,
+  strandedRelations,
 } from '../src/client/relations.ts'
+import { readFileSync } from 'node:fs'
 
 let failures = 0
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -213,6 +215,65 @@ console.log('\n-- replies --')
     },
   })
   check('real reply inside a thread IS a reply', resolveReply(realThreadReply, idx.byId)?.eventId === '$2')
+}
+
+console.log('== stranded relations: a reaction scrollback fetched before its target (2026-11-07)')
+{
+  // The sdk files a relation whose target is not loaded yet into
+  // room.relations and never into a timeline. A fake container with that
+  // shape: children by target id, rel type and event type.
+  const asked: string[] = []
+  const container = (children: Record<string, any[]>) => ({
+    getChildEventsForEvent(id: string, relType: string, evType: string) {
+      asked.push(id)
+      const list = (children[id] ?? []).filter(
+        (c) => readRelatesTo(c).relType === relType && c.getType() === evType,
+      )
+      return list.length ? { getRelations: () => list } : undefined
+    },
+  })
+  const target = msg('$t', OTHER, 100, 'look at this')
+  const r1 = react('$r1', OTHER, 300, '$t', 'heart')
+  const r2 = react('$r2', ME, 310, '$t', 'heart')
+  const e1 = edit('$e1', OTHER, 320, '$t', 'look at THIS')
+  const src = container({ '$t': [r1, r2, e1], '$gone': [react('$r9', ME, 330, '$gone', 'x')] })
+
+  // Control: the window alone, which is what the client read before the fix,
+  // has no tally -- so the cases below measure the new path, not the old one.
+  check('control: the window alone loses the stranded reaction', !buildRelationIndex([target], ME).reactions.has('$t'))
+
+  const idx = buildRelationIndex([target], ME, src)
+  const heart = idx.reactions.get('$t')?.find((t) => t.key === 'heart')
+  check('a stranded reaction is counted on its target', heart?.count === 2, heart)
+  check('a stranded reaction of mine is mine and can be taken back', heart?.mine === true && heart?.myEventId === '$r2', heart)
+  check('a stranded edit is applied to its target', idx.edits.get('$t')?.event.getId() === '$e1')
+  check('the container is asked only about events in the window', asked.every((id) => id === '$t'), asked)
+  check('a target outside the window draws nothing', !idx.reactions.has('$gone'))
+
+  // The same reaction in the window AND the container counts once.
+  const both = buildRelationIndex([target, r1], ME, src).reactions.get('$t')?.find((t) => t.key === 'heart')
+  check('a reaction in both the window and the container counts once', both?.count === 2, both)
+
+  const gone = buildRelationIndex([target], ME, container({ '$t': [react('$r3', ME, 300, '$t', 'heart', true)] }))
+  check('a redacted stranded reaction draws nothing', !gone.reactions.has('$t'))
+  check('no source, no stranded relations', strandedRelations([target], null).length === 0)
+}
+
+console.log('== the sdk still strands them, and both readers still pass the container')
+{
+  const client = readFileSync('node_modules/matrix-js-sdk/lib/client.js', 'utf8')
+  // If this stops matching, the sdk changed how scrollback files a relation
+  // with no loaded target: re-read paginateEventTimeline before trusting
+  // strandedRelations to still be the whole fix.
+  check(
+    'sdk: scrollback puts an unknown relation in room.relations only',
+    /unknownRelations\.forEach\(event => room\.relations\.aggregateChildEvent\(event\)\)/.test(client),
+  )
+  const tl = readFileSync('src/client/useTimeline.ts', 'utf8')
+  check('the main timeline passes room.relations', /relations: room\.relations/.test(tl))
+  check('toItems hands the source to the index', /buildRelationIndex\(events, opts\.myUserId, opts\.relations\)/.test(tl))
+  const tp = readFileSync('src/ui/ThreadPanel.tsx', 'utf8')
+  check('the thread panel passes room.relations', /relations: room\?\.relations/.test(tp))
 }
 
 console.log('\n' + (failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'))

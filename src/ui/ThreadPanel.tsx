@@ -113,7 +113,7 @@ export function ThreadPanel({
   // myUserId is what marks own reactions and finds the annotation to redact
   // when toggling one off -- the thread panel shares the Row, so it needs the
   // same item model the main timeline gets.
-  const items = applyLayout(toItems(events, { myUserId: client?.getUserId() ?? null }))
+  const items = applyLayout(toItems(events, { myUserId: client?.getUserId() ?? null, relations: room?.relations }))
   // The lightbox's vertical axis inside a thread: the thread's own images, in
   // order. The panel paginates the thread to exhaustion on open, so this is the
   // whole thread and not a window of it -- up/down really does walk the thread.

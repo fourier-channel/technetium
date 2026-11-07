@@ -11,6 +11,16 @@ import type { IContent, MatrixEvent } from 'matrix-js-sdk'
 // The trade is that a relation whose target scrolled out of the loaded window
 // is invisible until that target is paginated back in. That is the correct
 // failure mode: we never render a reaction on a message we cannot see.
+//
+// ONE exception, and it is not optional (2026-11-07). With threadSupport on,
+// the sdk files a relation whose target is not loaded YET -- a reaction or an
+// edit on an older page than its own when scrollback fetches it -- as an
+// "unknown relation": it goes into room.relations and NEVER into any
+// timeline. Its target arriving on the next page does not move it. So the
+// window alone loses every such reaction for good, which is what people saw
+// as reactions not surviving a reload: in the session they arrived live after
+// their target, after a reload scrollback fetched them first. The container
+// is read only for targets IN the window, so the trade above still holds.
 
 export type RelType = 'm.replace' | 'm.annotation' | 'm.thread' | 'm.reference' | null
 
@@ -115,11 +125,59 @@ function editWins(a: MatrixEvent, b: EditInfo): boolean {
   return (a.getId() ?? '') > (b.event.getId() ?? '')
 }
 
-// Build the whole relation index in one pass over the loaded window.
-export function buildRelationIndex(
+// The slice of the sdk's RelationsContainer (room.relations) this module
+// reads. Structural, so the checks can hand in a fake and nothing here needs
+// an sdk value import.
+export interface RelationSource {
+  getChildEventsForEvent(
+    eventId: string,
+    relationType: string,
+    eventType: string,
+  ): { getRelations(): MatrixEvent[] } | undefined
+}
+
+const STRANDABLE: readonly (readonly [string, string])[] = [
+  ['m.annotation', 'm.reaction'],
+  ['m.replace', 'm.room.message'],
+]
+
+// Relations the window does not hold but the container does, for targets that
+// ARE in the window: reactions, and edits of messages. See the head of this
+// file for why the window alone is not enough.
+export function strandedRelations(
   events: MatrixEvent[],
+  source: RelationSource | null | undefined,
+): MatrixEvent[] {
+  if (!source) return []
+  const have = new Set<string>()
+  for (const ev of events) {
+    const id = ev.getId()
+    if (id) have.add(id)
+  }
+  const out: MatrixEvent[] = []
+  for (const ev of events) {
+    const id = ev.getId()
+    if (!id) continue
+    for (const [relType, evType] of STRANDABLE) {
+      for (const child of source.getChildEventsForEvent(id, relType, evType)?.getRelations() ?? []) {
+        const cid = child.getId()
+        if (!cid || have.has(cid)) continue
+        have.add(cid)
+        out.push(child)
+      }
+    }
+  }
+  return out
+}
+
+// Build the whole relation index in one pass over the loaded window, plus the
+// window's stranded relations when a source is given.
+export function buildRelationIndex(
+  windowEvents: MatrixEvent[],
   myUserId?: string | null,
+  source?: RelationSource | null,
 ): RelationIndex {
+  const events = source ? windowEvents.concat(strandedRelations(windowEvents, source)) : windowEvents
   const byId = new Map<string, MatrixEvent>()
   for (const ev of events) {
     const id = ev.getId()

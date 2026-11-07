@@ -22,6 +22,7 @@ import {
   mergeReactions,
   resolveReply,
   type ReactionTally,
+  type RelationSource,
   type ReplyRef,
 } from './relations'
 
@@ -185,6 +186,9 @@ export interface ToItemsOptions {
   // (isSystemEvent). Off by default: they render as a literal `[type]` row that
   // costs height and splits a cluster, and nobody has ever wanted to see one.
   showSystemEvents?: boolean
+  // room.relations. Without it a reaction or edit fetched by scrollback before
+  // its target is lost from view for good (relations.ts, strandedRelations).
+  relations?: RelationSource | null
 }
 
 function classify(ev: MatrixEvent): TimelineItemKind {
@@ -294,7 +298,7 @@ export function rendersAsItem(ev: MatrixEvent, opts: ToItemsOptions = {}): boole
 export function toItems(events: MatrixEvent[], opts: ToItemsOptions = {}): TimelineItem[] {
   const out: TimelineItem[] = []
   const consumed = new Set<string>()
-  const rel = buildRelationIndex(events, opts.myUserId)
+  const rel = buildRelationIndex(events, opts.myUserId, opts.relations)
 
   for (let i = 0; i < events.length; i++) {
     const ev = events[i]
@@ -427,7 +431,7 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
 
   const buildItems = useCallback(() => {
     if (!room) return []
-    return toItems(room.getLiveTimeline().getEvents(), itemOpts())
+    return toItems(room.getLiveTimeline().getEvents(), { ...itemOpts(), relations: room.relations })
   }, [room, itemOpts])
 
   // Rebuild the item list from the room's current live timeline.
