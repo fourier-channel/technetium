@@ -4421,3 +4421,34 @@ the setup too.** Six of 15 prompts loaded their skill in round one, and 45 of 45
 after a rewording. The test setup changed between rounds as well, so the jump
 is not all wording. Held-out prompts gave 24 of 30, which is the number to
 quote.
+
+
+## 2026-11-07 -- reactions kept, thoughts, chosen bubbles and an IRC style
+
+Ledger: `docs/plan/INTERFACE_OPTIONS_PLAN.md`. Promoted as v2026.11.07,
+v2026.11.07.2 and v2026.11.07.3.
+
+Reactions and edits the SDK left outside every timeline are read again
+(`38c265c`). A line opening with an ellipsis is a thought (`af7d02c`). The
+operator picked three bubble designs from a comparison page, and `503919e`
+landed them: the shout's double ring, the thought's cloud, the question's
+raised tail. It also added Settings -> Interface Options, first among the
+tabs. That tab turns the styled bubbles on or off, sets each bubble's colour
+and the space between messages, and switches to an IRC style: `<~name> text`,
+no avatars, pictures as links to their booru posts. Choices live in account
+data.
+
+**Verified.** The geometry is proved over its input space by the check
+suite, and the rows and panel were seen in a headless render. The served
+bundle is the promoted one. **Not verified.** Live behaviour on the
+homeserver.
+
+**draft-36 (gotcha) -- a var() fallback is not a definition.** Custom
+properties set from script through a template string are invisible to the
+token check, and a fallback at the read hides an undefined token. Define the
+default once in the stylesheet and check it equals the script's default.
+
+**draft-37 (gotcha) -- a button is an atomic box.** Chromium lays out a
+`<button>` as one box whatever its `display` says, so a reaction in a line of
+text sets the line's height. Give it a fixed height and `vertical-align: top`.
+
