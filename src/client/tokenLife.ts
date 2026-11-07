@@ -118,6 +118,10 @@ function notSignedIn(account: NonNullable<BooruStatus['booru']>['account'], boor
     // Linked, yet not signed in: only signing out of the booru leaves that.
     case 'linked':
       return { label, tone: 'unknown', text: `You signed out of your booru account${name ? `, ${name}` : ''}.`, link: { href: viaMatrix, text: name ? `Continue as ${name}` : 'Sign back in' } }
+    // A second factor the account's owner set; Matrix is only one (chanbooru
+    // SessionLoader#load_matrix_account).
+    case 'two_factor':
+      return { label, tone: 'unknown', text: `Not signed in: your booru account${name ? `, ${name},` : ''} has two-factor sign-in, so Matrix does not sign it in.`, link: { href: `${booruOrigin}/login`, text: 'Sign in with its password and code' } }
     case 'taken':
       return { label, tone: 'warn', text: `Not signed in: the booru name ${name ?? 'of your Matrix username'} belongs to another account.`, link: signIn }
     case 'invalid':
