@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QuickQueue folder spike</title>
+<!--
+  QuickQueue M0 (technetium roadmap tc.150, fourier-basis D-89dc7a).
+  Measures File System Access on a real folder: how fast it lists, how fast a
+  Scan can read prompts (header only), how fast every file can be read and
+  MD5'd, and whether the folder grant survives a browser restart.
+  Open it straight from disk (file://) or from localhost; it needs a secure
+  context. It reads only; it writes nothing to the folder and sends nothing
+  anywhere. Point it at the test folders, never at a real library.
+-->
+<style>
+  :root { --bg: #f6f7f9; --fg: #1d2330; --mute: #5b6475; --line: #d6dae2; --acc: #2a5bd7; --ok: #1f7a43; --bad: #b3261e; --box: #fff;
+    font: 15px/1.5 system-ui, sans-serif; color-scheme: light; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #14171d; --fg: #e4e7ee; --mute: #98a1b3; --line: #2c323d; --acc: #7aa2ff; --ok: #5bc48a; --bad: #ff8a80; --box: #1b1f27; color-scheme: dark; } }
+  body { background: var(--bg); color: var(--fg); margin: 0; padding: 24px max(16px, 4vw); }
+  main { max-width: 860px; display: grid; gap: 18px; }
+  h1 { font-size: 20px; margin: 0; }
+  p { margin: 0; color: var(--mute); max-width: 68ch; }
+  section { background: var(--box); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: grid; gap: 10px; }
+  h2 { font-size: 15px; margin: 0; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  button { font: inherit; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--acc); background: var(--acc); color: #fff; cursor: pointer; }
+  button.alt { background: transparent; color: var(--acc); }
+  button:disabled { opacity: .45; cursor: default; }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+  select, input { font: inherit; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+  input[type=number] { width: 7em; }
+  .state { font-variant-numeric: tabular-nums; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+  progress { width: 100%; height: 10px; }
+  textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 12.5px/1.45 ui-monospace, Consolas, monospace; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>QuickQueue folder spike</h1>
+  <p>Pick a test folder, run the three measurements, then copy the results back to the session.
+     After that, close the browser completely, reopen this page, and press Reopen to test whether the grant survived.</p>
+
+  <section>
+    <h2>This browser</h2>
+    <div id="env" class="state"></div>
+  </section>
+
+  <section>
+    <h2>Folder</h2>
+    <div id="stored" class="state">Looking for a folder picked earlier...</div>
+    <div class="row">
+      <button id="pick">Pick folder</button>
+      <button id="reopen" class="alt" disabled>Reopen the folder picked earlier</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Measure</h2>
+    <div class="row">
+      <label for="conc">Reads at once</label>
+      <select id="conc"><option>1</option><option selected>4</option><option>8</option></select>
+      <label for="limit">Files (0 = all)</label>
+      <input id="limit" type="number" min="0" value="0">
+    </div>
+    <div class="row">
+      <button id="run" disabled>Run all three</button>
+      <button id="stop" class="alt" disabled>Stop</button>
+    </div>
+    <progress id="bar" max="1" value="0"></progress>
+    <div id="now" class="state">Pick a folder first.</div>
+  </section>
+
+  <section>
+    <h2>Results</h2>
+    <textarea id="out" readonly></textarea>
+    <div class="row"><button id="copy" class="alt">Copy results</button><span id="copied" class="state"></span></div>
+  </section>
+</main>
+<script src="md5.js"></script>
+<script>
+'use strict'
+const $ = (id) => document.getElementById(id)
+const IMG = /\.(png|jpe?g|webp|avif|gif)$/i
+let folder = null
+let stopping = false
+const lines = []
+function log(s) { lines.push(s); $('out').value = lines.join('\n'); }
+function say(s, cls) { const e = $('now'); e.textContent = s; e.className = 'state ' + (cls || '') }
+
+// ---- environment ---------------------------------------------------------
+const brands = (navigator.userAgentData && navigator.userAgentData.brands || [])
+  .filter(b => !/Not.?A.?Brand/i.test(b.brand)).map(b => b.brand + ' ' + b.version).join(', ')
+const env = {
+  when: new Date().toISOString(),
+  browser: brands || navigator.userAgent,
+  platform: (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform,
+  electron: /Electron\//.test(navigator.userAgent),
+  origin: location.protocol === 'file:' ? 'file://' : location.origin,
+  secureContext: window.isSecureContext,
+  showDirectoryPicker: 'showDirectoryPicker' in window,
+}
+$('env').innerHTML = ''
+for (const [k, v] of Object.entries(env)) {
+  const d = document.createElement('div')
+  const bad = (k === 'secureContext' || k === 'showDirectoryPicker') && !v
+  d.textContent = k + ': ' + v + (bad ? '  -- this browser or origin cannot run the spike; open the page from disk or localhost in Chrome or Edge' : '')
+  if (bad) d.className = 'bad'
+  $('env').appendChild(d)
+}
+log('== environment')
+for (const [k, v] of Object.entries(env)) log(k + ': ' + v)
+
+// ---- stored handle (the restart test) ------------------------------------
+function db() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('qq-spike', 1)
+    r.onupgradeneeded = () => r.result.createObjectStore('h')
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error)
+  })
+}
+async function idb(mode, fn) {
+  const d = await db()
+  return new Promise((res, rej) => {
+    const t = d.transaction('h', mode); const q = fn(t.objectStore('h'))
+    q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error)
+  })
+}
+async function loadStored() {
+  let rec = null
+  try { rec = await idb('readonly', s => s.get('folder')) } catch (e) {
+    $('stored').textContent = 'IndexedDB unavailable here (' + e.message + '); the restart test cannot run on this origin.'
+    $('stored').className = 'state bad'; log('stored handle: IndexedDB unavailable: ' + e.message); return
+  }
+  if (!rec) { $('stored').textContent = 'No folder picked on this browser yet.'; log('stored handle: none'); return }
+  let state = 'unknown'
+  try { state = await rec.handle.queryPermission({ mode: 'read' }) } catch (e) { state = 'error: ' + e.message }
+  const msg = 'Folder "' + rec.handle.name + '" picked ' + rec.savedAt + '; permission now: ' + state
+  $('stored').textContent = msg
+  $('stored').className = 'state ' + (state === 'granted' ? 'ok' : '')
+  log('== restart test')
+  log('stored handle: "' + rec.handle.name + '" saved ' + rec.savedAt + ' (this page load ' + env.when + ')')
+  log('queryPermission on load, before any click: ' + state)
+  $('reopen').disabled = false
+  $('reopen').onclick = async () => {
+    const t0 = performance.now()
+    let after
+    try { after = await rec.handle.requestPermission({ mode: 'read' }) } catch (e) { after = 'error: ' + e.message }
+    const ms = Math.round(performance.now() - t0)
+    log('requestPermission after click: ' + after + ' in ' + ms + ' ms (over ~300 ms usually means a prompt was shown and answered)')
+    if (after === 'granted') { folder = rec.handle; ready() }
+    $('stored').textContent = msg + ' -> after Reopen: ' + after
+  }
+}
+loadStored()
+
+function ready() {
+  $('run').disabled = false
+  say('Folder "' + folder.name + '" ready. Run all three when you are.')
+}
+
+$('pick').onclick = async () => {
+  try {
+    folder = await window.showDirectoryPicker({ id: 'qq-spike', mode: 'read' })
+  } catch (e) { say('No folder picked (' + e.name + ').', 'bad'); return }
+  const savedAt = new Date().toISOString()
+  try { await idb('readwrite', s => s.put({ handle: folder, savedAt }, 'folder')); log('picked "' + folder.name + '" and stored its handle at ' + savedAt) }
+  catch (e) { log('picked "' + folder.name + '" but could not store the handle: ' + e.message) }
+  ready()
+}
+
+// ---- measurements --------------------------------------------------------
+async function walk(dir, path, out) {
+  for await (const [name, h] of dir.entries()) {
+    if (stopping) return
+    if (h.kind === 'directory') await walk(h, path + name + '/', out)
+    else out.all++, IMG.test(name) && out.files.push({ h, path: path + name })
+    if (out.all % 500 === 0) say('Listing: ' + out.all + ' entries so far...')
+  }
+}
+
+// A1111 'parameters' from PNG tEXt/iTXt, or EXIF UserComment presence for JPEG/WebP.
+function promptIn(buf, name) {
+  const b = new Uint8Array(buf)
+  if (/\.png$/i.test(name)) {
+    const dv = new DataView(buf); let o = 8
+    while (o + 8 <= b.length) {
+      const len = dv.getUint32(o); const type = String.fromCharCode(b[o + 4], b[o + 5], b[o + 6], b[o + 7])
+      if (type === 'tEXt' || type === 'iTXt') {
+        const end = Math.min(o + 8 + len, b.length)
+        let z = o + 8; while (z < end && b[z] !== 0) z++
+        const key = new TextDecoder('latin1').decode(b.subarray(o + 8, z))
+        if (key === 'parameters') return o + 8 + len <= b.length ? 'png' : 'png-cut'
+      }
+      if (type === 'IDAT' || type === 'IEND') return null
+      o += 12 + len
+    }
+    return null
+  }
+  // JPEG: look for the EXIF UserComment charset marker in the header bytes.
+  return hasComment(b) ? 'exif' : null
+}
+function hasComment(b) {
+  const s = new TextDecoder('latin1').decode(b)
+  return s.includes('UNICODE\u0000') || s.includes('ASCII\u0000\u0000\u0000')
+}
+
+// WebP keeps its EXIF chunk AFTER the image data, so a header read never sees
+// it. Walk the RIFF chunk headers (8 bytes each, one small read per chunk) and
+// read only the EXIF chunk. Returns [found, bytesRead].
+async function webpPrompt(file) {
+  let o = 12, extra = 0
+  while (o + 8 <= file.size) {
+    const h = new DataView(await file.slice(o, o + 8).arrayBuffer()); extra += 8
+    const type = String.fromCharCode(h.getUint8(0), h.getUint8(1), h.getUint8(2), h.getUint8(3))
+    const len = h.getUint32(4, true)
+    if (type === 'EXIF') {
+      const body = new Uint8Array(await file.slice(o + 8, o + 8 + len).arrayBuffer()); extra += body.length
+      return [hasComment(body), extra]
+    }
+    o += 8 + len + (len & 1)
+  }
+  return [false, extra]
+}
+
+async function pass(label, files, conc, readOne) {
+  let i = 0, done = 0, bytes = 0, found = 0, md5s = 0
+  const t0 = performance.now()
+  $('bar').max = files.length; $('bar').value = 0
+  async function worker() {
+    while (!stopping && i < files.length) {
+      const f = files[i++]
+      const r = await readOne(f)
+      bytes += r.bytes; found += r.found ? 1 : 0; md5s += r.md5 ? 1 : 0
+      done++
+      if (done % 20 === 0 || done === files.length) {
+        const s = (performance.now() - t0) / 1000
+        $('bar').value = done
+        say(label + ': ' + done + '/' + files.length + ' files, ' + (bytes / 1e6).toFixed(0) + ' MB, ' + (done / s).toFixed(1) + ' files/s, ' + (bytes / 1e6 / s).toFixed(1) + ' MB/s')
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: conc }, worker))
+  const s = (performance.now() - t0) / 1000
+  return { done, bytes, found, md5s, s }
+}
+
+$('stop').onclick = () => { stopping = true; say('Stopping after the reads in flight...') }
+
+$('run').onclick = async () => {
+  stopping = false
+  $('run').disabled = true; $('pick').disabled = true; $('stop').disabled = false
+  const conc = +$('conc').value; const limit = +$('limit').value
+  log('')
+  log('== run on "' + folder.name + '", ' + conc + ' reads at once, ' + (limit || 'all') + ' files')
+  try {
+    // 1. list
+    const L = { all: 0, files: [] }; const t0 = performance.now()
+    await walk(folder, '', L)
+    const ls = (performance.now() - t0) / 1000
+    log('1 list: ' + L.all + ' entries, ' + L.files.length + ' images in ' + ls.toFixed(2) + ' s (' + (L.all / ls).toFixed(0) + ' entries/s)')
+    const files = limit ? L.files.slice(0, limit) : L.files
+    // 2. scan: header only, the way a prompt index would read
+    if (!stopping) {
+      const r = await pass('2 scan (PNG/JPEG first 64 KB, WebP EXIF chunk)', files, conc, async (f) => {
+        const file = await f.h.getFile()
+        if (/\.webp$/i.test(f.path)) { const [found, n] = await webpPrompt(file); return { bytes: n, found } }
+        const buf = await file.slice(0, 65536).arrayBuffer()
+        return { bytes: buf.byteLength, found: !!promptIn(buf, f.path) }
+      })
+      log('2 scan, header only: ' + r.done + ' files, ' + (r.bytes / 1e6).toFixed(1) + ' MB read, prompt found in ' + r.found + ', ' + r.s.toFixed(2) + ' s (' + (r.done / r.s).toFixed(1) + ' files/s)')
+    }
+    // 3. whole file + MD5: what selection and send cost per item
+    if (!stopping) {
+      const r = await pass('3 read + MD5', files, conc, async (f) => {
+        const file = await f.h.getFile(); const buf = await file.arrayBuffer()
+        qqMd5(new Uint8Array(buf))
+        return { bytes: buf.byteLength, md5: true, found: false }
+      })
+      log('3 read + MD5: ' + r.done + ' files, ' + (r.bytes / 1e6).toFixed(0) + ' MB in ' + r.s.toFixed(2) + ' s (' + (r.done / r.s).toFixed(1) + ' files/s, ' + (r.bytes / 1e6 / r.s).toFixed(1) + ' MB/s)')
+    }
+    if (stopping) log('stopped by hand before the end')
+    say(stopping ? 'Stopped. Partial results are below.' : 'Done. Copy the results below back to the session.', stopping ? 'bad' : 'ok')
+  } catch (e) {
+    log('FAILED: ' + e.name + ': ' + e.message)
+    say('Failed: ' + e.name + ': ' + e.message + '. The results box has the details.', 'bad')
+  }
+  $('run').disabled = false; $('pick').disabled = false; $('stop').disabled = true
+}
+
+$('copy').onclick = async () => {
+  try { await navigator.clipboard.writeText($('out').value); $('copied').textContent = 'Copied.' }
+  catch (e) { $('out').select(); $('copied').textContent = 'Copy blocked here; the text is selected, press Ctrl+C.' }
+}
+</script>
+</body>
+</html>
