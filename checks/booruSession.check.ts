@@ -1,6 +1,6 @@
 // Checks for the zero-click booru session: one exchange per token, the cookie
 // request shape, and that failure is remembered rather than retried per mount.
-import { ensureBooruSession, resetBooruSession } from '../src/client/booruSession'
+import { ensureBooruSession, renewOnReturn, resetBooruSession, RENEW_ON_RETURN_GAP_MS } from '../src/client/booruSession'
 
 let failures = 0
 const check = (name: string, cond: boolean, extra?: unknown) => { if (cond) console.log('  ok   ' + name); else { failures++; console.log('  FAIL ' + name + (extra === undefined ? '' : ' -- ' + JSON.stringify(extra))) } }
@@ -44,6 +44,52 @@ async function main() {
     storeCalls.length > 0 && storeCalls.length === gated.length, { calls: storeCalls.length, gated: gated.length })
   check('and a refused exchange sends nothing, naming the remedy instead',
     /const ok = await ensureBooruSession\(fetchClient\?\.getAccessToken\(\) \?\? null\)\s*\n\s*if \(!ok\) \{\s*\n\s*throw new Error\(/.test(store))
+
+  // 2026-11-09: a tester's booru pictures failed after a VPN switch. The
+  // frame's cookie died with the five-minute token, and nothing renewed the
+  // token until the sync loop was next refused. On return, ask at once.
+  {
+    const target = () => {
+      const fns = new Map<string, Set<() => void>>()
+      return {
+        visibilityState: 'visible',
+        addEventListener: (t: string, f: () => void) => { if (!fns.has(t)) fns.set(t, new Set()); fns.get(t)!.add(f) },
+        removeEventListener: (t: string, f: () => void) => { fns.get(t)?.delete(f) },
+        fire: (t: string) => { for (const f of fns.get(t) ?? []) f() },
+        count: () => [...fns.values()].reduce((n, s) => n + s.size, 0),
+      }
+    }
+    const win = target(), doc = target()
+    let clock = 1_000_000, asked = 0
+    const stop = renewOnReturn(async () => { asked++ }, { win, doc, now: () => clock })
+    doc.fire('visibilitychange')
+    check('the tab shown again asks whoami at once', asked === 1, asked)
+    win.fire('focus'); win.fire('online')
+    check('a burst of return events in one minute asks once', asked === 1, asked)
+    clock += RENEW_ON_RETURN_GAP_MS
+    win.fire('online')
+    check('the network back a minute later asks again', asked === 2, asked)
+    clock += RENEW_ON_RETURN_GAP_MS
+    win.fire('focus')
+    check('the window focused a minute later asks again', asked === 3, asked)
+    clock += RENEW_ON_RETURN_GAP_MS
+    doc.visibilityState = 'hidden'
+    doc.fire('visibilitychange')
+    check('the tab being hidden does not ask', asked === 3, asked)
+    // An unhandled rejection ends this process, so reaching the check is the proof.
+    const fdoc = target()
+    let refused = 0
+    const failing = renewOnReturn(async () => { refused++; throw new Error('offline') }, { win: target(), doc: fdoc, now: () => clock })
+    fdoc.fire('visibilitychange')
+    await new Promise((r) => setTimeout(r, 10))
+    failing()
+    check('a refused ask is swallowed, not thrown out of the listener', refused === 1, refused)
+    stop()
+    check('stopping removes every listener', win.count() === 0 && doc.count() === 0, [win.count(), doc.count()])
+    const ctx = readFileSync(new URL('../src/client/ClientContext.tsx', import.meta.url), 'utf8')
+    check('the client context renews on return with whoami, per client',
+      /return renewOnReturn\(\(\) => client\.whoami\(\)\)\s*\n\s*\}, \[client\]\)/.test(ctx))
+  }
 
   console.log(failures ? `booruSession: ${failures} FAILED` : 'booruSession: all ok')
   if (failures) process.exit(1)

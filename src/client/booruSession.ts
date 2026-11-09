@@ -37,3 +37,45 @@ export function ensureBooruSession(token: string | null, fetchImpl: FetchLike = 
 export function resetBooruSession(): void {
   memo = null
 }
+
+// The booru's cookie session dies with the token it was exchanged from (five
+// minutes, MAS default), and the SDK renews its token only when a request of
+// its own is refused. After a sleep, a VPN switch or a dropped network that
+// can be minutes after the reader is back: the booru frame is cross-origin, so
+// its pictures cannot be retried from here, and every one it asked for in that
+// gap was refused. So on return -- the tab shown again, the window focused,
+// the network back -- ask whoami at once. A dead token is refused, the SDK
+// refreshes it, and persistTokens (tokenRefresher.ts) exchanges the new one
+// before the reader clicks anything. A live token costs one whoami, at most
+// once a minute.
+type Listenable = {
+  addEventListener(type: string, fn: () => void): void
+  removeEventListener(type: string, fn: () => void): void
+}
+
+export const RENEW_ON_RETURN_GAP_MS = 60_000
+
+export function renewOnReturn(
+  ask: () => Promise<unknown>,
+  {
+    win = window as Listenable,
+    doc = document as Listenable & { visibilityState: string },
+    now = Date.now,
+  }: { win?: Listenable; doc?: Listenable & { visibilityState: string }; now?: () => number } = {},
+): () => void {
+  let last = -Infinity
+  const onReturn = () => {
+    if (doc.visibilityState !== 'visible') return
+    if (now() - last < RENEW_ON_RETURN_GAP_MS) return
+    last = now()
+    ask().catch(() => {})
+  }
+  win.addEventListener('focus', onReturn)
+  win.addEventListener('online', onReturn)
+  doc.addEventListener('visibilitychange', onReturn)
+  return () => {
+    win.removeEventListener('focus', onReturn)
+    win.removeEventListener('online', onReturn)
+    doc.removeEventListener('visibilitychange', onReturn)
+  }
+}

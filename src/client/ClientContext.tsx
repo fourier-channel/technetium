@@ -15,7 +15,7 @@ import { planSessionEnd, type SessionEndReason } from './sessionEnd'
 import { executePurge } from './browserPurge'
 import { clearOidcState, signOutFailures, signOutServerSide, type SignOutFailure, type SignOutProgress } from './signOut'
 import { booruCsrfToken, resetBooruCsrf } from './booruCsrf'
-import { resetBooruSession } from './booruSession'
+import { renewOnReturn, resetBooruSession } from './booruSession'
 import { BOORU_ORIGIN } from './booruUrl'
 import { DEVICE_LOCK_CHANNEL, acquireDeviceLock, deviceLockName, type LockManagerLike } from './deviceLock'
 import { compareDevice, ForeignTokensError } from './sessionIdentity'
@@ -505,6 +505,14 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     // endSession is redefined every render and is not a dependency: the effect
     // must re-subscribe when the CLIENT changes, not when the closure does.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client])
+
+  // A token that died while the reader was away is renewed the moment they
+  // are back, not when the sync loop next happens to be refused; renewal
+  // re-exchanges the booru cookie too (booruSession.ts, renewOnReturn).
+  useEffect(() => {
+    if (!client) return
+    return renewOnReturn(() => client.whoami())
   }, [client])
 
   const value: ClientContextValue = {
