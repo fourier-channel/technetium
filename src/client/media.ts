@@ -174,6 +174,22 @@ export function blobCacheStats(): { size: number; held: number } {
   return { size: blobs.size, held }
 }
 
+// A dead token's refusal, renewed once. This fetch goes around the SDK, so the
+// SDK's own refresh -- which runs only on its own requests -- never sees it: a
+// tab waking from the background sends a token past its five-minute life, the
+// gate answers 403 ("the token sees no room"), and AuthedImage's retries all
+// send the same dead token. One SDK call runs the SDK's refresh (early when it
+// knows the expiry, on M_UNKNOWN_TOKEN when it does not). Asked at most once
+// per token: a burst of refusals shares the one call, and a token that is
+// fine is not asked about again on every genuine refusal.
+let renewal: { token: string; done: Promise<void> } | null = null
+function renewOnce(client: MatrixClient, token: string): Promise<void> {
+  if (renewal?.token !== token) {
+    renewal = { token, done: client.whoami().then(() => {}, () => {}) }
+  }
+  return renewal.done
+}
+
 // Fetch an mxc with the client's token and return an object URL for the bytes.
 // The caller MUST revoke() on cleanup or it leaks the blob.
 //
@@ -214,7 +230,16 @@ export async function fetchMediaSrc(
   let pending = inFlight.get(key)
   if (!pending) {
     pending = mediaLimiter.run(async () => {
-      const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      let resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      if (resp.status === 401 || resp.status === 403) {
+        // One refresh, then one retry -- only when the refresh produced a NEW
+        // token. An unchanged token means the refusal was a real one.
+        await renewOnce(client, token)
+        const fresh = client.getAccessToken()
+        if (fresh && fresh !== token) {
+          resp = await fetch(url, { headers: { Authorization: `Bearer ${fresh}` } })
+        }
+      }
       if (!resp.ok) {
         // Keep the body. Discarding it is why a media failure could only ever
         // be diagnosed from the browser's network tab.

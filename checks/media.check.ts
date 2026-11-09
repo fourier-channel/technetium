@@ -5,7 +5,7 @@
 // The cases below are the ones that have actually gone wrong: a room hint sent
 // where it was not wanted, and the same bytes fetched more than once because
 // the cache was keyed on the arguments rather than on the request.
-import { mediaUrl, parseMxc, THUMB_SIZES } from '../src/client/media.ts'
+import { fetchMediaSrc, mediaUrl, parseMxc, THUMB_SIZES } from '../src/client/media.ts'
 
 let failures = 0
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -95,6 +95,54 @@ console.log('\n-- URL shape --')
   // a slash in it would silently address a different path.
   const odd = mediaUrl(clientWith(false), 'mxc://a b.net/x%y', 320)!
   check('path segments are encoded', odd.includes('a%20b.net') && odd.includes('x%25y'), odd)
+}
+
+console.log('\n-- a refused token is renewed once, and the picture retried once --')
+{
+  // The request goes around the SDK, so a token past its life is never
+  // renewed by it: every retry sent the same dead token. A stand-in fetch
+  // answers by token; whoami "refreshes" by swapping the client's token.
+  const sent: string[] = []
+  let alive = 'tok-new'
+  ;(globalThis as any).fetch = async (_url: string, init: RequestInit) => {
+    const auth = (init.headers as Record<string, string>).Authorization
+    sent.push(auth)
+    return new Response('x', { status: auth === `Bearer ${alive}` ? 200 : 403 })
+  }
+  ;(URL as any).createObjectURL = () => 'blob:x'
+  const client = (start: string, refreshTo: string | null) => {
+    const c = {
+      token: start,
+      whoamis: 0,
+      getHomeserverUrl: () => 'https://matrix.example.net/',
+      getRoom: () => null,
+      getAccessToken: () => c.token,
+      whoami: async () => { c.whoamis++; if (refreshTo) c.token = refreshTo; return {} },
+    }
+    return c
+  }
+
+  const dead = client('tok-old', 'tok-new')
+  sent.length = 0
+  const r = await fetchMediaSrc(dead as any, 'mxc://41chan.net/renew1', 320).catch(() => null)
+  check('a dead token: one renewal, then the picture loads with the new token',
+    r?.src === 'blob:x' && dead.whoamis === 1 && sent.join() === 'Bearer tok-old,Bearer tok-new', [dead.whoamis, sent])
+
+  alive = 'tok-other'
+  const real = client('tok-real', null)
+  sent.length = 0
+  const err = await fetchMediaSrc(real as any, 'mxc://41chan.net/renew2', 320).then(() => null, (e: Error) => e.message)
+  check('a real refusal: the token is unchanged, so no retry and the 403 stands',
+    !!err && err.includes('(403)') && real.whoamis === 1 && sent.length === 1, [err, sent])
+  await fetchMediaSrc(real as any, 'mxc://41chan.net/renew3', 320).catch(() => {})
+  check('the same token is not asked about again on the next refusal', real.whoamis === 1, real.whoamis)
+
+  alive = 'tok-fresh'
+  const burst = client('tok-stale', 'tok-fresh')
+  sent.length = 0
+  const all = await Promise.all([4, 5, 6, 7].map((i) => fetchMediaSrc(burst as any, `mxc://41chan.net/renew${i}`, 320).catch(() => null)))
+  check('a burst of refusals shares ONE renewal and every picture loads',
+    burst.whoamis === 1 && all.every((x) => x?.src === 'blob:x'), [burst.whoamis, sent])
 }
 
 if (failures > 0) {
