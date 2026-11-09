@@ -25,7 +25,8 @@ import { useLevelElsewhere } from './useLevelElsewhere'
 import type { PresenceState } from '../client/presence'
 import { MemberEvent } from './MemberEvent'
 import { useLightbox, type LightboxItem, type LightboxThread } from './lightboxContext'
-import { buildMediaSequence, imageMeta, lightboxItem, type MediaSequence } from './mediaSequence'
+import { buildMediaSequence, imageMeta, isGif, lightboxItem, type MediaSequence } from './mediaSequence'
+import { GifBadge } from './GifBadge'
 import { useInterfacePrefs } from '../client/interfaceStore'
 import { shownTone, type InterfacePrefs } from '../client/interfacePrefs'
 import { useMediaTagLine } from '../client/useMediaTags'
@@ -717,6 +718,7 @@ function BubbleRow({
               alt={typeof content.body === 'string' ? content.body : undefined}
               onClick={() => open([{ mxc, roomId, ...imageMeta(event) }], 0, thread)}
             />
+            {isGif(imageMeta(event)) && <GifBadge />}
           </div>
           <MediaTags mxc={mxc} roomId={event.getRoomId()} />
         </div>
@@ -1329,6 +1331,7 @@ function GalleryCell({ ev, onOpen }: { ev: MatrixEvent | null; onOpen?: () => vo
             transparentLoading
             onClick={onOpen}
           />
+          {ev && isGif(imageMeta(ev)) && <GifBadge />}
           {/* Gallery cells are small and tile tightly -- a count chip, not a
               strip, so the batch's geometry is untouched. */}
           <MediaTags mxc={mxc} roomId={ev?.getRoomId()} variant="chip" />

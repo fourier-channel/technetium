@@ -30,6 +30,14 @@ export function imageMeta(ev: MatrixEvent): { name?: string; mimetype?: string }
   return { name, mimetype }
 }
 
+/** An animated-capable GIF. The thumbnail is one still frame, so the picture
+ *  wears a badge saying a click plays it. The mimetype decides; a message
+ *  with none falls back to the file's name. */
+export function isGif({ name, mimetype }: { name?: string; mimetype?: string }): boolean {
+  if (mimetype) return mimetype.toLowerCase() === 'image/gif'
+  return !!name && /\.gif$/i.test(name)
+}
+
 /** The lightbox item for an image event, or null if it carries no usable mxc. */
 export function lightboxItem(ev: MatrixEvent | null): LightboxItem | null {
   if (!ev) return null

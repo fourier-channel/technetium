@@ -35,6 +35,7 @@
 }
 /* line-height:0 stops the inline baseline gap adding height below the image. */
 .mtags-stack > .mtags-media {
+  position: relative; /* the GIF badge's frame */
   min-width: 0;
   max-width: 100%;
   line-height: 0;
@@ -188,6 +189,33 @@
   cursor: pointer;
   pointer-events: auto;
   backdrop-filter: blur(2px);
+}
+/* A GIF's thumbnail is one still frame; the badge says a click plays it.
+   Top-right, clear of the tag chip bottom-left. It takes no clicks, so the
+   click lands on the picture and opens the moving original. */
+.gif-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+  padding: 1px 5px 1px 3px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  pointer-events: none;
+}
+.gif-badge svg {
+  width: 9px;
+  height: 9px;
+  fill: currentColor;
 }
 .mtags-chip[aria-expanded='true'] {
   background: var(--cpd-color-bg-action-primary-rest);
