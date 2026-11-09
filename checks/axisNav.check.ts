@@ -11,6 +11,7 @@
 import { axisFromKey, isTypingTarget, HORIZONTAL, BOTH } from '../src/ui/axisKeys.ts'
 import {
   buildMediaSequence,
+  lightboxItem,
   flatIndex,
   stepImage,
   totalImages,
@@ -131,6 +132,36 @@ console.log('\n-- the sequence is built from what was rendered --')
   check('order follows the conversation',
     seq.stops.flat().map((i) => i.mxc).join(',') ===
       'mxc://x.net/a,mxc://x.net/b,mxc://x.net/c,mxc://x.net/d')
+}
+
+console.log('\n-- an encrypted picture opens like any other (operator 2026-11-09) --')
+{
+  // A direct message is encrypted, so its picture carries `file` and no `url`.
+  // Read only by url, every DM picture fell out of the sequence and opened
+  // nowhere: it could be seen, never expanded or saved.
+  const file = {
+    url: 'mxc://x.net/enc', key: { k: 'k' }, iv: 'iv', hashes: { sha256: 'h' }, v: 'v2',
+  }
+  const content = { msgtype: 'm.image', body: 'dm.png', file, info: { mimetype: 'image/png' } }
+  const ev: any = { getId: () => '$e', getRoomId: () => '!dm:x.net', getContent: () => content }
+  const li = lightboxItem(ev)
+  check('an encrypted image is a lightbox item', !!li, li)
+  check('it carries the file, so the viewer can decrypt it', li?.file === file, li)
+  check('its mxc is the ciphertext address', li?.mxc === 'mxc://x.net/enc', li)
+  check('it keeps its room, name and mimetype',
+    li?.roomId === '!dm:x.net' && li?.name === 'dm.png' && li?.mimetype === 'image/png', li)
+  const seq = buildMediaSequence([{ id: '$e', kind: 'message', event: ev, content } as any])
+  check('an encrypted image is a stop in the sequence', seq.stopOf.get('$e') === 0 && seq.stops[0]?.[0]?.file === file)
+  const plain = lightboxItem({
+    getId: () => '$p', getRoomId: () => '!r:x.net',
+    getContent: () => ({ msgtype: 'm.image', url: 'mxc://x.net/p', body: 'p.png' }),
+  } as any)
+  check('a plain image carries no file', !!plain && plain.file === undefined, plain)
+  const broken = lightboxItem({
+    getId: () => '$b', getRoomId: () => '!r:x.net',
+    getContent: () => ({ msgtype: 'm.image', body: 'b.png', file: { url: 'mxc://x.net/b' } }),
+  } as any)
+  check('a file with no key is not an item', broken === null, broken)
 }
 
 console.log('\n-- the vertical walk crosses messages, image by image --')

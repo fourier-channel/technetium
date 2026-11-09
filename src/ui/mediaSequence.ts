@@ -1,6 +1,7 @@
 import type { MatrixEvent } from 'matrix-js-sdk'
 import type { TimelineItem } from '../client/useTimeline'
 import { parseMxc } from '../client/media'
+import { encryptedFileOf } from '../client/encryptedFile'
 import type { LightboxItem } from './lightboxContext'
 
 // The vertical axis of the image viewer, built once per rendered conversation.
@@ -40,13 +41,21 @@ export function isGif({ name, mimetype }: { name?: string; mimetype?: string }):
 
 /** The lightbox item for an image event, or null if it carries no usable mxc. */
 export function lightboxItem(ev: MatrixEvent | null): LightboxItem | null {
-  if (!ev) return null
-  const c = ev.getContent()
-  const mxc = typeof c.url === 'string' ? c.url : ''
-  if (!parseMxc(mxc)) return null
-  // roomId travels with the item: in an ENCRYPTED room the server cannot work
-  // out which room an mxc belongs to, so the gateway needs telling.
-  return { mxc, roomId: ev.getRoomId(), ...imageMeta(ev) }
+  return ev ? imageItem(ev, ev.getContent()) : null
+}
+
+// One image's lightbox item from its content: a plain picture by its `url`, an
+// encrypted one (every direct message) by its `file`, which the viewer
+// decrypts. roomId travels with the item: in an ENCRYPTED room the server
+// cannot work out which room an mxc belongs to, so the gateway needs telling.
+function imageItem(ev: MatrixEvent, content: Record<string, unknown>): LightboxItem | null {
+  const roomId = ev.getRoomId()
+  const mxc = typeof content.url === 'string' ? content.url : ''
+  if (parseMxc(mxc)) return { mxc, roomId, ...imageMeta(ev) }
+  const file = encryptedFileOf(content)
+  const fileMxc = file?.url ?? ''
+  if (!file || !parseMxc(fileMxc)) return null
+  return { mxc: fileMxc, roomId, file, ...imageMeta(ev) }
 }
 
 export interface MediaSequence {
@@ -58,9 +67,8 @@ export interface MediaSequence {
 }
 
 function messageStop(item: TimelineItem): LightboxItem[] {
-  const mxc = typeof item.content.url === 'string' ? item.content.url : ''
-  if (!parseMxc(mxc)) return []
-  return [{ mxc, roomId: item.event.getRoomId(), ...imageMeta(item.event) }]
+  const li = imageItem(item.event, item.content)
+  return li ? [li] : []
 }
 
 export const EMPTY_SEQUENCE: MediaSequence = { stops: [], stopOf: new Map() }

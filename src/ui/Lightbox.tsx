@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LightboxContext, type LightboxItem, type LightboxThread } from './lightboxContext'
 import { useClient } from '../client/clientContextValue'
-import { fetchMediaSrc, parseMxc } from '../client/media'
+import { fetchEncryptedMediaSrc, fetchMediaSrc, parseMxc } from '../client/media'
 import { useFileVersion } from './useFileVersion'
 import { MediaTags } from './MediaTags'
 import { axisFromKey, isTypingTarget, BOTH } from './axisKeys'
@@ -150,7 +150,8 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
   )
 
   // A replaced picture refetches under its new file version (useFileVersion.ts).
-  const curMxc = items && index >= 0 && index < items.length ? items[index].mxc : null
+  // An encrypted one is never replaced in place, as AuthedImage has it.
+  const curMxc = items && index >= 0 && index < items.length && !items[index].file ? items[index].mxc : null
   const version = useFileVersion(curMxc)
 
   // Fetch the current image full-res whenever it changes; revoke the prior blob.
@@ -173,7 +174,11 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
       setError(false)
     })
 
-    fetchMediaSrc(client, cur.mxc, undefined, cur.roomId)
+    // An encrypted picture (a direct message) is fetched and decrypted whole;
+    // Save then hands over the decrypted bytes, never the ciphertext.
+    ;(cur.file
+      ? fetchEncryptedMediaSrc(client, cur.file, cur.mimetype, cur.roomId)
+      : fetchMediaSrc(client, cur.mxc, undefined, cur.roomId))
       .then(({ src: resolved, revoke }) => {
         if (cancelled) {
           revoke()
@@ -343,7 +348,9 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
                     borderRadius: 4,
                   }}
                 />
-                <MediaTags mxc={current.mxc} roomId={current.roomId} />
+                {/* No tags for an encrypted picture: the tag hub is keyed on a
+                    public mxc, and a direct message is not the booru's business. */}
+                {!current.file && <MediaTags mxc={current.mxc} roomId={current.roomId} />}
               </div>
             ) : (
               <span style={{ color: 'var(--cpd-color-text-secondary)' }}>Loading...</span>

@@ -693,6 +693,9 @@ function BubbleRow({
             lazy
             reserve={reserveBox(content)}
             alt={typeof content.body === 'string' ? content.body : undefined}
+            // The viewer fetches the FULL picture and decrypts it, so it opens
+            // and saves like any other (operator 2026-11-09).
+            onClick={() => open([{ mxc: encFile.url ?? '', roomId, file: encFile, ...imageMeta(event) }], 0, thread)}
           />
         </div>
       )
@@ -959,10 +962,18 @@ function IrcRow({
         </span>
       )
     },
-    encrypted: () => (
+    encrypted: (_content, encFile) => (
       // An encrypted picture is never on the booru (a direct message's
-      // contents are not its business), so there is no post to link to.
-      <IrcEncryptedPicture item={item} roomId={roomId} />
+      // contents are not its business), so the word opens the viewer, which
+      // decrypts it, rather than a post.
+      <button
+        type="button"
+        className="tc-irc-link"
+        onClick={() => open([{ mxc: encFile.url ?? '', roomId, file: encFile, ...imageMeta(event) }], 0, thread)}
+        title="Open the picture"
+      >
+        [encrypted picture]
+      </button>
     ),
     image: (mxc) => (
       <IrcPicture mxc={mxc} roomId={roomId} onOpen={() => open([{ mxc, roomId, ...imageMeta(event) }], 0, thread)} />
@@ -1065,36 +1076,6 @@ function IrcPicture({ mxc, roomId, onOpen }: { mxc: string; roomId: string; onOp
     <button type="button" className="tc-irc-link" onClick={onOpen} title="Open the picture">
       [picture{why ? `: ${why}` : ''}]
     </button>
-  )
-}
-
-// An encrypted picture, in IRC style: a word on the line until asked for, then
-// the picture under it. Not shown by default because the mode is words only;
-// not left unreachable because an encrypted picture opens nowhere else.
-function IrcEncryptedPicture({ item, roomId }: { item: TimelineItem; roomId: string }) {
-  const [shown, setShown] = useState(false)
-  const content = item.content
-  const file = encryptedFileOf(content)
-  const thumb = encryptedThumbnailOf(content)
-  if (!file) return null
-  return (
-    <>
-      <button type="button" className="tc-irc-link" onClick={() => setShown((v) => !v)}>
-        [encrypted picture: {shown ? 'hide' : 'show'}]
-      </button>
-      {shown && (
-        <span className="tc-irc-reveal">
-          <AuthedImage
-            file={thumb ? thumb.file : file}
-            mimetype={thumb ? thumb.mimetype : undefined}
-            mxc={(thumb ? thumb.file.url : file.url) ?? ''}
-            roomId={roomId}
-            reserve={reserveBox(content)}
-            alt={typeof content.body === 'string' ? content.body : undefined}
-          />
-        </span>
-      )}
-    </>
   )
 }
 
@@ -1280,7 +1261,11 @@ function RowFooter({
 // until the real image paints). A null / loading / failed slot shows the graphic.
 function GalleryCell({ ev, onOpen }: { ev: MatrixEvent | null; onOpen?: () => void }) {
   const c = ev?.getContent()
-  const mxc = c && typeof c.url === 'string' ? c.url : ''
+  // An encrypted cell (a gallery sent in a direct message) carries `file`, not
+  // `url`: shown by its sender's thumbnail when there is one, else whole.
+  const encFile = c ? encryptedFileOf(c) : null
+  const thumb = encFile ? encryptedThumbnailOf(c) : null
+  const mxc = encFile ? ((thumb ? thumb.file.url : encFile.url) ?? '') : c && typeof c.url === 'string' ? c.url : ''
   const showImg = !!ev && !!parseMxc(mxc)
   return (
     <div
@@ -1323,6 +1308,8 @@ function GalleryCell({ ev, onOpen }: { ev: MatrixEvent | null; onOpen?: () => vo
         <div style={{ position: 'absolute', inset: 0 }}>
           <AuthedImage
             mxc={mxc}
+            file={encFile ? (thumb ? thumb.file : encFile) : undefined}
+            mimetype={thumb ? thumb.mimetype : (imageMeta(ev!).mimetype ?? undefined)}
             width={360}
             roomId={ev?.getRoomId()}
             alt={typeof c?.body === 'string' ? c.body : undefined}
@@ -1334,7 +1321,7 @@ function GalleryCell({ ev, onOpen }: { ev: MatrixEvent | null; onOpen?: () => vo
           {ev && isGif(imageMeta(ev)) && <GifBadge />}
           {/* Gallery cells are small and tile tightly -- a count chip, not a
               strip, so the batch's geometry is untouched. */}
-          <MediaTags mxc={mxc} roomId={ev?.getRoomId()} variant="chip" />
+          {!encFile && <MediaTags mxc={mxc} roomId={ev?.getRoomId()} variant="chip" />}
         </div>
       )}
     </div>

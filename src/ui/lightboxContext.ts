@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react'
+import type { EncryptedFileInfo } from '../client/encryptedFile'
 
 // The lightbox context, its types, and the hook that reads it.
 //
@@ -13,6 +14,9 @@ export interface LightboxItem {
   roomId?: string
   name?: string
   mimetype?: string
+  /** An ENCRYPTED picture (every direct message): the attachment to fetch and
+   *  decrypt. `mxc` is then its ciphertext address. */
+  file?: EncryptedFileInfo
 }
 
 // The conversation the open image came from, supplying the VERTICAL axis:

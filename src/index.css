@@ -5300,11 +5300,6 @@ select.tc-input { padding-right: 4px; }
 .tc-irc-pictures > * + * {
   margin-left: 6px;
 }
-.tc-irc-reveal {
-  display: block;
-  max-width: 320px;
-  margin: 4px 0;
-}
 .tc-irc-row .tc-reply-pill {
   display: inline-flex;
   vertical-align: baseline;
