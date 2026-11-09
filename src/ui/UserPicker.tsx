@@ -5,6 +5,7 @@ import { initials } from '../client/members'
 import {
   isValidMxid,
   mergeCandidates,
+  normalizeMxid,
   searchDirectory,
   type Candidate,
   type DirectoryUser,
@@ -132,6 +133,7 @@ export function UserPicker({
 
   const rawIsValid = isValidMxid(query)
   const rawLooksLikeAttempt = query.trim().startsWith('@')
+  const sentAs = normalizeMxid(query)
 
   return createPortal(
     <div
@@ -162,6 +164,29 @@ export function UserPicker({
           autoFocus
           style={{ marginBottom: 8 }}
         />
+
+        {/* What a typed id is SENT as, shown before the click: the input
+            keeps what was typed, and capitals never reach the server
+            (normalizeMxid). Shown for every typed id, not only when it
+            differs, so the box does not appear mid-word. */}
+        {rawLooksLikeAttempt && (
+          <>
+            <input
+              type="text"
+              className="tc-input"
+              data-wide="true"
+              value={sentAs}
+              readOnly
+              tabIndex={-1}
+              aria-label="Will be sent as"
+              style={{ marginBottom: 4, opacity: 0.8 }}
+            />
+            <div className="tc-modal-hint" data-tone={sentAs !== query.trim() ? 'warn' : undefined} style={{ marginBottom: 6 }}>
+              Will be sent as shown above. Matrix user names only allow lowercase letters, so anything
+              you type in capitals is lowercased here: this is what the account name looks like.
+            </div>
+          </>
+        )}
 
         {rawLooksLikeAttempt && !rawIsValid && query.trim().length > 1 && (
           <div className="tc-modal-hint" style={{ marginBottom: 6 }}>

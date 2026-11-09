@@ -19,6 +19,15 @@ export function isValidMxid(input: string): boolean {
   return MXID_RE.test(input.trim())
 }
 
+// The id a hand-typed entry is SENT as. New Matrix user names are lowercase
+// only, so "@Parity:41chan.net" can never be anyone: the invite is accepted
+// and reaches nobody (operator, 2026-11-09). The picker lowercases what was
+// typed and shows the result under the input before anything is sent. Server
+// names are DNS names, where case never mattered.
+export function normalizeMxid(input: string): string {
+  return input.trim().toLowerCase()
+}
+
 export interface DirectoryUser {
   userId: string
   displayName?: string
@@ -91,7 +100,7 @@ export function mergeCandidates(
 
   // A hand-typed id goes LAST: it is the fallback, and surfacing it above real
   // matches would let a typo outrank the person being looked for.
-  const raw = rawInput.trim()
+  const raw = normalizeMxid(rawInput)
   if (isValidMxid(raw)) push({ userId: raw }, 'raw')
 
   return out

@@ -4,6 +4,7 @@ import {
   describeInviteError,
   isValidMxid,
   mergeCandidates,
+  normalizeMxid,
 } from '../src/client/userDirectory.ts'
 
 let failures = 0
@@ -27,6 +28,24 @@ console.log('\n-- isValidMxid --')
   check('empty', !isValidMxid(''))
   check('inner space', !isValidMxid('@a b:x.net'))
   check('a bare name is not an id', !isValidMxid('saber'))
+}
+
+console.log('\n-- normalizeMxid (operator 2026-11-09: @Parity invited nobody) --')
+{
+  // New Matrix user names are lowercase only, so a typed capital can only ever
+  // reach nobody. The picker sends the lowercased id and shows it before the
+  // click.
+  check('capitals are lowercased', normalizeMxid('@Parity:41chan.net') === '@parity:41chan.net')
+  check('the server name too', normalizeMxid('@a:X.Net') === '@a:x.net')
+  check('spaces trimmed', normalizeMxid('  @a:x.net  ') === '@a:x.net')
+  check('already lowercase is unchanged', normalizeMxid('@a.b_c:x.net:8448') === '@a.b_c:x.net:8448')
+
+  const typo = mergeCandidates([], [], '@Parity:41chan.net', new Set())
+  check('a typed capital is offered lowercased', typo.length === 1 && typo[0].userId === '@parity:41chan.net')
+  const known = mergeCandidates([{ userId: '@parity:41chan.net', displayName: 'Parity' }], [], '@Parity:41chan.net', new Set())
+  check('and then resolves to the real person', known.length === 1 && known[0].source === 'local')
+  check('an excluded id cannot return in capitals',
+    mergeCandidates([], [], '@X:x.net', new Set(['@x:x.net'])).length === 0)
 }
 
 console.log('\n-- mergeCandidates --')
