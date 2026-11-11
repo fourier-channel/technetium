@@ -4452,3 +4452,34 @@ default once in the stylesheet and check it equals the script's default.
 `<button>` as one box whatever its `display` says, so a reaction in a line of
 text sets the line's height. Give it a fixed height and `vertical-align: top`.
 
+
+## 2026-11-11 -- withheld pictures pop out of the room, and back in
+
+Promoted as v2026.11.11 and v2026.11.11.2.
+
+A picture whose booru post the live tag read reports as withheld from this
+reader (sensitive below Gold, deleted, jailed) now plays a short burst and
+leaves the room, its gallery closing up with no hole (`0b43ef4`). Only a
+404 that says `withheld` pops a picture; a plain 404 is a post not yet known
+and leaves it alone.
+
+Withholding is not final, so a popped picture is asked about again
+(`90c5cec`): a minute after it went, doubling to every fifteen minutes, only
+while the tab is visible -- seven reads in its first hour, then four an
+hour, each the same small read an on-screen picture costs, and nothing for a
+picture that never popped. A tag-state push for it re-reads it at once. When
+the booru shows the post again, the client first fetches the row's own
+thumbnail, because the media gate caches its refusal for a minute or so; once
+the image loads, the picture pops back in (the burst in reverse) and can pop
+out again later.
+
+**Verified.** The pop store, its recheck schedule and the room's regrouping
+are proved by the check suite, with seven sabotage mutants each killed. The
+served bundle is the promoted one. **Not verified.** Live behaviour against
+the booru: a sensitive tag removed from a popped picture's post, watched
+come back.
+
+**draft-38 (gotcha) -- a popped row has no listener.** The tag store
+re-reads on a state push only for an image something is rendering. A picture
+that left the room is rendered by nothing, so every path that should reach it
+(the push, the recheck) has to name the gone set explicitly.
