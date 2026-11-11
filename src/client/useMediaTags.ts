@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import { RoomEvent, RoomStateEvent, type MatrixClient, type MatrixEvent } from 'matrix-js-sdk'
-import { parseMxc } from './media'
+import { fetchMediaSrc, parseMxc } from './media'
 import { createLimiter } from './concurrency'
 import { reportIgnored } from './report'
 import { ensureBooruSession } from './booruSession'
@@ -10,7 +10,7 @@ import {
   WITHHELD,
   type TagEdit,
 } from './booruTags'
-import { withhold } from './withheldMedia'
+import { popPhase, recheckSoon, release, setRechecker, withhold } from './withheldMedia'
 import { mayRead, mergeBooruIntoSet, newBooruReadState, optimisticSet } from './booruLive'
 import { askKey, beginAsk, heardOf, isAbsent, newTagAsks, retry, settle, tagLineView, takeDeferred, type TagLineView } from './tagAsks'
 import {
@@ -84,6 +84,7 @@ function ingestEvent(ev: MatrixEvent): void {
   if (ev.getType() !== MEDIA_TAGS_EVENT) return
   const mediaId = mediaIdFromStateKey(ev.getStateKey())
   if (!mediaId) return
+  rememberMxc(ev.getStateKey(), mediaId)
   ingestSet(tagSetFromEvent(ev), mediaId)
   // Seen for real -- drop any "no tags" or "could not load" on record for it.
   heardOf(asks, mediaId)
@@ -96,7 +97,19 @@ function ingestEvent(ev: MatrixEvent): void {
   // 718 tag events in a single batch, and reacting to each of them
   // unconditionally would have been 718 booru reads for images nobody was
   // looking at.
-  if (listeners.has(mediaId)) refreshBooruTags(mediaId, true)
+  //
+  // And for a picture that popped out of the room (withheldMedia.ts): it has
+  // no listener, because its row is gone, and a push for it -- a quarantine
+  // let go, a replaced file -- is the soonest word that it may come back.
+  if (listeners.has(mediaId) || popPhase(mediaId) === 'gone') refreshBooruTags(mediaId, true)
+}
+
+// The full mxc of each image the store has heard of, for bringing a popped
+// picture back (bringBack): its tags are keyed by media id alone. Filled
+// wherever the mxc is in hand -- the bridge's state key, an on-demand ask.
+const mxcOf = new Map<string, string>()
+function rememberMxc(key: string | undefined, mediaId: string): void {
+  if (key?.startsWith('mxc://') && !mxcOf.has(mediaId)) mxcOf.set(mediaId, key.trim())
 }
 
 // Full sweep of every room. Reads BOTH sources:
@@ -146,6 +159,7 @@ let fetchClient: MatrixClient | null = null
 export function fetchTags(roomId: string, mxc: string): void {
   const mediaId = parseMxc(mxc)?.mediaId
   if (!mediaId) return
+  rememberMxc(mxc, mediaId)
   const go = beginAsk(asks, roomId, mxc, mediaId, { haveClient: !!fetchClient, haveSet: sets.has(mediaId) })
   if (go !== 'go' || !fetchClient) return
   const key = askKey(roomId, mediaId)
@@ -199,8 +213,11 @@ function changedLine(mediaId: string): void {
 // about 157 bytes measured against production, so the cost that matters here is
 // the REQUEST COUNT, not the bytes.
 //
-// Nothing here polls. A read happens when an image comes into view, and again
-// when the bridge says the tags changed.
+// A read happens when an image comes into view, and again when the bridge
+// says the tags changed. The one schedule is for a picture that popped out of
+// the room (withheldMedia.ts): nothing would ever say it may come back, so it
+// is asked about again, backing off to every fifteen minutes, while the tab
+// is visible.
 // ---------------------------------------------------------------------------
 
 const BOORU_MAX_INFLIGHT = 4
@@ -286,6 +303,9 @@ export function refreshBooruTags(mediaId: string, force = false): void {
         withhold(mediaId)
         return
       }
+      // Shown again (a sensitive tag removed, a post let out of jail): the
+      // picture pops back into the room. A plain 404 above leaves it gone.
+      if (popPhase(mediaId) === 'gone') void bringBack(mediaId)
       // Re-read the store rather than closing over the earlier set: the read
       // took a round trip, and a state push may have replaced it meanwhile.
       const current = sets.get(mediaId)
@@ -309,6 +329,36 @@ export function refreshBooruTags(mediaId: string, force = false): void {
     .finally(() => {
       booruReads.inFlight.delete(postId)
     })
+}
+
+// A popped picture is asked about again on withheldMedia's schedule, through
+// the one live read above.
+setRechecker((mediaId) => refreshBooruTags(mediaId, true))
+
+// The booru shows a popped picture's post again. Bring it back only once the
+// media gate serves the image too: the gate caches its answer (up to about
+// 80 s), and a picture that pops back in only to fail to load is worse than
+// one that comes back a little later. The probe is the timeline row's own
+// thumbnail, so the row that mounts finds it already in the blob cache.
+const ROW_THUMB = 320 // Timeline's picture row (AuthedImage width={320})
+async function bringBack(mediaId: string): Promise<void> {
+  const mxc = mxcOf.get(mediaId)
+  if (!fetchClient || !mxc) {
+    // Nothing to probe with: bring it back and let the image's own retries
+    // carry a lagging gate.
+    release(mediaId)
+    return
+  }
+  try {
+    const { revoke } = await fetchMediaSrc(fetchClient, mxc, ROW_THUMB)
+    revoke()
+    release(mediaId)
+  } catch (err: unknown) {
+    // Expected for a minute or so after the booru lets a post go; said where
+    // a report is read all the same (G-tc05), and asked again soon.
+    reportIgnored('media tags: the booru shows ' + mediaId + ' again but the media gate still refuses it; asking again shortly', err)
+    recheckSoon(mediaId, Date.now())
+  }
 }
 
 // ---------------------------------------------------------------------------

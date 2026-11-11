@@ -8,9 +8,18 @@
 // must not pop it for the people it was posted to); the pop runs its course
 // before the message leaves; a gone picture leaves no row and its gallery
 // closes up with no hole.
+//
+// And it comes back (operator, 2026-11-11: "let's have it pop back in"): a
+// gone picture is rechecked a minute after, doubling to fifteen minutes; a
+// release plays the pop in reverse and then clears, so it can pop again; a
+// release touches only a gone picture.
 import { readFileSync } from 'node:fs'
 const { fetchBooruPool, WITHHELD } = await import('../src/client/booruTags.ts')
-const { withhold, popPhase, goneMedia, onWithheld, POP_MS } = await import('../src/client/withheldMedia.ts')
+const {
+  withhold, release, popPhase, goneMedia, onWithheld, POP_MS,
+  recheckDelay, dueForRecheck, recheckSoon, recheckDue,
+  RECHECK_FIRST_MS, RECHECK_MAX_MS, RECHECK_SOON_MS,
+} = await import('../src/client/withheldMedia.ts')
 const { toItems } = await import('../src/client/useTimeline.ts')
 
 let failures = 0
@@ -67,6 +76,78 @@ console.log('\n-- the pop runs its course, then the picture is gone --')
   const ms = [...css.matchAll(/\.tc-pop[^{]*\{[^}]*animation:\s*tc-pop-\w+\s+(\d+)ms/g)].map((m) => Number(m[1]))
   check('every pop animation in index.css lasts POP_MS', ms.length >= 2 && ms.every((n) => n === POP_MS), ms)
   check('the pop is finite (no infinite animation)', !/tc-pop[^}]*infinite/.test(css))
+  const back = [...css.matchAll(/\.tc-unpop[^{]*\{[^}]*animation:\s*tc-unpop-\w+\s+(\d+)ms/g)].map((m) => Number(m[1]))
+  check('every pop-back animation in index.css lasts POP_MS', back.length >= 3 && back.every((n) => n === POP_MS), back)
+  check('the pop back is finite', !/tc-unpop[^}]*infinite/.test(css))
+}
+
+console.log('\n-- a gone picture is asked about again, backing off --')
+{
+  check('the first recheck is a minute after', recheckDelay(0) === RECHECK_FIRST_MS && RECHECK_FIRST_MS === 60_000)
+  check('then it doubles', recheckDelay(1) === 120_000 && recheckDelay(2) === 240_000 && recheckDelay(3) === 480_000)
+  check('and stops at fifteen minutes', recheckDelay(4) === RECHECK_MAX_MS && recheckDelay(40) === 15 * 60_000)
+
+  const timers: { run: () => void; ms: number }[] = []
+  const schedule = (run: () => void, ms: number) => timers.push({ run, ms })
+  let t = 1_000_000
+  const now = () => t
+  withhold('rc', schedule, now)
+  check('no recheck while it pops', recheckDue('rc') === undefined)
+  timers.shift()!.run()
+  check('gone: first recheck due a minute later', recheckDue('rc') === t + 60_000, recheckDue('rc'))
+  t += 59_999
+  check('nothing due a moment early', !dueForRecheck(t).includes('rc'))
+  t += 1
+  check('due on the minute', dueForRecheck(t).includes('rc'))
+  check('asked once per due time', !dueForRecheck(t).includes('rc'))
+  check('the next one is two minutes on', recheckDue('rc') === t + 120_000, recheckDue('rc') - t)
+  // A whole hour of ticks: how many reads one popped picture costs.
+  let reads = 1
+  for (let s = 15_000; s <= 3_600_000; s += 15_000) if (dueForRecheck(t + s).includes('rc')) reads++
+  check('seven reads in its first hour (1, 3, 7, 15, 30, 45, 60 min), then four an hour', reads === 7, reads)
+  const before = recheckDue('rc')!
+  recheckSoon('rc', before - 10 * 60_000)
+  check('recheckSoon brings the next ask forward to thirty seconds',
+    recheckDue('rc') === before - 10 * 60_000 + RECHECK_SOON_MS, recheckDue('rc'))
+  recheckSoon('rc', recheckDue('rc')! + 60_000)
+  check('recheckSoon never pushes an ask later', recheckDue('rc') === before - 10 * 60_000 + RECHECK_SOON_MS)
+  recheckSoon('never-gone', t)
+  check('recheckSoon on a picture not gone schedules nothing', recheckDue('never-gone') === undefined)
+}
+
+console.log('\n-- shown again, it pops back in --')
+{
+  const timers: { run: () => void; ms: number }[] = []
+  const schedule = (run: () => void, ms: number) => timers.push({ run, ms })
+  let heard = 0
+  const off = onWithheld(() => heard++)
+
+  release('not-withheld', schedule)
+  check('a picture never withheld is not released', popPhase('not-withheld') === undefined && timers.length === 0)
+  withhold('back', schedule)
+  release('back', schedule)
+  check('a picture still popping is not released mid-pop', popPhase('back') === 'popping' && timers.length === 1)
+  timers.shift()!.run()
+  check('gone', goneMedia().has('back') && recheckDue('back') !== undefined)
+  heard = 0
+  const goneBefore = goneMedia()
+  release('back', schedule)
+  check('released: returning at once', popPhase('back') === 'returning', popPhase('back'))
+  check('back in the room at once, so the row mounts and plays the return', !goneMedia().has('back'))
+  check('the gone set is a new object', goneMedia() !== goneBefore && goneBefore.has('back'))
+  check('no more rechecks for it', recheckDue('back') === undefined)
+  check('one timer, the length of the animation', timers.length === 1 && timers[0].ms === POP_MS, timers)
+  release('back', schedule)
+  check('a second release starts nothing', timers.length === 1)
+  timers.shift()!.run()
+  check('then no phase at all', popPhase('back') === undefined)
+  check('listeners heard both changes', heard === 2, heard)
+  withhold('back', schedule)
+  check('and it can pop again', popPhase('back') === 'popping')
+  timers.shift()!.run()
+  check('gone again, with a fresh first recheck', goneMedia().has('back') && recheckDue('back') !== undefined)
+
+  off()
 }
 
 console.log('\n-- a gone picture leaves the room --')

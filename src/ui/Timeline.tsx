@@ -30,7 +30,7 @@ import { GifBadge } from './GifBadge'
 import { useInterfacePrefs } from '../client/interfaceStore'
 import { shownTone, type InterfacePrefs } from '../client/interfacePrefs'
 import { useMediaTagLine } from '../client/useMediaTags'
-import { usePopPhase } from '../client/withheldMedia'
+import { usePopPhase, type PopPhase } from '../client/withheldMedia'
 import { booruPostUrl } from '../client/booruUrl'
 import { linkify } from './linkify'
 import { useChatBackground } from './chatBackground'
@@ -738,7 +738,7 @@ function BubbleRow({
     // data-event-id is what click-to-jump searches for; keeping it on the row
     // means no separate index has to stay in sync with the timeline.
     <div
-      className={popping ? 'tc-row tc-pop' : 'tc-row'}
+      className={'tc-row' + popping}
       data-event-id={item.id}
       data-grouped={head ? undefined : 'true'}
       data-speaker={speaks && !narrow ? 'true' : undefined}
@@ -915,10 +915,15 @@ function BubbleRow({
 // avatars, bubbles, tails, effects, receipts, link previews, the tag line.
 // A picture whose booru post is withheld from this reader pops out of the
 // room (withheldMedia.ts): its row plays the pop, then useTimeline drops it.
-function useRowPop(item: TimelineItem): boolean {
+// Shown again, it comes back playing the pop in reverse. The row's extra
+// class, or '' for a row doing neither.
+function useRowPop(item: TimelineItem): string {
   const c = item.kind === 'message' ? item.content : null
   const mediaId = c?.msgtype === 'm.image' && typeof c.url === 'string' ? parseMxc(c.url)?.mediaId : undefined
-  return usePopPhase(mediaId) === 'popping'
+  return popClass(usePopPhase(mediaId))
+}
+function popClass(phase: PopPhase | undefined): string {
+  return phase === 'popping' ? ' tc-pop' : phase === 'returning' ? ' tc-unpop' : ''
 }
 
 function IrcRow({
@@ -993,7 +998,7 @@ function IrcRow({
 
   return (
     <div
-      className={popping ? 'tc-row tc-irc-row tc-pop' : 'tc-row tc-irc-row'}
+      className={'tc-row tc-irc-row' + popping}
       data-event-id={item.id}
       data-mentions-me={callsOnMe ? 'true' : undefined}
     >
@@ -1278,11 +1283,12 @@ function GalleryCell({ ev, onOpen }: { ev: MatrixEvent | null; onOpen?: () => vo
   const thumb = encFile ? encryptedThumbnailOf(c) : null
   const mxc = encFile ? ((thumb ? thumb.file.url : encFile.url) ?? '') : c && typeof c.url === 'string' ? c.url : ''
   const showImg = !!ev && !!parseMxc(mxc)
-  // Popped out of its gallery when its booru post is withheld (withheldMedia.ts).
-  const popping = usePopPhase(encFile ? undefined : parseMxc(mxc)?.mediaId) === 'popping'
+  // Popped out of its gallery when its booru post is withheld, and back in
+  // when it is shown again (withheldMedia.ts).
+  const popping = popClass(usePopPhase(encFile ? undefined : parseMxc(mxc)?.mediaId)).trim()
   return (
     <div
-      className={popping ? 'tc-pop' : undefined}
+      className={popping || undefined}
       style={{
         position: 'relative',
         width: '100%',
