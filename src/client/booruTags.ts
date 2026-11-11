@@ -286,6 +286,13 @@ export function parseLiveRead(json: unknown): BooruTagSet | null {
 }
 
 /**
+ * The booru's answer for a post hidden from this reader by a gate other than
+ * the rooms (sensitive below Gold, deleted, jailed): its image is withheld
+ * from them in their rooms too, and the message pops (withheldMedia.ts).
+ */
+export const WITHHELD = 'withheld'
+
+/**
  * Current tags, categories, rating and provenance for one post, live, in ONE
  * credentialed request. Replaces a pair of reads that asked the booru two
  * questions per image on screen to draw one panel.
@@ -296,14 +303,22 @@ export function parseLiveRead(json: unknown): BooruTagSet | null {
 export async function fetchBooruPool(
   postId: number,
   fetchImpl: typeof fetch = fetch,
-): Promise<BooruTagSet | null> {
+): Promise<BooruTagSet | typeof WITHHELD | null> {
   const res = await fetchImpl(`${BOORU_ORIGIN}/posts/${postId}/tag_sources.json`, {
     credentials: 'include',
     headers: { Accept: 'application/json' },
   })
   // A 404 is an ANSWER: the booru has no such post, and the caller should
-  // treat that as "no tags" and stop asking.
-  if (res.status === 404) return null
+  // treat that as "no tags" and stop asking. Unless it says `withheld`
+  // (chanbooru FourierTagSourcesController#show): then the post exists and
+  // this reader may not see it, by the gate fourier-auth asks for the image.
+  // Only that 404 says so -- one hidden by the rooms alone does not, since a
+  // new Matrix post is closed to every room until its own are known, and its
+  // image must not pop for the people it was posted to.
+  if (res.status === 404) {
+    const body: unknown = await res.json().catch(() => null)
+    return body !== null && typeof body === 'object' && (body as { withheld?: unknown }).withheld === true ? WITHHELD : null
+  }
   // Anything else is a FAULT and must not be returned as absence. Returning
   // null for a 403 is what made the CORS breakage invisible for days -- a
   // refused read and an untagged image looked identical to every caller, so

@@ -9,6 +9,8 @@ import {
   MatrixEventEvent,
 } from 'matrix-js-sdk'
 import { MEDIA_TAGS_EVENT } from './mediaTags'
+import { parseMxc } from './media'
+import { goneMedia, onWithheld } from './withheldMedia'
 import { getIgnoredUsers } from './ignoredUsers'
 import { isBackgroundPost } from './backgroundPost'
 import { INTERACTION_EVENT } from './interactionEvents'
@@ -189,6 +191,10 @@ export interface ToItemsOptions {
   // room.relations. Without it a reaction or edit fetched by scrollback before
   // its target is lost from view for good (relations.ts, strandedRelations).
   relations?: RelationSource | null
+  // Media ids of the pictures whose booru post is withheld from this reader
+  // and whose pop has finished (withheldMedia.ts): their messages leave the
+  // room as an ignored sender's do.
+  withheld?: ReadonlySet<string>
 }
 
 function classify(ev: MatrixEvent): TimelineItemKind {
@@ -242,6 +248,15 @@ function galleryTag(ev: MatrixEvent): GalleryTag | null {
   }
 }
 
+// A picture whose booru post is withheld from this reader, its pop finished.
+function isWithheld(ev: MatrixEvent, opts: ToItemsOptions): boolean {
+  if (!opts.withheld?.size) return false
+  const c = ev.getContent()
+  if (c.msgtype !== 'm.image' || typeof c.url !== 'string') return false
+  const mediaId = parseMxc(c.url)?.mediaId
+  return !!mediaId && opts.withheld.has(mediaId)
+}
+
 /**
  * Would this event, on its own, produce a row?
  *
@@ -276,6 +291,7 @@ export function rendersAsItem(ev: MatrixEvent, opts: ToItemsOptions = {}): boole
   // Filtered here rather than in the renderer so an ignored sender leaves no
   // gap, no "message hidden" row, and no reaction or receipt behind.
   if (opts.ignoredUsers?.length && opts.ignoredUsers.includes(ev.getSender() ?? '')) return false
+  if (isWithheld(ev, opts)) return false
   // Spatial-mode presence/position events ride the timeline (so they work at
   // PL0) but are never chat -- keep them out of every message log.
   if (ev.getType().startsWith('net.41chan.spatial.')) return false
@@ -310,12 +326,22 @@ export function toItems(events: MatrixEvent[], opts: ToItemsOptions = {}): Timel
     if (tag) {
       // Gather every member of this batch across the whole window (not just the
       // consecutive run), so interleaved/out-of-order images still land in-grid.
-      const members = events.filter((e) => galleryTag(e)?.id === tag.id)
-
-      // Grid size = declared count, expanded to fit any present index / overflow.
-      let size = tag.count && tag.count >= 1 ? tag.count : 0
-      for (const m of members) {
+      // A withheld picture leaves its gallery and takes its slot with it, so
+      // the batch closes up rather than keeping a hole where it was.
+      const batch = events.filter((e) => galleryTag(e)?.id === tag.id)
+      const members = batch.filter((e) => !isWithheld(e, opts))
+      // Each member's index moves down by the withheld pictures before it.
+      const dropped = batch.filter((e) => isWithheld(e, opts)).map((e) => galleryTag(e)?.index)
+      const slotOf = (m: MatrixEvent): number | undefined => {
         const mi = galleryTag(m)?.index
+        return typeof mi === 'number' ? mi - dropped.filter((d) => typeof d === 'number' && d < mi).length : undefined
+      }
+
+      // Grid size = declared count less the withheld, expanded to fit any
+      // present index / overflow.
+      let size = tag.count && tag.count >= 1 ? tag.count - dropped.length : 0
+      for (const m of members) {
+        const mi = slotOf(m)
         if (typeof mi === 'number' && mi + 1 > size) size = mi + 1
       }
       if (members.length > size) size = members.length
@@ -327,7 +353,7 @@ export function toItems(events: MatrixEvent[], opts: ToItemsOptions = {}): Timel
         }
         const cells: (MatrixEvent | null)[] = new Array(size).fill(null)
         for (const m of members) {
-          const mi = galleryTag(m)?.index
+          const mi = slotOf(m)
           let slot = typeof mi === 'number' ? mi : -1
           if (slot < 0 || slot >= size || cells[slot] !== null) {
             slot = cells.findIndex((c) => c === null) // fallback: first free slot
@@ -425,6 +451,7 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
       showSystemEvents,
       myUserId: client?.getUserId() ?? null,
       ignoredUsers: client ? getIgnoredUsers(client) : undefined,
+      withheld: goneMedia(),
     }),
     [client, showSystemEvents],
   )
@@ -536,9 +563,12 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
     client.on(RoomEvent.Redaction, onRedaction)
     client.on(RoomEvent.LocalEchoUpdated, onLocalEcho)
     client.on(RoomEvent.TimelineReset, onReset)
+    // A picture's pop finished: its message leaves (withheldMedia.ts).
+    const offWithheld = onWithheld(scheduleRefresh)
     return () => {
       cancelled = true
       if (pending !== null) clearTimeout(pending)
+      offWithheld()
       client.off(MatrixEventEvent.Decrypted, onDecrypted)
       client.off(ClientEvent.AccountData, onAccountData)
       client.off(RoomEvent.Timeline, onTimeline)

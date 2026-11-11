@@ -7,8 +7,10 @@ import { ensureBooruSession } from './booruSession'
 import {
   fetchBooruPool,
   writeBooruTags,
+  WITHHELD,
   type TagEdit,
 } from './booruTags'
+import { withhold } from './withheldMedia'
 import { mayRead, mergeBooruIntoSet, newBooruReadState, optimisticSet } from './booruLive'
 import { askKey, beginAsk, heardOf, isAbsent, newTagAsks, retry, settle, tagLineView, takeDeferred, type TagLineView } from './tagAsks'
 import {
@@ -278,6 +280,12 @@ export function refreshBooruTags(mediaId: string, force = false): void {
     )
     .then((live) => {
       if (!live) return
+      // The post is hidden from this reader, and so is its image from now on:
+      // the message pops out of the room (withheldMedia.ts).
+      if (live === WITHHELD) {
+        withhold(mediaId)
+        return
+      }
       // Re-read the store rather than closing over the earlier set: the read
       // took a round trip, and a state push may have replaced it meanwhile.
       const current = sets.get(mediaId)
@@ -344,6 +352,13 @@ export async function editBooruTags(mediaId: string, edit: TagEdit): Promise<voi
   let seen = before.tagString
   if (seen === undefined) {
     const live = await booruLimiter.run(() => withBooruSession(() => fetchBooruPool(postId)))
+    if (live === WITHHELD) {
+      withhold(mediaId)
+      throw new Error(
+        `booru post ${postId} is hidden from you (a sensitive, deleted or jailed post), ` +
+          'so there is nothing here for you to tag. Fix: none; its picture leaves the room.',
+      )
+    }
     if (!live) {
       throw new Error(
         `could not read post ${postId} from the booru, so an edit would overwrite ` +

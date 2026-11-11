@@ -30,6 +30,7 @@ import { GifBadge } from './GifBadge'
 import { useInterfacePrefs } from '../client/interfaceStore'
 import { shownTone, type InterfacePrefs } from '../client/interfacePrefs'
 import { useMediaTagLine } from '../client/useMediaTags'
+import { usePopPhase } from '../client/withheldMedia'
 import { booruPostUrl } from '../client/booruUrl'
 import { linkify } from './linkify'
 import { useChatBackground } from './chatBackground'
@@ -594,6 +595,7 @@ function BubbleRow({
   const captionSource = kind === 'gallery' ? (cells?.[0]?.getContent() ?? null) : isMediaRow ? item.content : null
   const captionContent = hasCaption(captionSource) ? captionSource : null
   const callsOnMe = rowCallsOnMe(item, client, senderId, roomId)
+  const popping = useRowPop(item)
 
   // A face typed into the message flashes over the sender's avatar. Text
   // messages only -- there is nothing to read a face out of a picture.
@@ -736,7 +738,7 @@ function BubbleRow({
     // data-event-id is what click-to-jump searches for; keeping it on the row
     // means no separate index has to stay in sync with the timeline.
     <div
-      className="tc-row"
+      className={popping ? 'tc-row tc-pop' : 'tc-row'}
       data-event-id={item.id}
       data-grouped={head ? undefined : 'true'}
       data-speaker={speaks && !narrow ? 'true' : undefined}
@@ -911,6 +913,14 @@ function BubbleRow({
 // would lose meaning: the reply it answers, (edited), reactions, a thread's
 // reply count. The hover actions stay (they overlay, never take room). Gone:
 // avatars, bubbles, tails, effects, receipts, link previews, the tag line.
+// A picture whose booru post is withheld from this reader pops out of the
+// room (withheldMedia.ts): its row plays the pop, then useTimeline drops it.
+function useRowPop(item: TimelineItem): boolean {
+  const c = item.kind === 'message' ? item.content : null
+  const mediaId = c?.msgtype === 'm.image' && typeof c.url === 'string' ? parseMxc(c.url)?.mediaId : undefined
+  return usePopPhase(mediaId) === 'popping'
+}
+
 function IrcRow({
   item,
   onOpenThread,
@@ -939,6 +949,7 @@ function IrcRow({
   const thread: LightboxThread | undefined =
     sequence && stop !== undefined ? { stops: sequence.stops, stop } : undefined
   const callsOnMe = rowCallsOnMe(item, client, senderId, roomId)
+  const popping = useRowPop(item)
   const isMedia = kind === 'gallery' || (kind === 'message' && item.content.msgtype === 'm.image')
   const captionSource = kind === 'gallery' ? (cells?.[0]?.getContent() ?? null) : isMedia ? item.content : null
   const caption = hasCaption(captionSource) ? renderMessageBody(captionSource) : null
@@ -982,7 +993,7 @@ function IrcRow({
 
   return (
     <div
-      className="tc-row tc-irc-row"
+      className={popping ? 'tc-row tc-irc-row tc-pop' : 'tc-row tc-irc-row'}
       data-event-id={item.id}
       data-mentions-me={callsOnMe ? 'true' : undefined}
     >
@@ -1267,8 +1278,11 @@ function GalleryCell({ ev, onOpen }: { ev: MatrixEvent | null; onOpen?: () => vo
   const thumb = encFile ? encryptedThumbnailOf(c) : null
   const mxc = encFile ? ((thumb ? thumb.file.url : encFile.url) ?? '') : c && typeof c.url === 'string' ? c.url : ''
   const showImg = !!ev && !!parseMxc(mxc)
+  // Popped out of its gallery when its booru post is withheld (withheldMedia.ts).
+  const popping = usePopPhase(encFile ? undefined : parseMxc(mxc)?.mediaId) === 'popping'
   return (
     <div
+      className={popping ? 'tc-pop' : undefined}
       style={{
         position: 'relative',
         width: '100%',
