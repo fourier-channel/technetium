@@ -12,6 +12,7 @@ import { useClient } from '../client/clientContextValue'
 import { formatMessage } from '../client/messageFormat'
 import { type EncryptedFileInfo } from '../client/encryptedFile'
 import { makeThumbnail } from '../client/imageThumbnail'
+import { IdentityRefusal, stripFile } from '../client/identityStrip'
 import { readImageSize } from './imageSize'
 import {
   sendAttachment,
@@ -272,12 +273,34 @@ export function Composer({
     void send()
   }
 
-  const addFiles = (files: File[]) => {
+  // Each picture is cleared of what identifies its poster as it is added
+  // (client/identityStrip.ts), so the tray holds what will be sent and a
+  // picture that cannot be cleared -- a HEIC, a TIFF -- is refused here, with
+  // the reason and the fix, before anything leaves. sendAttachment clears
+  // again at the upload; for a cleared file that changes nothing.
+  const addFiles = async (files: File[]) => {
     const imgs = files.filter((f) => f.type.startsWith('image/'))
     if (imgs.length === 0) return
+    const cleared = await Promise.all(
+      imgs.map((f) =>
+        stripFile(f).then(
+          (r) => ({ file: r.file, refusal: null }),
+          (err: unknown) => {
+            if (err instanceof IdentityRefusal) return { file: null, refusal: err.message }
+            // Not a refusal: the file could not even be read. Said, not swallowed.
+            console.error('[tc] attach: the picture could not be read:', err)
+            return { file: null, refusal: `"${f.name}" could not be read. Choose it again; if it keeps failing, save a copy and attach that.` }
+          },
+        ),
+      ),
+    )
+    const refusals = cleared.flatMap((c) => (c.refusal ? [c.refusal] : []))
+    if (refusals.length) setSendError(refusals.join(' '))
+    const ok = cleared.flatMap((c) => (c.file ? [c.file] : []))
+    if (ok.length === 0) return
     setAttachments((prev) => [
       ...prev,
-      ...imgs.map((file) => ({
+      ...ok.map((file) => ({
         id: crypto.randomUUID(),
         file,
         previewUrl: URL.createObjectURL(file),
@@ -474,7 +497,7 @@ export function Composer({
           stash: uploadStashRef.current,
           io: { uploadContent: (body, opts) => client.uploadContent(body, opts), makeThumbnail },
           sendEvent: (up) => {
-            const info = { mimetype: att.file.type, size: att.file.size, ...(dims ?? {}), ...up.thumbInfo }
+            const info = { mimetype: att.file.type, size: up.size, ...(dims ?? {}), ...up.thumbInfo }
             const content = buildImageContent(up.contentUri, info, att.file.name, cap, {
               id: batchId,
               index: i,
@@ -509,7 +532,7 @@ export function Composer({
   }
 
   const onFilePicked = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) addFiles(Array.from(e.target.files))
+    if (e.target.files) void addFiles(Array.from(e.target.files))
     e.target.value = '' // let the same file(s) be picked again
   }
 
@@ -576,7 +599,7 @@ export function Composer({
   const onDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     setDragging(false)
-    addFiles(Array.from(e.dataTransfer.files))
+    void addFiles(Array.from(e.dataTransfer.files))
   }
 
   const onDragOver = (e: DragEvent<HTMLDivElement>) => {
@@ -609,7 +632,7 @@ export function Composer({
     if (found.length === 0) return
     const hasText = Array.from(dt.items).some((i) => i.kind === 'string')
     if (!hasText) e.preventDefault()
-    addFiles(found)
+    void addFiles(found)
   }
 
   const canSend = !sending && (text.trim().length > 0 || attachments.length > 0)

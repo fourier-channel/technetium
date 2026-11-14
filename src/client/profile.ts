@@ -1,4 +1,5 @@
 import type { MatrixClient } from 'matrix-js-sdk'
+import { stripFile } from './identityStrip'
 
 // ---------------------------------------------------------------------------
 // W4.3 -- editing your own profile.
@@ -30,7 +31,10 @@ export async function setDisplayName(client: MatrixClient, name: string): Promis
 export async function uploadAndSetAvatar(client: MatrixClient, file: File): Promise<string> {
   const problem = validateAvatarFile(file)
   if (problem) throw new Error(problem)
-  const { content_uri: mxc } = await client.uploadContent(file, {
+  // A profile picture is seen by everyone: cleared of what identifies its
+  // poster like any other picture. A refusal's message is its own sentence.
+  const { file: clean } = await stripFile(file)
+  const { content_uri: mxc } = await client.uploadContent(clean, {
     name: file.name,
     type: file.type,
   })

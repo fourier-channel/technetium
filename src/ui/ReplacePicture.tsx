@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { IContent, MatrixClient, MatrixEvent } from 'matrix-js-sdk'
-import { sendAttachment, type UploadStash } from '../client/attachmentUpload'
+import { AttachmentStageError, sendAttachment, type UploadStash } from '../client/attachmentUpload'
+import { IdentityRefusal } from '../client/identityStrip'
 import { makeThumbnail } from '../client/imageThumbnail'
 import { buildPictureEdit, REPLACE_PREFS_TYPE, startingChoice, type OldFileChoice } from '../client/pictureReplace'
 import { readImageSize } from './imageSize'
@@ -71,7 +72,7 @@ export function ReplacePicture({
               originalId: eventId,
               current,
               url: up.contentUri,
-              info: { mimetype: file.type, size: file.size, ...(dims ?? {}) },
+              info: { mimetype: file.type, size: up.size, ...(dims ?? {}) },
               filename: file.name,
               oldFile,
             }) as unknown as Parameters<typeof client.sendMessage>[2],
@@ -87,9 +88,14 @@ export function ReplacePicture({
       close()
     } catch (err) {
       console.error('Picture replacement failed:', err)
+      // A picture that cannot be cleared of what identifies its poster says
+      // so, and how to post it; anything else is the connection.
+      const refusal = err instanceof AttachmentStageError && err.cause instanceof IdentityRefusal ? err.cause : null
       setError(
-        'The new picture was not sent, so nothing changed. Fix: check the connection and press Replace again -- ' +
-          'what already uploaded is reused.',
+        refusal
+          ? `${refusal.message} Nothing changed.`
+          : 'The new picture was not sent, so nothing changed. Fix: check the connection and press Replace again -- ' +
+              'what already uploaded is reused.',
       )
       setBusy(false)
     }

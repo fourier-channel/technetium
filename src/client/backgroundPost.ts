@@ -1,4 +1,5 @@
 import type { IContent, MatrixClient } from 'matrix-js-sdk'
+import { stripFile } from './identityStrip'
 
 // ---------------------------------------------------------------------------
 // Backgrounds are POSTED, then referenced.
@@ -83,6 +84,8 @@ export interface BackgroundAttempt {
   roomId: string
   kind: BackgroundKind
   mxc?: string
+  // The size of what was uploaded (the cleared file), for the post's info.
+  size?: number
   post?: BackgroundPost
 }
 
@@ -105,12 +108,17 @@ export async function uploadAndPostBackground(
   if (a.post) return a.post
 
   if (!a.mxc) {
+    // Cleared of what identifies its poster before it leaves, like any
+    // picture. A refusal (IdentityRefusal) is thrown as itself: its message is
+    // the poster's sentence, and nothing reached the server.
+    const { file: clean } = await stripFile(file)
     try {
-      const res = await client.uploadContent(file, {
+      const res = await client.uploadContent(clean, {
         name: safeUploadName(file),
         type: file.type,
       })
       a.mxc = res.content_uri
+      a.size = clean.size
     } catch (err) {
       throw new BackgroundStageError('upload', err)
     }
@@ -123,7 +131,7 @@ export async function uploadAndPostBackground(
     // it should read as an explanation rather than a bare filename.
     body: kind === 'domain' ? `[domain background] ${file.name}` : `[chat background] ${file.name}`,
     url: mxc,
-    info: { mimetype: file.type, size: file.size },
+    info: { mimetype: file.type, size: a.size ?? file.size },
     [BACKGROUND_FLAG]: { kind },
   }
 

@@ -1,4 +1,5 @@
 import { encryptAttachment, type EncryptedFileInfo } from './encryptedFile'
+import { IdentityRefusal, stripFile } from './identityStrip'
 import type { Thumbnail } from './imageThumbnail'
 import { describeSendFailure } from './sendFailure'
 
@@ -24,6 +25,11 @@ import { describeSendFailure } from './sendFailure'
 // to reuse. That case is told to the user honestly instead (stage 'upload',
 // see describeAttachmentFailure).
 //
+// And nothing leaves before what identifies the poster is gone: every
+// picture is cleared (client/identityStrip.ts) ahead of encryption and upload,
+// and a picture that cannot be cleared is refused at stage 'prepare' with the
+// reason and the fix. The size the event declares is the cleared file's.
+//
 // Pure apart from the injected io, so the harness drives the real send order
 // against fakes that fail on demand (O-tp9).
 // ---------------------------------------------------------------------------
@@ -37,7 +43,9 @@ export interface StagedUpload {
   // The picture itself. `encrypted` is the key material for EXACTLY the
   // ciphertext at `contentUri` -- it is meaningless for any other upload, which
   // is why it is stored beside the mxc rather than recomputed.
-  main?: { contentUri: string; encrypted: Omit<EncryptedFileInfo, 'url'> | null }
+  // `size` is the size of what was uploaded: the cleared file, before any
+  // encryption.
+  main?: { contentUri: string; encrypted: Omit<EncryptedFileInfo, 'url'> | null; size: number }
   // The encrypted path's thumbnail fields for `info`, once settled. `{}` means
   // "settled as none" (no thumbnail could be made), so it is not retried.
   thumbInfo?: Record<string, unknown>
@@ -67,6 +75,8 @@ export class AttachmentStageError extends Error {
 
 export interface ReadyUpload {
   contentUri: string
+  // The cleared picture's size in bytes, for the event's `info.size`.
+  size: number
   encrypted: Omit<EncryptedFileInfo, 'url'> | null
   thumbInfo: Record<string, unknown>
 }
@@ -90,12 +100,18 @@ export async function sendAttachment(args: {
   io: AttachmentIo
   sendEvent: (upload: ReadyUpload) => Promise<unknown>
 }): Promise<void> {
-  const { id, file, encrypt, stash, io, sendEvent } = args
+  const { id, encrypt, stash, io, sendEvent } = args
   let entry = stash.get(id)
   if (!entry || entry.encrypt !== encrypt) {
     entry = { encrypt }
     stash.set(id, entry)
   }
+
+  // Cleared before anything is made from it -- the upload, the ciphertext,
+  // the thumbnail. Only when something is still to be made from it: a retry
+  // whose uploads all landed only re-sends the event.
+  const needsBytes = !entry.main || (encrypt && !entry.thumbInfo)
+  const file = needsBytes ? (await stage('prepare', () => stripFile(args.file))).file : args.file
 
   // The picture FIRST. In an encrypted room the thumbnail used to go first,
   // so a failed main upload left the thumbnail with nothing to belong to.
@@ -111,12 +127,12 @@ export async function sendAttachment(args: {
           type: 'application/octet-stream',
         }),
       )
-      entry.main = { contentUri: up.content_uri, encrypted: out.info }
+      entry.main = { contentUri: up.content_uri, encrypted: out.info, size: file.size }
     } else {
       const up = await stage('upload', () =>
         io.uploadContent(file, { name: file.name, type: file.type }),
       )
-      entry.main = { contentUri: up.content_uri, encrypted: null }
+      entry.main = { contentUri: up.content_uri, encrypted: null, size: file.size }
     }
   }
 
@@ -148,6 +164,7 @@ export async function sendAttachment(args: {
   await stage('send', () =>
     sendEvent({
       contentUri: entry.main!.contentUri,
+      size: entry.main!.size,
       encrypted: entry.main!.encrypted,
       thumbInfo: entry.thumbInfo ?? {},
     }),
@@ -174,6 +191,7 @@ export function removePendingAttachment<T extends { id: string; previewUrl: stri
 // did not reach the server. A refusal WITH an answer is the ordinary path.
 export function describeAttachmentFailure(err: unknown): string {
   if (err instanceof AttachmentStageError) {
+    if (err.cause instanceof IdentityRefusal) return err.cause.message
     const cause = err.cause as { errcode?: unknown; httpStatus?: unknown } | null | undefined
     const answered = typeof cause?.httpStatus === 'number' || typeof cause?.errcode === 'string'
     if (err.stage === 'upload' && !answered) {

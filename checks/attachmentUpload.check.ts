@@ -14,6 +14,8 @@ import {
   type ReadyUpload,
 } from '../src/client/attachmentUpload.ts'
 import { uploadAndPostBackground, type BackgroundAttempt } from '../src/client/backgroundPost.ts'
+import { stripIdentity, IdentityRefusal } from '../src/client/identityStrip.ts'
+import { FIXTURES } from './identityFixtures.ts'
 
 let failures = 0
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -62,7 +64,13 @@ function fakeSend(failFirst: number) {
   }
 }
 
-const file = new File([new Uint8Array([9, 8, 7, 6, 5])], 'cat.png', { type: 'image/png' })
+// Real pictures, because every send clears its picture first and refuses what
+// it cannot read. `file` is already clear, so the strip hands it back as is;
+// `dirty` carries planted location, device and time (checks/identityFixtures.ts).
+const fixture = (k: string) => new Uint8Array(Buffer.from(FIXTURES[k], 'base64'))
+const clearBytes = async (k: string) => new Uint8Array((await stripIdentity(fixture(k))).bytes)
+const file = new File([await clearBytes('.png')], 'cat.png', { type: 'image/png' })
+const dirty = new File([fixture('.jpg')], 'dog.jpg', { type: 'image/jpeg' })
 
 async function attempt(args: Parameters<typeof sendAttachment>[0]): Promise<unknown> {
   try { await sendAttachment(args); return null } catch (err) { return err }
@@ -178,6 +186,46 @@ console.log('\n== what each branch hands the media repo')
     bodies[1]?.body !== file && bodies[1]?.name === 'encrypted', bodies[1])
 }
 
+console.log('\n== nothing leaves before the poster is cleared from it')
+{
+  const bodies: Blob[] = []
+  const sent: ReadyUpload[] = []
+  const io = {
+    async uploadContent(body: Blob) { bodies.push(body); return { content_uri: 'mxc://test/c' } },
+    async makeThumbnail() { return null },
+  }
+  await sendAttachment({
+    id: 'd1', file: dirty, encrypt: false, stash: new Map(), io,
+    sendEvent: async (u) => { sent.push(u) },
+  })
+  const up = bodies[0]
+  const text = up ? Buffer.from(await up.arrayBuffer()).toString('latin1') : ''
+  check('a picture carrying location, device and time is uploaded cleared',
+    !!up && up !== dirty && !text.includes('PLANT'), { planted: text.includes('PLANT') })
+  check('the prompt that identifies the image rides along', text.includes('plantedprompt'))
+  check('the event declares the size of what was uploaded, not of the original',
+    sent[0]?.size === up?.size && up?.size !== dirty.size, { sent: sent[0]?.size, up: up?.size, dirty: dirty.size })
+
+  // A HEIC photo: refused before anything reaches the server, with its fix.
+  const heic = new File([new Uint8Array([
+    0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63, 0, 0, 0, 0,
+    0x6d, 0x69, 0x66, 0x31, 0x68, 0x65, 0x69, 0x63,
+  ])], 'IMG_0001.HEIC', { type: 'image/heic' })
+  const calls: string[] = []
+  const stash: UploadStash = new Map()
+  const err = await attempt({
+    id: 'h1', file: heic, encrypt: false, stash,
+    io: { async uploadContent() { calls.push('up'); return { content_uri: 'mxc://x/y' } }, async makeThumbnail() { return null } },
+    sendEvent: async () => { calls.push('send') },
+  })
+  check('a HEIC photo is refused at the prepare stage',
+    err instanceof AttachmentStageError && err.stage === 'prepare' && err.cause instanceof IdentityRefusal, err)
+  check('a refused picture reaches the server not at all', calls.length === 0, calls)
+  const said = describeAttachmentFailure(err)
+  check('the poster is told why and how to post it',
+    said.includes('IMG_0001.HEIC') && said.includes('HEIC') && said.includes('Most Compatible'), said)
+}
+
 console.log('\n== removing an attachment forgets its upload')
 {
   const stash: UploadStash = new Map()
@@ -221,7 +269,7 @@ console.log('\n== what the user is told')
 
 console.log('\n== domain background: a retry resumes instead of re-uploading')
 {
-  const bg = new File([new Uint8Array([1, 2])], 'wall.png', { type: 'image/png' })
+  const bg = new File([await clearBytes('.png')], 'wall.png', { type: 'image/png' })
   let uploads = 0
   let posts = 0
   let failPosts = 1
@@ -245,7 +293,7 @@ console.log('\n== domain background: a retry resumes instead of re-uploading')
   const again = await uploadAndPostBackground(client, '!r:x', bg, 'domain', ref)
   check('a resume after a successful post re-posts nothing',
     uploads === 1 && posts === 2 && again.eventId === post.eventId, { uploads, posts })
-  const other = new File([new Uint8Array([3])], 'other.png', { type: 'image/png' })
+  const other = new File([await clearBytes('.gif')], 'other.gif', { type: 'image/gif' })
   await uploadAndPostBackground(client, '!r:x', other, 'domain', ref)
   check('a different file starts over', uploads === 2, { uploads })
   await uploadAndPostBackground(client, '!other:x', other, 'domain', ref)
