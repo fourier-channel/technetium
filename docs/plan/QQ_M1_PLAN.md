@@ -25,9 +25,9 @@ M1."
 | M1.5 | A refusal is told to the poster (client) | DONE `6ade7f6`: reason and fix, at stage 'prepare', nothing reaches the server |
 | M1.6 | Fixtures with GPS, device and time; sabotage control | DONE `6ade7f6`: `checks/identityStrip.check.ts`, `checks/attachmentUpload.check.ts`; hand mutants all killed |
 | M1.7 | Read the stored media back from the server | DONE 2026-11-14 (below) |
-| M1.8 | The tunnel strips again with the SAME list | OPEN: fourier-tunnel `strip-generation.js` carries its own copies of the lists; adopt canon's module and delete the copies |
-| M1.9 | The tunnel strips AVIF instead of refusing it | OPEN: it refuses an unstripped AVIF today and passes the client-stripped one |
-| M1.10 | The tunnel tells a refusal to the poster, not only its log | OPEN |
+| M1.8 | The tunnel strips again with the SAME list | DONE fourier-tunnel `5cf1da0`, coherence `5c5cda2`: canon's module hydrated in as `canon-image-metadata.mjs`, the tunnel's own copies deleted |
+| M1.9 | The tunnel strips AVIF instead of refusing it | DONE fourier-tunnel `5b4389c`: blanked in place as the client does; the prompt in an Exif or XMP item is filed first; HEIC refused with the fix; an item the tables do not locate is still refused |
+| M1.10 | The tunnel tells a refusal to the poster, not only its log | DONE fourier-tunnel `c5cd98b`: a reply to the picture, mentioning the poster, with the reason and the fix in their words; live events only, once each |
 | M1.11 | Live behaviour in the browser UI (tray, refusal sentence) | PENDING OPERATOR VERIFICATION |
 
 ## Readings chosen
@@ -59,9 +59,17 @@ M1."
   booru's record and serves the stripped file. So the client keeping the
   prompt is what lets the tunnel record it.
 
+- The tunnel, 2026-11-14: a Pillow-encoded AVIF carrying a phone's make and
+  model, an artist, GPS, an A1111 prompt and an XMP creator came out the same
+  length with the prompt filed, decoding pixel-identical, exiftool showing
+  only structural fields, and no planted string left. Eight hand mutants of
+  the AVIF strip and seven of the refusal notice were each killed.
+
 ## Known losses
 
 - A prompt held only in XMP (Midjourney JPEG/WebP, Draw Things) or only in a
   Raw profile chunk is dropped with the XMP. Admitting a named XMP field is
   a canon list change, if wanted.
-- An AVIF's Exif item goes whole, any prompt in it included.
+- In the client, an AVIF's Exif item goes whole, any prompt in it included.
+  The tunnel files a prompt it finds in an AVIF's Exif or XMP item before
+  taking the item out, so an AVIF posted from elsewhere keeps its record.

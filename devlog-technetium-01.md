@@ -4514,3 +4514,22 @@ refused to everyone, its uploader included. A read-back test has to post it.
 tunnel takes generation data into the booru's record and serves the one
 stripped file, so a read-back shows the prompt gone. The client keeps it
 so that the tunnel can record it.
+
+
+## 2026-11-14 (later) -- the server gate clears pictures by the same list
+
+The tunnel half of QuickQueue M1 landed (ledger `docs/plan/QQ_M1_PLAN.md`,
+M1.8-M1.10). The booru's ingest now clears pictures by the same canon list
+the client uses, clears AVIF rather than refusing it, and answers a picture
+it refuses with a reply in the room naming why and how to post it. So a
+picture posted from a client that does not clear it first is still cleared,
+and a refusal is no longer silent.
+
+**Verified.** Live in a test room: a picture the ingest must refuse was
+posted, and the reply arrived about a second later, as a reply to it
+mentioning the poster. **Not verified.** The client's tray and refusal
+sentence in a live browser (M1.11).
+
+**draft-41 (decision) -- only a live picture is answered.** A walk over
+history re-judges pictures nobody is waiting on; answering those would fill a
+room with notices. They stay in the server's log.
