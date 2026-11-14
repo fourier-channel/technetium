@@ -4483,3 +4483,34 @@ come back.
 re-reads on a state push only for an image something is rendering. A picture
 that left the room is rendered by nothing, so every path that should reach it
 (the push, the recheck) has to name the gone set explicitly.
+
+
+## 2026-11-14 -- pictures leave without their poster (QuickQueue M1)
+
+Promoted as v2026.11.14. Ledger `docs/plan/QQ_M1_PLAN.md`.
+
+Every picture is cleared before it leaves the browser (`6ade7f6`): the
+composer tray, the background save, Replace picture and the avatar. What
+stays is an allowlist from canon -- the pixels, orientation, colour profile
+and the generation data that identifies the image; location, camera, serial
+numbers, every date, XMP, IPTC and trailing bytes go. The strip runs before
+encryption, so encrypted rooms get it too. AVIF is cleared in place rather
+than rebuilt. HEIC, TIFF and files the stripper cannot read are refused
+before anything is uploaded, and the poster reads why and how to post it.
+
+**Verified.** The check suite plants GPS, device and time in a fixture of
+each format and judges the output with its own parsers, not the stripper's;
+the raw fixtures and a wiped prompt are the sabotage controls, and six hand
+mutants each went red. Outputs decode pixel-identical. A cleared fixture
+uploaded, posted and read back through the media gate carried nothing
+planted. **Not verified.** The tray and the refusal sentence in a live
+browser.
+
+**draft-39 (gotcha) -- an upload nobody references cannot be read back.**
+The media gate admits a reader by room membership, so a bare upload is
+refused to everyone, its uploader included. A read-back test has to post it.
+
+**draft-40 (decision) -- the served file carries no prompt, by design.** The
+tunnel takes generation data into the booru's record and serves the one
+stripped file, so a read-back shows the prompt gone. The client keeps it
+so that the tunnel can record it.
