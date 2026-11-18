@@ -157,7 +157,7 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
   // Fetch the current image full-res whenever it changes; revoke the prior blob.
   useEffect(() => {
     const cur = items && index >= 0 && index < items.length ? items[index] : null
-    if (!client || !cur) {
+    if (!cur || (!client && !cur.local)) {
       // Not a synchronous setState in the effect body (G-tc01).
       queueMicrotask(() => {
         setSrc(null)
@@ -176,9 +176,18 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
 
     // An encrypted picture (a direct message) is fetched and decrypted whole;
     // Save then hands over the decrypted bytes, never the ciphertext.
-    ;(cur.file
-      ? fetchEncryptedMediaSrc(client, cur.file, cur.mimetype, cur.roomId)
-      : fetchMediaSrc(client, cur.mxc, undefined, cur.roomId))
+    // A picture on this device (QuickQueue) is read from its file; Save then
+    // hands back the same bytes.
+    ;(cur.local
+      ? cur.local().then((blob) => {
+          const url = URL.createObjectURL(blob)
+          return { src: url, revoke: () => URL.revokeObjectURL(url) }
+        })
+      : !client
+        ? Promise.reject(new Error('not signed in'))
+        : cur.file
+          ? fetchEncryptedMediaSrc(client, cur.file, cur.mimetype, cur.roomId)
+          : fetchMediaSrc(client, cur.mxc, undefined, cur.roomId))
       .then(({ src: resolved, revoke }) => {
         if (cancelled) {
           revoke()
@@ -350,7 +359,7 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
                 />
                 {/* No tags for an encrypted picture: the tag hub is keyed on a
                     public mxc, and a direct message is not the booru's business. */}
-                {!current.file && <MediaTags mxc={current.mxc} roomId={current.roomId} />}
+                {!current.file && !current.local && <MediaTags mxc={current.mxc} roomId={current.roomId} />}
               </div>
             ) : (
               <span style={{ color: 'var(--cpd-color-text-secondary)' }}>Loading...</span>

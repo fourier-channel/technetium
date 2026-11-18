@@ -1,0 +1,23 @@
+<!doctype html>
+<!-- Mounts the REAL QuickQueueDrawer (and, through its lazy import, the real
+     QuickQueuePanel) in a chat-shaped column, over a folder this page builds in
+     the origin-private file system: real directory handles, storable in
+     IndexedDB, whose permission reads 'granted'. The system folder picker is
+     replaced by one that returns that folder. ?lightbox=1 also opens the first
+     picture full screen. Served by a dev server:
+     http://127.0.0.1:5173/tools/visual/qq-react.html
+     Proves the panel lists, sorts, windows and thumbnails a real handle's
+     folder, and that the Lightbox shows a local file. Does NOT prove the
+     system picker, a persisted grant across a browser restart, or anything on
+     Android or over SMB. Harness only. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>html, body { margin: 0; background: var(--cpd-color-bg-canvas-default, #1b1a17); color: #ccc; font: 13px system-ui; }</style>
+</head>
+<body>
+<div id="root"></div>
+<pre id="result" style="color:#ccc; white-space: pre-wrap; padding: 0 16px; margin: 0">running</pre>
+<script type="module" src="./qq-react.tsx"></script>
+</body>
+</html>

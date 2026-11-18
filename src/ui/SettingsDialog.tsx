@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useClient } from '../client/clientContextValue'
 import { applyDomainOptIn, domainOptInStore, domainEnabled } from '../client/domainMode'
 import { replaceEnabled, replaceOptInStore } from '../client/pictureReplace'
+import { applyQqOptIn, qqEnabled, qqOptInStore } from '../client/qqMode'
 import { clientTokenSource } from '../client/masSessions'
 import { loadSession } from '../client/session'
 import { observeServerAdmin, type AdminFacts } from '../client/serverAdmin'
@@ -30,6 +31,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [replaceNote, setReplaceNote] = useState<string | null>(null)
   const [domainPass, setDomainPass] = useState('')
   const [domainNote, setDomainNote] = useState<string | null>(null)
+  const [qqOn, setQqOn] = useState(() => qqEnabled())
+  const [qqPass, setQqPass] = useState('')
+  const [qqNote, setQqNote] = useState<string | null>(null)
   const [admin, setAdmin] = useState<AdminFacts | null>(null)
 
   // Asked once per open. Read-only: it is a GET that answers yes or 403.
@@ -190,6 +194,59 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               {replaceOn ? 'Turn Replace picture off' : 'Turn Replace picture on'}
             </button>
             {replaceNote && <p className="tc-settings-note tc-tone-warn">{replaceNote}</p>}
+          </div>
+          <div className="tc-settings-optin">
+            <p className="tc-settings-note">
+              QuickQueue is not finished: it shows a folder of pictures on this device and opens them full screen, and
+              does not post yet. Turning it on here affects this browser only.
+            </p>
+            {qqOn ? (
+              <>
+                <p className="tc-settings-note">QuickQueue is on for this browser.</p>
+                <button
+                  className="tc-pill"
+                  type="button"
+                  onClick={() => {
+                    applyQqOptIn(qqOptInStore, '', false)
+                    setQqOn(false)
+                    setQqNote('Off after a reload.')
+                  }}
+                >
+                  Turn QuickQueue off
+                </button>
+              </>
+            ) : (
+              <div className="tc-settings-confirm">
+                <input
+                  className="tc-input"
+                  type="password"
+                  value={qqPass}
+                  onChange={(e) => setQqPass(e.target.value)}
+                  placeholder="Passphrase"
+                  aria-label="QuickQueue passphrase"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <button
+                  className="tc-pill"
+                  type="button"
+                  disabled={!qqPass.trim()}
+                  onClick={() => {
+                    const result = applyQqOptIn(qqOptInStore, qqPass, true)
+                    if (result === 'enabled') {
+                      setQqOn(true)
+                      setQqNote('On after a reload.')
+                    } else {
+                      setQqNote('That passphrase is not right, or this browser refused to store the setting.')
+                    }
+                    setQqPass('')
+                  }}
+                >
+                  Turn QuickQueue on
+                </button>
+              </div>
+            )}
+            {qqNote && <p className="tc-settings-note tc-tone-warn">{qqNote}</p>}
           </div>
         </>
       )}

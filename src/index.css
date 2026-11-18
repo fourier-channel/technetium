@@ -3621,6 +3621,91 @@ code {
   .tc-domain-tile, .tc-threadview-tile, .tc-threads-tile { transition: none; }
 }
 
+/* --- QuickQueue (tc.152; src/qq/) --------------------------------------
+   A tile pulled up from the chat box, above the ticker: it takes its height
+   from the chat (the same height transition as the thread strip) and its tab
+   rides its top edge. The drawer is zero tall itself; the tab hangs above it.
+   The grid inside is windowed (qqGrid.ts), so tiles are absolutely placed on
+   a canvas as tall as the whole folder. */
+.tc-qq-drawer { position: relative; flex-shrink: 0; }
+.tc-qq-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  overflow: clip;
+  border-top: 1px solid rgba(128, 128, 128, 0.25);
+  background: var(--cpd-color-bg-canvas-default);
+  transition: height 380ms var(--tc-panel-ease);
+}
+.tc-qq-tile[data-dragging='true'] { user-select: none; }
+.tc-qq-grip {
+  position: absolute; left: 0; right: 0; top: 0; height: 6px; z-index: 2;
+  cursor: ns-resize; touch-action: none;
+}
+@media (pointer: coarse) { .tc-qq-grip { height: 14px; } }
+.tc-qq { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.tc-qq-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px 4px;
+}
+.tc-qq-roots { display: flex; gap: 6px; flex: 1; min-width: 0; overflow-x: auto; }
+.tc-qq-root {
+  display: inline-flex; align-items: stretch; flex-shrink: 0;
+  border: 1px solid var(--tc-pill-line); border-radius: var(--tc-pill-radius);
+  overflow: hidden;
+}
+.tc-qq-root button {
+  border: none; background: transparent; color: var(--mod-ink-dim);
+  font: inherit; font-size: 12px; padding: 2px 8px; cursor: pointer;
+}
+.tc-qq-root[data-active='true'] { background: var(--mod-surface-2); }
+.tc-qq-root[data-active='true'] > button:first-child { color: var(--mod-ink); font-weight: 700; }
+.tc-qq-root .tc-qq-forget { padding: 2px 6px; border-left: 1px solid var(--tc-pill-line); }
+.tc-qq-root button:hover { color: var(--mod-ink); }
+.tc-qq-crumbs {
+  display: flex; align-items: baseline; gap: 2px; flex-wrap: wrap;
+  padding: 0 10px 6px; font-size: 12px;
+}
+.tc-qq-crumbs button {
+  border: none; background: transparent; padding: 0 2px; font: inherit;
+  color: var(--mod-ink); cursor: pointer; text-decoration: underline;
+}
+.tc-qq-crumbs button:disabled { cursor: default; text-decoration: none; font-weight: 700; }
+.tc-qq-sep { color: var(--mod-ink-dim); padding: 0 2px; }
+.tc-qq-count { margin-left: auto; color: var(--mod-ink-dim); }
+.tc-qq-note { margin: 8px 10px; font-size: 12px; color: var(--mod-ink-dim); }
+.tc-qq-ask { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding-left: 0; }
+.tc-qq-ask > .tc-pill { margin-left: 10px; }
+.tc-qq-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.tc-qq-grid { flex: 1; min-height: 0; overflow-y: auto; padding: 0 10px 10px; }
+.tc-qq-canvas { position: relative; }
+.tc-qq-cell, .tc-qq-cell img { -webkit-user-drag: none; }
+.tc-qq-cell {
+  position: absolute;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 0; overflow: hidden;
+  border: 1px solid rgba(128, 128, 128, 0.25); border-radius: 4px;
+  background: var(--mod-surface-2); color: var(--mod-ink-dim);
+  cursor: pointer;
+}
+.tc-qq-cell:hover { border-color: var(--mod-ink-dim); }
+.tc-qq-cell > img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tc-qq-name {
+  max-width: 100%; padding: 2px 4px; font-size: 11px; line-height: 1.25;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* A folder: a tab-topped box drawn in CSS, so no icon font or image is fetched. */
+.tc-qq-folder {
+  position: relative; width: 44%; height: 32%; margin-bottom: 6px;
+  border: 2px solid var(--mod-ink-dim); border-radius: 2px 4px 4px 4px;
+}
+.tc-qq-folder::before {
+  content: ''; position: absolute; left: -2px; top: -8px; width: 40%; height: 6px;
+  border: 2px solid var(--mod-ink-dim); border-bottom: none; border-radius: 3px 3px 0 0;
+}
+@media (prefers-reduced-motion: reduce) { .tc-qq-tile { transition: none; } }
+
 /* --- An attached popup (AnchoredPopup.tsx) ------------------------------
    Drawn over the page in window coordinates, so no panel's overflow clips it
    and it may cover the user list. Above the lightbox (1000), below dialogs

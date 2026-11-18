@@ -17,6 +17,10 @@ export interface LightboxItem {
   /** An ENCRYPTED picture (every direct message): the attachment to fetch and
    *  decrypt. `mxc` is then its ciphertext address. */
   file?: EncryptedFileInfo
+  /** A picture on THIS device, not on the server: QuickQueue's folder view
+   *  (tc.152). Read when shown; `mxc` is then empty, and there are no booru
+   *  tags to show, because nothing has been posted. */
+  local?: () => Promise<Blob>
 }
 
 // The conversation the open image came from, supplying the VERTICAL axis:

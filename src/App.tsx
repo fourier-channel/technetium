@@ -46,6 +46,8 @@ import { NavSharedContext, type NavShared } from './ui/navShared'
 import { MembersPullTab } from './ui/DmList'
 import { DomainView } from './ui/DomainView'
 import { domainEnabled } from './client/domainMode'
+import { qqEnabled } from './client/qqMode'
+import { QuickQueueDrawer } from './qq/QuickQueueDrawer'
 import { threadStripCss, dmTabBesideTitle, ROOMS_TAB_TOP, MEMBERS_TAB_TOP, THREAD_TAB_TOP_EDGE } from './ui/threadStrip'
 import { dockShareCss, tabAttach, threadTabGeometry } from './ui/tabRide'
 import { TabRail } from './ui/TabRail'
@@ -185,6 +187,8 @@ function App() {
   // the build), and re-reading it would mean a render that disagrees with the
   // one before it for no reason anybody could see.
   const [domainAvailable] = useState(domainEnabled)
+  // QuickQueue (tc.152) is held the same way, and read once per mount the same way.
+  const [qqAvailable] = useState(qqEnabled)
   const [domainExpanded, setDomainExpanded] = useState(false)
   // The canvas's time-to-die lives here rather than inside DomainView, so the
   // ONE composer can stamp it onto a post while the domain is open. The domain
@@ -517,6 +521,9 @@ function App() {
                   <Timeline room={selectedRoom} onOpenThread={(roomId, rootId) => setOpenThread({ roomId, rootId })} onOpenRoom={openRoomById} threadListOpen={threadListOpen} />
                 </div>
                 <TypingBar client={client} room={selectedRoom} />
+                {/* QuickQueue: pulled up from the chat box, above the ticker
+                    (master reference sec 22.1). Held behind its flag. */}
+                {qqAvailable && <QuickQueueDrawer />}
                 {/* The dedicated strip above the chat box. Absent in DMs
                     entirely (operator ruling 2026-09-05); collapsible
                     elsewhere, the state riding account data. */}
