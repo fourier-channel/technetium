@@ -4533,3 +4533,29 @@ sentence in a live browser (M1.11).
 **draft-41 (decision) -- only a live picture is answered.** A walk over
 history re-judges pictures nobody is waiting on; answering those would fill a
 room with notices. They stay in the server's log.
+
+
+## 2026-11-18 -- QuickQueue opens inside Technetium (step 1, behind a flag)
+
+QuickQueue M2 began (ledger `docs/plan/QQ_M2_PLAN.md`, roadmap tc.152). A
+drawer pulls up from the chat box, above the ticker, and is resized by its top
+edge. In it, a member picks a folder on their device; Technetium remembers it,
+asks for permission again each visit instead of assuming it, and shows the
+folder's subfolders and pictures in natural order, with thumbnails made on the
+device. A picture opens full screen in the same Lightbox a room's images use,
+read straight from the file. The panel is downloaded only the first time the
+drawer is opened. It is off for everyone; a Settings switch with a passphrase
+turns it on for one browser, as domain mode does.
+
+**Verified.** The gate's checks cover the flag (it fails closed), which files
+are shown, the order, the grid's window and the panel's height. A harness
+drives the real drawer on real directory handles: the folder listed and
+ordered, hidden entries left out, 40 thumbnails, a subfolder's breadcrumbs,
+and a picture in the Lightbox. **Not verified.** The system folder picker, a
+permission brought back after a restart, the tablet and a very large folder.
+
+**draft-42 (gotcha) -- a GPU-less headless browser can hang encoding a
+canvas.** `OffscreenCanvas.convertToBlob` to PNG never returned on the ninth
+picture, so the harness stalled before reaching anything it tests. A watchdog
+that reports the stage it was stuck at found it in one run. The harness now
+writes its PNGs by hand.
