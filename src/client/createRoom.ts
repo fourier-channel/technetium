@@ -1,4 +1,5 @@
 import { EventType, JoinRule, Preset, Visibility, type MatrixClient } from 'matrix-js-sdk'
+import { READ_ONLY_LEVEL } from './readOnlyRoom'
 
 // ---------------------------------------------------------------------------
 // W3.9 -- creating a room or a space.
@@ -44,6 +45,10 @@ export interface CreateRoomInput {
   // not encrypt -- a bot room created encrypted is a room they cannot use, and
   // nothing undoes it.
   encrypted?: boolean
+  // A read-only room: messages (and reactions) need moderator, so members
+  // read and only moderators and bots post (readOnlyRoom.ts). Rooms only; a
+  // space already sets events_default 100.
+  readOnly?: boolean
 }
 
 export interface CreateRoomOutcome {
@@ -132,12 +137,18 @@ export function buildInitialState(
 // (measured 2026-09-26). events_default 100 because nobody talks in a space --
 // it is what Element sends for one too. Rooms keep the preset's invite: 0,
 // which is what the house's rooms run (chat, measured 2026-09-20).
+//
+// A READ-ONLY room raises events_default to moderator and nothing else: the
+// preset's other levels stand, so a moderator still invites, kicks and redacts
+// as in any room.
 export function buildPowerOverride(input: {
   isSpace: boolean
   joinRule: HouseJoinRule
+  readOnly?: boolean
 }): Record<string, unknown> | undefined {
-  if (!input.isSpace) return undefined
-  return { events_default: 100, invite: input.joinRule === 'public' ? 0 : 50 }
+  if (input.isSpace) return { events_default: 100, invite: input.joinRule === 'public' ? 0 : 50 }
+  if (input.readOnly) return { events_default: READ_ONLY_LEVEL }
+  return undefined
 }
 
 function presetFor(rule: HouseJoinRule): Preset {

@@ -3,11 +3,13 @@ import {
   useRef,
   useEffect,
   useMemo,
+  useCallback,
+  useSyncExternalStore,
   type KeyboardEvent,
   type ChangeEvent,
   type DragEvent,
 } from 'react'
-import type { Room } from 'matrix-js-sdk'
+import { RoomEvent, RoomStateEvent, type Room } from 'matrix-js-sdk'
 import { useClient } from '../client/clientContextValue'
 import { formatMessage } from '../client/messageFormat'
 import { type EncryptedFileInfo } from '../client/encryptedFile'
@@ -38,6 +40,7 @@ import {
   roomMentionRefusal,
 } from '../client/roomMention'
 import { roomCreators } from '../client/roomFacts'
+import { mayPostMessage, READ_ONLY_LINE } from '../client/readOnlyRoom'
 import { MentionPicker, type MentionEntry } from './MentionPicker'
 import { panelEnterSends } from './composerEnter'
 import '../composer.css'
@@ -61,17 +64,59 @@ interface PendingAttachment {
 // body = caption) on the FIRST image. Every image in a batch also carries a dormant
 // `net.41chan.gallery` hint ({id, index, count}) so a later grid renderer can
 // coalesce them; clients that don't know the field just show stacked images.
-export function Composer({
-  room,
-  threadId,
-  domainTtd,
-}: {
+type ComposerProps = {
   room: Room
   threadId?: string
   // When set (composer is under an expanded domain), stamp each image with the
   // domain time-to-depop so it spawns as a canvas object for that many seconds.
   domainTtd?: number
-}) {
+}
+
+// Where this person may not send a message (a read-only room,
+// readOnlyRoom.ts), there is no composer: one line says why instead. The
+// check lives HERE rather than at each place a composer is drawn, so the room
+// timeline and the thread panel cannot disagree, and a composer added later
+// cannot forget it. Re-read on every state event, so a promotion to moderator
+// brings the composer back while the room is open.
+export function Composer(props: ComposerProps) {
+  const { client } = useClient()
+  const { room } = props
+  // On the CLIENT, not room.currentState: a timeline reset replaces that
+  // object, and a listener on the old one would never hear the new state.
+  const subscribe = useCallback(
+    (cb: () => void) => {
+      if (!client) return () => {}
+      client.on(RoomStateEvent.Events, cb)
+      client.on(RoomEvent.TimelineReset, cb)
+      return () => {
+        client.off(RoomStateEvent.Events, cb)
+        client.off(RoomEvent.TimelineReset, cb)
+      }
+    },
+    [client],
+  )
+  const me = client?.getUserId() ?? ''
+  const mayPost = useCallback(
+    () =>
+      mayPostMessage(
+        room.currentState.getStateEvents('m.room.power_levels', '')?.getContent(),
+        me,
+        roomCreators(room),
+      ),
+    [room, me],
+  )
+  const allowed = useSyncExternalStore(subscribe, mayPost, mayPost)
+  if (!allowed) {
+    return (
+      <div className="tc-composer tc-composer-readonly" role="status">
+        {READ_ONLY_LINE}
+      </div>
+    )
+  }
+  return <ComposerBody {...props} />
+}
+
+function ComposerBody({ room, threadId, domainTtd }: ComposerProps) {
   const { client } = useClient()
   // Reply/edit target, set by the message action bar (Wave 2). Without a
   // ComposerModeProvider above us this is permanently normal, which is exactly

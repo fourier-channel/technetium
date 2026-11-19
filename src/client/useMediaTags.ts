@@ -3,7 +3,8 @@ import { RoomEvent, RoomStateEvent, type MatrixClient, type MatrixEvent } from '
 import { fetchMediaSrc, parseMxc } from './media'
 import { createLimiter } from './concurrency'
 import { reportIgnored } from './report'
-import { ensureBooruSession } from './booruSession'
+import { ensureBooruSession, renewOnReturn } from './booruSession'
+import { blockedBy, currentRules, fetchBlocklist, onBlocklistChanged, postWords, setBlocked, setBlocklist } from './booruBlocklist'
 import {
   fetchBooruPool,
   writeBooruTags,
@@ -76,8 +77,61 @@ function ingestSet(next: MediaTagSet | null, mediaId: string): void {
     if (prev && prev.ts > next.ts) return
     sets.set(mediaId, next)
   }
+  judge(mediaId)
   dirty.add(mediaId)
   scheduleFlush()
+}
+
+// Does the person's booru blocklist hide this picture (booruBlocklist.ts)?
+// Judged on whatever tags this store holds for it -- the ones the panel
+// shows -- every time they change, and for every picture when the list
+// changes. A picture with no tags yet matches nothing.
+function judge(mediaId: string): void {
+  const set = sets.get(mediaId)
+  const rules = currentRules()
+  if (!set || rules.length === 0 || set.tags.length === 0) {
+    setBlocked(mediaId, false)
+    return
+  }
+  setBlocked(mediaId, !!blockedBy(rules, postWords(set.tags.map((t) => t.name), set.rating)))
+}
+onBlocklistChanged(() => {
+  for (const mediaId of sets.keys()) judge(mediaId)
+})
+
+// Read the list again this often while the window is shown. The booru is
+// edited in its own frame inside this window, so neither focus nor
+// visibility marks the moment it changed; a person who blocks a tag there
+// sees it leave their rooms within this long. One small GET.
+export const BLOCKLIST_REREAD_MS = 2 * 60_000
+
+// Each rule Technetium cannot apply is said ONCE, not on every re-read: a
+// report every two minutes about the same rule is noise that buries the next
+// real fault.
+const reportedUnseen = new Set<string>()
+
+function loadBlocklist(): Promise<void> {
+  return booruLimiter
+    .run(() => withBooruSession(() => fetchBlocklist()))
+    .then((blocks) => {
+      for (const r of setBlocklist(blocks)) {
+        if (reportedUnseen.has(r.rule)) continue
+        reportedUnseen.add(r.rule)
+        reportIgnored(
+          'blocklist rule "' + r.rule + '"',
+          new Error(
+            'it names ' + r.unseen.join(' ') + ', which the live read does not carry, so ' +
+              'Technetium does not apply this rule; the booru still does. Fix: write the ' +
+              'rule with tags and rating only to have it apply here too.',
+          ),
+        )
+      }
+    })
+    .catch((err: unknown) => {
+      // Recorded, and the last list read stays in force: a booru that is down
+      // for a minute must not bring back every blocked picture.
+      reportIgnored('blocklist: read from the booru', err)
+    })
 }
 
 function ingestEvent(ev: MatrixEvent): void {
@@ -472,6 +526,14 @@ export function useMediaTagSync(client: MatrixClient | null): void {
     // BooruFrame asks for the same thing whenever it mounts.
     void ensureBooruSession(client.getAccessToken() ?? null)
 
+    // The person's booru blocklist, read once now and again on return and on
+    // a slow timer (BLOCKLIST_REREAD_MS).
+    void loadBlocklist()
+    const stopRenew = renewOnReturn(loadBlocklist)
+    const reread = setInterval(() => {
+      if (document.visibilityState === 'visible') void loadBlocklist()
+    }, BLOCKLIST_REREAD_MS)
+
     // Both channels: state writes that sync surfaces as state, AND the same
     // events arriving down the timeline (the only path that currently fires,
     // given the lean required_state).
@@ -482,6 +544,10 @@ export function useMediaTagSync(client: MatrixClient | null): void {
     return () => {
       client.off(RoomStateEvent.Events, onState)
       client.off(RoomEvent.Timeline, onTimeline)
+      stopRenew()
+      clearInterval(reread)
+      // Signed out, or another account: its list must not outlive it.
+      setBlocklist([])
       fetchClient = null
       if (flushTimer !== undefined) {
         clearTimeout(flushTimer)

@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import { EventTimeline, ThreadEvent } from 'matrix-js-sdk'
+import { ClientEvent, EventTimeline, ThreadEvent } from 'matrix-js-sdk'
 import { useClient } from '../client/clientContextValue'
 import { applyLayout, toItems } from '../client/useTimeline'
+import { hiddenMedia, onHiddenChanged } from '../client/hiddenMedia'
+import { getIgnoredUsers } from '../client/ignoredUsers'
 import { DaySeparator, Row } from './Timeline'
 import { buildMediaSequence } from './mediaSequence'
 import { MemberEvent } from './MemberEvent'
@@ -79,6 +81,22 @@ export function ThreadPanel({
     }
   }, [thread])
 
+  // The same rows leave a thread that leave the room (useTimeline itemOpts): a
+  // picture withheld by the booru or hidden by the person's blocklist, and an
+  // ignored sender's messages. Until 2026-11-19 the panel passed none of them,
+  // so a blocked or withheld picture left the room and stayed in its thread --
+  // and in the 4chan lens every post lives in a thread.
+  useEffect(() => {
+    if (!client) return
+    const refresh = () => forceRefresh((n) => n + 1)
+    const offHidden = onHiddenChanged(refresh)
+    client.on(ClientEvent.AccountData, refresh)
+    return () => {
+      offHidden()
+      client.off(ClientEvent.AccountData, refresh)
+    }
+  }, [client])
+
   // Load the whole thread, not just the slice already aggregated into the live
   // timeline: paginate backwards to exhaustion so every reply (and every gallery
   // member) is present, not just the ones inside the initial window.
@@ -113,7 +131,14 @@ export function ThreadPanel({
   // myUserId is what marks own reactions and finds the annotation to redact
   // when toggling one off -- the thread panel shares the Row, so it needs the
   // same item model the main timeline gets.
-  const items = applyLayout(toItems(events, { myUserId: client?.getUserId() ?? null, relations: room?.relations }))
+  const items = applyLayout(
+    toItems(events, {
+      myUserId: client?.getUserId() ?? null,
+      relations: room?.relations,
+      ignoredUsers: client ? getIgnoredUsers(client) : undefined,
+      withheld: hiddenMedia(),
+    }),
+  )
   // The lightbox's vertical axis inside a thread: the thread's own images, in
   // order. The panel paginates the thread to exhaustion on open, so this is the
   // whole thread and not a window of it -- up/down really does walk the thread.

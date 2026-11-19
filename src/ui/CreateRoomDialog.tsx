@@ -49,6 +49,9 @@ export function CreateRoomDialog({
   // leaves the most choices open, and both say so.
   const [federate, setFederate] = useState(false)
   const [encrypted, setEncrypted] = useState(false)
+  // A read-only room: only moderators and bots post (readOnlyRoom.ts). A room
+  // setting, not a space one -- nobody talks in a space already.
+  const [readOnly, setReadOnly] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Set when the room was created but could not be parented -- the room EXISTS,
@@ -87,6 +90,7 @@ export function CreateRoomDialog({
         joinRule,
         federate,
         encrypted,
+        readOnly: !isSpace && readOnly,
         parentSpaceId: parentSpaceId || undefined,
       })
       if (result.parentError) {
@@ -283,6 +287,32 @@ export function CreateRoomDialog({
               ? 'Cannot be turned off later. The site\'s bots cannot read or post in an encrypted room.'
               : 'Not encrypted. It can be switched on later; it can never be switched off once it is.'}
           </div>
+
+          {!isSpace && (
+            <>
+              <label className="tc-modal-label" htmlFor="tc-create-readonly">
+                Who posts
+              </label>
+              <label
+                htmlFor="tc-create-readonly"
+                style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 4, cursor: 'pointer' }}
+              >
+                <input
+                  id="tc-create-readonly"
+                  type="checkbox"
+                  checked={readOnly}
+                  onChange={(e) => setReadOnly(e.target.checked)}
+                  style={{ marginTop: 2, flexShrink: 0 }}
+                />
+                <span style={{ fontSize: 13 }}>Read-only: only moderators and bots post</span>
+              </label>
+              <div className="tc-modal-hint" style={{ marginBottom: 12 }}>
+                {readOnly
+                  ? 'Members read; posting and reacting need moderator. Raise a bot to moderator from its profile in the room to let it post.'
+                  : 'Every member may post.'}
+              </div>
+            </>
+          )}
         </fieldset>
 
         {error && (

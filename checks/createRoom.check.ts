@@ -95,6 +95,16 @@ console.log('\n-- power levels --')
   for (const rule of ['invite', 'knock', 'public', 'restricted'] as const) {
     check(`a ${rule} room sends no power override`, buildPowerOverride({ isSpace: false, joinRule: rule }) === undefined)
   }
+  // A read-only room raises messages to moderator and nothing else, so the
+  // preset's invite/kick/redact levels stand (LIVE_4CHAN_LENS.md ruling 5).
+  for (const rule of ['invite', 'knock', 'public', 'restricted'] as const) {
+    const o = buildPowerOverride({ isSpace: false, joinRule: rule, readOnly: true })
+    check(`a read-only ${rule} room needs moderator to post, and says nothing else`,
+      JSON.stringify(o) === JSON.stringify({ events_default: 50 }), o)
+  }
+  check('read-only does not change a space',
+    JSON.stringify(buildPowerOverride({ isSpace: true, joinRule: 'restricted', readOnly: true })) ===
+      JSON.stringify({ events_default: 100, invite: 50 }))
 }
 
 if (failures > 0) {

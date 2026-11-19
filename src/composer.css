@@ -17,6 +17,22 @@
   --tc-composer-h: 32px;
 }
 
+/* --- read-only room ------------------------------------------------------- */
+/* Where this person may not post (readOnlyRoom.ts), one line stands in the
+   composer's place. Same top rule, padding and height as the composer row, so
+   the timeline above does not move when a promotion brings the composer back
+   (no-forced-reflow-law). */
+.tc-composer-readonly {
+  border-top: 1px solid rgba(128, 128, 128, 0.25);
+  padding: 6px 10px;
+  min-height: var(--tc-composer-h);
+  box-sizing: content-box;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  color: var(--cpd-color-text-secondary);
+}
+
 /* --- the input ------------------------------------------------------------ */
 /* ONE LINE AT REST, and it grows only when there is something to grow for.
    box-sizing matters: without it the padding is added to the height and the

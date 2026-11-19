@@ -10,7 +10,7 @@ import {
 } from 'matrix-js-sdk'
 import { MEDIA_TAGS_EVENT } from './mediaTags'
 import { parseMxc } from './media'
-import { goneMedia, onWithheld } from './withheldMedia'
+import { hiddenMedia, onHiddenChanged } from './hiddenMedia'
 import { getIgnoredUsers } from './ignoredUsers'
 import { isBackgroundPost } from './backgroundPost'
 import { INTERACTION_EVENT } from './interactionEvents'
@@ -191,9 +191,10 @@ export interface ToItemsOptions {
   // room.relations. Without it a reaction or edit fetched by scrollback before
   // its target is lost from view for good (relations.ts, strandedRelations).
   relations?: RelationSource | null
-  // Media ids of the pictures whose booru post is withheld from this reader
-  // and whose pop has finished (withheldMedia.ts): their messages leave the
-  // room as an ignored sender's do.
+  // Media ids of the pictures this reader is not shown (hiddenMedia.ts): the
+  // booru withholds the post and its pop has finished, or the person's own
+  // booru blocklist hides it. Their messages leave the room as an ignored
+  // sender's do.
   withheld?: ReadonlySet<string>
 }
 
@@ -248,7 +249,7 @@ function galleryTag(ev: MatrixEvent): GalleryTag | null {
   }
 }
 
-// A picture whose booru post is withheld from this reader, its pop finished.
+// A picture this reader is not shown: withheld or blocked (hiddenMedia.ts).
 function isWithheld(ev: MatrixEvent, opts: ToItemsOptions): boolean {
   if (!opts.withheld?.size) return false
   const c = ev.getContent()
@@ -451,7 +452,7 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
       showSystemEvents,
       myUserId: client?.getUserId() ?? null,
       ignoredUsers: client ? getIgnoredUsers(client) : undefined,
-      withheld: goneMedia(),
+      withheld: hiddenMedia(),
     }),
     [client, showSystemEvents],
   )
@@ -563,8 +564,9 @@ export function useTimeline(client: MatrixClient | null, room: Room | null) {
     client.on(RoomEvent.Redaction, onRedaction)
     client.on(RoomEvent.LocalEchoUpdated, onLocalEcho)
     client.on(RoomEvent.TimelineReset, onReset)
-    // A picture's pop finished: its message leaves (withheldMedia.ts).
-    const offWithheld = onWithheld(scheduleRefresh)
+    // A picture's pop finished, or the person's blocklist now hides or shows
+    // one: its message leaves or returns (hiddenMedia.ts).
+    const offWithheld = onHiddenChanged(scheduleRefresh)
     return () => {
       cancelled = true
       if (pending !== null) clearTimeout(pending)
