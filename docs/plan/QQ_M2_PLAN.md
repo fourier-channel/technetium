@@ -25,6 +25,7 @@ something built in that can. That decision waits (docs/design/QQ_FOLDER_INDEX.md
 | M2.1e | Thumbnails made on the device | DONE `32041b8`: 256 px WebP, four at a time LIFO, bounded cache that revokes what it evicts; a tile scrolled away gives up its turn |
 | M2.1f | Full screen is the room Lightbox | DONE `32041b8`: `LightboxItem.local` reads the file itself, so a local picture needs no client and no upload |
 | M2.1g | Live on a real folder: the system picker, a grant across a restart, the tablet, a big folder | PENDING OPERATOR VERIFICATION |
+| M2.1h | Operator on the preview 2026-11-18: the panel opened empty; the tab did not move inside the panel when open | DONE technetium `0763d2c`, on the preview: a browser without File System Access now says so (it rendered nothing); the tab rides the panel's top edge as every drawer's does |
 | M2.2 | Scan: state the cost and index size first, then build the index | NOT STARTED; where the index lives awaits the ruling on QQ_FOLDER_INDEX.md |
 | M2.3 | Search and filters over the index | NOT STARTED |
 | M2.4 | Queues | NOT STARTED |
@@ -73,3 +74,10 @@ something built in that can. That decision waits (docs/design/QQ_FOLDER_INDEX.md
   on the ninth encode, stalling the harness before any panel code ran (a
   watchdog naming the stage found it). The harness now builds its PNGs by
   hand. The panel's own WebP thumbnails encoded 40 of 40 in the same shell.
+- The panel rendered NOTHING in a browser without File System Access
+  (Firefox, Safari, Brave by default): it waited for a folder list that is
+  never read there, so the "cannot open folders" note was never reached. The
+  check "unsupported, whatever else" was green throughout -- it held for
+  `folderView`, which the panel did not ask until the list had loaded. The
+  function now takes the loading state, so what the panel shows is exactly
+  what the check sees; the harness has a `?nofsa=1` run with the API removed.
