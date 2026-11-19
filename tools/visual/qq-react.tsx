@@ -116,8 +116,14 @@ async function buildFolder(): Promise<FileSystemDirectoryHandle> {
 async function run() {
   const dir = await buildFolder()
   stage = 'mounting'
-  ;(window as unknown as { showDirectoryPicker: () => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker =
-    async () => dir
+  if (params.get('nofsa') === '1') {
+    // A browser without File System Access (Firefox, Safari, Brave by default).
+    delete (Window.prototype as unknown as { showDirectoryPicker?: unknown }).showDirectoryPicker
+    delete (window as unknown as { showDirectoryPicker?: unknown }).showDirectoryPicker
+  } else {
+    ;(window as unknown as { showDirectoryPicker: () => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker =
+      async () => dir
+  }
 
   createRoot(document.getElementById('root')!).render(
     <ClientContext.Provider value={{ client: null, status: 'ready', error: null } as never}>
@@ -136,8 +142,32 @@ async function run() {
   const tab = await until('the tab', () => document.querySelector<HTMLButtonElement>('[data-target="quickqueue"]'))
   facts.push(`closed tab: pull=${tab.dataset.pull} open=${tab.dataset.open} label=${tab.getAttribute('aria-label') ?? tab.title}`)
   facts.push(`panel chunk loaded before opening: ${!!document.querySelector('.tc-qq')}`)
+  // Where the tab sits against the panel's top edge (the drawer's top) and
+  // whether its clip shows it: rounded px, so a reader can check each claim.
+  const drawer = document.querySelector<HTMLElement>('.tc-qq-drawer')!
+  const seat = () => {
+    const t = tab.getBoundingClientRect()
+    const edge = drawer.getBoundingClientRect().top
+    const clip = tab.closest('.tc-tabclip')!.getBoundingClientRect()
+    const visible = Math.max(0, Math.min(t.bottom, clip.bottom) - Math.max(t.top, clip.top))
+    return `attach=${tab.dataset.attach} tabTop-edge=${Math.round(t.top - edge)} tabBottom-edge=${Math.round(t.bottom - edge)} visiblePx=${Math.round(visible)}`
+  }
+  facts.push(`closed seat: ${seat()}`)
   stage = 'opening the drawer'
   tab.click()
+  await sleep(0)
+  facts.push(`at the click: ${seat()}`)
+  if (params.get('nofsa') === '1') {
+    await sleep(800)
+    const panel = await until('the panel', () => document.querySelector<HTMLElement>('.tc-qq'))
+    facts.push(`open seat: ${seat()}`)
+    facts.push(`view: ${panel.dataset.view}`)
+    facts.push(`body says: ${document.querySelector('.tc-qq-body')?.textContent?.trim().slice(0, 90)}`)
+    facts.push(`add-folder offered: ${[...panel.querySelectorAll('button')].some((b) => /folder/i.test(b.textContent ?? ''))}`)
+    facts.push(`errors: ${errors.length ? errors.join(' / ') : 'none'}`)
+    report(facts)
+    return
+  }
   const pick = await until('the pick button', () =>
     [...document.querySelectorAll<HTMLButtonElement>('.tc-qq-ask .tc-pill')].find((b) => /Pick a folder/.test(b.textContent ?? '')))
   stage = 'picking; waiting for thumbnails'
@@ -147,6 +177,7 @@ async function run() {
   const tile = document.querySelector<HTMLElement>('.tc-qq-tile')!
   const cells = [...document.querySelectorAll<HTMLElement>('.tc-qq-cell')]
   facts.push(`open tab: pull=${tab.dataset.pull} open=${tab.dataset.open}`)
+  facts.push(`open seat: ${seat()}`)
   facts.push(`panel height: ${tile.getBoundingClientRect().height}px of a 700px column`)
   facts.push(`roots: ${[...document.querySelectorAll('.tc-qq-root')].map((r) => r.textContent).join(' | ')}`)
   facts.push(`count line: ${document.querySelector('.tc-qq-count')?.textContent}`)
@@ -169,6 +200,14 @@ async function run() {
     cells.find((c) => c.dataset.kind === 'dir')!.click()
     await until('the subfolder', () => document.querySelector('.tc-qq-cell[title="inner.png"] img'), 8000)
     facts.push(`subfolder crumbs: ${document.querySelector('.tc-qq-crumbs')?.textContent}`)
+  }
+  if (params.get('close') === '1') {
+    stage = 'closing the drawer'
+    tab.click()
+    await sleep(150)
+    facts.push(`closing (150 ms in): ${seat()}`)
+    await sleep(700)
+    facts.push(`closed again: ${seat()}`)
   }
   facts.push(`errors: ${errors.length ? errors.join(' / ') : 'none'}`)
   report(facts)

@@ -3624,7 +3624,8 @@ code {
 /* --- QuickQueue (tc.152; src/qq/) --------------------------------------
    A tile pulled up from the chat box, above the ticker: it takes its height
    from the chat (the same height transition as the thread strip) and its tab
-   rides its top edge. The drawer is zero tall itself; the tab hangs above it.
+   rides its top edge: closed it hangs above the edge, open it sits inside the
+   panel below it (QuickQueueDrawer.tsx). The drawer is zero tall when closed.
    The grid inside is windowed (qqGrid.ts), so tiles are absolutely placed on
    a canvas as tall as the whole folder. */
 .tc-qq-drawer { position: relative; flex-shrink: 0; }
@@ -3634,7 +3635,9 @@ code {
   flex-direction: column;
   overflow: hidden;
   overflow: clip;
-  border-top: 1px solid rgba(128, 128, 128, 0.25);
+  /* A shadow, not a border: a border keeps a zero-tall tile 1px tall, a line
+     left above the ticker and a 1px sliver of the tab when it changes sides. */
+  box-shadow: inset 0 1px 0 rgba(128, 128, 128, 0.25);
   background: var(--cpd-color-bg-canvas-default);
   transition: height 380ms var(--tc-panel-ease);
 }

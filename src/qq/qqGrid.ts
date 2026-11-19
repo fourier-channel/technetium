@@ -156,8 +156,12 @@ export function panelHeight(stored: number | null, room: number): number {
 // --- What the panel offers, for a folder -----------------------------------
 
 export type FolderView =
-  /** This browser has no File System Access (Firefox, Safari): say so. */
+  /** This browser has no File System Access (Firefox, Safari, Brave unless
+   *  enabled): say so. Decided before anything is loaded, because nothing
+   *  will ever load (the panel showed NOTHING here until 2026-11-19). */
   | 'unsupported'
+  /** The remembered folders are still being read from this device. */
+  | 'loading'
   /** No folder picked yet. */
   | 'pick'
   /** Picked before, and this browser session has not been granted it yet:
@@ -169,8 +173,12 @@ export type FolderView =
 
 export type Permission = 'granted' | 'prompt' | 'denied'
 
-export function folderView(supported: boolean, picked: boolean, permission: Permission | null): FolderView {
+/** `loaded`: the remembered folders have been read (or failed to be). The
+ *  panel renders exactly what this returns, so every state, loading included,
+ *  is one the checks can see. */
+export function folderView(supported: boolean, loaded: boolean, picked: boolean, permission: Permission | null): FolderView {
   if (!supported) return 'unsupported'
+  if (!loaded) return 'loading'
   if (!picked) return 'pick'
   if (permission === 'granted') return 'ready'
   if (permission === 'denied') return 'denied'

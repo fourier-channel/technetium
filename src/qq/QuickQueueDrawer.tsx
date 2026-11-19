@@ -1,5 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { PullTab } from '../ui/PullTab'
+import { TabRail } from '../ui/TabRail'
+import { tabAttach } from '../ui/tabRide'
 import { useReveal } from '../ui/useReveal'
 import { panelHeight } from './qqGrid'
 import { storedPanelHeight, storePanelHeight } from './panelPrefs'
@@ -26,6 +28,10 @@ import { storedPanelHeight, storePanelHeight } from './panelPrefs'
 const QuickQueuePanel = lazy(() => import('./QuickQueuePanel'))
 
 const REVEAL_MS = 380
+
+// How far above the drawer's top edge the tab's clip reaches: room for the
+// closed tab (16 px, 24 on touch) and its tooltip above it.
+const TAB_HEADROOM_PX = 64
 
 export function QuickQueueDrawer() {
   const [open, setOpen] = useState(false)
@@ -82,15 +88,28 @@ export function QuickQueueDrawer() {
 
   return (
     <div className="tc-qq-drawer" ref={shell}>
-      <PullTab
-        pull={open ? 'down' : 'up'}
-        open={open}
-        attach="above"
-        target="quickqueue"
-        label={open ? 'Hide QuickQueue' : 'QuickQueue'}
-        onClick={toggle}
-        style={{ top: 0, left: '50%' }}
-      />
+      {/* ONE tab, riding the panel's top edge (tabRide.ts), as every other
+          drawer's does. The drawer's top IS that edge -- the tile below it
+          grows the drawer -- so layout carries the tab and no rail offset is
+          needed. Closed, it hangs above the edge, outside the panel; open, it
+          sits below the edge, inside it. The clip ends at the drawer's
+          bottom, so the moment it changes sides (at the click, while the
+          edge is still on the ticker) the inside tab is out of sight below
+          it, and the edge brings it into view. */}
+      <TabRail axis="y" offset="0px" durationMs={reveal.durationMs} clip={{ top: -TAB_HEADROOM_PX, bottom: 0, left: 0, right: 0 }}>
+        <PullTab
+          pull={open ? 'down' : 'up'}
+          open={open}
+          // Inverted from the drawers that come DOWN: for a panel coming up,
+          // inside it is below the anchor (PullTab's base rule, 'start') and
+          // outside is above it ('above').
+          attach={tabAttach(open, reveal.mounted) === 'end' ? 'start' : 'above'}
+          target="quickqueue"
+          label={open ? 'Hide QuickQueue' : 'QuickQueue'}
+          onClick={toggle}
+          style={{ top: TAB_HEADROOM_PX, left: '50%' }}
+        />
+      </TabRail>
       {everOpened && (
         <div
           className="tc-qq-tile"

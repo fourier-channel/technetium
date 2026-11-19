@@ -88,12 +88,16 @@ check('a tiny window still gets the minimum, not a negative', panelHeight(null, 
 check('a non-finite stored height is ignored', panelHeight(Number.NaN, 1000) === Math.round(1000 * PANEL_DEFAULT_SHARE))
 
 console.log('== what the panel offers for a folder')
-check('no File System Access: say so, whatever else', folderView(false, true, 'granted') === 'unsupported')
-check('nothing picked: offer the picker', folderView(true, false, null) === 'pick')
-check('granted: show it', folderView(true, true, 'granted') === 'ready')
-check('denied: say how to get it back', folderView(true, true, 'denied') === 'denied')
-check('prompt (Android after a restart): one tap to reopen', folderView(true, true, 'prompt') === 'reopen')
-check('not yet asked is NEVER treated as granted', folderView(true, true, null) === 'reopen')
+check('no File System Access: say so, whatever else', folderView(false, true, true, 'granted') === 'unsupported')
+// The panel once rendered nothing at all in such a browser: it waited for a
+// folder list that is never read when the API is missing (2026-11-19).
+check('no File System Access: say so even before anything has loaded', folderView(false, false, false, null) === 'unsupported')
+check('folders not read yet: loading, never the picker', folderView(true, false, false, null) === 'loading')
+check('nothing picked: offer the picker', folderView(true, true, false, null) === 'pick')
+check('granted: show it', folderView(true, true, true, 'granted') === 'ready')
+check('denied: say how to get it back', folderView(true, true, true, 'denied') === 'denied')
+check('prompt (Android after a restart): one tap to reopen', folderView(true, true, true, 'prompt') === 'reopen')
+check('not yet asked is NEVER treated as granted', folderView(true, true, true, null) === 'reopen')
 
 if (failures) { console.log(`\n${failures} check(s) failed`); process.exit(1) }
 console.log('\nquickqueue grid: all checks passed')

@@ -51,7 +51,7 @@ export default function QuickQueuePanel() {
   const root = roots?.find((r) => r.id === rootId) ?? null
   const dir: QqDirHandle | null = trail.length > 0 ? trail[trail.length - 1] : (root?.handle ?? null)
   const dirKey = root ? `${root.id}/${trail.map((d) => d.name).join('/')}` : ''
-  const view = roots === null ? null : folderView(supported, !!root, permission)
+  const view = folderView(supported, roots !== null, !!root, permission)
 
   // The folders remembered on this device, and which was open last.
   useEffect(() => {
@@ -180,7 +180,7 @@ export default function QuickQueuePanel() {
   }
 
   return (
-    <div className="tc-qq" data-view={view ?? 'loading'}>
+    <div className="tc-qq" data-view={view}>
       <div className="tc-qq-head">
         <div className="tc-qq-roots" role="tablist" aria-label="Folders">
           {roots?.map((r) => (
@@ -235,9 +235,12 @@ export default function QuickQueuePanel() {
       <div className="tc-qq-body">
         {view === 'unsupported' && (
           <p className="tc-qq-note">
-            This browser cannot open folders. QuickQueue needs Chrome or Edge (Chrome 132 or later on Android).
+            This browser cannot open folders on this device, so QuickQueue has nothing to show. It needs Chrome or
+            Edge on a computer, or Chrome 132 or later on Android. Firefox and Safari do not offer it; Brave offers it
+            only once switched on at brave://flags/#file-system-access-api.
           </p>
         )}
+        {view === 'loading' && <p className="tc-qq-note">Looking for the folders this device remembers...</p>}
         {view === 'pick' && (
           <div className="tc-qq-ask">
             <p className="tc-qq-note">
