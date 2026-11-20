@@ -14,9 +14,14 @@ import { BOORU_ORIGIN } from './booruUrl'
 // ONE ADDRESS, THE MEDIA GATE'S. The fourier-auth media Worker answers
 // `<booru>/fourier/booru/<md5>.<ext>` (`?w=` for a variant, snapped by the
 // gate to its allowed sizes) and takes Technetium's Matrix Bearer as well as
-// the booru cookie, asking fourier-auth the same question either way. So the
-// picture is fetched exactly as an mxc is: an authorized fetch, a blob, an
-// <img>. No new route.
+// the booru cookie. The two are different askers: a cookie is asked about as
+// its booru session, and a Bearer as the Matrix reader the token names, with
+// the Matrix door's own question (fourier-auth booru-route.js readerOpens,
+// openOutsideRooms; ea0605b). Before that the Bearer was asked about as
+// nobody, and a lens picture went "unavailable" once the booru stopped
+// answering signed-out asks for its post, about two hours after it showed.
+// So the picture is fetched exactly as an mxc is: an authorized fetch, a
+// blob, an <img>. No new route.
 //
 // INSIDE THIS CLIENT the picture is named by an address of the mxc shape,
 //   mxc://booru.41chan.net/<md5>.<ext>
