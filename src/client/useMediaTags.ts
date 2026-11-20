@@ -6,15 +6,20 @@ import { createLimiter } from './concurrency'
 import { reportIgnored } from './report'
 import { ensureBooruSession, renewOnReturn } from './booruSession'
 import {
+  applyBlocklistEdit,
   applyBlocklistRead,
   beginBlocklistRead,
   blockedBy,
   clearBlocklist,
   currentRules,
+  editQueue,
   fetchBlocklist,
   onBlocklistChanged,
   postWords,
+  sendBlocklistEdit,
   setBlocked,
+  type BlocklistOp,
+  type CompiledRule,
 } from './booruBlocklist'
 import {
   fetchBooruPool,
@@ -145,22 +150,49 @@ export function rereadBlocklist(): Promise<void> {
   return loadBlocklist()
 }
 
+function reportUnseen(unseen: readonly CompiledRule[] | null): void {
+  for (const r of unseen ?? []) {
+    if (reportedUnseen.has(r.rule)) continue
+    reportedUnseen.add(r.rule)
+    reportIgnored(
+      'blocklist rule "' + r.rule + '"',
+      new Error(
+        'it names ' + r.unseen.join(' ') + ', which the live read does not carry, so ' +
+          'Technetium does not apply this rule; the booru still does. Fix: write the ' +
+          'rule with tags and rating only to have it apply here too.',
+      ),
+    )
+  }
+}
+
+// Edits go one at a time, in the order they were made (editQueue says why).
+const queueEdit = editQueue()
+
+/**
+ * Edit the person's blocklist on the booru (BlocklistControl) and apply the
+ * list it answers with, which judges every known picture again at once
+ * (onBlocklistChanged). Rejects with the booru's own words on a refusal
+ * (BlocklistRefused) for the panel to show; nothing is changed here first,
+ * so a refused edit leaves the list exactly as it was.
+ */
+export function editBlocklist(op: BlocklistOp, rule: string): Promise<void> {
+  const run = async () => {
+    const client = fetchClient
+    if (!client) throw new Error('signed out, so there is no booru account to edit. Fix: sign in again.')
+    const next = await withBooruSession(() => sendBlocklistEdit(op, rule))
+    // Signed out or switched account while the answer was on its way: that
+    // account's list must not come back for whoever is signed in now.
+    if (fetchClient !== client) return
+    reportUnseen(applyBlocklistEdit(next))
+  }
+  return queueEdit(run)
+}
+
 function loadBlocklist(): Promise<void> {
   const read = beginBlocklistRead()
   return withBooruSession(() => fetchBlocklist())
     .then((blocks) => {
-      for (const r of applyBlocklistRead(read, blocks) ?? []) {
-        if (reportedUnseen.has(r.rule)) continue
-        reportedUnseen.add(r.rule)
-        reportIgnored(
-          'blocklist rule "' + r.rule + '"',
-          new Error(
-            'it names ' + r.unseen.join(' ') + ', which the live read does not carry, so ' +
-              'Technetium does not apply this rule; the booru still does. Fix: write the ' +
-              'rule with tags and rating only to have it apply here too.',
-          ),
-        )
-      }
+      reportUnseen(applyBlocklistRead(read, blocks))
     })
     .catch((err: unknown) => {
       // Recorded, and the last list read stays in force: a booru that is down

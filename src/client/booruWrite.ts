@@ -39,7 +39,7 @@ export async function postAsViewer(
   path: string,
   fields: Record<string, string> | ((csrf: string) => Record<string, string>),
   fetchImpl: typeof fetch = fetch,
-  method: 'post' | 'put' | 'delete' = 'post',
+  method: 'post' | 'put' | 'patch' | 'delete' = 'post',
 ): Promise<Response> {
   const send = (csrf: string) => {
     const body = new URLSearchParams(typeof fields === 'function' ? fields(csrf) : { ...fields, authenticity_token: csrf })

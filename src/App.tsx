@@ -26,6 +26,7 @@ import { PersonRouterContext, createPersonRouter } from './ui/personRouter'
 import { PersonCard, type PersonCardTarget } from './ui/PersonCard'
 import { personGestures } from './ui/personGesture'
 import { SiteReset } from './ui/SiteReset'
+import { BlocklistControl } from './ui/BlocklistControl'
 import { ManageSession } from './ui/ManageSession'
 import { DeviceElsewhere } from './ui/DeviceElsewhere'
 import { ProfilePanel } from './ui/ProfilePanel'
@@ -414,7 +415,11 @@ function App() {
                 Log out
               </button>
             </div>
-            <SiteReset />
+            {/* The blocklist joined to the left of purge/refresh, as on the booru. */}
+            <div className="tc-me-reset">
+              <BlocklistControl client={client} roomId={selectedRoomId} />
+              <SiteReset />
+            </div>
           </div>
         }
       />

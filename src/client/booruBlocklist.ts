@@ -1,12 +1,15 @@
 import { BOORU_ORIGIN } from './booruUrl'
+import { postAsViewer } from './booruWrite'
 
 // ---------------------------------------------------------------------------
 // The person's booru blocklist, applied to the pictures Technetium shows.
 //
 // ONE LIST EVERYWHERE (operator, 2026-10-13, blocklist-is-the-only-filter):
 // the list lives on the person's booru account, and every app reads it.
-// Blocking a tag on the booru hides it here too. This module is the reading
-// half; the booru owns the editing.
+// Blocking a tag on the booru hides it here too, and blocking one here (the
+// header's block control, src/ui/BlocklistControl.tsx) writes it to the
+// account, so the booru hides it too. The booru owns the list and every rule
+// about it; this module reads it, sends one edit, and applies the answer.
 //
 // WHERE IT COMES FROM. chanbooru's `GET /profile.json` answers the signed-in
 // person's own record, with `blocklist: [{rule, locked}]` already parsed and
@@ -141,7 +144,91 @@ export async function fetchBlocklist(fetchImpl: typeof fetch = fetch): Promise<B
 }
 
 // ---------------------------------------------------------------------------
-// The store: the compiled list, and which pictures it hides.
+// Editing the list. The booru's own panel and this client make the SAME edit
+// through the SAME route (chanbooru app/logical/blocklist.rb):
+//   PATCH /modulation/settings  blocklist[op]=add|remove|lock|unlock, blocklist[rule]
+// answered 200 {"blocklist": [{rule, locked}, ...]} -- the whole list after
+// the edit, made on the account's current list under a row lock -- or 422
+// {"error": "..."} whose text names the remedy and is shown to the person as
+// it is. The booru refuses removing a locked block whatever a client sends.
+//
+// Sent the way every write of this client is (booruWrite.ts): a CORS-simple
+// POST with the verb as _method and the CSRF token in the form body, so there
+// is no preflight -- a preflight carries no cookie and the booru refuses it.
+// ---------------------------------------------------------------------------
+
+export const BLOCKLIST_EDIT_PATH = '/modulation/settings'
+
+export type BlocklistOp = 'add' | 'remove' | 'lock' | 'unlock'
+
+/** The booru refused this edit; the message is its own and says what to do instead. */
+export class BlocklistRefused extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'BlocklistRefused'
+  }
+}
+
+/** Send one edit as the viewer and return the list the booru now holds. */
+export async function sendBlocklistEdit(
+  op: BlocklistOp,
+  rule: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<Block[]> {
+  const res = await postAsViewer(
+    BLOCKLIST_EDIT_PATH,
+    { 'blocklist[op]': op, 'blocklist[rule]': rule },
+    fetchImpl,
+    'patch',
+  )
+  let body: unknown
+  try {
+    body = await res.json()
+  } catch {
+    body = null
+  }
+  const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>
+  if (res.status === 422 && typeof b.error === 'string' && b.error.trim()) throw new BlocklistRefused(b.error)
+  if (!res.ok || !Array.isArray(b.blocklist)) {
+    throw new Error(
+      `the booru did not save this blocklist edit (HTTP ${res.status}). ` +
+        'Fix: a 403 is usually a missing booru session -- open the booru panel once, ' +
+        'then try again. Your list on the booru is unchanged.',
+    )
+  }
+  return parseProfileBlocklist(b)
+}
+
+/**
+ * A queue that runs edits one at a time, in the order they were made. The
+ * booru answers each edit with the whole list after it; two in flight at once
+ * could answer out of order, and the earlier answer, arriving last, would put
+ * back the list from before the later edit until the next read. A failed edit
+ * does not stop the ones queued behind it.
+ */
+export function editQueue(): <T>(run: () => Promise<T>) => Promise<T> {
+  let tail: Promise<unknown> = Promise.resolve()
+  return <T>(run: () => Promise<T>) => {
+    const done = tail.then(run, run)
+    tail = done.catch(() => undefined)
+    return done
+  }
+}
+
+/**
+ * Apply the list an edit's answer carries. It is numbered as it ARRIVES, not
+ * when the edit was sent: the answer is the account's list as of the edit, so
+ * a read that started before it arrived may predate the edit and is dropped
+ * (applyBlocklistRead), and a read that starts after it already sees the
+ * edit. Numbered at sending, a timer read started meanwhile would outrank the
+ * answer and could put back the list from before the edit.
+ */
+export function applyBlocklistEdit(next: readonly Block[]): CompiledRule[] | null {
+  return applyBlocklistRead(beginBlocklistRead(), next)
+}
+
+// ---------------------------------------------------------------------------
+// The store: the list, compiled, and which pictures it hides.
 //
 // A separate set from withheldMedia's, on purpose. A withheld picture is
 // re-asked on a schedule and brought back when the booru lets it out; a
@@ -151,6 +238,7 @@ export async function fetchBlocklist(fetchImpl: typeof fetch = fetch): Promise<B
 // ---------------------------------------------------------------------------
 
 let rules: CompiledRule[] = []
+let blocks: readonly Block[] = []
 let blocked: ReadonlySet<string> = new Set()
 const listeners = new Set<() => void>()
 const ruleListeners = new Set<() => void>()
@@ -195,7 +283,8 @@ export function clearBlocklist(): void {
 }
 
 /** Replace the list. Returns the rules Technetium cannot evaluate, for the caller to report. */
-export function setBlocklist(blocks: readonly Block[]): CompiledRule[] {
+export function setBlocklist(next: readonly Block[]): CompiledRule[] {
+  blocks = next.map((b) => ({ rule: b.rule, locked: b.locked }))
   rules = blocks.map((b) => compileRule(b.rule))
   for (const cb of ruleListeners) cb()
   return rules.filter((r) => r.unseen.length > 0)
@@ -203,6 +292,11 @@ export function setBlocklist(blocks: readonly Block[]): CompiledRule[] {
 
 export function currentRules(): readonly CompiledRule[] {
   return rules
+}
+
+/** The list as the booru holds it, locks included. A new array on every change. */
+export function currentBlocks(): readonly Block[] {
+  return blocks
 }
 
 /** Record whether one picture is hidden. A no-op when nothing changes. */
@@ -234,6 +328,7 @@ export function onBlocklistChanged(cb: () => void): () => void {
 /** Test seam. */
 export function resetBlocklistForTest(): void {
   rules = []
+  blocks = []
   blocked = new Set()
   readsIssued = 0
   readApplied = 0

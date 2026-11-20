@@ -107,7 +107,14 @@ console.log('== hard refresh, and the question')
     purgeAt > -1 && refreshAt > purgeAt &&
     ui.indexOf('<ResetIcon d={PURGE_ICON} />') > purgeAt && ui.indexOf('<ResetIcon d={REFRESH_ICON} />') > refreshAt &&
     !/>\s*(Refresh|Purge)\s*</.test(ui), { purgeAt, refreshAt })
-  check('it sits under the name card', /<\/div>\n\s*<SiteReset \/>\n\s*<\/div>/.test(read('src/App.tsx')))
+  // Under the name card: the last row of the signed-in header, joined on its
+  // left by the blocklist (operator, 2026-11-20), so the rectangle closes the
+  // row and the row closes the header.
+  const underCard = /<\/div>\n\s*(?:\{\/\*[^]*?\*\/\}\n\s*)?<div className="tc-me-reset">\n\s*<BlocklistControl [^>]*\/>\n\s*<SiteReset \/>\n\s*<\/div>\n\s*<\/div>/
+  const app = read('src/App.tsx')
+  check('it sits under the name card', underCard.test(app))
+  check('SABOTAGE: the rectangle taken out of that row is caught',
+    !underCard.test(app.replace(/(<BlocklistControl [^>]*\/>)\n\s*<SiteReset \/>/, '$1')))
 }
 
 if (failures) { console.log(`\n${failures} check(s) failed`); process.exit(1) }

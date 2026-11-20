@@ -4047,6 +4047,105 @@ code {
 .tc-site-reset-row { display: flex; gap: 6px; }
 .tc-site-reset-go { color: var(--mod-alarm-ink); border-color: var(--mod-alarm-line); }
 
+/* The blocklist (2026-11-20), joined to the LEFT of the refresh and purge
+   rectangle as on the booru: one row of three equal cells, the block icon
+   sharing purge's left border. Its count's room is always reserved, so a
+   number arriving or leaving moves nothing (no-forced-reflow). */
+.tc-me-reset { display: grid; grid-template-columns: 1fr 2fr; }
+.tc-me-reset > .tc-site-reset { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.tc-blocklist-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid var(--mod-line);
+  border-right: none;
+  border-radius: var(--mod-radius-sm) 0 0 var(--mod-radius-sm);
+  background: transparent;
+  color: var(--mod-ink-dim);
+  font: inherit;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.tc-blocklist-trigger:hover { color: var(--mod-ink); background: var(--mod-surface-2); }
+.tc-blocklist-trigger:focus-visible { outline: 2px solid var(--mod-accent); outline-offset: -2px; }
+.tc-blocklist-count { min-width: 3ch; text-align: left; visibility: hidden; }
+.tc-blocklist-count.is-shown { visibility: visible; }
+.tc-blocklist-panel {
+  z-index: 1002;
+  width: min(22rem, calc(100vw - 16px));
+  max-height: min(28rem, calc(100vh - 16px));
+  max-height: min(28rem, calc(100dvh - 16px));
+  overflow-y: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--mod-line-strong);
+  border-radius: var(--mod-radius-sm);
+  background: var(--mod-surface-2);
+  box-shadow: var(--mod-raise-lift);
+  color: var(--mod-ink);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.tc-blocklist-panel:focus { outline: none; }
+.tc-blocklist-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.tc-blocklist-title { margin: 0; font-size: 13px; font-weight: 700; }
+.tc-blocklist-hidden, .tc-blocklist-foot, .tc-blocklist-empty { color: var(--mod-ink-dim); font-size: 11.5px; }
+.tc-blocklist-add { display: flex; gap: 6px; margin-bottom: 8px; }
+.tc-blocklist-input {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid var(--mod-line-strong);
+  border-radius: var(--mod-radius-sm);
+  background: var(--mod-surface);
+  color: var(--mod-ink);
+  font: inherit;
+}
+.tc-blocklist-add > .tc-pill[aria-disabled='true'] { opacity: 0.6; cursor: progress; }
+.tc-blocklist-error {
+  margin: 0 0 8px;
+  padding: 4px 6px;
+  border: 1px solid var(--mod-alarm-line);
+  border-radius: var(--mod-radius-sm);
+  color: var(--mod-alarm-ink);
+  font-size: 11.5px;
+}
+.tc-blocklist-pills { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 8px; padding: 0; list-style: none; }
+.tc-blocklist-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  padding: 1px 2px 1px 7px;
+  border: 1px solid var(--mod-line-strong);
+  border-radius: 999px;
+  background: var(--mod-surface);
+}
+.tc-blocklist-pill.is-locked { border-color: var(--mod-accent); }
+.tc-blocklist-pill-rule { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-blocklist-pill-unseen { color: var(--mod-ink-dim); font-size: 10.5px; font-style: italic; white-space: nowrap; }
+.tc-blocklist-pill-lock, .tc-blocklist-pill-remove {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--mod-ink-dim);
+  cursor: pointer;
+}
+.tc-blocklist-pill-lock:hover, .tc-blocklist-pill-remove:hover { color: var(--mod-ink); background: var(--mod-surface-2); }
+.tc-blocklist-pill-lock[aria-pressed='true'] { color: var(--mod-accent); }
+.tc-blocklist-pill svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.tc-blocklist-empty, .tc-blocklist-foot { margin: 0 0 6px; }
+.tc-blocklist-foot { margin: 0; }
+.tc-blocklist-foot a { color: var(--mod-accent); }
+
 /* Manage session (operator, 2026-10-05): the button under the name card, full
    width so it reads as the card's own control, and the dropdown it opens --
    an AnchoredPopup, so it sits over the page and moves nothing. One fixed
