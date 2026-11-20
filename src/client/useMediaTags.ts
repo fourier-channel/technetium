@@ -4,7 +4,17 @@ import { fetchMediaSrc, parseMxc } from './media'
 import { createLimiter } from './concurrency'
 import { reportIgnored } from './report'
 import { ensureBooruSession, renewOnReturn } from './booruSession'
-import { blockedBy, currentRules, fetchBlocklist, onBlocklistChanged, postWords, setBlocked, setBlocklist } from './booruBlocklist'
+import {
+  applyBlocklistRead,
+  beginBlocklistRead,
+  blockedBy,
+  clearBlocklist,
+  currentRules,
+  fetchBlocklist,
+  onBlocklistChanged,
+  postWords,
+  setBlocked,
+} from './booruBlocklist'
 import {
   fetchBooruPool,
   writeBooruTags,
@@ -99,10 +109,18 @@ onBlocklistChanged(() => {
   for (const mediaId of sets.keys()) judge(mediaId)
 })
 
-// Read the list again this often while the window is shown. The booru is
-// edited in its own frame inside this window, so neither focus nor
-// visibility marks the moment it changed; a person who blocks a tag there
-// sees it leave their rooms within this long. One small GET.
+// Read the list again this often while the window is shown. One small GET.
+//
+// WHEN THE LIST CAN HAVE CHANGED. The booru is edited in its own frame inside
+// this window (BooruFrame), so neither focus nor visibility marks the moment.
+// Leaving that frame does: BooruFrame unmounts when a room is opened, and
+// rereads the list then (rereadBlocklist). Before that (2026-11-20, seen in
+// Firefox) a tag blocked in the frame stayed visible in the next room: the
+// return-to-window reread is spaced 60 s apart for the session's sake, so a
+// quick edit fell inside the gap, and the read queued behind every tag read
+// the new room started. A slower edit -- the settings page -- outlasted the
+// gap, which is why removing a tag looked instant and adding one did not.
+// The timer stays for an edit made in another tab.
 export const BLOCKLIST_REREAD_MS = 2 * 60_000
 
 // Each rule Technetium cannot apply is said ONCE, not on every re-read: a
@@ -110,11 +128,27 @@ export const BLOCKLIST_REREAD_MS = 2 * 60_000
 // real fault.
 const reportedUnseen = new Set<string>()
 
+/**
+ * Read the person's blocklist now and apply it. Called on leaving the booru
+ * view (BooruFrame), where the list is edited.
+ *
+ * NOT through booruLimiter. That queue is LIFO so the picture scrolled in
+ * last is served first; a read started as a room opens is exactly the one
+ * every picture of that room then overtakes. This is one small GET, not part
+ * of a flood.
+ */
+export function rereadBlocklist(): Promise<void> {
+  // Signed out (the frame unmounts then too): there is no list to read, and
+  // asking would only record a refused exchange.
+  if (!fetchClient) return Promise.resolve()
+  return loadBlocklist()
+}
+
 function loadBlocklist(): Promise<void> {
-  return booruLimiter
-    .run(() => withBooruSession(() => fetchBlocklist()))
+  const read = beginBlocklistRead()
+  return withBooruSession(() => fetchBlocklist())
     .then((blocks) => {
-      for (const r of setBlocklist(blocks)) {
+      for (const r of applyBlocklistRead(read, blocks) ?? []) {
         if (reportedUnseen.has(r.rule)) continue
         reportedUnseen.add(r.rule)
         reportIgnored(
@@ -546,8 +580,9 @@ export function useMediaTagSync(client: MatrixClient | null): void {
       client.off(RoomEvent.Timeline, onTimeline)
       stopRenew()
       clearInterval(reread)
-      // Signed out, or another account: its list must not outlive it.
-      setBlocklist([])
+      // Signed out, or another account: its list must not outlive it, and
+      // neither may a read of it still on its way.
+      clearBlocklist()
       fetchClient = null
       if (flushTimer !== undefined) {
         clearTimeout(flushTimer)

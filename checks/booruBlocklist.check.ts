@@ -14,6 +14,7 @@ const {
   parseProfileBlocklist, compileRule, postWords, ruleMatches, blockedBy,
   fetchBlocklist, BLOCKLIST_URL, setBlocklist, currentRules,
   setBlocked, blockedMedia, onBlocked, onBlocklistChanged, resetBlocklistForTest,
+  beginBlocklistRead, applyBlocklistRead, clearBlocklist,
 } = await import('../src/client/booruBlocklist.ts')
 const { hiddenMedia, onHiddenChanged } = await import('../src/client/hiddenMedia.ts')
 const { withhold, goneMedia } = await import('../src/client/withheldMedia.ts')
@@ -159,6 +160,47 @@ console.log('\n-- one union of hidden pictures, read by both views --')
   check('every tag set that arrives is judged', /judge\(mediaId\)/.test(tags))
   check('a rule it cannot apply is reported once, not on every re-read',
     /if \(reportedUnseen\.has\(r\.rule\)\) continue/.test(tags))
+}
+
+console.log('\n-- a tag blocked in the booru frame is gone from the next room --')
+{
+  // The 2026-11-20 bug: blocking took a refresh, unblocking looked instant.
+  const frame = readFileSync('src/ui/BooruFrame.tsx', 'utf8')
+  check('leaving the booru view rereads the list',
+    /useEffect\(\(\) => \(\) => void rereadBlocklist\(\), \[\]\)/.test(frame))
+  const tags = readFileSync('src/client/useMediaTags.ts', 'utf8')
+  const load = tags.slice(tags.indexOf('function loadBlocklist'), tags.indexOf('function ingestEvent'))
+  check('the list read does not queue behind the room\'s tag reads (no booruLimiter)',
+    load.length > 0 && !/booruLimiter/.test(load), load.slice(0, 200))
+  check('an answer is applied through the read numbering', /applyBlocklistRead\(read, blocks\)/.test(load))
+  check('sign-out clears the list and abandons reads in flight', /clearBlocklist\(\)/.test(tags))
+
+  resetBlocklistForTest()
+  const a = [{ rule: 'old', locked: false }]
+  const b = [{ rule: 'new', locked: false }]
+  const first = beginBlocklistRead()
+  const second = beginBlocklistRead()
+  check('the later read applies', applyBlocklistRead(second, b) !== null)
+  check('an earlier read landing after it is dropped', applyBlocklistRead(first, a) === null)
+  check('the list is the later read\'s', currentRules().map((r) => r.rule).join() === 'new')
+
+  resetBlocklistForTest()
+  const slow = beginBlocklistRead()
+  const quick = beginBlocklistRead()
+  check('an earlier read landing first applies (it is newer than nothing)', applyBlocklistRead(slow, a) !== null)
+  check('then the later one replaces it', applyBlocklistRead(quick, b) !== null &&
+    currentRules().map((r) => r.rule).join() === 'new')
+
+  resetBlocklistForTest()
+  setBlocklist(a)
+  const inFlight = beginBlocklistRead()
+  clearBlocklist()
+  check('sign-out empties the list', currentRules().length === 0)
+  check('a read for the old account landing after sign-out is dropped',
+    applyBlocklistRead(inFlight, a) === null && currentRules().length === 0)
+  const afterSignIn = beginBlocklistRead()
+  check('a read started after sign-in still applies', applyBlocklistRead(afterSignIn, b) !== null &&
+    currentRules().map((r) => r.rule).join() === 'new')
 }
 
 console.log('\n' + (failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'))

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useClient } from '../client/clientContextValue'
 import { ensureBooruSession } from '../client/booruSession'
+import { rereadBlocklist } from '../client/useMediaTags'
 
 // The dead space, filled. Before a room is picked the main pane used to say
 // "Select a room from the left." and nothing else. It now shows the booru
@@ -44,6 +45,12 @@ export function BooruFrame() {
     })
     return () => { cancelled = true }
   }, [client])
+
+  // The blocklist is edited in this frame, and opening a room unmounts it:
+  // read the list again on the way out, so a tag blocked here is gone from
+  // the room being opened (useMediaTags.ts BLOCKLIST_REREAD_MS says why the
+  // return-to-window reread was not enough).
+  useEffect(() => () => void rereadBlocklist(), [])
 
   useEffect(() => {
     const onFocus = () => {

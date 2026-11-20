@@ -159,6 +159,41 @@ function emit(): void {
   for (const cb of listeners) cb()
 }
 
+// ---------------------------------------------------------------------------
+// Reads of the list overlap: the timer, a return to the window and leaving
+// the booru view can each start one, and a slow answer can land after a
+// quicker, later one. Each read is numbered when it starts, and an answer
+// older than the one already applied is dropped, so a stale list never
+// replaces a newer one. Signing out abandons every read still out: an answer
+// for the old account landing after its list was cleared would bring that
+// list back for whoever signs in next.
+// ---------------------------------------------------------------------------
+
+let readsIssued = 0
+let readApplied = 0
+
+/** Number a read of the list as it starts; hand the number to applyBlocklistRead. */
+export function beginBlocklistRead(): number {
+  return ++readsIssued
+}
+
+/**
+ * Apply one read's answer, unless a read that started later has already been
+ * applied or the reads were abandoned. Returns the rules Technetium cannot
+ * evaluate (as setBlocklist does), or null when the answer was dropped.
+ */
+export function applyBlocklistRead(read: number, blocks: readonly Block[]): CompiledRule[] | null {
+  if (read <= readApplied) return null
+  readApplied = read
+  return setBlocklist(blocks)
+}
+
+/** Sign-out: clear the list and drop every answer still on its way. */
+export function clearBlocklist(): void {
+  readApplied = readsIssued
+  setBlocklist([])
+}
+
 /** Replace the list. Returns the rules Technetium cannot evaluate, for the caller to report. */
 export function setBlocklist(blocks: readonly Block[]): CompiledRule[] {
   rules = blocks.map((b) => compileRule(b.rule))
@@ -200,6 +235,8 @@ export function onBlocklistChanged(cb: () => void): () => void {
 export function resetBlocklistForTest(): void {
   rules = []
   blocked = new Set()
+  readsIssued = 0
+  readApplied = 0
   listeners.clear()
   ruleListeners.clear()
 }
