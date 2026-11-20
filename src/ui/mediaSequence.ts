@@ -3,6 +3,7 @@ import type { TimelineItem } from '../client/useTimeline'
 import { parseMxc } from '../client/media'
 import { encryptedFileOf } from '../client/encryptedFile'
 import type { LightboxItem } from './lightboxContext'
+import { parseBooruRef } from '../client/booruRef'
 
 // The vertical axis of the image viewer, built once per rendered conversation.
 //
@@ -52,6 +53,10 @@ function imageItem(ev: MatrixEvent, content: Record<string, unknown>): LightboxI
   const roomId = ev.getRoomId()
   const mxc = typeof content.url === 'string' ? content.url : ''
   if (parseMxc(mxc)) return { mxc, roomId, ...imageMeta(ev) }
+  // A picture referenced on the booru (lens L0b), once it has a post: before
+  // that there is nothing to show.
+  const ref = parseBooruRef(content)
+  if (ref?.postId !== undefined) return { mxc: ref.mxc, roomId, name: `${ref.md5}.${ref.ext}` }
   const file = encryptedFileOf(content)
   const fileMxc = file?.url ?? ''
   if (!file || !parseMxc(fileMxc)) return null

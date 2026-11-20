@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import { RoomEvent, RoomStateEvent, type MatrixClient, type MatrixEvent } from 'matrix-js-sdk'
 import { fetchMediaSrc, parseMxc } from './media'
+import { isBooruMxc } from './booruRef'
 import { createLimiter } from './concurrency'
 import { reportIgnored } from './report'
 import { ensureBooruSession, renewOnReturn } from './booruSession'
@@ -248,6 +249,10 @@ export function fetchTags(roomId: string, mxc: string): void {
   const mediaId = parseMxc(mxc)?.mediaId
   if (!mediaId) return
   rememberMxc(mxc, mediaId)
+  // A booru-referenced picture has no tag event on the homeserver to ask for:
+  // its pointer came with its message (seedBooruRef), and asking would only
+  // spend a request on a certain 404.
+  if (isBooruMxc(mxc)) return
   const go = beginAsk(asks, roomId, mxc, mediaId, { haveClient: !!fetchClient, haveSet: sets.has(mediaId) })
   if (go !== 'go' || !fetchClient) return
   const key = askKey(roomId, mediaId)
@@ -281,6 +286,25 @@ export function fetchTags(roomId: string, mxc: string): void {
       }
       changedLine(mediaId)
     })
+}
+
+/**
+ * A booru-referenced picture (booruRef.ts) is drawn: hand the store the post
+ * it names, so the live read, the blocklist and the withheld pop apply to it
+ * exactly as to a bridged picture, whose pointer arrives as a state event.
+ *
+ * Called while the row renders, so it must stay cheap and idempotent: it
+ * writes only the first time a picture is seen with this post, and that write
+ * reaches React through the store's own deferred flush, never a setState
+ * during render. ts 0, so the first live read always wins.
+ */
+export function seedBooruRef(mxc: string, postId: number): void {
+  const mediaId = parseMxc(mxc)?.mediaId
+  if (!mediaId || !isBooruMxc(mxc)) return
+  rememberMxc(mxc, mediaId)
+  if (sets.get(mediaId)?.postId === postId) return
+  sets.delete(mediaId)
+  ingestSet({ mediaId, tags: [], postId, ts: 0 }, mediaId)
 }
 
 // An image's line changed without its set changing (an answer of "no tags", a

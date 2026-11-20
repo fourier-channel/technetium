@@ -2,6 +2,7 @@ import type { MatrixClient } from 'matrix-js-sdk'
 import { fileVersionOf } from './fileVersions'
 import { decryptAttachment, type EncryptedFileInfo } from './encryptedFile'
 import { createLimiter } from './concurrency'
+import { BOORU_MEDIA_SERVER, booruMediaUrl } from './booruRef'
 
 // ---------------------------------------------------------------------------
 // Media. ONE path, for every mxc, every size, every caller.
@@ -74,6 +75,11 @@ export function mediaUrl(
 ): string | null {
   const parsed = parseMxc(mxc)
   if (!parsed) return null
+  // A picture an event references on the booru (booruRef.ts): its bytes are
+  // at the booru's media gate, never the homeserver, and the gate takes the
+  // same Bearer. No room hint and no file version: the gate keys on the file
+  // name alone, and a booru file name is its md5, so it never changes.
+  if (parsed.serverName === BOORU_MEDIA_SERVER) return booruMediaUrl(parsed.mediaId, width)
   const base = client.getHomeserverUrl().replace(/\/+$/, '')
   const kind = width ? 'thumbnail' : 'download'
   const path =

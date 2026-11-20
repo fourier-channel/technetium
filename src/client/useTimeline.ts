@@ -11,6 +11,7 @@ import {
 import { MEDIA_TAGS_EVENT } from './mediaTags'
 import { parseMxc } from './media'
 import { hiddenMedia, onHiddenChanged } from './hiddenMedia'
+import { pictureMxcOf } from './booruRef'
 import { getIgnoredUsers } from './ignoredUsers'
 import { isBackgroundPost } from './backgroundPost'
 import { INTERACTION_EVENT } from './interactionEvents'
@@ -252,9 +253,9 @@ function galleryTag(ev: MatrixEvent): GalleryTag | null {
 // A picture this reader is not shown: withheld or blocked (hiddenMedia.ts).
 function isWithheld(ev: MatrixEvent, opts: ToItemsOptions): boolean {
   if (!opts.withheld?.size) return false
-  const c = ev.getContent()
-  if (c.msgtype !== 'm.image' || typeof c.url !== 'string') return false
-  const mediaId = parseMxc(c.url)?.mediaId
+  // An m.image by its mxc; a booru-referenced picture by its address (booruRef.ts).
+  const mxc = pictureMxcOf(ev.getContent())
+  const mediaId = mxc ? parseMxc(mxc)?.mediaId : undefined
   return !!mediaId && opts.withheld.has(mediaId)
 }
 

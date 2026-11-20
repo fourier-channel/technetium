@@ -29,7 +29,8 @@ import { buildMediaSequence, imageMeta, isGif, lightboxItem, type MediaSequence 
 import { GifBadge } from './GifBadge'
 import { useInterfacePrefs } from '../client/interfaceStore'
 import { shownTone, type InterfacePrefs } from '../client/interfacePrefs'
-import { useMediaTagLine } from '../client/useMediaTags'
+import { seedBooruRef, useMediaTagLine } from '../client/useMediaTags'
+import { parseBooruRef, pictureMxcOf, type BooruRef } from '../client/booruRef'
 import { usePopPhase, type PopPhase } from '../client/withheldMedia'
 import { booruPostUrl } from '../client/booruUrl'
 import { linkify } from './linkify'
@@ -100,6 +101,21 @@ const FOLLOW_SLACK_PX = 120
 // render (which would churn the effects' dependency arrays).
 function pinBottom(el: HTMLElement | null): void {
   if (el) el.scrollTop = el.scrollHeight
+}
+
+// Does this message carry words to show under its picture?
+function hasWords(content: IContent): boolean {
+  return typeof content.body === 'string' && content.body.trim().length > 0
+}
+
+// A booru reference's box: its w/h fitted exactly as an m.image's info.w/h
+// (reserveBox below). The "being tagged" slot takes the same box, so the row
+// does not move when the post arrives; a square when the event does not say.
+function booruBox(ref: BooruRef): { width: number; height: number } | undefined {
+  return reserveBox({ info: { w: ref.w, h: ref.h } } as IContent)
+}
+function taggingBox(ref: BooruRef): { width: number; height: number; maxWidth: string } {
+  return { ...(booruBox(ref) ?? { width: INLINE_IMAGE_MAX_W, height: INLINE_IMAGE_MAX_W }), maxWidth: '100%' }
 }
 
 // The box an inline image will occupy, computed from the event's OWN info.w /
@@ -584,8 +600,12 @@ function BubbleRow({
   // that only looks at url dropped every encrypted picture through to being
   // rendered as its own text body, silently (H3).
   const encFile = kind === 'message' ? encryptedFileOf(item.content) : null
+  // A picture the message references on the booru (lens L0b, booruRef.ts):
+  // drawn as a picture row, with the message's words as its caption.
+  const booruRef = kind === 'message' ? parseBooruRef(item.content) : null
   const isMediaRow =
     kind === 'gallery' ||
+    (kind === 'message' && !!booruRef) ||
     (kind === 'message' &&
       item.content.msgtype === 'm.image' &&
       (!!encFile || !!parseMxc(typeof item.content.url === 'string' ? item.content.url : '')))
@@ -593,7 +613,10 @@ function BubbleRow({
   // image, where the composer puts them; a single picture's on itself, with
   // any edit applied.
   const captionSource = kind === 'gallery' ? (cells?.[0]?.getContent() ?? null) : isMediaRow ? item.content : null
-  const captionContent = hasCaption(captionSource) ? captionSource : null
+  // A booru reference is an m.text: its body is the words, never a file name.
+  const captionContent = booruRef
+    ? hasWords(item.content) ? item.content : null
+    : hasCaption(captionSource) ? captionSource : null
   const callsOnMe = rowCallsOnMe(item, client, senderId, roomId)
   const popping = useRowPop(item)
 
@@ -729,6 +752,34 @@ function BubbleRow({
         </div>
       )
     },
+  booru: (ref, content) =>
+      // Before the booru has a post there is nothing the reader may be shown
+      // (ruling 1), so nothing is fetched: the slot says so, at the picture's
+      // own proportions, so the row does not jump when @sample's edit brings
+      // the post and the picture arrives.
+      ref.postId === undefined ? (
+        <div className="mtags-stack">
+          <div className="mtags-media tc-booru-tagging" style={taggingBox(ref)} data-testid="booru-tagging">
+            being tagged
+          </div>
+        </div>
+      ) : (
+        <div className="mtags-stack">
+          <div className="mtags-media">
+            <AuthedImage
+              mxc={ref.mxc}
+              width={320}
+              roomId={roomId}
+              lazy
+              reserve={booruBox(ref)}
+              alt={typeof content.body === 'string' ? content.body : undefined}
+              onClick={() => open([{ mxc: ref.mxc, roomId, name: `${ref.md5}.${ref.ext}` }], 0, thread)}
+            />
+            {ref.ext === 'gif' && <GifBadge />}
+          </div>
+          <MediaTags mxc={ref.mxc} roomId={event.getRoomId()} />
+        </div>
+      ),
   })
 
   // The first message of a run: the one that carries the avatar and the name.
@@ -919,7 +970,8 @@ function BubbleRow({
 // class, or '' for a row doing neither.
 function useRowPop(item: TimelineItem): string {
   const c = item.kind === 'message' ? item.content : null
-  const mediaId = c?.msgtype === 'm.image' && typeof c.url === 'string' ? parseMxc(c.url)?.mediaId : undefined
+  const mxc = pictureMxcOf(c)
+  const mediaId = mxc ? parseMxc(mxc)?.mediaId : undefined
   return popClass(usePopPhase(mediaId))
 }
 function popClass(phase: PopPhase | undefined): string {
@@ -993,6 +1045,20 @@ function IrcRow({
     ),
     image: (mxc) => (
       <IrcPicture mxc={mxc} roomId={roomId} onOpen={() => open([{ mxc, roomId, ...imageMeta(event) }], 0, thread)} />
+    ),
+    booru: (ref, _content, words) => (
+      <>
+        {ref.postId === undefined ? (
+          <span className="tc-irc-link">[picture: being tagged]</span>
+        ) : (
+          <IrcPicture
+            mxc={ref.mxc}
+            roomId={roomId}
+            onOpen={() => open([{ mxc: ref.mxc, roomId, name: `${ref.md5}.${ref.ext}` }], 0, thread)}
+          />
+        )}{' '}
+        {words}
+      </>
     ),
   })
 
@@ -1128,6 +1194,10 @@ interface RowMedia {
   gallery: (cells: (MatrixEvent | null)[]) => ReactNode
   encrypted: (content: IContent, file: NonNullable<ReturnType<typeof encryptedFileOf>>) => ReactNode
   image: (mxc: string, content: IContent) => ReactNode
+  /** A picture referenced on the booru (lens L0b). `words` is the message's
+   *  text, drawn as the plain branch would draw it, for a row that has no
+   *  caption slot of its own. */
+  booru: (ref: BooruRef, content: IContent, words: ReactNode) => ReactNode
 }
 
 function rowBody(
@@ -1144,15 +1214,14 @@ function rowBody(
     const content = item.content
     const mxc = typeof content.url === 'string' ? content.url : ''
     const encFile = encryptedFileOf(content)
-    if (content.msgtype === 'm.image' && encFile) {
-      body = media.encrypted(content, encFile)
-    } else if (content.msgtype === 'm.image' && parseMxc(mxc)) {
-      body = media.image(mxc, content)
-    } else {
-      // item.content, not event.getContent(): the effective content with the
-      // winning edit applied (S1). isReply strips the spec's "> " fallback quote.
+    const ref = parseBooruRef(content)
+    // item.content, not event.getContent(): the effective content with the
+    // winning edit applied (S1) -- which is how @sample's edit adding the
+    // post_id reaches a booru reference. isReply strips the spec's "> "
+    // fallback quote.
+    const words = (): ReactNode => {
       const rendered = renderMessageBody(item.content, { isReply: !!item.replyTo })
-      body =
+      return (
         rendered.html !== undefined ? (
           // Sanitized by DOMPurify in renderMessageBody -- safe to inject.
           // The click/key handlers are DELEGATED: an innerHTML subtree cannot
@@ -1168,6 +1237,19 @@ function rowBody(
         ) : (
           <span style={{ whiteSpace: 'pre-wrap' }}>{linkify(rendered.text ?? '')}</span>
         )
+      )
+    }
+    if (content.msgtype === 'm.image' && encFile) {
+      body = media.encrypted(content, encFile)
+    } else if (content.msgtype === 'm.image' && parseMxc(mxc)) {
+      body = media.image(mxc, content)
+    } else if (ref) {
+      // Hand the tag store the post this picture names, so the live read,
+      // the blocklist and the withheld pop apply to it (seedBooruRef).
+      if (ref.postId !== undefined) seedBooruRef(ref.mxc, ref.postId)
+      body = media.booru(ref, content, words())
+    } else {
+      body = words()
     }
     // A filing reply from Neru-chan points at a BUR; the card under it reads
     // the BUR live and is where an admin decides it (client/booruBur.ts).
