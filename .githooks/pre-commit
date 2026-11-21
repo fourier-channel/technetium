@@ -45,7 +45,18 @@
 set -uo pipefail
 
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
-repo_name="$(basename "$repo_root")"
+# A linked worktree is named for its main checkout, not its own folder: the
+# attachment is the repository, and ~/chanbooru-polish read "no attached repo
+# matched 'chanbooru-polish'" (2026-11-19), a refusal that named no check. The
+# main checkout is the one whose .git is the common dir; a submodule's common
+# dir is not a .git, so it keeps its own folder's name. --path below stays
+# the worktree, so the tree being committed is the one judged.
+main_root="$repo_root"
+common="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || common=""
+case "$common" in
+  */.git) main_root="$(dirname "$common")" ;;
+esac
+repo_name="$(basename "$main_root")"
 
 # Where coherence lives. An explicit override first, then the sibling checkout,
 # which is the layout on every machine that has one. A relative override is
@@ -53,7 +64,7 @@ repo_name="$(basename "$repo_root")"
 # directory below, and an unpinned ../fourier-coherence passed this check and
 # then named a directory one level too high. COHERENCE_PYTHON is pinned the
 # same way below.
-home="${COHERENCE_HOME:-$(dirname "$repo_root")/fourier-coherence}"
+home="${COHERENCE_HOME:-$(dirname "$main_root")/fourier-coherence}"
 case "$home" in
   /*|[A-Za-z]:*) ;;
   *) home="$repo_root/$home" ;;

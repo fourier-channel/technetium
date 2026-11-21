@@ -1,7 +1,7 @@
 {
   "build_stamp": null,
-  "hydrated_at": "2026-10-31T19:03:30Z",
-  "hydrated_hash": "sha256c:80a56fa23fb2e0670300fc7b9e559237949fc18a3e5288c239eeb0ad720e9226",
+  "hydrated_at": "2026-11-21T23:44:55Z",
+  "hydrated_hash": "sha256c:6f37e47dfc25d86b034bee372389503046180e64f97fd312c2b7a5be2a0e0f6c",
   "pinned": null,
   "source": "coherence://brain/git-pre-commit"
 }
