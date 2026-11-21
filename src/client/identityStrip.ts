@@ -312,7 +312,7 @@ function pngChunk(type: string, data: Uint8Array): Uint8Array {
   return out
 }
 
-async function inflate(data: Uint8Array): Promise<Uint8Array | null> {
+export async function inflate(data: Uint8Array): Promise<Uint8Array | null> {
   try {
     const stream = new Blob([data as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate'))
     return new Uint8Array(await new Response(stream).arrayBuffer())

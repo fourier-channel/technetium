@@ -1,0 +1,611 @@
+{
+ "files": {
+  "png tEXt parameters (A1111)": {
+   "keys": [
+    "parameters"
+   ],
+   "raw": "masterpiece, best quality, (solo:1.2), 1girl, ((silver hair)), lumen \\(starfall\\), blue eyes, <lora:glowy:0.8>, smile BREAK outdoors, night sky",
+   "tags": {
+    "tags": [
+     "solo",
+     "1girl",
+     "silver_hair",
+     "lumen_(starfall)",
+     "blue_eyes",
+     "smile",
+     "outdoors",
+     "night_sky"
+    ],
+    "meta": [
+     "masterpiece",
+     "best_quality"
+    ],
+    "characters": [
+     "lumen_(starfall)"
+    ]
+   }
+  },
+  "png tEXt prompt (ComfyUI graph)": {
+   "keys": [
+    "prompt",
+    "workflow"
+   ],
+   "raw": "harbor town, sunset, (kiri_oc:0) white hair, ferry, gulls, warm light",
+   "tags": {
+    "tags": [
+     "harbor_town",
+     "sunset",
+     "white_hair",
+     "ferry",
+     "gulls",
+     "warm_light"
+    ],
+    "meta": [],
+    "characters": [
+     "kiri_oc"
+    ]
+   }
+  },
+  "png zTXt parameters": {
+   "keys": [
+    "parameters"
+   ],
+   "raw": "masterpiece, best quality, (solo:1.2), 1girl, ((silver hair)), lumen \\(starfall\\), blue eyes, <lora:glowy:0.8>, smile BREAK outdoors, night sky",
+   "tags": {
+    "tags": [
+     "solo",
+     "1girl",
+     "silver_hair",
+     "lumen_(starfall)",
+     "blue_eyes",
+     "smile",
+     "outdoors",
+     "night_sky"
+    ],
+    "meta": [
+     "masterpiece",
+     "best_quality"
+    ],
+    "characters": [
+     "lumen_(starfall)"
+    ]
+   }
+  },
+  "png zTXt parameters, non-ASCII": {
+   "keys": [
+    "parameters"
+   ],
+   "raw": "snow \u00e9t\u00e9, \u732b, lantern",
+   "tags": {
+    "tags": [
+     "snow_t",
+     "lantern"
+    ],
+    "meta": [],
+    "characters": []
+   }
+  },
+  "png iTXt Comment compressed (NovelAI)": {
+   "keys": [
+    "Description",
+    "Comment"
+   ],
+   "raw": "forest shrine, maple \\(tester\\), fox ears, autumn leaves, best quality",
+   "tags": {
+    "tags": [
+     "forest_shrine",
+     "maple_(tester)",
+     "fox_ears",
+     "autumn_leaves"
+    ],
+    "meta": [
+     "best_quality"
+    ],
+    "characters": [
+     "maple_(tester)"
+    ]
+   }
+  },
+  "png iTXt parameters plain, non-ASCII": {
+   "keys": [
+    "parameters"
+   ],
+   "raw": "caf\u00e9 terrace, \u7d05\u8449, rain",
+   "tags": {
+    "tags": [
+     "caf_terrace",
+     "rain"
+    ],
+    "meta": [],
+    "characters": []
+   }
+  },
+  "png tEXt Description only": {
+   "keys": [
+    "Description"
+   ],
+   "raw": "quiet library, lamplight, cat on desk",
+   "tags": {
+    "tags": [
+     "quiet_library",
+     "lamplight",
+     "cat_on_desk"
+    ],
+    "meta": [],
+    "characters": []
+   }
+  },
+  "png zTXt corrupt, then tEXt": {
+   "keys": [
+    "Description"
+   ],
+   "raw": "kept after a bad chunk",
+   "tags": {
+    "tags": [
+     "kept_after_a_bad_chunk"
+    ],
+    "meta": [],
+    "characters": []
+   }
+  },
+  "png with no text": {
+   "keys": [],
+   "raw": "",
+   "tags": {
+    "tags": [],
+    "meta": [],
+    "characters": []
+   }
+  },
+  "jpeg UserComment ASCII, MM": {
+   "keys": [
+    "parameters"
+   ],
+   "raw": "masterpiece, best quality, (solo:1.2), 1girl, ((silver hair)), lumen \\(starfall\\), blue eyes, <lora:glowy:0.8>, smile BREAK outdoors, night sky",
+   "tags": {
+    "tags": [
+     "solo",
+     "1girl",
+     "silver_hair",
+     "lumen_(starfall)",
+     "blue_eyes",
+     "smile",
+     "outdoors",
+     "night_sky"
+    ],
+    "meta": [
+     "masterpiece",
+     "best_quality"
+    ],
+    "characters": [
+     "lumen_(starfall)"
+    ]
+   }
+  },
+  "jpeg UserComment UNICODE big-endian": {
+   "keys": [
+    "parameters"
+   ],
+   "raw": "masterpiece, best quality, (solo:1.2), 1girl, ((silver hair)), lumen \\(starfall\\), blue eyes, <lora:glowy:0.8>, smile BREAK outdoors, night sky",
+   "tags": {
+    "tags": [
+     "solo",
+     "1girl",
+     "silver_hair",
+     "lumen_(starfall)",
+     "blue_eyes",
+     "smile",
+     "outdoors",
+     "night_sky"
+    ],
+    "meta": [
+     "masterpiece",
+     "best_quality"
+    ],
+    "characters": [
+     "lumen_(starfall)"
+    ]
+   }
+  },
+  "jpeg UserComment UNICODE little-endian": {
+   "keys": [
+    "parameters"
+   ],
+   "raw": "masterpiece, best quality, (solo:1.2), 1girl, ((silver hair)), lumen \\(starfall\\), blue eyes, <lora:glowy:0.8>, smile BREAK outdoors, night sky",
+   "tags": {
+    "tags": [
+     "solo",
+     "1girl",
+     "silver_hair",
+     "lumen_(starfall)",
+     "blue_eyes",
+     "smile",
+     "outdoors",
+     "night_sky"
+    ],
+    "meta": [
+     "masterpiece",
+     "best_quality"
+    ],
+    "characters": [
+     "lumen_(starfall)"
+    ]
+   }
+  },
+  "jpeg UserComment with no charset prefix": {
+   "keys": [
+    "Comment"
+   ],
+   "raw": "lighthouse, storm, waves",
+   "tags": {
+    "tags": [
+     "lighthouse",
+     "storm",
+     "waves"
+    ],
+    "meta": [],
+    "characters": []
+   }
+  },
+  "jpeg UserComment zero prefix, NUL padded": {
+   "keys": [
+    "parameters"
+   ],
+   "raw": "tea house, rain, lanterns",
+   "tags": {
+    "tags": [
+     "tea_house",
+     "rain",
+     "lanterns"
+    ],
+    "meta": [],
+    "characters": []
+   }
+  },
+  "jpeg ImageDescription ComfyUI graph": {
+   "keys": [
+    "prompt"
+   ],
+   "raw": "harbor town, sunset, (kiri_oc:0) white hair, ferry, gulls, warm light",
+   "tags": {
+    "tags": [
+     "harbor_town",
+     "sunset",
+     "white_hair",
+     "ferry",
+     "gulls",
+     "warm_light"
+    ],
+    "meta": [],
+    "characters": [
+     "kiri_oc"
+    ]
+   }
+  },
+  "jpeg graph nested under .prompt": {
+   "keys": [
+    "prompt"
+   ],
+   "raw": "harbor town, sunset, (kiri_oc:0) white hair, ferry, gulls, warm light",
+   "tags": {
+    "tags": [
+     "harbor_town",
+     "sunset",
+     "white_hair",
+     "ferry",
+     "gulls",
+     "warm_light"
+    ],
+    "meta": [],
+    "characters": [
+     "kiri_oc"
+    ]
+   }
+  },
+  "webp EXIF with Exif header, labelled ComfyUI": {
+   "keys": [
+    "prompt"
+   ],
+   "raw": "harbor town, sunset, (kiri_oc:0) white hair, ferry, gulls, warm light",
+   "tags": {
+    "tags": [
+     "harbor_town",
+     "sunset",
+     "white_hair",
+     "ferry",
+     "gulls",
+     "warm_light"
+    ],
+    "meta": [],
+    "characters": [
+     "kiri_oc"
+    ]
+   }
+  },
+  "webp EXIF labelled, no prompt label": {
+   "keys": [],
+   "raw": "",
+   "tags": {
+    "tags": [],
+    "meta": [],
+    "characters": []
+   }
+  },
+  "webp EXIF with no Exif header, NovelAI": {
+   "keys": [
+    "Comment"
+   ],
+   "raw": "forest shrine, maple \\(tester\\), fox ears, autumn leaves, best quality",
+   "tags": {
+    "tags": [
+     "forest_shrine",
+     "maple_(tester)",
+     "fox_ears",
+     "autumn_leaves"
+    ],
+    "meta": [
+     "best_quality"
+    ],
+    "characters": [
+     "maple_(tester)"
+    ]
+   }
+  },
+  "webp with no EXIF": {
+   "keys": [],
+   "raw": "",
+   "tags": {
+    "tags": [],
+    "meta": [],
+    "characters": []
+   }
+  },
+  "not an image": {
+   "keys": [],
+   "raw": "",
+   "tags": {
+    "tags": [],
+    "meta": [],
+    "characters": []
+   }
+  },
+  "truncated png": {
+   "keys": [],
+   "raw": "",
+   "tags": {
+    "tags": [],
+    "meta": [],
+    "characters": []
+   }
+  }
+ },
+ "terms": {
+  "2024": {
+   "norm": "2024",
+   "expand": [
+    "2024"
+   ]
+  },
+  "lumen \\(starfall\\)": {
+   "norm": "lumen_(starfall)",
+   "expand": [
+    "lumen \\(starfall\\)"
+   ]
+  },
+  "lumen (starfall)": {
+   "norm": "lumen_(starfall)",
+   "expand": [
+    "lumen (starfall)"
+   ]
+  },
+  "(lumen:1.3)": {
+   "norm": "lumen",
+   "expand": [
+    "(lumen:1.3)"
+   ]
+  },
+  "((silver hair))": {
+   "norm": "silver_hair",
+   "expand": [
+    "(",
+    "(silver hair)",
+    ")"
+   ]
+  },
+  "[blue eyes]": {
+   "norm": "blue_eyes",
+   "expand": [
+    "[blue eyes]"
+   ]
+  },
+  "{red scarf}": {
+   "norm": "red_scarf",
+   "expand": [
+    "{red scarf}"
+   ]
+  },
+  "name (1.2)": {
+   "norm": "name_1.2",
+   "expand": [
+    "name (1.2)"
+   ]
+  },
+  "re:zero style": {
+   "norm": "re:zero_style",
+   "expand": [
+    "re:zero style"
+   ]
+  },
+  "(kiri_oc:0) white hair": {
+   "norm": "kiri_oc_white_hair",
+   "expand": [
+    "(kiri_oc:0)",
+    " white hair"
+   ]
+  },
+  "(maple_\\(tester\\):1.1) fox ears": {
+   "norm": "maple_(tester)_fox_ears",
+   "expand": [
+    "(maple_\\(tester\\):1.1)",
+    " fox ears"
+   ]
+  },
+  "@somebody": {
+   "norm": "somebody",
+   "expand": [
+    "@somebody"
+   ]
+  },
+  "-negative lead": {
+   "norm": "negative_lead",
+   "expand": [
+    "-negative lead"
+   ]
+  },
+  "~tilde lead": {
+   "norm": "tilde_lead",
+   "expand": [
+    "~tilde lead"
+   ]
+  },
+  "  spaced   out  ": {
+   "norm": "spaced_out",
+   "expand": [
+    "  spaced   out  "
+   ]
+  },
+  "Mixed CASE Words": {
+   "norm": "mixed_case_words",
+   "expand": [
+    "Mixed CASE Words"
+   ]
+  },
+  "caf\u00e9": {
+   "norm": "caf",
+   "expand": [
+    "caf\u00e9"
+   ]
+  },
+  "a (b) c (d)": {
+   "norm": "a_b_c_d",
+   "expand": [
+    "a ",
+    "(b)",
+    " c ",
+    "(d)"
+   ]
+  },
+  "(a) (b)": {
+   "norm": "a_b",
+   "expand": [
+    "(a)",
+    "(b)"
+   ]
+  },
+  "oc_kiri": {
+   "norm": "oc_kiri",
+   "expand": [
+    "oc_kiri"
+   ]
+  },
+  "kiri_character_oc": {
+   "norm": "kiri_character_oc",
+   "expand": [
+    "kiri_character_oc"
+   ]
+  },
+  "x": {
+   "norm": "x",
+   "expand": [
+    "x"
+   ]
+  },
+  "1.5": {
+   "norm": "1.5",
+   "expand": [
+    "1.5"
+   ]
+  },
+  "year_2024": {
+   "norm": "year_2024",
+   "expand": [
+    "year_2024"
+   ]
+  },
+  "ultra-detailed": {
+   "norm": "ultra-detailed",
+   "expand": [
+    "ultra-detailed"
+   ]
+  }
+ },
+ "prompts": [
+  {
+   "tags": [
+    "solo",
+    "1girl",
+    "silver_hair",
+    "lumen_(starfall)",
+    "blue_eyes",
+    "smile",
+    "outdoors",
+    "night_sky"
+   ],
+   "meta": [
+    "masterpiece",
+    "best_quality"
+   ],
+   "characters": [
+    "lumen_(starfall)"
+   ]
+  },
+  {
+   "tags": [
+    "lumen_(starfall)",
+    "hat"
+   ],
+   "meta": [],
+   "characters": [
+    "maple_(tester)",
+    "lumen_(starfall)",
+    "oc_kiri"
+   ]
+  },
+  {
+   "tags": [
+    "maple_(tester)",
+    "lumen_(starfall)",
+    "hat"
+   ],
+   "meta": [],
+   "characters": [
+    "maple_(tester)",
+    "lumen_(starfall)",
+    "oc_kiri"
+   ]
+  },
+  {
+   "tags": [
+    "a1",
+    "b2",
+    "c3"
+   ],
+   "meta": [
+    "masterpiece"
+   ],
+   "characters": []
+  },
+  {
+   "tags": [
+    "dup"
+   ],
+   "meta": [],
+   "characters": []
+  },
+  {
+   "tags": [],
+   "meta": [],
+   "characters": []
+  }
+ ]
+}
