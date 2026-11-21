@@ -24,7 +24,7 @@ something built in that can. That decision waits (docs/design/QQ_FOLDER_INDEX.md
 | M2.1d | The folder grid | DONE `32041b8`: listed whole with a running count, then subfolders and pictures in natural order; hidden entries (`.quickqueue/`) never shown; other files counted; windowed, so 100,000 files mount only the rows in view |
 | M2.1e | Thumbnails made on the device | DONE `32041b8`: 256 px WebP, four at a time LIFO, bounded cache that revokes what it evicts; a tile scrolled away gives up its turn |
 | M2.1f | Full screen is the room Lightbox | DONE `32041b8`: `LightboxItem.local` reads the file itself, so a local picture needs no client and no upload |
-| M2.1g | Live on a real folder: the system picker, a grant across a restart, the tablet, a big folder | PENDING OPERATOR VERIFICATION |
+| M2.1g | Live on a real folder: the system picker, a grant across a restart, the tablet, a big folder | PARTLY SEEN: the operator on desktop Chrome 2026-11-20, a small folder: "the Chrome folder picker works perfectly", listing and thumbnails "relatively fast"; a reload lists the folder again, as step 1 is built to (no index before M2.2). Still to see: the tablet, a big folder, the grant across a full browser restart |
 | M2.1h | Operator on the preview 2026-11-18: the panel opened empty; the tab did not move inside the panel when open | DONE technetium `0763d2c`, on the preview: a browser without File System Access now says so (it rendered nothing); the tab rides the panel's top edge as every drawer's does |
 | M2.2 | Scan: state the cost and index size first, then build the index | NOT STARTED; where the index lives awaits the ruling on QQ_FOLDER_INDEX.md |
 | M2.3 | Search and filters over the index | NOT STARTED |
