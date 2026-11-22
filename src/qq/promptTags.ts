@@ -354,7 +354,7 @@ export const QUALITY_META: ReadonlySet<string> = new Set([
 // Colons survive too (re:zero has one): a colon followed by a number is the
 // only thing read as a weight.
 export function normalizeTerm(raw: unknown): string {
-  // eslint-disable-next-line no-control-regex -- \u0001/\u0002 hold escaped parentheses aside, as the original does
+  // \u0001/\u0002 hold escaped parentheses aside, as the original does
   let t = String(raw).replace(/\\\(/g, '\u0001').replace(/\\\)/g, '\u0002')
   t = t.replace(/:\s*[\d.]+(?=\s*[)\]}]|\s*$)/g, '')                  // (tag:1.2) weights
   const q = /^([^()]*[^\s()])\s*\(([^()]+)\)\s*$/.exec(t)               // name (series)
