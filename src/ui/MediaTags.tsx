@@ -5,6 +5,7 @@ import { isHypeTag } from '../client/hypeTags'
 import { useTagDiff, tagKey, type DiffedTag, type TagPhase } from '../client/useTagDiff'
 import '../mediatags.css'
 import { editBooruTags, refreshBooruTags, useMediaTagLine } from '../client/useMediaTags'
+import { lineOnScreen } from '../client/onScreenMedia'
 import type { TagLineView } from '../client/tagAsks'
 import { parseTagInput } from '../client/booruLive'
 import { splitForBubble } from '../client/tagBubble'
@@ -184,9 +185,14 @@ function TagBubble({
   // is the only copy that is definitely right, and the only place the creator
   // and character categories come from. refreshBooruTags is idempotent -- it
   // refuses a duplicate read and a repeat inside its TTL.
+  // Counted on screen while it is, so leaving the booru view or coming back
+  // to the window asks about it again even though it never scrolled
+  // (onScreenMedia.ts: a thread panel stays put while the post is jailed).
   const { ref: lineRef, onScreen } = useOnScreen<HTMLDivElement>()
   useEffect(() => {
-    if (onScreen && mediaId) refreshBooruTags(mediaId)
+    if (!onScreen || !mediaId) return
+    refreshBooruTags(mediaId)
+    return lineOnScreen(mediaId)
   }, [onScreen, mediaId])
 
   const [open, setOpen] = useState(false)

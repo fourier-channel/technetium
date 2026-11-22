@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useClient } from '../client/clientContextValue'
 import { ensureBooruSession } from '../client/booruSession'
-import { rereadBlocklist } from '../client/useMediaTags'
+import { rereadBlocklist, rereadOnScreen } from '../client/useMediaTags'
 
 // The dead space, filled. Before a room is picked the main pane used to say
 // "Select a room from the left." and nothing else. It now shows the booru
@@ -50,7 +50,15 @@ export function BooruFrame() {
   // read the list again on the way out, so a tag blocked here is gone from
   // the room being opened (useMediaTags.ts BLOCKLIST_REREAD_MS says why the
   // return-to-window reread was not enough).
-  useEffect(() => () => void rereadBlocklist(), [])
+  //
+  // Posts are jailed, deleted and retagged here too, and the thread panel
+  // stays on screen beside this frame the whole time: ask about every picture
+  // still on screen on the way out, or a jailed picture stays in its thread
+  // (onScreenMedia.ts). The room's own pictures remount and read anyway.
+  useEffect(() => () => {
+    void rereadBlocklist()
+    rereadOnScreen()
+  }, [])
 
   useEffect(() => {
     const onFocus = () => {

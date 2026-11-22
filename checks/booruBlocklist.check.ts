@@ -167,7 +167,7 @@ console.log('\n-- a tag blocked in the booru frame is gone from the next room --
   // The 2026-11-20 bug: blocking took a refresh, unblocking looked instant.
   const frame = readFileSync('src/ui/BooruFrame.tsx', 'utf8')
   check('leaving the booru view rereads the list',
-    /useEffect\(\(\) => \(\) => void rereadBlocklist\(\), \[\]\)/.test(frame))
+    /useEffect\(\(\) => \(\) => \{[^}]*void rereadBlocklist\(\)[^}]*\}, \[\]\)/.test(frame))
   const tags = readFileSync('src/client/useMediaTags.ts', 'utf8')
   const load = tags.slice(tags.indexOf('function loadBlocklist'), tags.indexOf('function ingestEvent'))
   check('the list read does not queue behind the room\'s tag reads (no booruLimiter)',

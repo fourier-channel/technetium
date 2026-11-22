@@ -28,6 +28,7 @@ import {
   type TagEdit,
 } from './booruTags'
 import { popPhase, recheckSoon, release, setRechecker, withhold } from './withheldMedia'
+import { mediaOnScreen } from './onScreenMedia'
 import { mayRead, mergeBooruIntoSet, newBooruReadState, optimisticSet } from './booruLive'
 import { askKey, beginAsk, heardOf, isAbsent, newTagAsks, retry, settle, tagLineView, takeDeferred, type TagLineView } from './tagAsks'
 import {
@@ -479,6 +480,17 @@ export function refreshBooruTags(mediaId: string, force = false): void {
 // the one live read above.
 setRechecker((mediaId) => refreshBooruTags(mediaId, true))
 
+/**
+ * Ask the booru again about every picture on screen now (onScreenMedia.ts
+ * says why). Forced past the TTL, because the reason to ask is that the post
+ * may have changed since the last read, however recent: a jail made in the
+ * booru view takes less than the TTL. Bounded by what is on screen, and each
+ * read is one ~157-byte request through the same limiter.
+ */
+export function rereadOnScreen(): void {
+  for (const mediaId of mediaOnScreen()) refreshBooruTags(mediaId, true)
+}
+
 // The booru shows a popped picture's post again. Bring it back only once the
 // media gate serves the image too: the gate caches its answer (up to about
 // 80 s), and a picture that pops back in only to fail to load is worse than
@@ -620,6 +632,11 @@ export function useMediaTagSync(client: MatrixClient | null): void {
     // a slow timer (BLOCKLIST_REREAD_MS).
     void loadBlocklist()
     const stopRenew = renewOnReturn(loadBlocklist)
+    // And the pictures on screen, on the same return and at most as often
+    // (once a minute): a post jailed or retagged in another tab sends this
+    // window nothing, and a picture that never left the screen is never
+    // asked about by scrolling (onScreenMedia.ts).
+    const stopReread = renewOnReturn(async () => rereadOnScreen())
     const reread = setInterval(() => {
       if (document.visibilityState === 'visible') void loadBlocklist()
     }, BLOCKLIST_REREAD_MS)
@@ -635,6 +652,7 @@ export function useMediaTagSync(client: MatrixClient | null): void {
       client.off(RoomStateEvent.Events, onState)
       client.off(RoomEvent.Timeline, onTimeline)
       stopRenew()
+      stopReread()
       clearInterval(reread)
       // Signed out, or another account: its list must not outlive it, and
       // neither may a read of it still on its way.

@@ -94,7 +94,7 @@ console.log('\n-- the component wires it the way the rule says --')
   check('the line splits the DIFFED list once (a recategorised tag moves as one change)',
     /const diffed = useTagDiff\(tags\)\s*\n\s*const \{ always, folded \} = splitForBubble\(diffed/.test(src))
   check('the live read is triggered from the line when it comes on screen',
-    /if \(onScreen && mediaId\) refreshBooruTags\(mediaId\)/.test(src))
+    /if \(!onScreen \|\| !mediaId\) return\s+refreshBooruTags\(mediaId\)/.test(src))
   check('a chip reads live tags when its popup opens',
     /if \(open && mediaId\) refreshBooruTags\(mediaId\)/.test(src))
   check('the full list is a portal popup, not a panel inside the row', /<AnchoredPopup/.test(src))
