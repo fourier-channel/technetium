@@ -282,12 +282,20 @@ export function exifChunks(fields: ExifText): Chunks {
 
 // Pull the positive-prompt string out of whatever embedding is present.
 export function rawPrompt(chunks: Chunks): string {
+  return promptSource(chunks).prompt
+}
+
+/** The positive prompt and the chunk key it came from ("parameters",
+ *  "prompt", "Comment", "Description"), or both empty. The index records the
+ *  key as the prompt's generator, so it is rawPrompt's own answer, never a
+ *  second copy of its key order. */
+export function promptSource(chunks: Chunks): { key: string; prompt: string } {
   if (typeof chunks.parameters === 'string') {
     const t = chunks.parameters
     const neg = t.indexOf('\nNegative prompt:')
     const steps = t.indexOf('\nSteps:')
     const end = neg >= 0 ? neg : (steps >= 0 ? steps : t.length)
-    return t.slice(0, end).trim()
+    return { key: 'parameters', prompt: t.slice(0, end).trim() }
   }
   if (typeof chunks.prompt === 'string') {
     try {
@@ -304,20 +312,20 @@ export function rawPrompt(chunks: Chunks): string {
       }
       // The longest CLIP text block is almost always the positive prompt.
       texts.sort((a, b) => b.length - a.length)
-      if (texts.length) return texts[0].trim()
+      if (texts.length) return { key: 'prompt', prompt: texts[0].trim() }
     } catch { /* not JSON we understand */ }
   }
   for (const key of ['Comment', 'Description']) {
     if (typeof chunks[key] === 'string') {
       try {
         const c: unknown = JSON.parse(chunks[key])
-        if (isObject(c) && typeof c.prompt === 'string') return c.prompt.trim()
+        if (isObject(c) && typeof c.prompt === 'string') return { key, prompt: c.prompt.trim() }
       } catch {
-        if (key === 'Description') return chunks[key].trim()
+        if (key === 'Description') return { key, prompt: chunks[key].trim() }
       }
     }
   }
-  return ''
+  return { key: '', prompt: '' }
 }
 
 // --- Prompt -> tags ----------------------------------------------------------

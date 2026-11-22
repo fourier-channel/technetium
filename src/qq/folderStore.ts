@@ -16,7 +16,8 @@
 // ---------------------------------------------------------------------------
 
 // The parts of File System Access this uses that TypeScript's DOM library does
-// not declare yet (the permission pair, the picker, async iteration).
+// not declare yet (the permission pair, the picker, async iteration), and the
+// write half the folder index uses (scan.ts writes `.quickqueue/` with it).
 export interface QqDirHandle {
   readonly kind: 'directory'
   readonly name: string
@@ -24,12 +25,23 @@ export interface QqDirHandle {
   queryPermission(opts: { mode: 'read' | 'readwrite' }): Promise<PermissionState>
   requestPermission(opts: { mode: 'read' | 'readwrite' }): Promise<PermissionState>
   values(): AsyncIterable<QqDirHandle | QqFileHandle>
+  getDirectoryHandle(name: string, opts?: { create?: boolean }): Promise<QqDirHandle>
+  getFileHandle(name: string, opts?: { create?: boolean }): Promise<QqFileHandle>
 }
 
 export interface QqFileHandle {
   readonly kind: 'file'
   readonly name: string
   getFile(): Promise<File>
+  createWritable(opts?: { keepExistingData?: boolean }): Promise<QqWritable>
+}
+
+export interface QqWritable {
+  seek(position: number): Promise<void>
+  write(data: Uint8Array): Promise<void>
+  truncate(size: number): Promise<void>
+  close(): Promise<void>
+  abort(): Promise<void>
 }
 
 type Picker = (opts: { id?: string; mode?: 'read' | 'readwrite' }) => Promise<QqDirHandle>
