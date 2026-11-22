@@ -9,7 +9,7 @@ import {
   type Arranged, type ListedEntry, type Permission,
 } from './qqGrid'
 import { thumbFor, cachedThumb } from './thumbs'
-import { FolderScan, INDEX_DIR, storedDeviceId, type ScanPhase, type ScanProgress } from './scan'
+import { FolderScan, INDEX_DIR, STALL_MS, stalled, storedDeviceId, type ScanPhase, type ScanProgress } from './scan'
 import { calendarTotals, scanCalendar, type CalendarRow } from './scanCalendar'
 
 // ---------------------------------------------------------------------------
@@ -83,6 +83,15 @@ export default function QuickQueuePanel() {
   const [showScan, setShowScan] = useState(true)
   const engineRef = useRef<FolderScan | null>(null)
   const scanActive = !!scanRun && !FINISHED.has(scanRun.progress.phase)
+  // The stall watch: time since the engine last reported a step.
+  const lastStepRef = useRef(0)
+  const [idleMs, setIdleMs] = useState(0)
+  const scanPhase = scanRun?.progress.phase
+  useEffect(() => {
+    if (!scanPhase || FINISHED.has(scanPhase)) return
+    const t = setInterval(() => setIdleMs(performance.now() - lastStepRef.current), 5000)
+    return () => clearInterval(t)
+  }, [scanPhase])
 
   const root = roots?.find((r) => r.id === rootId) ?? null
   const dir: QqDirHandle | null = trail.length > 0 ? trail[trail.length - 1] : (root?.handle ?? null)
@@ -204,6 +213,8 @@ export default function QuickQueuePanel() {
       keeper: browserKeeper(target.id),
       saveTo: write === 'granted' ? 'folder' : 'browser',
       onProgress: (p) => {
+        lastStepRef.current = performance.now()
+        setIdleMs(0)
         // The engine reports at most every 200 ms; the calendar is rebuilt at
         // most once a second while reading, and on every change of phase.
         const now = performance.now()
@@ -216,6 +227,8 @@ export default function QuickQueuePanel() {
     })
     engineRef.current?.stop()
     engineRef.current = engine
+    lastStepRef.current = performance.now()
+    setIdleMs(0)
     setShowScan(true)
     setScanRun({ rootId: target.id, rootName: target.name, handle: target.handle, engine, progress: engine.progress(), rows: [], notes })
     void engine.prepare()
@@ -361,6 +374,7 @@ export default function QuickQueuePanel() {
       {scanRun && (
         <ScanStrip
           run={scanRun}
+          stalledMs={stalled(scanRun.progress.phase, idleMs) ? idleMs : null}
           viewing={scanRun.rootId === rootId}
           showing={showScan}
           onToggle={() => setShowScan(!showScan)}
@@ -436,7 +450,8 @@ function scanWords(run: ScanRun): string {
     case 'idle':
       return `Starting a scan of "${run.rootName}"...`
     case 'listing':
-      return `Listing "${run.rootName}": ${counted(p.listed, 'file')} in ${counted(p.folders, 'folder')} so far.`
+      return `Listing "${run.rootName}": ${counted(p.listed, 'file')} in ${counted(p.folders, 'folder')} so far` +
+        (p.listingIn ? `; now in "${p.listingIn}".` : '.')
     case 'indexing':
       return `Reading the index already kept in ${INDEX_DIR}...`
     case 'calibrating':
@@ -467,10 +482,19 @@ function scanWords(run: ScanRun): string {
   }
 }
 
+function stallWords(phase: ScanPhase, ms: number): string {
+  const head = `Nothing has moved for ${duration(ms / 1000)}, so the scan has probably stalled. Stop is recommended`
+  if (phase === 'listing' || phase === 'indexing' || phase === 'calibrating') return `${head}; nothing has been written yet.`
+  return `${head}: it saves what was read once the reads in flight answer. If Stop does not end it, reload the page; ` +
+    'what was saved is kept and the next scan carries on from it.'
+}
+
 function ScanStrip({
-  run, viewing, showing, onToggle, onGo, onPause, onStop, onClose,
+  run, stalledMs, viewing, showing, onToggle, onGo, onPause, onStop, onClose,
 }: {
   run: ScanRun
+  /** Set when the stall watch fires: how long nothing has moved. */
+  stalledMs: number | null
   viewing: boolean
   showing: boolean
   onToggle: () => void
@@ -486,6 +510,13 @@ function ScanStrip({
   return (
     <section className="tc-qq-scan" aria-label={`Scan of ${run.rootName}`} aria-live="polite">
       <p className="tc-qq-scan-words">{scanWords(run)}</p>
+      {p.phase === 'listing' && stalledMs === null && (
+        <p className="tc-qq-note">
+          Listing a big library can take minutes on a phone or tablet. The count moves as pictures are found; if
+          nothing moves for {duration(STALL_MS / 1000)}, this panel says so.
+        </p>
+      )}
+      {stalledMs !== null && <p className="tc-qq-note tc-tone-warn">{stallWords(p.phase, stalledMs)}</p>}
       {run.notes.map((n) => <p key={n} className="tc-qq-note tc-tone-warn">{n}</p>)}
       {/* The four totals sec 7a step 8 names; second reads are the gauge for
           the prefix budget (PREFIX_BYTES), so a wrong budget shows here. */}

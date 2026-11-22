@@ -75,13 +75,17 @@ function errorName(e: unknown): string {
 
 /** Lists the tree under `root`. Hidden entries (`.quickqueue/` among them)
  *  are skipped, as the panel skips them. A permission error ends the listing
- *  (it is the whole tree's); any other error loses one folder, said. */
+ *  (it is the whole tree's); any other error loses one folder, said.
+ *  `onProgress` is called at every entry, not only when a folder is done: one
+ *  big folder can take minutes on a slow device, and a count that waits for
+ *  it reads as a hang. `inFolder` is the folder being listed ('' the root). */
 export async function listTree(
   root: QqDirHandle,
-  onProgress?: (listed: number, folders: number) => void,
+  onProgress?: (listed: number, folders: number, inFolder: string) => void,
   halted?: () => boolean,
+  /** Filled as the listing goes, so a caller can draw it before it ends. */
+  out: Listed = { files: new Map(), folders: new Map(), unlisted: [] },
 ): Promise<Listed> {
-  const out: Listed = { files: new Map(), folders: new Map(), unlisted: [] }
   const stack: [string, QqDirHandle][] = [['', root]]
   while (stack.length) {
     if (halted?.()) break
@@ -89,17 +93,19 @@ export async function listTree(
     let n = 0
     try {
       for await (const h of dir.values()) {
+        if (halted?.()) return out
         if (isHidden(h.name)) continue
         const rel = path ? `${path}/${h.name}` : h.name
         if (h.kind === 'directory') stack.push([rel, h])
-        else if (imageType(h.name)) { out.files.set(rel, h); n++ }
+        else if (imageType(h.name)) { out.files.set(rel, h); out.folders.set(path, ++n) }
+        onProgress?.(out.files.size, out.folders.size, path)
       }
     } catch (e) {
       if (errorName(e) === 'NotAllowedError') throw e
       out.unlisted.push({ path: path || '(the picked folder)', reason: errorName(e) || 'unknown error' })
     }
     out.folders.set(path, n)
-    onProgress?.(out.files.size, out.folders.size)
+    onProgress?.(out.files.size, out.folders.size, path)
   }
   return out
 }
@@ -462,6 +468,8 @@ export interface ScanProgress {
   phase: ScanPhase
   listed: number
   folders: number
+  /** While listing, the folder being listed below the root ('' the root). */
+  listingIn: string
   /** Entries the index held when this scan began, from every device. */
   indexed: number
   adopted: number
@@ -518,13 +526,28 @@ export interface ScanOptions {
   saveTo?: 'folder' | 'browser'
 }
 
+/**
+ * The stall watch (operator 2026-11-22, the same ruling as the pre-upload
+ * check's: warned in advance, and the app watches for a stall, not the
+ * user). In these phases the scan is working and reports every step; this
+ * long with no step means it has probably stalled.
+ */
+export const STALL_MS = 60_000
+const WATCHED: ReadonlySet<ScanPhase> = new Set(['listing', 'indexing', 'calibrating', 'reading', 'pausing'])
+/** True when `idleMs` without a step is a stall in this phase. */
+export function stalled(phase: ScanPhase, idleMs: number): boolean {
+  return WATCHED.has(phase) && idleMs >= STALL_MS
+}
+/** Before Start nothing is written, so Stop ends these at once. */
+const NOTHING_WRITTEN: ReadonlySet<ScanPhase> = new Set(['listing', 'indexing', 'calibrating'])
+
 export const ONE_SCAN_AT_A_TIME =
   'Another tab of this browser is scanning. One scan runs at a time, so two tabs never write the same index file; close that scan first.'
 
 export class FolderScan {
   private readonly o: Required<Omit<ScanOptions, 'onProgress' | 'locks' | 'keeper' | 'saveTo'>> & Pick<ScanOptions, 'onProgress' | 'locks' | 'keeper'>
   private p: ScanProgress = {
-    phase: 'idle', listed: 0, folders: 0, indexed: 0, adopted: 0, moved: 0, gone: 0, toRead: 0, read: 0,
+    phase: 'idle', listed: 0, folders: 0, listingIn: '', indexed: 0, adopted: 0, moved: 0, gone: 0, toRead: 0, read: 0,
     secondReads: 0, unreadable: 0, saved: 0, unsaved: 0, etaSeconds: null, indexBytes: 0, addBytes: 0, problems: [],
   }
   private listed: Listed | null = null
@@ -542,6 +565,10 @@ export class FolderScan {
   private releaseLock: (() => void) | null = null
   /** Per folder: [images listed, indexed now, could not be read]. */
   private perFolder = new Map<string, [number, number, number]>()
+  /** The listing as it grows; the calendar draws from it until the plan
+   *  fills perFolder. */
+  private listing: Listed = { files: new Map(), folders: new Map(), unlisted: [] }
+  private planned = false
   private saveTo: 'folder' | 'browser'
   /** Records the keeper holds that win the merge: moved into the folder first. */
   private keptRecords = new Set<QqiRecord>()
@@ -572,7 +599,9 @@ export class FolderScan {
    *  and how many this scan could not read. */
   folderProgress(): Map<string, FolderCount> {
     const out = new Map<string, FolderCount>()
-    for (const [f, [images, done, failed]] of this.perFolder) out.set(f, { images, done, failed })
+    // Until the plan, a folder is its count so far; nothing is known indexed.
+    if (!this.planned) for (const [f, images] of this.listing.folders) out.set(f, { images, done: 0, failed: 0 })
+    else for (const [f, [images, done, failed]] of this.perFolder) out.set(f, { images, done, failed })
     return out
   }
 
@@ -596,11 +625,12 @@ export class FolderScan {
     }
     try {
       this.set('listing')
-      this.listed = await listTree(this.o.root, (listed, folders) => {
+      this.listed = await listTree(this.o.root, (listed, folders, inFolder) => {
         this.p.listed = listed
         this.p.folders = folders
+        this.p.listingIn = inFolder
         this.emit()
-      }, () => this.stopping())
+      }, () => this.stopping(), this.listing)
       if (this.stopping()) return this.finish('stopped')
       for (const u of this.listed.unlisted) this.p.problems.push(`The folder "${u.path}" could not be listed (${u.reason}); its images are not in this scan.`)
 
@@ -609,6 +639,7 @@ export class FolderScan {
       this.p.problems.push(...index.problems)
       this.p.indexBytes = index.bytes
       const kept = await this.readKept()
+      if (this.stopping()) return this.finish('stopped')
       const segments = kept ? [...index.segments, kept] : index.segments
       this.merged = mergeSegments(segments)
       this.p.indexed = this.merged.size
@@ -639,6 +670,7 @@ export class FolderScan {
         if (this.merged.has(pathKey(path))) c[1]++
         this.perFolder.set(f, c)
       }
+      this.planned = true
 
       if (this.toRead.length) {
         this.set('calibrating')
@@ -649,6 +681,8 @@ export class FolderScan {
       if (this.cursor >= this.toRead.length && !this.pending.length) return this.finish('done')
       return this.set('planned')
     } catch (e) {
+      // Stopped already: whatever failed after that is not this scan's.
+      if (this.stopping()) return this.finish('stopped')
       this.p.problems.push(failureWords(e))
       return this.finish('failed')
     }
@@ -687,7 +721,15 @@ export class FolderScan {
    */
   stop(): void {
     this.halt = 'stop'
-    if (this.p.phase === 'planned') {
+    if (NOTHING_WRITTEN.has(this.p.phase)) {
+      // At once, not when the step in flight answers: a stalled listing may
+      // never answer, and Stop is what the stall watch recommends. Nothing
+      // is written before Start, and prepare() checks for the stop after
+      // every step, so the step's late answer changes nothing.
+      this.pending = []
+      this.p.unsaved = 0
+      this.finish('stopped')
+    } else if (this.p.phase === 'planned') {
       this.pending = []
       this.p.unsaved = 0
       this.finish('stopped')

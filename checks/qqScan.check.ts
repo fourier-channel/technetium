@@ -20,7 +20,7 @@ import { embeddedChunks, promptSource, promptToTags } from '../src/qq/promptTags
 import { encodeSegment, mergeSegments, readSegment, segmentName, PARSER_VERSION, type QqiFile, type SegmentRead } from '../src/qq/qqi.ts'
 import {
   FolderScan, INDEX_DIR, KEPT_IN_BROWSER, KEPT_LABEL, listTree, newestFirst, planScan, prefixSuffices, readEntry, readIndex,
-  ONE_SCAN_AT_A_TIME, type Merged,
+  ONE_SCAN_AT_A_TIME, STALL_MS, stalled, type Merged,
 } from '../src/qq/scan.ts'
 import type { Keeper, QqDirHandle, QqFileHandle, QqWritable } from '../src/qq/folderStore.ts'
 
@@ -256,6 +256,29 @@ console.log('== listing')
   let threw = ''
   try { await listTree(asRoot(root)) } catch (e) { threw = (e as Error).name }
   check('a permission error ends the listing', threw === 'NotAllowedError')
+}
+
+console.log('== listing says where it is before a folder ends')
+{
+  // Found on the preview 2026-11-22: a big library sat at "0 files in 0
+  // folders" for a minute, because the count moved only when a whole folder
+  // was done. It reads as a hang.
+  const root = new FakeDir('root')
+  for (let i = 0; i < 5; i++) put(root, `big/${i}.png`, new Uint8Array(4))
+  const calls: [number, number, string][] = []
+  await listTree(asRoot(root), (l, f, at) => calls.push([l, f, at]))
+  const inBig = calls.filter(([, , at]) => at === 'big')
+  check('the count rises inside a folder, before it is done', J(inBig.map(([l]) => l).slice(0, 5)) === J([1, 2, 3, 4, 5]), calls)
+  check('the folder being listed is named', calls.some(([, , at]) => at === 'big') && calls[0][2] === '', calls)
+
+  const seen: { listed: number; folders: number; at: string }[] = []
+  let t = 0
+  const s = new FolderScan({
+    root: asRoot(root), deviceId: 'dev-listing', locks: null, calibrate: 0, now: () => (t += 1000),
+    onProgress: (p) => { if (p.phase === 'listing') seen.push({ listed: p.listed, folders: p.folders, at: p.listingIn }) },
+  })
+  await s.prepare()
+  check('the scan reports files inside a folder not yet done', seen.some((x) => x.listed > 0 && x.listed < 5 && x.at === 'big'), seen)
 }
 
 // --- the plan ------------------------------------------------------------------------------
@@ -679,5 +702,92 @@ console.log('== one scan at a time')
   const p = await scan(library(), { locks }).prepare()
   check('a second scan refuses, and says why', p.phase === 'failed' && p.problems.includes(ONE_SCAN_AT_A_TIME), p)
 }
+
+console.log('== the calendar draws folders while they are listed')
+{
+  // Found on the preview 2026-11-22: cells appeared only after the whole
+  // tree was listed and the index read, so a big library showed none.
+  const root = new FakeDir('root')
+  for (let i = 0; i < 3; i++) put(root, `a/${i}.png`, new Uint8Array(4))
+  for (let i = 0; i < 4; i++) put(root, `b/${i}.png`, new Uint8Array(4))
+  let t = 0
+  const during: string[] = []
+  const s: FolderScan = scan(root, {
+    calibrate: 0, now: () => (t += 1000),
+    onProgress: (p) => {
+      if (p.phase !== 'listing') return
+      const f = s.folderProgress()
+      during.push(J([...f].map(([k, c]) => [k, c.images, c.done]).sort()))
+    },
+  })
+  await s.prepare()
+  check('a folder has a cell before the listing ends', during.some((x) => x.includes('"b"') && !x.includes('"a"')) || during.some((x) => x.includes('"a"') && !x.includes('"b"')), during)
+  check('a cell grows with its count while listed', during.some((x) => x.includes('["b",2,0]') || x.includes('["a",2,0]')), during)
+  const end = s.folderProgress()
+  check('after the plan the counts are the plan\'s', end.get('a')?.images === 3 && end.get('b')?.images === 4, [...end])
+}
+
+console.log('== Stop answers while a listing is wedged')
+{
+  // A folder whose listing never answers until released (a stalled share).
+  const root = new FakeDir('root')
+  put(root, 'a.png', pngWith('a'))
+  const wedged = new FakeDir('wedged')
+  let release: (e?: Error) => void = () => {}
+  const gate = new Promise<void>((res, rej) => { release = (e) => (e ? rej(e) : res()) })
+  const late = new FakeFile('late.png', new Uint8Array(4))
+  wedged.values = async function* () { await gate; yield late as unknown as QqFileHandle }
+  root.children.set('wedged', wedged)
+  const k = new FakeKeeper()
+  k.bytes = new Uint8Array(0)
+  let last = ''
+  resetCounts()
+  const s = scan(root, { keeper: k, calibrate: 0, onProgress: (p) => { last = p.phase } })
+  const done = s.prepare()
+  await new Promise((r) => setTimeout(r, 20))
+  check('the listing is wedged', last === 'listing', last)
+  s.stop()
+  check('Stop ends it at once', s.progress().phase === 'stopped' && last === 'stopped', s.progress().phase)
+  release()
+  const p = await done
+  check('the late answer changes nothing', p.phase === 'stopped' && counts.writes === 0 && k.writes === 0 && k.drops === 0, { p: p.phase, w: counts.writes, k })
+  check('the listing stops counting at the Stop, mid-folder', p.listed === 1, p.listed)
+
+  const s2 = scan(root, { calibrate: 0 })
+  const g2 = new Promise<void>((_, rej) => { release = (e) => rej(e) })
+  wedged.values = async function* () { await g2; yield* [] as never[] }
+  const done2 = s2.prepare()
+  await new Promise((r) => setTimeout(r, 20))
+  s2.stop()
+  release(domError('NotAllowedError'))
+  const p2 = await done2
+  check('a late failure after Stop stays stopped and is not said', p2.phase === 'stopped' && p2.problems.length === 0, p2)
+}
+
+console.log('== Stop answers while the kept index is being read')
+{
+  const root = library()
+  const k = new FakeKeeper()
+  let release: () => void = () => {}
+  const gate = new Promise<void>((res) => { release = res })
+  k.read = async () => { await gate; return null }
+  const phases: string[] = []
+  let stoppedAt = -1
+  const s = scan(root, { keeper: k, calibrate: 0, onProgress: (p) => { phases.push(p.phase) } })
+  const done = s.prepare()
+  await new Promise((r) => setTimeout(r, 20))
+  check('the scan waits on the keeper', phases[phases.length - 1] === 'indexing', phases)
+  s.stop()
+  stoppedAt = phases.length
+  release()
+  await done
+  const after = phases.slice(stoppedAt)
+  check('after Stop no other phase is reported', after.length > 0 && after.every((x) => x === 'stopped'), phases)
+}
+
+console.log('== the stall watch')
+check('a minute with no step while listing is a stall', stalled('listing', STALL_MS) && !stalled('listing', STALL_MS - 1))
+check('reading is watched', stalled('reading', STALL_MS) && stalled('pausing', STALL_MS) && stalled('calibrating', STALL_MS) && stalled('indexing', STALL_MS))
+check('waiting on the user is never a stall', !stalled('planned', 3_600_000) && !stalled('paused', 3_600_000) && !stalled('done', 3_600_000) && !stalled('stopped', 3_600_000))
 
 process.exit(failures ? 1 : 0)
