@@ -62,8 +62,9 @@ Three consequences, and they are the point:
 - **Storage does not multiply.** A picture posted in a room and mirrored to the
   booru is stored once, not twice, and the two can never disagree about what it
   is.
-- **A leaked URL grants nothing.** Access is decided per request, before the
-  redirect is issued, and the signed URL that results is short-lived.
+- **A leaked URL grants nothing.** Access is decided per request, before any
+  byte is sent, and the only signed URL involved is short-lived and never
+  leaves Cloudflare's edge.
 
 Permission is enforced once, in one place -- fourier-auth, reading the facts
 Synapse holds about rooms and membership -- rather than being re-implemented
@@ -96,13 +97,18 @@ viewer is joined. Synapse's HTTP API is used only to validate the token, and
 its authenticated-media endpoint is not used at all, because it authenticates
 the token without enforcing room membership.
 
-If the answer is yes, the caller gets a short-lived presigned R2 URL.
-**No media byte passes through this service.** It decides and steps out of the
-way. Since 2026-09-06 a Cloudflare Worker in front of both public hosts asks
-this service for the decision, caches an allow at the edge for four minutes
-(never a denial), and streams the object from R2 itself -- so the bytes come
-from Cloudflare's edge, not from one host in one datacentre, and a viewer
-who leaves a room can read for at most four more minutes.
+If the answer is yes, a short-lived presigned R2 URL is made -- and released
+only to the Cloudflare Worker in front of both public hosts, which proves it is
+the Worker with a shared secret. Every other caller gets the decision and no
+URL, so the presigned URL is never a reader's to leak. **No media byte passes
+through this service.** It decides and steps out of the way. The Worker asks
+for the decision, streams the object from R2 itself, and caches an allow (never
+a denial) for 150 seconds, or 60 for a booru image or a signed-out reader; the
+gate keeps its own allow for 120. So the bytes come from Cloudflare's edge, not
+from one host in one datacentre, and an image that has just been jailed or
+whose message was deleted stays readable for about three minutes. A viewer's
+joined rooms are cached for five, so after leaving a room its images can stay
+readable for up to about seven and a half.
 
 An earlier version proxied from Synapse whenever R2 could not answer. That was
 deleted rather than switched off, for two reasons: it put media bytes through
@@ -134,8 +140,8 @@ Conflating them would have meant either inventing a fake room or weakening the
 real check.
 
 **Why this is unusual.** Most sites check permission when the page is built.
-This checks per request, before any URL is handed out, and the URL it hands out
-expires -- so a leaked link is not a leak.
+This checks per request, and no reader is ever handed a URL that opens the
+object by itself -- so a leaked link is not a leak.
 
 ---
 
@@ -151,7 +157,10 @@ tags, creates the booru post with those tags and an artist tag minted from the
 poster's Matrix name, and writes the tags back into the room as a state event
 keyed by the image's MXC URI -- ready for a client to render and edit. Prompt
 tags scraped from AI-image metadata stay private: they reach neither the
-booru's tag string nor the room. When the bot is invited into a room it walks
+booru's tag string nor the room. Before anything is posted, the generation
+data itself (prompts, settings, workflows) is stripped from the bytes without
+touching the picture, and an image whose generation data cannot be removed is
+not posted at all. When the bot is invited into a room it walks
 the room's history once and catches up.
 
 **The reasoning.** The MXC URI is the link between the two systems. Tags live in
@@ -251,9 +260,11 @@ one process, so capacity is more instances rather than more threads. It was
 149 seconds an image before a wrapper fixed a CPU pathology: the model
 hardcodes bfloat16, correct on the GPU it was built for and 75x slower than
 float32 on a CPU with no bf16 hardware path. The loader is wrapped, not
-edited, so upstream fixes keep working. No box in the suite has a GPU; a
-proposal to run hydra as a post-hoc batch worker on a rented one is in canon,
-unruled.
+edited, so upstream fixes keep working. The serving box has no GPU; the
+tagging service may run as several copies of one fixed model, the serving
+box's and a GPU copy on a workstation (devwin's 3090), each an endpoint of the
+same route. A proposal to run hydra as a post-hoc batch worker on a rented GPU
+is in canon, unruled.
 
 **Routes serve both ends of the backlog.** A tagger pointed only at new images
 never reaches old ones while new work keeps arriving; pointed only at old ones
@@ -342,7 +353,7 @@ model, a human editor, or is metadata -- and a tag can be several at once. The
 UI does not colour tags by which model produced them; provenance is recorded
 because it is true, not because it should be decorated.
 
-For the operational detail of all twelve gates, see `docs/CONTENT_GATING.md`
+For the operational detail of all thirteen gates, numbered 0 to 12, see `docs/CONTENT_GATING.md`
 in chanbooru, published beside this page.
 
 ---
@@ -400,9 +411,12 @@ They are easy to invert and expensive to leave inverted. These generated pages
 had green as the body text colour with orange on every heading, every link and
 every inline name, which spent both colours on every sentence and left neither
 able to mark anything. The ground underneath is now formant's warm dark grey
-rather than black, with a vignette falling to black at the edge of the viewport
--- the same ground Technetium sits on, so moving between the client and the
-pages describing it no longer changes the room.
+rather than black, flat to the edge -- the same ground Technetium sits on, so
+moving between the client and the pages describing it no longer changes the
+room. Since 2026-11-22 these pages also take their type and motion from
+formant: IBM Plex, served from this origin, and two animations that end -- a
+trace drawing itself in and a mark arriving. A reader whose system asks for a
+light page gets formant's warm paper ramp with the same roles.
 
 The tokens are delivered to each surface rather than copied. chanbooru is the
 exception and holds itself to them by ASSERTION instead: its tokens live inside

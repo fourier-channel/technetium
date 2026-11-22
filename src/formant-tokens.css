@@ -71,12 +71,12 @@
    * different semantic rather than a mistake. The names stay separate; the
    * values now agree, and the ground is re-cut to the same hue (128) so the
    * pill does not sit a pure green on a minty dark. */
-  --mod-creator-fg:     #0ce92a;
+  --mod-creator-fg:     #3fa34d;
   --mod-creator-bg:     #0d2a14;
   --mod-auto-fg:        #ff9d3c;
   --mod-auto-bg:        #2c1c0c;
   --mod-both-fg:        #ff9d3c;
-  --mod-both-outline:   #0ce92a;
+  --mod-both-outline:   #3fa34d;
   --mod-pending-fg:     #b7b3a8;
   --mod-meta-fg:        #8f8b80;
 
@@ -129,7 +129,7 @@
   --mod-tag-ink:           #ffffff;
   --mod-tag-artist-fg:     #ff6b7a;
   --mod-tag-copyright-fg:  #c78bff;
-  --mod-tag-character-fg:  #0ce92a;
+  --mod-tag-character-fg:  #3fa34d;
   --mod-tag-general-fg:    var(--mod-auto-fg);
   --mod-tag-meta-fg:       #c9a15a;
 
@@ -151,7 +151,7 @@
    * opinions about one colour, and a creator's ACTIVITY lamp (--mod-lamp-live
    * below) is lit with this token on the same pill. The line is re-cut to the
    * same hue. */
-  --mod-ok-fg:          #0ce92a;
+  --mod-ok-fg:          #3fa34d;
   --mod-ok-line:        #1f4026;
   --mod-warn-fg:        #f0b429;
   --mod-warn-line:      #3a3424;
@@ -216,11 +216,17 @@
    *
    * WHY NOT THE MARK'S VALUE ITSELF. #038403 is lightness 26.5% -- a solid
    * fill on white-ish paper, not ink on a dark ground. As text on
-   * --mod-surface it measures 3.6:1 -- under the 4.5:1 that body copy needs,
-   * and the old page green #00b200 was only 6.1:1. The hue and the
-   * saturation are the brand; the lightness is the medium. So this is the
-   * mark's character carried to text weight: hue 128, 90% saturation,
-   * lightness 48%, which measures 10.5:1 on --mod-surface.
+   * --mod-surface it measures 3.6:1 -- under the 4.5:1 that body copy needs.
+   * The hue is the brand; the saturation and lightness are the medium.
+   *
+   * THE VALUE IS #3fa34d, operator 2026-11-22, reviewing the content gating
+   * page whose "passes" green it was: "I'm kinda liking the more muted tone
+   * tbh. less florescent. Let's try making that the brand green and see how
+   * it looks." Hue 128 like the mark, saturation 44%, lightness 44%: 5.4:1 on
+   * --mod-surface and 4.9:1 on --mod-surface-2, both over 4.5:1. The value
+   * before it, #0ce92a (same hue at 90% saturation, 10.5:1), read as a lamp
+   * rather than ink. Every token below that holds the brand green moved with
+   * it, for the reason the provenance block gives: a reader sees values.
    *
    * WHAT DID NOT MOVE THAT DAY, and why the names were kept separate:
    * --mod-creator-fg, --mod-tag-character-fg and --mod-ok-fg kept the mint,
@@ -232,7 +238,7 @@
    * the mint was the green. The mint survives where the operator said it
    * belonged, "as a glow or a stroke": nowhere yet, and a token for it is
    * extracted on the second use, not the first. */
-  --mod-accent:         #0ce92a;
+  --mod-accent:         #3fa34d;
 
   /* --- depth ------------------------------------------------------------ */
   /* THE SHADE THAT MAKES A HEADER CHROME AND A PAGE A PAGE.
@@ -420,7 +426,7 @@
    * file permits (the lamp incident: an infinite box-shadow idled a core at
    * 45%). Under prefers-reduced-motion it holds still as a half-and-half. */
   --mod-lamp-spectrum:     var(--mod-auto-fg);
-  --mod-lamp-hydra:        #0ce92a;
+  --mod-lamp-hydra:        #3fa34d;
   --mod-lamp-manual:       #ffffff;
   --mod-lamp-swirl:        conic-gradient(var(--mod-lamp-hydra) 0 50%, var(--mod-lamp-spectrum) 50% 100%);
   --mod-lamp-swirl-period: 2.4s;
@@ -443,20 +449,115 @@
   /* A system stack on purpose: these render at 11-13px in dense grids, and a
    * webfont buys nothing there while costing a flash. */
   --mod-mono:           ui-monospace, "SFMono-Regular", "Menlo", monospace;
-  /* THE HOUSE FACE: Hammersmith One, the front page's, and the body and
-   * headings of every public 41chan.net page. It was named by hand on each of
-   * those pages and in the docs renderer and never extracted here -- an
-   * omission, not a ruling (operator 2026-10-29: "Isn't hammersmith one the
-   * font used on the front page? Why would it not be a token.").
+  /* THE HOUSE FACE: IBM Plex Sans, the body and headings of every public
+   * 41chan.net page, with Plex Mono as its data voice (--mod-face-data,
+   * below). Operator 2026-11-22, choosing the content gating page's faces
+   * for the whole site: "HammersmithOne isn't near and dear to me. Plex
+   * seems to fit what I've got going on a bit better."
    *
    * The token names the FAMILY and no bytes. The font is self-hosted per
-   * origin (SIL OFL 1.1, /fonts/hammersmith-one-latin.woff2), because it was
-   * once loaded from Google and sent every visitor's address there before the
-   * page drew; a url() in this file would resolve on no origin but one. So a
-   * surface that uses it declares its own @font-face over its own copy.
-   * It has ONE weight, 400; anything heavier is the browser's synthetic bold
-   * (the front page's title asks for 700 and gets exactly that). */
-  --mod-face:           "Hammersmith One", sans-serif;
+   * origin (SIL OFL 1.1, /fonts/ibm-plex-sans-latin-<weight>-<style>.woff2),
+   * because a webfont once loaded from Google sent every visitor's address
+   * there before the page drew; a url() in this file would resolve on no
+   * origin but one. So a surface that uses it declares its own @font-face
+   * over its own copy: 400, 400 italic and 600 for Sans; 500 and 600 for
+   * Mono. */
+  --mod-face:           "IBM Plex Sans", system-ui, sans-serif;
+
+  /* --- instrument ------------------------------------------------------- */
+  /* THE STRUCTURED-EXPLANATION VOCABULARY. Extracted from 41chan.net's
+   * content gating page (fourier-domain assets/content-gating/page.css) on its
+   * second use, when the operator asked for it across the public site
+   * (2026-11-22: "This is the vibe I want for the site. Everything
+   * structured, readable ... smooth animations. coherent interactive
+   * diagrams with complete explanations.").
+   *
+   * WHAT IS NOT HERE, ON PURPOSE. No greys and no state colours. The page
+   * typed its own ramp (#0f110e .. #e5e7df, a cool green cast); the operator
+   * ruled the same day "use Technetium's slightly warmer greys", which is the
+   * surface/line/ink ramp at the top of this file, the one Technetium wears.
+   * Its states map onto tokens that already exist: passes is --mod-ok-fg
+   * (the page's #3fa34d, which became the brand green the same day),
+   * passes-with-part-hidden is --mod-warn-fg (the page's #f0b429 was already
+   * that value), a stop is --mod-alarm-fg (one per path: a gate after the
+   * first "no" is never asked), and the highlight is --mod-active-fg, the
+   * "look here first" orange. Only what had no name yet is named below. */
+
+  /* The data face. --mod-face (Plex Sans) reads at 14-15px in long prose;
+   * Plex Mono carries every title, label, number and code -- the
+   * instrument's "this is data" voice. Family only, as with --mod-face. */
+  --mod-face-data:      "IBM Plex Mono", ui-monospace, monospace;
+
+  /* Type scale, in the order a reader meets it. */
+  --mod-type-title:     600 1.625rem/1.1 var(--mod-face-data);
+  --mod-type-head:      600 1.3125rem/1.2 var(--mod-face-data);
+  --mod-type-text:      400 0.9375rem/1.5 var(--mod-face);
+  --mod-type-prose:     400 0.90625rem/1.62 var(--mod-face);
+  --mod-type-side:      400 0.84375rem/1.55 var(--mod-face);
+  --mod-type-label:     600 0.6875rem/1.3 var(--mod-face-data);
+  --mod-type-chip:      600 0.71875rem/1.5 var(--mod-face-data);
+  --mod-type-readout:   600 1.5rem/1.1 var(--mod-face-data);
+  --mod-type-index:     600 2.25rem/1 var(--mod-face-data);
+  /* A section label is uppercase and tracked: it names a group, it is not
+   * read as a sentence. */
+  --mod-label-track:    0.14em;
+  --mod-prose-measure:  70ch;
+
+  /* Shape. A control (a pill you press) is tighter than the panel it sits
+   * in; a card is --mod-radius and carries its state on a 4px left edge. */
+  --mod-radius-control: 8px;
+  --mod-radius-panel:   12px;
+  --mod-edge-card:      4px;
+  --mod-edge-flag:      3px;
+  --mod-gap-tight:      0.625rem;
+  --mod-gap-wide:       1.75rem;
+
+  /* The diagram's ground: a faint grid, ink at 5%, one cell per step. */
+  --mod-grid-line:      rgba(232, 230, 224, 0.05);
+  --mod-grid-step:      24px;
+  /* The highlight that ties a diagram element to its explanation: the
+   * active orange at 14% under, a 1px ring of it around. */
+  --mod-hl-bg:          rgba(255, 157, 60, 0.14);
+  --mod-hl-ring:        0 0 0 1px var(--mod-active-fg);
+
+  /* Motion. Every one of these ENDS: a transition or a forwards animation,
+   * never an infinite one (an infinite animation costs a core at idle). A
+   * control answers in 0.12s, a highlight settles in 0.15s, a diagram stroke
+   * draws in 0.28s and each next stroke starts 28ms after the last, so a path
+   * reads as travelled, in order. */
+  --mod-ease:           ease-out;
+  --mod-dur-control:    0.12s;
+  --mod-dur-settle:     0.15s;
+  --mod-dur-draw:       0.28s;
+  --mod-draw-stagger:   28ms;
+
+  /* --- paper ------------------------------------------------------------ */
+  /* THE WARM LIGHT RAMP. Operator 2026-11-22, asked whether the public site
+   * goes dark-only or follows the reader: "A warm light ramp might not
+   * hurt." The surface/line/ink ramp above is a dark ramp and had no light
+   * counterpart anywhere; this is it, for a page that follows
+   * prefers-color-scheme. A dark-only surface (Technetium) never reads it.
+   *
+   * Derived from the content gating page's own light theme, re-cut to the
+   * warm cast of the dark ramp (its greys leaned green). The states darken
+   * to stay ink on paper: every one below is over 4.5:1 on --mod-paper,
+   * except --mod-paper-ink-faint (4.1:1), which is for labels and rules,
+   * not sentences. Same names, same meanings as the dark tokens they stand
+   * in for: ok/warn/alarm/active, and the brand green is --mod-paper-ok. */
+  --mod-paper:              #f4f2ec;
+  --mod-paper-2:            #fbfaf6;
+  --mod-paper-3:            #eeebe3;
+  --mod-paper-line:         #dad6cb;
+  --mod-paper-line-strong:  #bcb7ab;
+  --mod-paper-ink:          #1d1c18;
+  --mod-paper-ink-dim:      #67635a;
+  --mod-paper-ink-faint:    #7a756a;
+  --mod-paper-ok:           #237a2f;
+  --mod-paper-warn:         #8a6000;
+  --mod-paper-alarm:        #c42f22;
+  --mod-paper-active:       #a8440a;
+  --mod-paper-hl-bg:        rgba(168, 68, 10, 0.12);
+  --mod-paper-grid-line:    rgba(29, 28, 24, 0.055);
 }
 
 /* The sweep's motion: the gradient layer crosses the element once per period.
@@ -466,10 +567,24 @@
   100% { transform: translateX(40%); }
 }
 
+/* A diagram stroke draws itself once: the consumer sets pathLength="1",
+   stroke-dasharray 1 and stroke-dashoffset 1, then runs this forwards. */
+@keyframes mod-draw {
+  to { stroke-dashoffset: 0; }
+}
+/* What is not a stroke -- a node, a dotted run, an end mark -- fades in once. */
+@keyframes mod-appear {
+  from { opacity: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     --mod-raise-scale:  1;
     --mod-sweep-period: 0s;
+    --mod-dur-control:  0s;
+    --mod-dur-settle:   0s;
+    --mod-dur-draw:     0s;
+    --mod-draw-stagger: 0ms;
   }
 }
 

@@ -1,7 +1,7 @@
 {
   "build_stamp": null,
-  "hydrated_at": "2026-10-29T23:55:03Z",
-  "hydrated_hash": "sha256c:932afd7c6b533bc58fcaed0dbfff46ecdfb4888dcce0a401a1b16d3cdb8e1bd6",
+  "hydrated_at": "2026-11-22T03:58:37Z",
+  "hydrated_hash": "sha256c:3db62d1e421e39c1f572dca45a78159e3820253b83c26114f5f548c7d4461749",
   "pinned": null,
   "source": "coherence://fourier-formant/tokens.css"
 }
