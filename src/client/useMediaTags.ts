@@ -130,6 +130,16 @@ onBlocklistChanged(() => {
 // The timer stays for an edit made in another tab.
 export const BLOCKLIST_REREAD_MS = 2 * 60_000
 
+// THE PICTURES ON SCREEN ARE ASKED AGAIN EVERY MINUTE while the tab is
+// visible (operator, 2026-11-22: "Misc tag changes can be on the 60s timer
+// -- jails and sensitive tags should be pushes"). An ordinary retag made by
+// someone else sends nothing, so this timer is how a picture that never
+// leaves the screen learns of it. A jail, a deletion or a rating change is
+// pushed instead: the booru tells the tunnel, the tunnel rewrites the
+// picture's tag state in its rooms, and ingestEvent reads it at once. Should
+// a push be lost, this timer still catches the change within the minute.
+export const ON_SCREEN_REREAD_MS = 60_000
+
 // Each rule Technetium cannot apply is said ONCE, not on every re-read: a
 // report every two minutes about the same rule is noise that buries the next
 // real fault.
@@ -633,13 +643,16 @@ export function useMediaTagSync(client: MatrixClient | null): void {
     void loadBlocklist()
     const stopRenew = renewOnReturn(loadBlocklist)
     // And the pictures on screen, on the same return and at most as often
-    // (once a minute): a post jailed or retagged in another tab sends this
-    // window nothing, and a picture that never left the screen is never
-    // asked about by scrolling (onScreenMedia.ts).
+    // (once a minute), and on their own timer (ON_SCREEN_REREAD_MS): a
+    // picture that never left the screen is never asked about by scrolling
+    // (onScreenMedia.ts).
     const stopReread = renewOnReturn(async () => rereadOnScreen())
     const reread = setInterval(() => {
       if (document.visibilityState === 'visible') void loadBlocklist()
     }, BLOCKLIST_REREAD_MS)
+    const rereadPictures = setInterval(() => {
+      if (document.visibilityState === 'visible') rereadOnScreen()
+    }, ON_SCREEN_REREAD_MS)
 
     // Both channels: state writes that sync surfaces as state, AND the same
     // events arriving down the timeline (the only path that currently fires,
@@ -654,6 +667,7 @@ export function useMediaTagSync(client: MatrixClient | null): void {
       stopRenew()
       stopReread()
       clearInterval(reread)
+      clearInterval(rereadPictures)
       // Signed out, or another account: its list must not outlive it, and
       // neither may a read of it still on its way.
       clearBlocklist()
