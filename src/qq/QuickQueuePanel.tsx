@@ -449,9 +449,15 @@ function scanWords(run: ScanRun): string {
   switch (p.phase) {
     case 'idle':
       return `Starting a scan of "${run.rootName}"...`
-    case 'listing':
-      return `Listing "${run.rootName}": ${counted(p.listed, 'file')} in ${counted(p.folders, 'folder')} so far` +
+    case 'listing': {
+      const where = `Listing "${run.rootName}": ${counted(p.listed, 'file')} in ${counted(p.folders, 'folder')} so far` +
         (p.listingIn ? `; now in "${p.listingIn}".` : '.')
+      if (!p.startable) return where
+      // Calibrated: the cost of what is listed so far, and Start may go now.
+      return `${where} ${counted(left, 'picture')} to read so far` +
+        (eta ? `, about ${eta} on this device` : '') +
+        '. Start now and the reads keep pace with the listing. Nothing is written until you press Start.'
+    }
     case 'indexing':
       return `Reading the index already kept in ${INDEX_DIR}...`
     case 'calibrating':
@@ -463,6 +469,11 @@ function scanWords(run: ScanRun): string {
         `. The index grows by about ${size(p.addBytes)}${p.indexBytes ? `; it is ${size(p.indexBytes)} now` : ''}. ` +
         'Nothing is written until you press Start.'
     case 'reading':
+      if (!p.listingDone) {
+        return `Reading "${run.rootName}", newest first, while the listing goes on ` +
+          `(${counted(p.listed, 'file')} in ${counted(p.folders, 'folder')} so far)` +
+          (eta ? `: about ${eta} for what is listed so far.` : '.')
+      }
       return `Reading "${run.rootName}", newest first${eta ? `: about ${eta} left` : ''}.`
     case 'pausing':
       return 'Pausing once the reads in flight finish...'
@@ -470,7 +481,8 @@ function scanWords(run: ScanRun): string {
       if (!left && p.unsaved) {
         return `Read to the end, but ${counted(p.unsaved, 'entry', 'entries')} could not be saved into the folder; the problems say why. Resume tries again.`
       }
-      return `Paused with ${counted(left, 'picture')} to read. Resume carries on from there.`
+      return `Paused with ${counted(left, 'picture')} to read${p.listingDone ? '' : ' so far; the listing goes on'}. ` +
+        'Resume carries on from there.'
     case 'done':
       return `Scan of "${run.rootName}" finished: ${counted(p.read, 'picture')} read, ${counted(p.adopted, 'picture')} already indexed.`
     case 'stopped':
@@ -504,7 +516,7 @@ function ScanStrip({
   onClose: () => void
 }) {
   const p = run.progress
-  const planned = !['idle', 'listing', 'indexing', 'calibrating'].includes(p.phase)
+  const planned = p.startable || !['idle', 'listing', 'indexing', 'calibrating'].includes(p.phase)
   const left = Math.max(0, p.toRead - p.read)
   const num = (n: number) => (planned ? n.toLocaleString() : '-')
   return (
@@ -527,7 +539,7 @@ function ScanStrip({
         <span>Second reads <b>{num(p.secondReads)}</b></span>
       </p>
       <div className="tc-qq-scan-actions">
-        {p.phase === 'planned' && <button type="button" className="tc-pill" onClick={onGo}>Start</button>}
+        {p.startable && <button type="button" className="tc-pill" onClick={onGo}>Start</button>}
         {p.phase === 'paused' && <button type="button" className="tc-pill" onClick={onGo}>Resume</button>}
         {(p.phase === 'reading' || p.phase === 'pausing') && (
           <button type="button" className="tc-pill" onClick={onPause} disabled={p.phase === 'pausing'}>Pause</button>

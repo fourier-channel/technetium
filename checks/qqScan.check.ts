@@ -20,7 +20,7 @@ import { embeddedChunks, promptSource, promptToTags } from '../src/qq/promptTags
 import { encodeSegment, mergeSegments, readSegment, segmentName, PARSER_VERSION, type QqiFile, type SegmentRead } from '../src/qq/qqi.ts'
 import {
   FolderScan, INDEX_DIR, KEPT_IN_BROWSER, KEPT_LABEL, listTree, newestFirst, planScan, prefixSuffices, readEntry, readIndex,
-  ONE_SCAN_AT_A_TIME, STALL_MS, stalled, type Merged,
+  ONE_SCAN_AT_A_TIME, PlanAsListed, STALL_MS, stalled, type Merged,
 } from '../src/qq/scan.ts'
 import type { Keeper, QqDirHandle, QqFileHandle, QqWritable } from '../src/qq/folderStore.ts'
 
@@ -266,7 +266,7 @@ console.log('== listing says where it is before a folder ends')
   const root = new FakeDir('root')
   for (let i = 0; i < 5; i++) put(root, `big/${i}.png`, new Uint8Array(4))
   const calls: [number, number, string][] = []
-  await listTree(asRoot(root), (l, f, at) => calls.push([l, f, at]))
+  await listTree(asRoot(root), { onProgress: (l, f, at) => calls.push([l, f, at]) })
   const inBig = calls.filter(([, , at]) => at === 'big')
   check('the count rises inside a folder, before it is done', J(inBig.map(([l]) => l).slice(0, 5)) === J([1, 2, 3, 4, 5]), calls)
   check('the folder being listed is named', calls.some(([, , at]) => at === 'big') && calls[0][2] === '', calls)
@@ -784,6 +784,251 @@ console.log('== Stop answers while the kept index is being read')
   const after = phases.slice(stoppedAt)
   check('after Stop no other phase is reported', after.length > 0 && after.every((x) => x === 'stopped'), phases)
 }
+
+// --- the overlap: index first, newest folders first, Start while listing ------------------
+
+/** Polls until `cond` holds; throws past the deadline rather than hanging the run. */
+async function until(cond: () => boolean, what: string, ms = 3000) {
+  const end = Date.now() + ms
+  while (!cond()) {
+    if (Date.now() > end) throw new Error('timed out waiting for ' + what)
+    await new Promise((r) => setTimeout(r, 5))
+  }
+}
+/** Runs a check block that awaits the engine: a throw or a hang is a FAIL that
+ *  names the block, not a crash with no verdict. */
+async function guarded(name: string, body: () => Promise<void>, ms = 5000) {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const late = new Promise<string>((res) => { timer = setTimeout(() => res('hung for ' + ms + ' ms'), ms) })
+  const r = await Promise.race([body().then(() => null, (e: Error) => 'threw: ' + e.message), late])
+  clearTimeout(timer)
+  if (r) check(name + ': ran to the end', false, r)
+}
+/** A folder whose listing answers only when released; `release(err)` fails it. */
+function wedge(root: FakeDir, name: string, file = 'late.png') {
+  const d = new FakeDir(name)
+  let release: (e?: Error) => void = () => {}
+  const gate = new Promise<void>((res, rej) => { release = (e) => (e ? rej(e) : res()) })
+  const late = new FakeFile(file, pngWith('late'))
+  d.values = async function* () { await gate; yield late as unknown as QqFileHandle }
+  root.children.set(name, d)
+  return { release: (e?: Error) => release(e) }
+}
+
+console.log('== the listing walks newest folders first and releases each whole')
+{
+  const root = new FakeDir('root')
+  const paths = ['2026/11/22/b.png', '2026/11/22/a.png', '2026/11/21/x.png', '2026/loose.png', '2025/12/01/y.png', 'top.png', '2026/11/22/deep/z.png']
+  for (const p of paths) put(root, p, new Uint8Array(4))
+  const seen: string[] = []
+  const released: string[] = []
+  await listTree(asRoot(root), { onImage: (p) => seen.push(p), onFolder: (_f, images) => { released.push(...images) } })
+  // Loose files are seen as their folder is opened; folders are walked newest first.
+  const days = seen.filter((p) => p.split('/').length >= 4)
+  check('the first day folder walked into is the newest', days[0].startsWith('2026/11/22/'), seen)
+  check('released in the order a whole-tree sort gives', J(released) === J([...paths].sort(newestFirst)), released)
+}
+
+console.log('== the index is read before the listing')
+{
+  const phases: string[] = []
+  await scan(library(), { onProgress: (p) => { if (phases[phases.length - 1] !== p.phase) phases.push(p.phase) } }).prepare()
+  check('indexing, then listing', phases.indexOf('indexing') >= 0 && phases.indexOf('indexing') < phases.indexOf('listing'), phases)
+}
+
+console.log('== known folders are done while the listing goes on')
+{
+  const root = library()
+  await scan(root).prepare().then(() => undefined)
+  const first = scan(root)
+  await first.prepare()
+  await first.run()
+  let t = 0
+  let doneEarly = false
+  const s: FolderScan = scan(root, {
+    now: () => (t += 1000),
+    onProgress: (p) => {
+      if (p.phase !== 'listing' || p.listed >= N) return
+      if ([...s.folderProgress().values()].some((c) => c.images > 0 && c.done === c.images)) doneEarly = true
+    },
+  })
+  const p = await s.prepare()
+  check('a known folder shows done before the listing ends', doneEarly)
+  check('and the scan is done with nothing to read', p.phase === 'done' && p.adopted === N, p)
+}
+
+console.log('== planning folder by folder equals planning the whole listing')
+{
+  let seed = 0x5eed
+  const rand = () => { seed = (seed * 1103515245 + 12345) >>> 0; return seed / 2 ** 32 }
+  const pick = <T,>(xs: T[]) => xs[Math.floor(rand() * xs.length)]
+  const folders = ['', 'a', 'b', 'a/c', 'd']
+  const names = ['n0.png', 'n1.png', 'n2.png', 'n3.png', 'n4.png', 'n5.png']
+  const at = (f: string, n: string) => (f ? `${f}/${n}` : n)
+  const rec = (path: string) => ({ kind: 'file' as const, path, size: 1, mtime: 1, prompt: null }) as unknown as QqiFile
+  const norm = (p: { adopted: number; reparse: number; moves: unknown[]; gone: string[]; toRead: string[]; records: unknown[] }) => J({
+    adopted: p.adopted, reparse: p.reparse, moves: p.moves.map((m) => J(m)).sort(), gone: [...p.gone].sort(),
+    toRead: [...p.toRead].sort(), records: p.records.map((r) => J(r)).sort(),
+  })
+  let wrong = 0
+  let first = ''
+  const rounds = 600
+  for (let i = 0; i < rounds; i++) {
+    const merged: Merged = new Map()
+    const known = Math.floor(rand() * 8)
+    for (let j = 0; j < known; j++) {
+      const p = at(pick(folders), pick(names))
+      merged.set(p, { record: rec(p), deviceId: 'd', writtenAt: 1, parserVersion: rand() < 0.2 ? PARSER_VERSION - 1 : PARSER_VERSION, seq: 0 })
+    }
+    const listed = new Set<string>()
+    const count = Math.floor(rand() * 9)
+    for (let j = 0; j < count; j++) listed.add(at(pick(folders), pick(names)))
+    const whole = planScan(listed, merged)
+    const byFolder = new Map<string, string[]>()
+    for (const p of listed) {
+      const f = p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : ''
+      byFolder.set(f, [...(byFolder.get(f) ?? []), p])
+    }
+    const planner = new PlanAsListed(merged)
+    const now: string[] = []
+    for (const f of [...byFolder.keys()].sort(() => rand() - 0.5)) now.push(...planner.folder(byFolder.get(f)!))
+    const end = planner.end([])
+    const got = { ...end, toRead: [...now, ...end.toRead] }
+    if (norm(got) !== norm(whole)) { wrong++; if (!first) first = J({ merged: [...merged.keys()], listed: [...listed], got: norm(got), want: norm(whole) }) }
+  }
+  check(`${rounds} random libraries: the same adopted, reads, moves and gones`, wrong === 0, first)
+}
+
+console.log('== a folder that cannot be listed is not recorded gone')
+{
+  const root = library()
+  const a = scan(root)
+  await a.prepare()
+  await a.run()
+  ;(root.children.get('2026-11-11') as FakeDir).failList = 'NotReadableError'
+  const s = scan(root)
+  const p = await s.prepare()
+  check('nothing gone, the folder said', p.phase === 'done' && p.gone === 0 && p.problems.some((m) => m.includes('"2026-11-11" could not be listed')), p)
+  const ix = await indexOf(root)
+  check('its entries stay in the index', ix.size === N && ix.has('2026-11-11/img_1.png'), ix.size)
+}
+
+console.log('== a record an older parser wrote is counted done once')
+{
+  const root = library()
+  const a = scan(root)
+  await a.prepare()
+  await a.run()
+  const segFile = (root.children.get(INDEX_DIR) as FakeDir).children.get(segmentName(DEV)) as FakeFile
+  const seg = await ownSegment(root)
+  segFile.bytes = await encodeSegment(seg.deviceId, seg.frames.map((f) => ({ ...f, parserVersion: PARSER_VERSION - 1 })))
+  const s = scan(root)
+  const p = await s.prepare()
+  check('every file is read again', p.toRead === N, p)
+  await s.run()
+  const fp = [...s.folderProgress().values()]
+  check('each folder done exactly its count', fp.length === 4 && fp.every((c) => c.done === c.images), fp)
+}
+
+console.log('== Start while the listing goes on')
+await guarded('Start while the listing goes on', async () => {
+  const root = library()
+  const w = wedge(root, '0000')
+  resetCounts()
+  const s = scan(root)
+  const prepared = s.prepare()
+  await until(() => s.progress().startable, 'startable')
+  const q = s.progress()
+  check('startable while listing, with the cost so far', q.phase === 'listing' && !q.listingDone && q.toRead === N && q.read === 5 && q.etaSeconds !== null, q)
+  check('nothing written before Start', counts.writes === 0 && !root.children.has(INDEX_DIR))
+  let settled = false
+  const ran = s.run().then((x) => { settled = true; return x })
+  ran.catch(() => {}) // a rejection surfaces at the await below, inside guarded()
+  await until(() => s.progress().read === N, 'the listed files read')
+  await new Promise((r) => setTimeout(r, 20))
+  const mid = s.progress()
+  check('what is listed is read and saved before the listing ends', mid.phase === 'reading' && !mid.listingDone && !settled && mid.saved === N, mid)
+  w.release()
+  const d = await ran
+  const pp = await prepared
+  check('done only once the listing is, the late file read too', d.phase === 'done' && d.read === N + 1 && d.saved === N + 1 && pp.listingDone, d)
+  check('each file opened once', counts.getFile === N + 1, counts)
+  check('the index holds every file', (await indexOf(root)).size === N + 1)
+})
+
+console.log('== Start is refused before the cost is known')
+await guarded('Start is refused before the cost is known', async () => {
+  const root = new FakeDir('root')
+  const w = wedge(root, 'only')
+  const s = scan(root)
+  const prepared = s.prepare()
+  await until(() => s.progress().phase === 'listing', 'listing')
+  let threw = false
+  try { await s.run() } catch { threw = true }
+  check('run() during listing, before calibration, throws', threw && !s.progress().startable)
+  s.stop()
+  w.release()
+  check('and Stop still ends it', (await prepared).phase === 'stopped')
+})
+
+console.log('== Pause and Stop while the listing goes on')
+await guarded('Pause and Stop while the listing goes on', async () => {
+  const root = library()
+  const w = wedge(root, '0000')
+  resetCounts()
+  const s = scan(root)
+  const prepared = s.prepare()
+  await until(() => s.progress().startable, 'startable')
+  const ran = s.run()
+  ran.catch(() => {})
+  await until(() => s.progress().read === N, 'the listed files read')
+  s.pause()
+  const mid = await ran
+  check('paused while listing: what was read is saved', mid.phase === 'paused' && mid.saved === N && !mid.listingDone, mid)
+  w.release()
+  const pp = await prepared
+  check('the listing ends and the scan stays paused', pp.phase === 'paused' && pp.listingDone && pp.toRead === N + 1, pp)
+  const end = await s.run()
+  check('resumed to done, each file opened once', end.phase === 'done' && end.read === N + 1 && counts.getFile === N + 1, { end, counts })
+
+  const root2 = library()
+  const w2 = wedge(root2, '0000')
+  resetCounts()
+  const s2 = scan(root2)
+  const prepared2 = s2.prepare()
+  await until(() => s2.progress().startable, 'startable')
+  const ran2 = s2.run()
+  ran2.catch(() => {})
+  await until(() => s2.progress().read === N, 'the listed files read')
+  s2.stop()
+  const st = await ran2
+  check('Stop while the listing is wedged ends the reads at once, saved', st.phase === 'stopped' && st.saved === N, st)
+  w2.release()
+  const pp2 = await prepared2
+  check('the late listing changes nothing', pp2.phase === 'stopped' && counts.getFile === N, { phase: pp2.phase, counts })
+})
+
+console.log('== a listing that fails after Start')
+await guarded('a listing that fails after Start', async () => {
+  const root = library()
+  const a = scan(root)
+  await a.prepare()
+  await a.run()
+  take(root, '2026-11-10/img_4.png')
+  put(root, 'z-new/new.png', pngWith('new'))
+  const w = wedge(root, '0000')
+  const s = scan(root, { calibrate: 1 })
+  const prepared = s.prepare()
+  await until(() => s.progress().startable, 'startable')
+  const ran = s.run()
+  ran.catch(() => {})
+  await until(() => s.progress().read === 1 && s.progress().saved === 1, 'the new file read')
+  w.release(domError('NotAllowedError'))
+  const d = await ran
+  await prepared
+  check('failed, what was read saved, the failure said', d.phase === 'failed' && d.saved === 1 && d.problems.length > 0, d)
+  check('nothing recorded gone without the whole listing', d.gone === 0 && (await indexOf(root)).has('2026-11-10/img_4.png'))
+})
 
 console.log('== the stall watch')
 check('a minute with no step while listing is a stall', stalled('listing', STALL_MS) && !stalled('listing', STALL_MS - 1))

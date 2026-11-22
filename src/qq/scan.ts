@@ -10,20 +10,26 @@ import {
 // QuickQueue's Scan (tc.152 step 2; QQ_M2_PLAN M2.2): builds the folder index
 // for one picked root (QQ_FOLDER_INDEX.md in fourier-basis, secs 3, 3a, 7).
 //
-// 1. List the whole tree, names only. On the tablet a name is nearly free and
-//    a getFile() costs about 107 ms (master reference sec 22.13), so listing
-//    touches no file.
-// 2. Read `.quickqueue/`: every device's segment, merged (qqi.ts).
-// 3. Plan. A listed path the index knows is ADOPTED and never read. An index
-//    path no longer listed is re-paired with an unknown name when exactly one
-//    of each has that file name (a move: sec 3a step 1), else recorded gone.
-//    Every other listed path is to be read, and so is one whose record an
-//    older parser wrote.
-// 4. Calibrate: read a few files, then STOP and state the cost -- files to
-//    read, the time on this device, the index size (M2.2: "state the cost and
-//    index size first, then build the index").
-// 5. Read the rest, newest first, each with one getFile() and ONE read of the
-//    first PREFIX_BYTES; a second, whole-file read only when the metadata the
+// 1. Read `.quickqueue/`: every device's segment, merged (qqi.ts). First, so
+//    the listing can say what is already indexed as it goes.
+// 2. List the whole tree, names only, newest folders first. On the tablet a
+//    name is nearly free and a getFile() costs about 107 ms (master reference
+//    sec 22.13), so listing touches no file. Every scan lists again: a folder
+//    has no modified time to say nothing in it changed.
+// 3. Plan each folder once it and the folders below it are listed. A listed
+//    path the index knows is ADOPTED and never read; one whose record an older
+//    parser wrote is read again; an unknown name nothing in the index shares
+//    is read. An unknown name the index does share waits for the end of the
+//    listing, as does everything that needs the whole tree: an index path no
+//    longer listed is re-paired with an unknown name when exactly one of each
+//    has that file name (a move: sec 3a step 1), else recorded gone.
+// 4. Calibrate: read a few files as soon as there are some to read, then state
+//    the cost -- files to read, the time on this device, the index size (M2.2:
+//    "state the cost and index size first, then build the index"). While the
+//    listing goes on the cost is the cost so far, and the user may Start
+//    (operator 2026-11-22: overlap the listing).
+// 5. Read, newest first, each with one getFile() and ONE read of the first
+//    PREFIX_BYTES; a second, whole-file read only when the metadata the
 //    parser reads runs past the prefix. Append what is learned to this
 //    device's own segment, in frames.
 //
@@ -65,7 +71,8 @@ export interface Listed {
   files: Map<string, QqFileHandle>
   /** Images directly in each folder; '' is the root. */
   folders: Map<string, number>
-  /** Folders that could not be listed, and why. Shown, never dropped. */
+  /** Folders that could not be listed ('' the root), and why. Shown, never
+   *  dropped; nothing under one is recorded gone. */
   unlisted: { path: string; reason: string }[]
 }
 
@@ -73,40 +80,65 @@ function errorName(e: unknown): string {
   return e && typeof e === 'object' && 'name' in e ? String((e as { name: unknown }).name) : ''
 }
 
-/** Lists the tree under `root`. Hidden entries (`.quickqueue/` among them)
- *  are skipped, as the panel skips them. A permission error ends the listing
- *  (it is the whole tree's); any other error loses one folder, said.
- *  `onProgress` is called at every entry, not only when a folder is done: one
- *  big folder can take minutes on a slow device, and a count that waits for
- *  it reads as a hang. `inFolder` is the folder being listed ('' the root). */
-export async function listTree(
-  root: QqDirHandle,
-  onProgress?: (listed: number, folders: number, inFolder: string) => void,
-  halted?: () => boolean,
+export interface ListOptions {
+  /** Called at every entry, not only when a folder is done: one big folder
+   *  can take minutes on a slow device, and a count that waits for it reads
+   *  as a hang. `inFolder` is the folder being listed ('' the root). */
+  onProgress?: (listed: number, folders: number, inFolder: string) => void
+  /** Called for each image as it is listed. */
+  onImage?: (path: string) => void
+  /** Called once a folder and every folder below it are listed, with the
+   *  folder's own images, newest first; awaited before the listing goes on.
+   *  Folders come in the order a Scan reads in (newestFirst), so reading them
+   *  as they come is reading newest first. */
+  onFolder?: (folder: string, images: string[]) => void | Promise<void>
+  /** Checked at every entry; true ends the listing where it is. */
+  halted?: () => boolean
   /** Filled as the listing goes, so a caller can draw it before it ends. */
-  out: Listed = { files: new Map(), folders: new Map(), unlisted: [] },
-): Promise<Listed> {
-  const stack: [string, QqDirHandle][] = [['', root]]
-  while (stack.length) {
-    if (halted?.()) break
-    const [path, dir] = stack.pop()!
+  out?: Listed
+}
+
+/** Lists the tree under `root`, newest folders first: each folder's own
+ *  folders in descending natural order, as newestFirst sorts them. Hidden
+ *  entries (`.quickqueue/` among them) are skipped, as the panel skips them.
+ *  A permission error ends the listing (it is the whole tree's); any other
+ *  error loses one folder, said. */
+export async function listTree(root: QqDirHandle, opts: ListOptions = {}): Promise<Listed> {
+  const out: Listed = opts.out ?? { files: new Map(), folders: new Map(), unlisted: [] }
+  const halted = () => opts.halted?.() ?? false
+  const walk = async (path: string, dir: QqDirHandle): Promise<void> => {
+    const below: QqDirHandle[] = []
+    const images: string[] = []
     let n = 0
     try {
       for await (const h of dir.values()) {
-        if (halted?.()) return out
+        if (halted()) return
         if (isHidden(h.name)) continue
         const rel = path ? `${path}/${h.name}` : h.name
-        if (h.kind === 'directory') stack.push([rel, h])
-        else if (imageType(h.name)) { out.files.set(rel, h); out.folders.set(path, ++n) }
-        onProgress?.(out.files.size, out.folders.size, path)
+        if (h.kind === 'directory') below.push(h)
+        else if (imageType(h.name)) {
+          out.files.set(rel, h)
+          out.folders.set(path, ++n)
+          images.push(rel)
+          opts.onImage?.(rel)
+        }
+        opts.onProgress?.(out.files.size, out.folders.size, path)
       }
     } catch (e) {
       if (errorName(e) === 'NotAllowedError') throw e
-      out.unlisted.push({ path: path || '(the picked folder)', reason: errorName(e) || 'unknown error' })
+      out.unlisted.push({ path, reason: errorName(e) || 'unknown error' })
     }
     out.folders.set(path, n)
-    onProgress?.(out.files.size, out.folders.size, path)
+    opts.onProgress?.(out.files.size, out.folders.size, path)
+    below.sort((a, b) => naturalCompare(b.name, a.name))
+    for (const d of below) {
+      if (halted()) return
+      await walk(path ? `${path}/${d.name}` : d.name, d)
+    }
+    if (halted()) return
+    await opts.onFolder?.(path, images.sort(newestFirst))
   }
+  await walk('', root)
   return out
 }
 
@@ -231,6 +263,70 @@ export function planScan(listedPaths: Iterable<string>, merged: Merged): ScanPla
   }
   plan.toRead.sort(newestFirst)
   return plan
+}
+
+/**
+ * planScan made folder by folder as the listing goes, so reads can start
+ * before it ends. The result is planScan's over the whole listing: a path is
+ * judged early only where the rest of the tree cannot change the judgement.
+ * - Known to the index: adopted, or read again if an older parser wrote it.
+ * - Unknown, and no index entry shares its file name: it cannot be the far
+ *   end of a move, so it is read.
+ * - Unknown, and an index entry shares its name: it may be a move. It waits
+ *   for end(), which runs planScan over these and the paths not listed.
+ */
+export class PlanAsListed {
+  adopted = 0
+  reparse = 0
+  private readonly merged: Merged
+  private readonly names = new Set<string>()
+  private readonly listed = new Set<string>()
+  private deferred: string[] = []
+
+  /** `merged` is read when a path is judged; nothing a scan adds to it before
+   *  then is a path not yet listed. */
+  constructor(merged: Merged) {
+    this.merged = merged
+    for (const e of merged.values()) this.names.add(pathKey(baseName(e.record.path)))
+  }
+
+  /** True when the index already holds `path` as the current parser reads it. */
+  knows(path: string): boolean {
+    const e = this.merged.get(pathKey(path))
+    return !!e && e.parserVersion >= PARSER_VERSION
+  }
+
+  /** One folder's images, once listed. Returns the paths to read now. */
+  folder(paths: string[]): string[] {
+    const now: string[] = []
+    for (const p of paths) {
+      const k = pathKey(p)
+      this.listed.add(k)
+      const e = this.merged.get(k)
+      if (e) {
+        if (e.parserVersion < PARSER_VERSION) { now.push(p); this.reparse++ }
+        else this.adopted++
+      } else if (this.names.has(pathKey(baseName(p)))) this.deferred.push(p)
+      else now.push(p)
+    }
+    return now.sort(newestFirst)
+  }
+
+  /**
+   * Once the whole tree is listed. `lost` names folders that could not be
+   * listed: nothing under one is recorded gone, since it may still be there.
+   * Returns the moves, the gones and the waiting paths to read; `adopted` and
+   * `reparse` are the whole listing's.
+   */
+  end(lost: string[]): ScanPlan {
+    const lostKeys = lost.map(pathKey)
+    const under = (k: string) => lostKeys.some((l) => l === '' || k.startsWith(l + '/'))
+    const vanished: Merged = new Map()
+    for (const [k, e] of this.merged) if (!this.listed.has(k) && !under(k)) vanished.set(k, e)
+    const plan = planScan(this.deferred, vanished)
+    this.deferred = []
+    return { ...plan, adopted: this.adopted, reparse: this.reparse }
+  }
 }
 
 // --- 5. reading one file ---------------------------------------------------------
@@ -470,6 +566,10 @@ export interface ScanProgress {
   folders: number
   /** While listing, the folder being listed below the root ('' the root). */
   listingIn: string
+  /** The whole tree is listed: the counts to read are final, not so far. */
+  listingDone: boolean
+  /** run() may be called now: the cost is stated, final or so far. */
+  startable: boolean
   /** Entries the index held when this scan began, from every device. */
   indexed: number
   adopted: number
@@ -547,11 +647,17 @@ export const ONE_SCAN_AT_A_TIME =
 export class FolderScan {
   private readonly o: Required<Omit<ScanOptions, 'onProgress' | 'locks' | 'keeper' | 'saveTo'>> & Pick<ScanOptions, 'onProgress' | 'locks' | 'keeper'>
   private p: ScanProgress = {
-    phase: 'idle', listed: 0, folders: 0, listingIn: '', indexed: 0, adopted: 0, moved: 0, gone: 0, toRead: 0, read: 0,
+    phase: 'idle', listed: 0, folders: 0, listingIn: '', listingDone: false, startable: false, indexed: 0, adopted: 0, moved: 0, gone: 0, toRead: 0, read: 0,
     secondReads: 0, unreadable: 0, saved: 0, unsaved: 0, etaSeconds: null, indexBytes: 0, addBytes: 0, problems: [],
   }
-  private listed: Listed | null = null
   private merged: Merged = new Map()
+  /** run() has been called: from here prepare() lists and plans, and only
+   *  run() and stop() end the scan. */
+  private started = false
+  private calibrated = false
+  private listingFailed = false
+  /** Readers waiting for the listing to hand over more to read. */
+  private waiting: (() => void)[] = []
   private toRead: string[] = []
   private cursor = 0
   private pending: QqiRecord[] = []
@@ -563,12 +669,11 @@ export class FolderScan {
   private readsTimed = 0
   private lastEmit = 0
   private releaseLock: (() => void) | null = null
-  /** Per folder: [images listed, indexed now, could not be read]. */
+  /** Per folder: [images listed, indexed now, could not be read]. Filled as
+   *  the listing goes, so the calendar draws it before the listing ends. */
   private perFolder = new Map<string, [number, number, number]>()
-  /** The listing as it grows; the calendar draws from it until the plan
-   *  fills perFolder. */
+  /** The listing as it grows. */
   private listing: Listed = { files: new Map(), folders: new Map(), unlisted: [] }
-  private planned = false
   private saveTo: 'folder' | 'browser'
   /** Records the keeper holds that win the merge: moved into the folder first. */
   private keptRecords = new Set<QqiRecord>()
@@ -599,9 +704,7 @@ export class FolderScan {
    *  and how many this scan could not read. */
   folderProgress(): Map<string, FolderCount> {
     const out = new Map<string, FolderCount>()
-    // Until the plan, a folder is its count so far; nothing is known indexed.
-    if (!this.planned) for (const [f, images] of this.listing.folders) out.set(f, { images, done: 0, failed: 0 })
-    else for (const [f, [images, done, failed]] of this.perFolder) out.set(f, { images, done, failed })
+    for (const [f, [images, done, failed]] of this.perFolder) out.set(f, { images, done, failed })
     return out
   }
 
@@ -613,9 +716,12 @@ export class FolderScan {
   }
 
   /**
-   * Lists, reads the index, plans and calibrates, then stops at 'planned' with
-   * the cost stated (or 'done' when there is nothing to read). Writes nothing:
-   * what it learned waits for run().
+   * Reads the index, then lists and plans, calibrating as soon as there is
+   * something to read. While the listing goes on the cost is stated so far and
+   * `startable` is set: run() may start the reads then, and they keep pace
+   * with the listing. Otherwise it stops at 'planned' with the final cost (or
+   * 'done' when there is nothing to read). Writes nothing: what it learned
+   * waits for run(). Resolves when the listing ends, even after run().
    */
   async prepare(): Promise<ScanProgress> {
     if (this.p.phase !== 'idle') throw new Error('qq scan: prepare() runs once')
@@ -624,16 +730,6 @@ export class FolderScan {
       return this.set('failed')
     }
     try {
-      this.set('listing')
-      this.listed = await listTree(this.o.root, (listed, folders, inFolder) => {
-        this.p.listed = listed
-        this.p.folders = folders
-        this.p.listingIn = inFolder
-        this.emit()
-      }, () => this.stopping(), this.listing)
-      if (this.stopping()) return this.finish('stopped')
-      for (const u of this.listed.unlisted) this.p.problems.push(`The folder "${u.path}" could not be listed (${u.reason}); its images are not in this scan.`)
-
       this.set('indexing')
       const index = await readIndex(this.o.root)
       this.p.problems.push(...index.problems)
@@ -651,56 +747,103 @@ export class FolderScan {
           this.pending.push(w.record)
           this.keptRecords.add(w.record)
         }
+        this.p.unsaved = this.pending.length
       }
       // Nothing kept is needed: no write waits on dropping it.
       if (this.keptToDrop && !this.keptRecords.size) await this.dropKept()
+      const planner = new PlanAsListed(this.merged)
 
-      const plan = planScan(this.listed.files.keys(), this.merged)
-      this.toRead = plan.toRead
+      this.set('listing')
+      await listTree(this.o.root, {
+        out: this.listing,
+        halted: () => this.stopping(),
+        onProgress: (listed, folders, inFolder) => {
+          this.p.listed = listed
+          this.p.folders = folders
+          this.p.listingIn = inFolder
+          this.emit()
+        },
+        onImage: (path) => {
+          const f = folderOf(path)
+          const c = this.perFolder.get(f) ?? [0, 0, 0]
+          c[0]++
+          if (planner.knows(path)) c[1]++
+          this.perFolder.set(f, c)
+        },
+        onFolder: async (_folder, images) => {
+          this.queue(planner.folder(images))
+          this.p.adopted = planner.adopted
+          if (!this.started && !this.calibrated && this.toRead.length - this.cursor >= Math.max(1, this.o.calibrate)) {
+            await this.calibrate()
+            if (!this.stopping() && !this.started) this.set('listing')
+          }
+        },
+      })
+      if (this.stopping()) return this.started ? this.progress() : this.finish('stopped')
+      for (const u of this.listing.unlisted) {
+        this.p.problems.push(`The folder "${u.path || '(the picked folder)'}" could not be listed (${u.reason}); its images are not in this scan, and none of them is dropped from the index.`)
+      }
+
+      const plan = planner.end(this.listing.unlisted.map((u) => u.path))
       this.pending.push(...plan.records)
       for (const r of plan.records) this.apply(r)
-      Object.assign(this.p, {
-        adopted: plan.adopted, moved: plan.moves.length, gone: plan.gone.length, toRead: plan.toRead.length,
-        unsaved: this.pending.length,
-      })
-      for (const path of this.listed.files.keys()) {
-        const f = folderOf(path)
-        const c = this.perFolder.get(f) ?? [0, 0, 0]
-        c[0]++
-        if (this.merged.has(pathKey(path))) c[1]++
-        this.perFolder.set(f, c)
+      for (const m of plan.moves) {
+        const c = this.perFolder.get(folderOf(m.to))
+        if (c) c[1]++
       }
-      this.planned = true
+      this.queue(plan.toRead)
+      Object.assign(this.p, {
+        adopted: plan.adopted, moved: plan.moves.length, gone: plan.gone.length, unsaved: this.pending.length, listingDone: true,
+      })
+      this.wake()
+      // Started: run() reads what is left and ends the scan.
+      if (this.started) return this.set(this.p.phase)
 
-      if (this.toRead.length) {
+      if (!this.calibrated && this.cursor < this.toRead.length) {
+        this.p.startable = false
         this.set('calibrating')
-        await this.readSome(Math.min(this.o.calibrate, this.toRead.length))
+        await this.calibrate()
         if (this.stopping()) return this.finish('stopped')
       }
       this.estimate()
       if (this.cursor >= this.toRead.length && !this.pending.length) return this.finish('done')
+      this.p.startable = true
       return this.set('planned')
     } catch (e) {
       // Stopped already: whatever failed after that is not this scan's.
-      if (this.stopping()) return this.finish('stopped')
+      if (this.stopping()) return this.started ? this.progress() : this.finish('stopped')
       this.p.problems.push(failureWords(e))
-      return this.finish('failed')
+      if (!this.started) return this.finish('failed')
+      // The reads already started go on and are saved; with the tree not
+      // listed whole, nothing is recorded gone, and run() ends it 'failed'.
+      this.listingFailed = true
+      this.p.listingDone = true
+      this.wake()
+      return this.set(this.p.phase)
     }
   }
 
   /** Reads what is left and saves as it goes. Resolves at 'done', 'paused' or
-   *  'stopped'. Called again after a pause, it carries on where it stopped. */
+   *  'stopped'. Called again after a pause, it carries on where it stopped.
+   *  Called while the listing goes on, it reads what the listing has handed
+   *  over and waits for more; it is done only once the listing is. */
   async run(): Promise<ScanProgress> {
-    if (this.p.phase !== 'planned' && this.p.phase !== 'paused') throw new Error(`qq scan: run() from ${this.p.phase}`)
+    const from = this.p.phase
+    if (from !== 'planned' && from !== 'paused' && !(from === 'listing' && this.p.startable)) {
+      throw new Error(`qq scan: run() from ${from}`)
+    }
+    this.started = true
+    this.p.startable = false
     this.halt = null
     this.set('reading')
     try {
       this.lastFlush = this.o.now()
       await this.flush(true) // the plan's moves and gones, and the calibration's reads
-      await this.readSome(Infinity)
+      await this.readSome(Infinity, true)
       await this.flush(true)
       if (this.stopping()) return this.finish('stopped')
       if (this.halt === 'pause') return this.set('paused')
+      if (this.listingFailed) return this.finish('failed')
       return this.finish(this.p.unsaved ? 'paused' : 'done')
     } catch (e) {
       this.p.problems.push(failureWords(e))
@@ -708,19 +851,21 @@ export class FolderScan {
     }
   }
 
-  /** Finishes the reads in flight, saves, and stops at 'paused'. */
+  /** Finishes the reads in flight, saves, and stops at 'paused'. The listing,
+   *  if it is still going, goes on. */
   pause(): void {
-    if (this.p.phase === 'reading') { this.halt = 'pause'; this.set('pausing') }
+    if (this.p.phase === 'reading') { this.halt = 'pause'; this.set('pausing'); this.wake() }
   }
 
   /**
-   * As pause, but the scan cannot be resumed. Once the user has said go, what
-   * was read is still saved. At 'planned' they have not (sec 7a step 4: it
-   * writes nothing before the user says go), so declining the cost discards
-   * the calibration's reads and the plan, and writes nothing.
+   * As pause, but the scan cannot be resumed, and a listing still going ends.
+   * Once the user has said go, what was read is still saved. Before (sec 7a
+   * step 4: it writes nothing before the user says go), declining the cost
+   * discards the calibration's reads and the plan, and writes nothing.
    */
   stop(): void {
     this.halt = 'stop'
+    this.wake()
     if (NOTHING_WRITTEN.has(this.p.phase)) {
       // At once, not when the step in flight answers: a stalled listing may
       // never answer, and Stop is what the stall watch recommends. Nothing
@@ -743,11 +888,44 @@ export class FolderScan {
   /** A method, not a field test: tsc narrows `halt` across an await that may set it. */
   private stopping(): boolean { return this.halt === 'stop' }
 
-  private async readSome(limit: number): Promise<void> {
-    const end = Math.min(this.toRead.length, this.cursor + limit)
-    const files = this.listed!.files
+  /** Paths the plan hands over to read, in the order to read them. */
+  private queue(paths: string[]): void {
+    if (!paths.length) return
+    this.toRead.push(...paths)
+    this.p.toRead += paths.length
+    this.wake()
+  }
+
+  private wake(): void {
+    const w = this.waiting
+    this.waiting = []
+    for (const go of w) go()
+  }
+
+  /** Reads a few, for the cost. Before Start nothing is saved. */
+  private async calibrate(): Promise<void> {
+    await this.readSome(Math.min(this.o.calibrate, this.toRead.length - this.cursor), false)
+    this.calibrated = true
+    this.p.startable = true
+  }
+
+  /** Reads up to `limit` paths from the cursor. With `wait`, a reader that
+   *  runs out waits for the listing to hand over more, until it ends. */
+  private async readSome(limit: number, wait: boolean): Promise<void> {
+    const fixedEnd = Math.min(this.toRead.length, this.cursor + limit)
+    const end = () => (wait ? this.toRead.length : fixedEnd)
+    const files = this.listing.files
     const worker = async () => {
-      while (!this.halt && this.cursor < end) {
+      while (!this.halt) {
+        if (this.cursor >= end()) {
+          if (!wait || this.p.listingDone) break
+          // Caught up with the listing, which may take minutes more: save what
+          // was read before waiting, so a reload then loses none of it.
+          await this.flush(true)
+          if (this.halt || this.cursor < end() || this.p.listingDone) continue
+          await new Promise<void>((go) => this.waiting.push(go))
+          continue
+        }
         const path = this.toRead[this.cursor++]
         const t0 = this.o.now()
         try {
