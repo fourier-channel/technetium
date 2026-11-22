@@ -38,10 +38,18 @@ export const INDEX_DIR = '.quickqueue'
 
 /**
  * How much of a file the first read takes. A PNG's text chunks sit before its
- * first IDAT; a JPEG's Exif before its first SOS. NOT YET MEASURED: 64 KiB is
- * a placeholder until fourier-basis tools/qq-header-reach.mts has run over the
- * operator's library. A wrong size costs speed, never correctness: a prefix
- * that falls short is followed by a whole-file read (prefixSuffices).
+ * first IDAT; a JPEG's Exif before its first SOS.
+ *
+ * Measured 2026-11-22 over a 290,503-image generation library (263,174 JPEG,
+ * 27,328 PNG, 1 WebP): the furthest point a reader had to reach to know it
+ * held every metadata segment was 35,500 bytes (p99.9 about 12 KB). 64 KiB
+ * covers every file, with 1.8x headroom; 32 KiB would miss 4 of them. No PNG
+ * had text after its image data. On the tablet a read costs about the same
+ * whatever its size, so the headroom is nearly free.
+ *
+ * A wrong size costs speed, never correctness: a prefix that falls short is
+ * followed by a whole-file read (prefixSuffices), and progress().secondReads
+ * counts those, the gauge beside this budget.
  */
 export const PREFIX_BYTES = 64 * 1024
 
