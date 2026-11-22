@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLightbox, type LightboxItem } from '../ui/lightboxContext'
 import {
-  addRoot, folderAccessSupported, forgetRoot, listRoots, pickFolder, storeLastRoot, storedLastRoot,
+  addRoot, browserKeeper, folderAccessSupported, forgetRoot, listRoots, pickFolder, storeLastRoot, storedLastRoot,
   type QqDirHandle, type QqFileHandle, type StoredRoot,
 } from './folderStore'
 import {
@@ -171,8 +171,8 @@ export default function QuickQueuePanel() {
   const startScan = async () => {
     if (!root || scanActive) return
     // Asked at the press, the gesture the browser needs. Refused, the scan
-    // still runs and keeps its index in this tab (sec 7a step 7); the note
-    // below says so before the user says go.
+    // still runs and keeps its index in this browser (sec 4, sec 7a step 7);
+    // the note below says so before the user says go.
     let write = 'denied'
     let asked = ''
     try {
@@ -185,8 +185,9 @@ export default function QuickQueuePanel() {
     if (write !== 'granted') {
       notes.push(
         `${asked ? `Asking to edit "${root.name}" failed (${asked})` : `Editing "${root.name}" was not allowed`}, so this scan ` +
-        `keeps its index in this tab only: nothing is saved into the folder, and the next scan reads it all again. ` +
-        `To save it, Stop, press Scan again and allow editing; QuickQueue writes only inside ${INDEX_DIR}.`,
+        `keeps its index in this browser, not in the folder, so other devices will scan it again. ` +
+        `To save it into the folder, Stop, press Scan again and allow editing; QuickQueue writes only inside ${INDEX_DIR}, ` +
+        `and moves what this browser kept into it.`,
       )
     }
     if (!device.kept) {
@@ -200,6 +201,8 @@ export default function QuickQueuePanel() {
     const engine: FolderScan = new FolderScan({
       root: target.handle,
       deviceId: device.id,
+      keeper: browserKeeper(target.id),
+      saveTo: write === 'granted' ? 'folder' : 'browser',
       onProgress: (p) => {
         // The engine reports at most every 200 ms; the calendar is rebuilt at
         // most once a second while reading, and on every change of phase.

@@ -11,17 +11,18 @@
 //   again;
 // - what is learned is saved into the folder and reads back; a damaged own
 //   segment is cut at the damage, never thrown away whole;
-// - a folder QuickQueue may not write still scans, and says so.
+// - a folder QuickQueue may not write still scans, says so, and keeps its
+//   index in this browser until the folder can hold it.
 //
 // The folder is an in-memory fake of the File System Access handles.
 import { FIXTURES } from './qqPromptTags.fixtures.ts'
 import { embeddedChunks, promptSource, promptToTags } from '../src/qq/promptTags.ts'
-import { mergeSegments, readSegment, segmentName, PARSER_VERSION, type QqiFile, type SegmentRead } from '../src/qq/qqi.ts'
+import { encodeSegment, mergeSegments, readSegment, segmentName, PARSER_VERSION, type QqiFile, type SegmentRead } from '../src/qq/qqi.ts'
 import {
-  FolderScan, INDEX_DIR, listTree, newestFirst, planScan, prefixSuffices, readEntry, readIndex, ONE_SCAN_AT_A_TIME,
-  type Merged,
+  FolderScan, INDEX_DIR, KEPT_IN_BROWSER, KEPT_LABEL, listTree, newestFirst, planScan, prefixSuffices, readEntry, readIndex,
+  ONE_SCAN_AT_A_TIME, type Merged,
 } from '../src/qq/scan.ts'
-import type { QqDirHandle, QqFileHandle, QqWritable } from '../src/qq/folderStore.ts'
+import type { Keeper, QqDirHandle, QqFileHandle, QqWritable } from '../src/qq/folderStore.ts'
 
 let failures = 0
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -465,6 +466,211 @@ console.log('== a write that fails part way leaves the file as it was')
   const d = await s.run()
   FakeFile.prototype.createWritable = real
   check('the failed batch is retried, nothing lost', d.phase === 'done' && d.unsaved === 0 && (await indexOf(root)).size === N, d)
+}
+
+// --- the keeper: a folder's index kept in this browser ------------------------------
+
+/** folderStore.ts browserKeeper, in memory: the same all-or-nothing writeAt. */
+class FakeKeeper implements Keeper {
+  bytes: Uint8Array | null = null
+  failRead: string | null = null
+  failWrite: string | null = null
+  failDrop: string | null = null
+  writes = 0
+  drops = 0
+  async read() {
+    if (this.failRead) throw domError(this.failRead)
+    return this.bytes ? this.bytes.slice() : null
+  }
+  async writeAt(offset: number, b: Uint8Array) {
+    if (this.failWrite) throw domError(this.failWrite)
+    const old = this.bytes ?? new Uint8Array(0)
+    if (offset > old.length) throw new Error('a write past the end')
+    this.bytes = cat(old.subarray(0, offset), b)
+    this.writes++
+  }
+  async drop() {
+    if (this.failDrop) throw domError(this.failDrop)
+    this.bytes = null
+    this.drops++
+  }
+}
+async function keptSegment(k: FakeKeeper): Promise<SegmentRead> {
+  const r = await readSegment(k.bytes ?? new Uint8Array(0))
+  if (!r.ok) throw new Error('kept segment refused: ' + r.reason)
+  return r
+}
+/** What a reader sees: the folder's segments and the keeper's, merged. */
+async function everything(root: FakeDir, k: FakeKeeper) {
+  const ix = await readIndex(asRoot(root))
+  return mergeSegments(k.bytes ? [...ix.segments, await keptSegment(k)] : ix.segments)
+}
+
+console.log('== a folder QuickQueue may not write keeps its index in this browser')
+{
+  const root = library()
+  root.readOnly = true
+  const k = new FakeKeeper()
+  const s = scan(root, { keeper: k, saveTo: 'browser', flushRecords: 10, flushMs: 1e12 })
+  await s.prepare()
+  const d = await s.run()
+  check('read and saved, nothing waiting', d.phase === 'done' && d.read === N && d.saved === N && d.unsaved === 0, d)
+  check('nothing written into the folder', !root.children.has(INDEX_DIR))
+  const seg = await keptSegment(k)
+  check('the keeper holds every file', (await everything(root, k)).size === N && seg.stopped === null)
+  check('...under a device id of its own, not the folder segment\'s', seg.deviceId !== DEV && /^[0-9a-f]{32}$/.test(seg.deviceId), seg.deviceId)
+  check('no problem said: the panel said it before go', d.problems.length === 0, d.problems)
+
+  console.log('== a second scan of it reads nothing it knows')
+  resetCounts()
+  const writes = k.writes
+  const p2 = await scan(root, { keeper: k, saveTo: 'browser' }).prepare()
+  check('everything adopted from the keeper, done at once', p2.phase === 'done' && p2.adopted === N && p2.toRead === 0, p2)
+  check('no image opened, nothing written', counts.getFile === 0 && k.writes === writes, { counts, writes: k.writes })
+
+  console.log('== a new file is added to the same kept segment')
+  put(root, 'fresh/one.png', pngWith('fresh'))
+  const s3 = scan(root, { keeper: k, saveTo: 'browser' })
+  await s3.prepare()
+  const d3 = await s3.run()
+  const seg3 = await keptSegment(k)
+  check('one read, one saved', d3.phase === 'done' && d3.read === 1 && d3.saved === 1, d3)
+  check('appended under the same id, nothing before it lost',
+    seg3.deviceId === seg.deviceId && seg3.frames.length === seg.frames.length + 1 && (await everything(root, k)).size === N + 1)
+
+  console.log('== a damaged keeper is cut at the damage, and said')
+  const good = seg3.goodLength
+  k.bytes = cat(k.bytes!, new Uint8Array(5000).fill(0xa5))
+  put(root, 'fresh/two.png', pngWith('two'))
+  const s4 = scan(root, { keeper: k, saveTo: 'browser' })
+  await s4.prepare()
+  const d4 = await s4.run()
+  check('said where it was cut', d4.problems.some((m) => m.startsWith(KEPT_LABEL) && m.includes('damaged after byte ' + good)), d4.problems)
+  const seg4 = await keptSegment(k)
+  check('reads whole again; nothing before the damage lost', seg4.stopped === null && (await everything(root, k)).size === N + 2)
+
+  console.log('== allowed to write later: Stop at the cost leaves the keeper alone')
+  root.readOnly = false
+  const kept = k.bytes!.slice()
+  resetCounts()
+  const s5 = scan(root, { keeper: k })
+  const p5 = await s5.prepare()
+  check('planned: nothing to read, the kept records to save', p5.phase === 'planned' && p5.toRead === 0 && p5.unsaved === N + 2, p5)
+  s5.stop()
+  await new Promise((r) => setTimeout(r, 20))
+  check('nothing written, nothing dropped',
+    !root.children.has(INDEX_DIR) && k.drops === 0 && J([...k.bytes!]) === J([...kept]) && counts.getFile === 0)
+
+  console.log('== allowed to write: the keeper moves into the folder and is dropped')
+  const s6 = scan(root, { keeper: k })
+  await s6.prepare()
+  const d6 = await s6.run()
+  check('saved into the folder, no image opened', d6.phase === 'done' && d6.saved === N + 2 && counts.getFile === 0, { d6, counts })
+  check('the keeper is dropped', k.bytes === null && k.drops === 1)
+  const ix6 = await indexOf(root)
+  check('the folder alone holds every file, with what was read', ix6.size === N + 2 && ix6.get('fresh/two.png')?.record.prompt?.tags.includes('two') === true)
+  check('...in this device\'s own segment', (await ownSegment(root)).frames.reduce((n, f) => n + f.records.length, 0) === N + 2)
+  const p7 = await scan(root, { keeper: k }).prepare()
+  check('the next scan has nothing to do', p7.phase === 'done' && p7.adopted === N + 2 && p7.problems.length === 0, p7)
+}
+
+console.log('== a folder that refuses writes part way switches to the keeper, once')
+{
+  const root = library()
+  const k = new FakeKeeper()
+  const s = scan(root, { keeper: k, calibrate: 0, flushRecords: 10, flushMs: 1e12 })
+  await s.prepare()
+  let n = 0
+  const real = FakeFile.prototype.createWritable
+  FakeFile.prototype.createWritable = async function (o) {
+    if (this.name.endsWith('.qqi') && ++n >= 2) throw domError('NoModificationAllowedError')
+    return real.call(this, o)
+  }
+  const d = await s.run()
+  FakeFile.prototype.createWritable = real
+  check('done, nothing waiting', d.phase === 'done' && d.unsaved === 0 && d.saved === N, d)
+  check('said once', d.problems.filter((m) => m === KEPT_IN_BROWSER).length === 1 && !d.problems.some((m) => m.includes('this tab only')), d.problems)
+  const inFolder = (await indexOf(root)).size
+  check('the first frame in the folder, the rest in the keeper, together everything',
+    inFolder > 0 && inFolder < N && (await everything(root, k)).size === N, { inFolder })
+  check('the keeper is kept: the folder does not hold it all', k.bytes !== null && k.drops === 0)
+}
+
+console.log('== a folder that refuses writes while the keeper moves keeps it, whole and once')
+{
+  const root = library()
+  root.readOnly = true
+  const k = new FakeKeeper()
+  const a = scan(root, { keeper: k, saveTo: 'browser' })
+  await a.prepare()
+  await a.run()
+  root.readOnly = false
+  put(root, 'fresh/late.png', pngWith('late'))
+  const s = scan(root, { keeper: k, calibrate: 0 })
+  const p = await s.prepare()
+  check('planned: the kept records to move, one to read', p.phase === 'planned' && p.unsaved === N && p.toRead === 1, p)
+  const real = FakeFile.prototype.createWritable
+  FakeFile.prototype.createWritable = async function () { throw domError('NoModificationAllowedError') }
+  const d = await s.run()
+  FakeFile.prototype.createWritable = real
+  check('done, said once', d.phase === 'done' && d.unsaved === 0 && d.problems.filter((m) => m === KEPT_IN_BROWSER).length === 1, d)
+  const seg = await keptSegment(k)
+  const records = seg.frames.reduce((n, f) => n + f.records.length, 0)
+  check('the keeper is not dropped', k.bytes !== null && k.drops === 0, { drops: k.drops })
+  check('it holds every file, the kept ones not written twice', (await everything(root, k)).size === N + 1 && records === N + 1, { records })
+}
+
+console.log('== a keeper whose records the folder has all superseded is dropped at once')
+{
+  const root = library()
+  const k = new FakeKeeper()
+  root.readOnly = true
+  const a = scan(root, { keeper: k, saveTo: 'browser', now: () => 1e12 })
+  await a.prepare()
+  await a.run()
+  root.readOnly = false
+  // A later scan of the same folder from a device with no keeper.
+  const b = scan(root, { now: () => 2e12 })
+  await b.prepare()
+  await b.run()
+  const c = scan(root, { keeper: k, now: () => 3e12 })
+  const p = await c.prepare()
+  check('nothing to move, nothing to do, the keeper dropped', p.phase === 'done' && p.unsaved === 0 && k.bytes === null && k.drops === 1, { p, drops: k.drops })
+}
+
+console.log('== kept records an older parser wrote are read again, not moved')
+{
+  const root = library()
+  root.readOnly = true
+  const k = new FakeKeeper()
+  const a = scan(root, { keeper: k, saveTo: 'browser' })
+  await a.prepare()
+  await a.run()
+  const seg = await keptSegment(k)
+  k.bytes = await encodeSegment(seg.deviceId, seg.frames.map((f) => ({ ...f, parserVersion: PARSER_VERSION - 1 })))
+  root.readOnly = false
+  const p = await scan(root, { keeper: k, calibrate: 0 }).prepare()
+  check('all read again, none moved, the stale keeper dropped',
+    p.phase === 'planned' && p.toRead === N && p.unsaved === 0 && k.bytes === null, { p, kept: k.bytes?.length })
+}
+
+console.log('== a keeper that cannot store or be read is said')
+{
+  const root = library()
+  root.readOnly = true
+  const k = new FakeKeeper()
+  k.failWrite = 'QuotaExceededError'
+  const s = scan(root, { keeper: k, saveTo: 'browser' })
+  await s.prepare()
+  const d = await s.run()
+  check('kept in the tab, said once', d.unsaved === N && d.saved === 0 && d.problems.filter((m) => m.includes('no room left')).length === 1, d)
+  const k2 = new FakeKeeper()
+  k2.failRead = 'UnknownError'
+  const p = await scan(library(), { keeper: k2 }).prepare()
+  check('an unreadable keeper is said, and the scan goes on', p.phase === 'planned' && p.problems.some((m) => m.startsWith(KEPT_LABEL + ' could not be read')), p)
+  let threw = false
+  try { scan(root, { saveTo: 'browser' }) } catch { threw = true }
+  check('saving to the browser with no keeper is refused', threw)
 }
 
 console.log('== one scan at a time')

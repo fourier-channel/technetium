@@ -1,8 +1,8 @@
-import type { QqDirHandle, QqFileHandle } from './folderStore'
+import type { Keeper, QqDirHandle, QqFileHandle } from './folderStore'
 import { embeddedChunks, promptSource, promptToTags } from './promptTags'
 import { imageType, isHidden, naturalCompare } from './qqGrid'
 import {
-  mergeSegments, newDeviceId, pathKey, readSegment, segmentName, SegmentWriter, PARSER_VERSION,
+  mergeSegments, newDeviceId, pathKey, placeAll, readSegment, segmentName, SegmentWriter, winners, PARSER_VERSION,
   type Placed, type QqiFile, type QqiPrompt, type QqiRecord, type SegmentRead,
 } from './qqi'
 
@@ -309,43 +309,102 @@ export async function readEntry(path: string, handle: QqFileHandle, prefixBytes 
 // --- this device's own segment ------------------------------------------------------
 
 /**
- * This device's segment in `.quickqueue/`, opened for appending. Each append
- * is one writable: on failure it is aborted and the file is as it was. The
- * writer's string tables then hold strings the file does not, so a failed
+ * Where this device's segment is stored: `.quickqueue/` in the folder, or, for
+ * a folder QuickQueue may not write, the keeper in this browser
+ * (folderStore.ts). The bytes are the same either way (QQ_FOLDER_INDEX.md
+ * sec 3c).
+ */
+export interface SegmentFile {
+  /** Names the segment, to start a sentence for the user. */
+  readonly label: string
+  /** The file name readSegment checks the header against; none when the
+   *  segment is not a file in the folder. */
+  readonly fileName?: string
+  /** The bytes as stored; empty when there are none yet. */
+  read(): Promise<Uint8Array>
+  /** Replaces everything from `offset` on with `bytes`, all or nothing. */
+  writeAt(offset: number, bytes: Uint8Array): Promise<void>
+}
+
+export const KEPT_LABEL = 'The index kept in this browser for this folder'
+
+/** This device's segment file in `.quickqueue/`, made if missing. */
+export async function folderSegmentFile(root: QqDirHandle, deviceId: string): Promise<SegmentFile> {
+  const dir = await root.getDirectoryHandle(INDEX_DIR, { create: true })
+  const name = segmentName(deviceId)
+  const handle = await dir.getFileHandle(name, { create: true })
+  // The length last read or written; a write that starts before it cuts the
+  // rest off first.
+  let length = 0
+  return {
+    label: `This device's index file ${INDEX_DIR}/${name}`,
+    fileName: name,
+    async read() {
+      const bytes = new Uint8Array(await (await handle.getFile()).arrayBuffer())
+      length = bytes.length
+      return bytes
+    },
+    // One writable: on failure it is aborted and the file is as it was.
+    async writeAt(offset, bytes) {
+      let w
+      try {
+        w = await handle.createWritable({ keepExistingData: true })
+        if (offset < length) await w.truncate(offset)
+        await w.seek(offset)
+        await w.write(bytes)
+        await w.close()
+      } catch (e) {
+        if (w) await w.abort().catch(() => {})
+        throw e
+      }
+      length = offset + bytes.length
+    },
+  }
+}
+
+export function keptSegmentFile(keeper: Keeper): SegmentFile {
+  return {
+    label: KEPT_LABEL,
+    read: async () => (await keeper.read()) ?? new Uint8Array(0),
+    writeAt: (offset, bytes) => keeper.writeAt(offset, bytes),
+  }
+}
+
+/**
+ * This device's segment, opened for appending. Each append replaces the
+ * stored bytes from the end of the last good frame on, all or nothing. The
+ * writer's string tables then hold strings the store does not, so a failed
  * segment is never appended to again: the caller opens it afresh, which reads
- * the tables back from the file.
+ * the tables back.
  */
 export class OwnSegment {
   private broken = false
-  private readonly handle: QqFileHandle
+  private readonly file: SegmentFile
   private readonly writer: SegmentWriter
   private offset: number
-  private truncateTo: number | null
-  /** What opening found wrong with the file, said once. */
+  /** What opening found wrong with the stored bytes, said once. */
   readonly problem: string | null
 
-  private constructor(handle: QqFileHandle, writer: SegmentWriter, offset: number, truncateTo: number | null, problem: string | null) {
-    this.handle = handle
+  private constructor(file: SegmentFile, writer: SegmentWriter, offset: number, problem: string | null) {
+    this.file = file
     this.writer = writer
     this.offset = offset
-    this.truncateTo = truncateTo
     this.problem = problem
   }
 
-  static async open(root: QqDirHandle, deviceId: string): Promise<OwnSegment> {
-    const dir = await root.getDirectoryHandle(INDEX_DIR, { create: true })
-    const name = segmentName(deviceId)
-    const handle = await dir.getFileHandle(name, { create: true })
-    const bytes = new Uint8Array(await (await handle.getFile()).arrayBuffer())
-    if (bytes.length === 0) return new OwnSegment(handle, SegmentWriter.fresh(deviceId), 0, null, null)
-    const r = await readSegment(bytes, name)
+  /** `deviceId` names a segment written from the start; one that reads is
+   *  resumed under the id its header names. */
+  static async open(file: SegmentFile, deviceId: string): Promise<OwnSegment> {
+    const bytes = await file.read()
+    if (bytes.length === 0) return new OwnSegment(file, SegmentWriter.fresh(deviceId), 0, null)
+    const r = await readSegment(bytes, file.fileName)
     if (!r.ok) {
-      return new OwnSegment(handle, SegmentWriter.fresh(deviceId), 0, 0,
-        `This device's index file ${INDEX_DIR}/${name} could not be read (${r.reason}), so it is being written again from the start.`)
+      return new OwnSegment(file, SegmentWriter.fresh(deviceId), 0,
+        `${file.label} could not be read (${r.reason}), so it is being written again from the start.`)
     }
     const cut = r.goodLength < bytes.length ? r.goodLength : null
-    return new OwnSegment(handle, SegmentWriter.resume(r), r.goodLength, cut,
-      cut === null ? null : `This device's index file was damaged after byte ${cut} (${r.stopped}); everything before that is kept and the rest is written again.`)
+    return new OwnSegment(file, SegmentWriter.resume(r), r.goodLength,
+      cut === null ? null : `${file.label} was damaged after byte ${cut} (${r.stopped}); everything before that is kept and the rest is written again.`)
   }
 
   get usable(): boolean { return !this.broken }
@@ -356,26 +415,14 @@ export class OwnSegment {
     if (this.offset === 0) parts.push(this.writer.header())
     try {
       parts.push(await this.writer.frame(records, writtenAtSeconds))
+      const bytes = parts.length === 1 ? parts[0] : concat(parts)
+      await this.file.writeAt(this.offset, bytes)
+      this.offset += bytes.length
+      return bytes.length
     } catch (e) {
       this.broken = true
       throw e
     }
-    const bytes = parts.length === 1 ? parts[0] : concat(parts)
-    let w
-    try {
-      w = await this.handle.createWritable({ keepExistingData: true })
-      if (this.truncateTo !== null) await w.truncate(this.truncateTo)
-      await w.seek(this.offset)
-      await w.write(bytes)
-      await w.close()
-    } catch (e) {
-      this.broken = true
-      if (w) await w.abort().catch(() => {})
-      throw e
-    }
-    this.truncateTo = null
-    this.offset += bytes.length
-    return bytes.length
   }
 }
 
@@ -459,13 +506,23 @@ export interface ScanOptions {
   /** Web Locks; null runs unlocked (a check). One scan per browser profile at
    *  a time, so two tabs never write one segment. */
   locks?: LockManager | null
+  /**
+   * This folder's keeper in this browser (folderStore.ts browserKeeper). Its
+   * segment is read with the folder's. Saving into the folder moves what it
+   * holds there and then drops it; a folder that refuses writes part way
+   * through switches saving to it, said once.
+   */
+  keeper?: Keeper | null
+  /** Where this scan saves: 'browser' when the user did not allow writing
+   *  into the folder (it needs a keeper). Default 'folder'. */
+  saveTo?: 'folder' | 'browser'
 }
 
 export const ONE_SCAN_AT_A_TIME =
   'Another tab of this browser is scanning. One scan runs at a time, so two tabs never write the same index file; close that scan first.'
 
 export class FolderScan {
-  private readonly o: Required<Omit<ScanOptions, 'onProgress' | 'locks'>> & Pick<ScanOptions, 'onProgress' | 'locks'>
+  private readonly o: Required<Omit<ScanOptions, 'onProgress' | 'locks' | 'keeper' | 'saveTo'>> & Pick<ScanOptions, 'onProgress' | 'locks' | 'keeper'>
   private p: ScanProgress = {
     phase: 'idle', listed: 0, folders: 0, indexed: 0, adopted: 0, moved: 0, gone: 0, toRead: 0, read: 0,
     secondReads: 0, unreadable: 0, saved: 0, unsaved: 0, etaSeconds: null, indexBytes: 0, addBytes: 0, problems: [],
@@ -485,6 +542,14 @@ export class FolderScan {
   private releaseLock: (() => void) | null = null
   /** Per folder: [images listed, indexed now, could not be read]. */
   private perFolder = new Map<string, [number, number, number]>()
+  private saveTo: 'folder' | 'browser'
+  /** Records the keeper holds that win the merge: moved into the folder first. */
+  private keptRecords = new Set<QqiRecord>()
+  /** Drop the keeper once the folder holds its records. */
+  private keptToDrop = false
+  /** The id a keeper segment written from the start gets: never this
+   *  device's folder id, so the two segments' records never share a seq. */
+  private readonly keptDevice = newDeviceId()
 
   constructor(opts: ScanOptions) {
     this.o = {
@@ -495,6 +560,8 @@ export class FolderScan {
     if (opts.locks === undefined) {
       this.o.locks = typeof navigator !== 'undefined' && navigator.locks ? navigator.locks : null
     }
+    this.saveTo = opts.saveTo ?? 'folder'
+    if (this.saveTo === 'browser' && !opts.keeper) throw new Error('qq scan: saving to the browser needs a keeper')
   }
 
   progress(): ScanProgress {
@@ -541,8 +608,21 @@ export class FolderScan {
       const index = await readIndex(this.o.root)
       this.p.problems.push(...index.problems)
       this.p.indexBytes = index.bytes
-      this.merged = mergeSegments(index.segments)
+      const kept = await this.readKept()
+      const segments = kept ? [...index.segments, kept] : index.segments
+      this.merged = mergeSegments(segments)
       this.p.indexed = this.merged.size
+      if (kept && this.saveTo === 'folder') {
+        // Moved into the folder ahead of everything this scan learns. A record
+        // an older parser wrote is left behind: the plan reads its file again.
+        for (const w of winners(segments.flatMap(placeAll)).values()) {
+          if (w.deviceId !== kept.deviceId || w.parserVersion < PARSER_VERSION) continue
+          this.pending.push(w.record)
+          this.keptRecords.add(w.record)
+        }
+      }
+      // Nothing kept is needed: no write waits on dropping it.
+      if (this.keptToDrop && !this.keptRecords.size) await this.dropKept()
 
       const plan = planScan(this.listed.files.keys(), this.merged)
       this.toRead = plan.toRead
@@ -666,19 +746,35 @@ export class FolderScan {
     while (this.flushing) await this.flushing
     if (!this.pending.length) return
     if (!force && this.pending.length < this.o.flushRecords && this.o.now() - this.lastFlush < this.o.flushMs) return
-    const batch = this.pending
+    let batch = this.pending
     this.pending = []
     const mine = (async () => {
       try {
-        if (!this.own || !this.own.usable) {
-          this.own = await OwnSegment.open(this.o.root, this.o.deviceId)
-          if (this.own.problem) this.p.problems.push(this.own.problem)
+        for (;;) {
+          try {
+            await this.save(batch)
+            break
+          } catch (e) {
+            if (this.saveTo === 'folder' && this.o.keeper && refusesWrites(e)) {
+              // Keep it in this browser from here on. What the keeper already
+              // holds stays there and is not written to it twice.
+              this.saveTo = 'browser'
+              this.own = null
+              this.keptToDrop = false
+              batch = batch.filter((r) => !this.keptRecords.has(r))
+              this.p.problems.push(KEPT_IN_BROWSER)
+              continue
+            }
+            throw e
+          }
         }
-        await this.own.append(batch, Math.floor(this.o.now() / 1000))
         this.p.saved += batch.length
+        // The first save into the folder carried the keeper's records: they
+        // were first in line, and a failed batch goes back to the front.
+        if (this.keptToDrop) await this.dropKept()
       } catch (e) {
         this.pending = batch.concat(this.pending)
-        const said = saveFailureWords(e)
+        const said = saveFailureWords(e, this.saveTo)
         if (this.p.problems[this.p.problems.length - 1] !== said) this.p.problems.push(said)
       } finally {
         this.lastFlush = this.o.now()
@@ -687,6 +783,44 @@ export class FolderScan {
     })()
     this.flushing = mine
     try { await mine } finally { if (this.flushing === mine) this.flushing = null }
+  }
+
+  private async save(batch: QqiRecord[]): Promise<void> {
+    if (!batch.length) return
+    if (!this.own || !this.own.usable) {
+      this.own = this.saveTo === 'browser'
+        ? await OwnSegment.open(keptSegmentFile(this.o.keeper!), this.keptDevice)
+        : await OwnSegment.open(await folderSegmentFile(this.o.root, this.o.deviceId), this.o.deviceId)
+      if (this.own.problem) this.p.problems.push(this.own.problem)
+    }
+    await this.own.append(batch, Math.floor(this.o.now() / 1000))
+  }
+
+  /** The keeper's segment, or null. Problems are said; none stops the scan. */
+  private async readKept(): Promise<SegmentRead | null> {
+    if (!this.o.keeper) return null
+    let bytes: Uint8Array | null
+    try {
+      bytes = await this.o.keeper.read()
+    } catch (e) {
+      this.p.problems.push(`${KEPT_LABEL} could not be read (${errorName(e) || 'unknown error'}).`)
+      return null
+    }
+    if (!bytes?.length) return null
+    this.keptToDrop = this.saveTo === 'folder'
+    const r = await readSegment(bytes)
+    if (!r.ok) { this.p.problems.push(`${KEPT_LABEL} was skipped: ${r.reason}.`); return null }
+    if (r.stopped) this.p.problems.push(`${KEPT_LABEL} was read up to byte ${r.goodLength} of ${bytes.length}: ${r.stopped}.`)
+    return r
+  }
+
+  private async dropKept(): Promise<void> {
+    this.keptToDrop = false
+    try {
+      await this.o.keeper!.drop()
+    } catch (e) {
+      this.p.problems.push(`${KEPT_LABEL} is now saved in the folder, but this browser's copy could not be removed (${errorName(e) || 'unknown error'}); the next scan moves it again.`)
+    }
   }
 
   private apply(r: QqiRecord): void {
@@ -750,9 +884,22 @@ function failureWords(e: unknown): string {
   return `The scan stopped on an error (${name || String(e)}). What it read before that is kept.`
 }
 
-function saveFailureWords(e: unknown): string {
+function refusesWrites(e: unknown): boolean {
   const name = errorName(e)
-  if (name === 'NotAllowedError' || name === 'NoModificationAllowedError' || name === 'SecurityError') {
+  return name === 'NotAllowedError' || name === 'NoModificationAllowedError' || name === 'SecurityError'
+}
+
+export const KEPT_IN_BROWSER =
+  `QuickQueue may not write into this folder, so its index is kept in this browser instead, and other devices will scan it again. ` +
+  `To save it into the folder (${INDEX_DIR}), Stop, press Scan again and allow editing.`
+
+function saveFailureWords(e: unknown, where: 'folder' | 'browser'): string {
+  const name = errorName(e)
+  if (where === 'browser') {
+    if (name === 'QuotaExceededError') return 'This browser has no room left to keep the index, so it stays in this tab and saving is tried again.'
+    return `The index could not be kept in this browser (${name || String(e)}). It stays in this tab and saving is tried again.`
+  }
+  if (refusesWrites(e)) {
     return `QuickQueue may not write into this folder, so the index is kept in this tab only and other devices will scan again. Give QuickQueue write access to this folder to save it there (${INDEX_DIR}).`
   }
   if (name === 'QuotaExceededError') return 'The disk holding this folder is full, so the index could not be saved. It stays in this tab and is saved once there is room.'

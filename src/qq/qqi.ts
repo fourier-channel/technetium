@@ -482,7 +482,7 @@ export function placeAll(seg: { deviceId: string; frames: QqiFrame[] }): Placed[
 }
 
 /** The winning record per path key, gone records included. */
-function winners(placed: Iterable<Placed>): Map<string, Placed> {
+export function winners(placed: Iterable<Placed>): Map<string, Placed> {
   const best = new Map<string, Placed>()
   for (const p of placed) {
     const k = pathKey(p.record.path)
