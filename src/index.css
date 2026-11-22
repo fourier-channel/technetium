@@ -2309,7 +2309,7 @@ code {
 .tc-pinfold:hover { color: var(--cpd-color-text-primary, #e6e9ef); border-color: rgba(160, 160, 160, 0.6); }
 /* Out: the pin is lit. Folded: it is quiet and carries the count it holds. */
 .tc-pinfold[aria-pressed='true'] {
-  color: var(--mod-accent, #0ce92a);
+  color: var(--mod-accent, #3fa34d);
   border-color: rgba(56, 224, 138, 0.45);
 }
 .tc-carousel:focus-visible {
@@ -3014,12 +3014,12 @@ code {
 }
 .tc-tcard-pin.is-mark {
   cursor: default;
-  color: var(--mod-accent, #0ce92a);
+  color: var(--mod-accent, #3fa34d);
   border-color: rgba(56, 224, 138, 0.35);
 }
 .tc-tcard-pin:hover { color: var(--cpd-color-text-primary, #e6e9ef); border-color: rgba(160, 160, 160, 0.6); }
 .tc-tcard-pin[aria-pressed='true'] {
-  color: var(--mod-accent, #0ce92a);
+  color: var(--mod-accent, #3fa34d);
   border-color: rgba(56, 224, 138, 0.45);
 }
 /* A pinned card carries the accent down its leading edge, at any distance. */
@@ -3030,7 +3030,7 @@ code {
   top: 0;
   bottom: 0;
   width: 3px;
-  background: var(--mod-accent, #0ce92a);
+  background: var(--mod-accent, #3fa34d);
   opacity: 0.8;
   pointer-events: none;
 }
@@ -4431,7 +4431,7 @@ code {
    panel is exactly that: something is going on here.
    --------------------------------------------------------------------------- */
 .tc-divider {
-  --tc-div-tone: var(--mod-accent, #0ce92a);
+  --tc-div-tone: var(--mod-accent, #3fa34d);
   /* Fallbacks, not a second opinion: the live values below are derived from
      --tc-div-tone by relative-colour syntax, and these only stand in on an
      engine that cannot do that arithmetic. Grep marker: DIV-TONE-FALLBACK. */
@@ -4761,7 +4761,7 @@ code {
   cursor: pointer;
 }
 .tc-density-btn[aria-pressed='true'] {
-  color: var(--mod-accent, #0ce92a);
+  color: var(--mod-accent, #3fa34d);
   border-color: rgba(56, 224, 138, 0.45);
 }
 @supports (color: rgb(from white r g b / 1)) {
