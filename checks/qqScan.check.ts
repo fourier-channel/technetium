@@ -303,6 +303,20 @@ async function indexOf(root: FakeDir) {
 const scan = (root: FakeDir, extra: Partial<ConstructorParameters<typeof FolderScan>[0]> = {}) =>
   new FolderScan({ root: asRoot(root), deviceId: DEV, locks: null, concurrency: 4, calibrate: 5, ...extra })
 
+console.log('== declining the cost writes nothing')
+{
+  const root = library()
+  resetCounts()
+  const s = scan(root)
+  const p = await s.prepare()
+  s.stop()
+  const after = s.progress()
+  await new Promise((r) => setTimeout(r, 20))
+  check('stopped at once, nothing waiting', after.phase === 'stopped' && after.unsaved === 0 && after.saved === 0, after)
+  check('no index folder, no write', counts.writes === 0 && !root.children.has(INDEX_DIR), counts)
+  check('the calibration had read files', p.read > 0)
+}
+
 console.log('== a first scan')
 {
   const root = library()
@@ -419,6 +433,10 @@ console.log('== an unreadable file is counted and said')
   const d = await s.run()
   check('done, one unreadable, named', d.phase === 'done' && d.unreadable === 1 && d.problems.some((m) => m.includes('img_1.png')), d)
   check('not indexed, so the next scan tries it', !(await indexOf(root)).has('2026-11-11/img_1.png'))
+  const fp = s.folderProgress()
+  const hit = fp.get('2026-11-11')!
+  check('its folder counts it as failed, not done', hit.failed === 1 && hit.done === hit.images - 1, hit)
+  check('no other folder has a failure', [...fp].every(([f, c]) => f === '2026-11-11' || c.failed === 0))
 }
 
 console.log('== a folder QuickQueue may not write')

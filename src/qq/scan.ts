@@ -440,6 +440,8 @@ export interface ScanProgress {
   problems: string[]
 }
 
+export interface FolderCount { images: number; done: number; failed: number }
+
 export interface ScanOptions {
   root: QqDirHandle
   deviceId: string
@@ -481,8 +483,8 @@ export class FolderScan {
   private readsTimed = 0
   private lastEmit = 0
   private releaseLock: (() => void) | null = null
-  /** The folder of each path to read, and per folder [images, done]. */
-  private perFolder = new Map<string, [number, number]>()
+  /** Per folder: [images listed, indexed now, could not be read]. */
+  private perFolder = new Map<string, [number, number, number]>()
 
   constructor(opts: ScanOptions) {
     this.o = {
@@ -499,10 +501,11 @@ export class FolderScan {
     return { ...this.p, problems: [...this.p.problems] }
   }
 
-  /** Per folder ('' is the root): images listed, and how many are indexed now. */
-  folderProgress(): Map<string, { images: number; done: number }> {
-    const out = new Map<string, { images: number; done: number }>()
-    for (const [f, [images, done]] of this.perFolder) out.set(f, { images, done })
+  /** Per folder ('' is the root): images listed, how many are indexed now,
+   *  and how many this scan could not read. */
+  folderProgress(): Map<string, FolderCount> {
+    const out = new Map<string, FolderCount>()
+    for (const [f, [images, done, failed]] of this.perFolder) out.set(f, { images, done, failed })
     return out
   }
 
@@ -551,7 +554,7 @@ export class FolderScan {
       })
       for (const path of this.listed.files.keys()) {
         const f = folderOf(path)
-        const c = this.perFolder.get(f) ?? [0, 0]
+        const c = this.perFolder.get(f) ?? [0, 0, 0]
         c[0]++
         if (this.merged.has(pathKey(path))) c[1]++
         this.perFolder.set(f, c)
@@ -596,10 +599,19 @@ export class FolderScan {
     if (this.p.phase === 'reading') { this.halt = 'pause'; this.set('pausing') }
   }
 
-  /** As pause, but the scan cannot be resumed; what was read is still saved. */
+  /**
+   * As pause, but the scan cannot be resumed. Once the user has said go, what
+   * was read is still saved. At 'planned' they have not (sec 7a step 4: it
+   * writes nothing before the user says go), so declining the cost discards
+   * the calibration's reads and the plan, and writes nothing.
+   */
   stop(): void {
     this.halt = 'stop'
-    if (this.p.phase === 'planned' || this.p.phase === 'paused') {
+    if (this.p.phase === 'planned') {
+      this.pending = []
+      this.p.unsaved = 0
+      this.finish('stopped')
+    } else if (this.p.phase === 'paused') {
       void this.flush(true).finally(() => this.finish('stopped'))
     }
   }
@@ -637,6 +649,8 @@ export class FolderScan {
             break
           }
           this.p.unreadable++
+          const c = this.perFolder.get(folderOf(path))
+          if (c) c[2]++
           this.p.problems.push(`"${path}" could not be read (${errorName(e) || 'unknown error'}); the next scan tries it again.`)
         }
         this.p.read++

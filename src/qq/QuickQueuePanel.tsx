@@ -9,6 +9,8 @@ import {
   type Arranged, type ListedEntry, type Permission,
 } from './qqGrid'
 import { thumbFor, cachedThumb } from './thumbs'
+import { FolderScan, INDEX_DIR, storedDeviceId, type ScanPhase, type ScanProgress } from './scan'
+import { calendarTotals, scanCalendar, type CalendarRow } from './scanCalendar'
 
 // ---------------------------------------------------------------------------
 // QuickQueue's panel (tc.152 step 1): the folders this device has been given,
@@ -16,10 +18,12 @@ import { thumbFor, cachedThumb } from './thumbs'
 // opened (QuickQueueDrawer.tsx), so a user who never opens it never downloads
 // it.
 //
-// Step 1 READS ONLY. It asks for read access, lists, makes thumbnails and
-// opens pictures full screen in the room Lightbox. Nothing is written into the
-// folder, nothing leaves the device, nothing is posted. Scan, search and
-// queues are steps 2-5.
+// Browsing reads only: it asks for read access, lists, makes thumbnails and
+// opens pictures full screen in the room Lightbox. The Scan (step 2,
+// QQ_FOLDER_INDEX.md sec 7a) is the one thing that writes, and only inside
+// the folder's .quickqueue/, after the user has seen its cost and said go.
+// Nothing leaves the device and nothing is posted. Search and queues are
+// steps 3-5.
 // ---------------------------------------------------------------------------
 
 type Handle = QqDirHandle | QqFileHandle
@@ -28,12 +32,40 @@ const MIN_TILE = 112
 const GAP = 6
 const OVERSCAN_ROWS = 3
 
-function counted(n: number, noun: string): string {
-  return `${n.toLocaleString()} ${noun}${n === 1 ? '' : 's'}`
+function counted(n: number, noun: string, plural = `${noun}s`): string {
+  return `${n.toLocaleString()} ${n === 1 ? noun : plural}`
 }
 
 function errorName(e: unknown): string {
   return e && typeof e === 'object' && 'name' in e ? String((e as { name: unknown }).name) : ''
+}
+
+function duration(seconds: number): string {
+  if (seconds < 90) return counted(Math.max(1, Math.round(seconds)), 'second')
+  const m = Math.round(seconds / 60)
+  if (m < 90) return counted(m, 'minute')
+  return `${counted(Math.floor(m / 60), 'hour')} ${counted(m % 60, 'minute')}`
+}
+
+function size(bytes: number): string {
+  if (bytes < 1000) return counted(bytes, 'byte')
+  if (bytes < 1e6) return `${(bytes / 1e3).toFixed(1)} KB`
+  if (bytes < 1e9) return `${(bytes / 1e6).toFixed(1)} MB`
+  return `${(bytes / 1e9).toFixed(2)} GB`
+}
+
+const FINISHED: ReadonlySet<ScanPhase> = new Set(['done', 'stopped', 'failed'])
+
+/** One Scan and what the panel shows of it. */
+interface ScanRun {
+  rootId: number
+  rootName: string
+  handle: QqDirHandle
+  engine: FolderScan
+  progress: ScanProgress
+  rows: CalendarRow[]
+  /** Said before the user says go: write access refused, device id not kept. */
+  notes: string[]
 }
 
 export default function QuickQueuePanel() {
@@ -47,6 +79,10 @@ export default function QuickQueuePanel() {
   const [listing, setListing] = useState<{ key: string; arranged: Arranged<Handle> } | null>(null)
   const [listedSoFar, setListedSoFar] = useState(0)
   const [problem, setProblem] = useState<string | null>(null)
+  const [scanRun, setScanRun] = useState<ScanRun | null>(null)
+  const [showScan, setShowScan] = useState(true)
+  const engineRef = useRef<FolderScan | null>(null)
+  const scanActive = !!scanRun && !FINISHED.has(scanRun.progress.phase)
 
   const root = roots?.find((r) => r.id === rootId) ?? null
   const dir: QqDirHandle | null = trail.length > 0 ? trail[trail.length - 1] : (root?.handle ?? null)
@@ -124,7 +160,78 @@ export default function QuickQueuePanel() {
     return () => { cancelled = true }
   }, [dir, dirKey, permission])
 
+  // A panel taken down mid-scan stops it; what was read after Start is saved.
+  useEffect(() => {
+    const ref = engineRef
+    return () => ref.current?.stop()
+  }, [])
+
   const shown = listing && listing.key === dirKey ? listing.arranged : null
+
+  const startScan = async () => {
+    if (!root || scanActive) return
+    // Asked at the press, the gesture the browser needs. Refused, the scan
+    // still runs and keeps its index in this tab (sec 7a step 7); the note
+    // below says so before the user says go.
+    let write = 'denied'
+    let asked = ''
+    try {
+      write = await root.handle.requestPermission({ mode: 'readwrite' })
+    } catch (e) {
+      asked = errorName(e) || 'unknown error'
+    }
+    const device = storedDeviceId()
+    const notes: string[] = []
+    if (write !== 'granted') {
+      notes.push(
+        `${asked ? `Asking to edit "${root.name}" failed (${asked})` : `Editing "${root.name}" was not allowed`}, so this scan ` +
+        `keeps its index in this tab only: nothing is saved into the folder, and the next scan reads it all again. ` +
+        `To save it, Stop, press Scan again and allow editing; QuickQueue writes only inside ${INDEX_DIR}.`,
+      )
+    }
+    if (!device.kept) {
+      notes.push(
+        'This browser would not keep QuickQueue\'s device id, so this scan saves into an index file of its own. ' +
+        'That costs space, never correctness; a normal (not private) window keeps the id.',
+      )
+    }
+    const target = { id: root.id, name: root.name, handle: root.handle }
+    let rowsAt = 0
+    const engine: FolderScan = new FolderScan({
+      root: target.handle,
+      deviceId: device.id,
+      onProgress: (p) => {
+        // The engine reports at most every 200 ms; the calendar is rebuilt at
+        // most once a second while reading, and on every change of phase.
+        const now = performance.now()
+        const rebuild = p.phase !== 'reading' || now - rowsAt > 1000
+        if (rebuild) rowsAt = now
+        setScanRun((r) => (r && r.engine === engine
+          ? { ...r, progress: p, rows: rebuild ? scanCalendar(engine.folderProgress(), target.name) : r.rows }
+          : r))
+      },
+    })
+    engineRef.current?.stop()
+    engineRef.current = engine
+    setShowScan(true)
+    setScanRun({ rootId: target.id, rootName: target.name, handle: target.handle, engine, progress: engine.progress(), rows: [], notes })
+    void engine.prepare()
+  }
+
+  const goScan = async () => {
+    if (!scanRun) return
+    if (scanRun.progress.phase === 'paused') {
+      // A lapsed grant is the usual pause; asking again is what lets it go
+      // on. Refused, run() pauses again at once and says why.
+      try { await scanRun.handle.requestPermission({ mode: 'readwrite' }) } catch { /* run() reports it */ }
+    }
+    void scanRun.engine.run()
+  }
+
+  const closeScan = () => {
+    engineRef.current = null
+    setScanRun(null)
+  }
 
   const choose = (id: number) => {
     storeLastRoot(id)
@@ -162,6 +269,11 @@ export default function QuickQueuePanel() {
   }
 
   const forget = async (id: number) => {
+    // A forgotten folder is not scanned on behind the user's back.
+    if (scanRun?.rootId === id) {
+      scanRun.engine.stop()
+      closeScan()
+    }
     await forgetRoot(id)
     const rs = await listRoots()
     setRoots(rs)
@@ -205,6 +317,19 @@ export default function QuickQueuePanel() {
             Add folder
           </button>
         )}
+        {view === 'ready' && root && (
+          <button
+            type="button"
+            className="tc-pill"
+            disabled={scanActive}
+            title={scanActive
+              ? 'A scan is running; one runs at a time'
+              : `Read the prompt of every picture in "${root.name}" into an index kept inside it (${INDEX_DIR})`}
+            onClick={() => void startScan()}
+          >
+            Scan
+          </button>
+        )}
       </div>
 
       {view === 'ready' && root && (
@@ -228,6 +353,19 @@ export default function QuickQueuePanel() {
               : ''}
           </span>
         </div>
+      )}
+
+      {scanRun && (
+        <ScanStrip
+          run={scanRun}
+          viewing={scanRun.rootId === rootId}
+          showing={showScan}
+          onToggle={() => setShowScan(!showScan)}
+          onGo={() => void goScan()}
+          onPause={() => scanRun.engine.pause()}
+          onStop={() => scanRun.engine.stop()}
+          onClose={closeScan}
+        />
       )}
 
       {problem && <p className="tc-qq-note tc-tone-warn">{problem}</p>}
@@ -264,18 +402,156 @@ export default function QuickQueuePanel() {
             <button type="button" className="tc-pill" onClick={() => void pick()}>Pick a folder</button>
           </div>
         )}
-        {view === 'ready' && !shown && !problem && (
-          <p className="tc-qq-note">Listing "{dir?.name}": {listedSoFar.toLocaleString()} so far.</p>
+        {view === 'ready' && scanRun && scanRun.rootId === rootId && showScan ? (
+          <ScanCalendar rows={scanRun.rows} rootName={scanRun.rootName} />
+        ) : (
+          <>
+            {view === 'ready' && !shown && !problem && (
+              <p className="tc-qq-note">Listing "{dir?.name}": {listedSoFar.toLocaleString()} so far.</p>
+            )}
+            {view === 'ready' && shown && (
+              <FolderGrid
+                key={dirKey}
+                arranged={shown}
+                thumbKey={(name) => `${dirKey}/${name}`}
+                onOpenDir={(d) => setTrail([...trail, d])}
+                onOpenPicture={openPicture}
+              />
+            )}
+          </>
         )}
-        {view === 'ready' && shown && (
-          <FolderGrid
-            key={dirKey}
-            arranged={shown}
-            thumbKey={(name) => `${dirKey}/${name}`}
-            onOpenDir={(d) => setTrail([...trail, d])}
-            onOpenPicture={openPicture}
-          />
+      </div>
+    </div>
+  )
+}
+
+function scanWords(run: ScanRun): string {
+  const p = run.progress
+  const left = Math.max(0, p.toRead - p.read)
+  const eta = p.etaSeconds === null ? null : duration(p.etaSeconds)
+  switch (p.phase) {
+    case 'idle':
+      return `Starting a scan of "${run.rootName}"...`
+    case 'listing':
+      return `Listing "${run.rootName}": ${counted(p.listed, 'file')} in ${counted(p.folders, 'folder')} so far.`
+    case 'indexing':
+      return `Reading the index already kept in ${INDEX_DIR}...`
+    case 'calibrating':
+      return 'Timing a few reads on this device...'
+    case 'planned':
+      if (!left) return `Everything is read. Start saves ${counted(p.unsaved, 'entry', 'entries')} into ${INDEX_DIR}.`
+      return `${counted(left, 'picture')} to read in "${run.rootName}", ` +
+        (eta ? `about ${eta} on this device` : 'for a time that could not be measured (the first reads failed)') +
+        `. The index grows by about ${size(p.addBytes)}${p.indexBytes ? `; it is ${size(p.indexBytes)} now` : ''}. ` +
+        'Nothing is written until you press Start.'
+    case 'reading':
+      return `Reading "${run.rootName}", newest first${eta ? `: about ${eta} left` : ''}.`
+    case 'pausing':
+      return 'Pausing once the reads in flight finish...'
+    case 'paused':
+      if (!left && p.unsaved) {
+        return `Read to the end, but ${counted(p.unsaved, 'entry', 'entries')} could not be saved into the folder; the problems say why. Resume tries again.`
+      }
+      return `Paused with ${counted(left, 'picture')} to read. Resume carries on from there.`
+    case 'done':
+      return `Scan of "${run.rootName}" finished: ${counted(p.read, 'picture')} read, ${counted(p.adopted, 'picture')} already indexed.`
+    case 'stopped':
+      return p.saved
+        ? `Scan stopped. ${counted(p.saved, 'entry', 'entries')} saved; the next scan carries on from them.`
+        : 'Scan stopped before anything was saved; nothing was written.'
+    case 'failed':
+      return 'The scan could not go on; the problems say why.'
+  }
+}
+
+function ScanStrip({
+  run, viewing, showing, onToggle, onGo, onPause, onStop, onClose,
+}: {
+  run: ScanRun
+  viewing: boolean
+  showing: boolean
+  onToggle: () => void
+  onGo: () => void
+  onPause: () => void
+  onStop: () => void
+  onClose: () => void
+}) {
+  const p = run.progress
+  const planned = !['idle', 'listing', 'indexing', 'calibrating'].includes(p.phase)
+  const left = Math.max(0, p.toRead - p.read)
+  const num = (n: number) => (planned ? n.toLocaleString() : '-')
+  return (
+    <section className="tc-qq-scan" aria-label={`Scan of ${run.rootName}`} aria-live="polite">
+      <p className="tc-qq-scan-words">{scanWords(run)}</p>
+      {run.notes.map((n) => <p key={n} className="tc-qq-note tc-tone-warn">{n}</p>)}
+      {/* The four totals sec 7a step 8 names; second reads are the gauge for
+          the prefix budget (PREFIX_BYTES), so a wrong budget shows here. */}
+      <p className="tc-qq-scan-totals">
+        <span>Read <b>{num(p.read)}</b></span>
+        <span>To read <b>{num(left)}</b></span>
+        <span>Unreadable <b>{num(p.unreadable)}</b></span>
+        <span>Second reads <b>{num(p.secondReads)}</b></span>
+      </p>
+      <div className="tc-qq-scan-actions">
+        {p.phase === 'planned' && <button type="button" className="tc-pill" onClick={onGo}>Start</button>}
+        {p.phase === 'paused' && <button type="button" className="tc-pill" onClick={onGo}>Resume</button>}
+        {(p.phase === 'reading' || p.phase === 'pausing') && (
+          <button type="button" className="tc-pill" onClick={onPause} disabled={p.phase === 'pausing'}>Pause</button>
         )}
+        {!FINISHED.has(p.phase) && (
+          <button type="button" className="tc-pill" onClick={onStop}>{p.phase === 'planned' ? 'Cancel' : 'Stop'}</button>
+        )}
+        {FINISHED.has(p.phase) && <button type="button" className="tc-pill" onClick={onClose}>Close</button>}
+        {p.problems.length > 0 && (
+          <details className="tc-qq-problems">
+            <summary>{counted(p.problems.length, 'problem')}</summary>
+            <ul>{p.problems.map((x, i) => <li key={i}>{x}</li>)}</ul>
+          </details>
+        )}
+        {viewing && (
+          <button type="button" className="tc-pill tc-qq-scan-toggle" onClick={onToggle}>
+            {showing ? 'Show pictures' : 'Show scan'}
+          </button>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function ScanCalendar({ rows, rootName }: { rows: CalendarRow[]; rootName: string }) {
+  const t = calendarTotals(rows)
+  return (
+    <div className="tc-qq-cal">
+      <p className="tc-qq-cal-legend">
+        <span><i className="tc-qq-cal-cell" data-state="done" aria-hidden="true" /> {t.done.toLocaleString()} done</span>
+        <span><i className="tc-qq-cal-cell" data-state="reading" aria-hidden="true" style={{ '--tc-fill': '50%' } as React.CSSProperties} /> {t.reading.toLocaleString()} reading</span>
+        <span><i className="tc-qq-cal-cell" data-state="listed" aria-hidden="true" /> {t.listed.toLocaleString()} listed</span>
+        <span><i className="tc-qq-cal-cell" data-state="short" aria-hidden="true" /> {t.short.toLocaleString()} with unreadable files</span>
+      </p>
+      <div className="tc-qq-cal-scroll" role="list" aria-label="Folders by scan state">
+        {rows.length === 0 && <p className="tc-qq-note">A cell for each folder appears once the folder is listed.</p>}
+        {rows.map((r) => (
+          <div key={r.parent} className="tc-qq-cal-row" role="listitem">
+            <span className="tc-qq-cal-label" title={r.label}>{r.label}</span>
+            <span className="tc-qq-cal-cells">
+              {r.cells.map((c) => {
+                const what = `${c.folder || rootName}: ${c.done.toLocaleString()} of ${c.images.toLocaleString()} indexed` +
+                  (c.failed ? `, ${c.failed.toLocaleString()} unreadable` : '')
+                return (
+                  <i
+                    key={c.folder}
+                    className="tc-qq-cal-cell"
+                    data-state={c.state}
+                    role="img"
+                    aria-label={what}
+                    title={what}
+                    style={{ '--tc-fill': `${Math.floor((100 * c.done) / c.images)}%` } as React.CSSProperties}
+                  />
+                )
+              })}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   )
