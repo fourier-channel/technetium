@@ -3709,10 +3709,10 @@ code {
 }
 @media (prefers-reduced-motion: reduce) { .tc-qq-tile { transition: none; } }
 /* The Scan (QQ_FOLDER_INDEX.md sec 7a step 8): a strip of words, totals and
-   controls, and a calendar of cells, one per folder, coloured by state. No
-   animation anywhere in it: a scan can run for hours, and an infinite
-   animation costs a core at idle. The words keep two lines so a longer
-   phase line does not push the calendar down. */
+   controls above the folder being browsed, and a foot on each folder tile
+   for everything below it. No animation anywhere in it: a scan can run for
+   hours, and an infinite animation costs a core at idle. The words keep two
+   lines so a longer phase line does not push the grid down. */
 .tc-qq-scan {
   padding: 6px 10px; font-size: 12px;
   border-top: 1px solid var(--mod-line); border-bottom: 1px solid var(--mod-line);
@@ -3725,37 +3725,25 @@ code {
 }
 .tc-qq-scan-totals b { color: var(--mod-ink); font-weight: 600; }
 .tc-qq-scan-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
-.tc-qq-scan-toggle { margin-left: auto; }
 .tc-qq-problems summary { cursor: pointer; color: var(--mod-warn-fg); }
 .tc-qq-problems ul { margin: 4px 0 0; padding-left: 18px; max-height: 8em; overflow-y: auto; }
-.tc-qq-cal { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.tc-qq-cal-legend {
-  display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 6px 10px;
-  font-size: 12px; color: var(--mod-ink-dim);
+/* A folder tile's foot: filled from the left by the share of everything
+   below it that is indexed, with done/images ('+' while its listing goes on).
+   Listed is an empty foot, reading the accent, done ok, short warn. */
+.tc-qq-tile-scan {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 16px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; line-height: 16px; font-variant-numeric: tabular-nums;
+  color: var(--mod-ink); background: var(--mod-surface-2);
+  border-top: 1px solid var(--mod-line-strong);
 }
-.tc-qq-cal-legend > span { display: inline-flex; align-items: center; gap: 4px; }
-.tc-qq-cal-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 10px 10px; }
-.tc-qq-cal-row { display: flex; align-items: flex-start; gap: 8px; padding: 2px 0; }
-.tc-qq-cal-label {
-  flex: 0 0 9em; font-size: 11px; line-height: 14px; color: var(--mod-ink-dim);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.tc-qq-cal-cells { display: flex; flex-wrap: wrap; gap: 3px; flex: 1; min-width: 0; }
-.tc-qq-cal-cell {
-  display: inline-block; flex-shrink: 0; width: 12px; height: 12px; box-sizing: border-box;
-  border: 1px solid var(--mod-line-strong); border-radius: 2px; background: var(--mod-surface-2);
-}
-/* Reading: filled from the bottom by the share indexed (--tc-fill). */
-.tc-qq-cal-cell[data-state='reading'] {
-  border-color: var(--mod-active-fg);
-  background: linear-gradient(to top, var(--mod-active-fg) var(--tc-fill, 0%), var(--mod-surface-2) var(--tc-fill, 0%));
-}
-.tc-qq-cal-cell[data-state='done'] { border-color: var(--mod-ok-fg); background: var(--mod-ok-fg); }
-.tc-qq-cal-cell[data-state='short'] { border-color: var(--mod-warn-fg); background: var(--mod-warn-fg); }
-@media (pointer: coarse) {
-  .tc-qq-cal-cell { width: 16px; height: 16px; }
-  .tc-qq-cal-label { line-height: 18px; }
-}
+.tc-qq-tile-bar { position: absolute; left: 0; top: 0; bottom: 0; opacity: 0.35; background: var(--mod-active-fg); }
+.tc-qq-tile-n { position: relative; }
+.tc-qq-tile-scan[data-state='reading'] { border-top-color: var(--mod-active-fg); }
+.tc-qq-tile-scan[data-state='done'] { border-top-color: var(--mod-ok-fg); }
+.tc-qq-tile-scan[data-state='done'] .tc-qq-tile-bar { background: var(--mod-ok-fg); }
+.tc-qq-tile-scan[data-state='short'] { border-top-color: var(--mod-warn-fg); }
+.tc-qq-tile-scan[data-state='short'] .tc-qq-tile-bar { background: var(--mod-warn-fg); }
 
 /* --- An attached popup (AnchoredPopup.tsx) ------------------------------
    Drawn over the page in window coordinates, so no panel's overflow clips it

@@ -1,6 +1,7 @@
 import type { Keeper, QqDirHandle, QqFileHandle } from './folderStore'
 import { embeddedChunks, promptSource, promptToTags } from './promptTags'
 import { imageType, isHidden, naturalCompare } from './qqGrid'
+import type { ScanFolders } from './scanRollup'
 import {
   mergeSegments, newDeviceId, pathKey, placeAll, readSegment, segmentName, SegmentWriter, winners, PARSER_VERSION,
   type Placed, type QqiFile, type QqiPrompt, type QqiRecord, type SegmentRead,
@@ -672,6 +673,8 @@ export class FolderScan {
   /** Per folder: [images listed, indexed now, could not be read]. Filled as
    *  the listing goes, so the calendar draws it before the listing ends. */
   private perFolder = new Map<string, [number, number, number]>()
+  /** Folders whose listing, and every folder's below, has finished. */
+  private listedFolders = new Set<string>()
   /** The listing as it grows. */
   private listing: Listed = { files: new Map(), folders: new Map(), unlisted: [] }
   private saveTo: 'folder' | 'browser'
@@ -706,6 +709,16 @@ export class FolderScan {
     const out = new Map<string, FolderCount>()
     for (const [f, [images, done, failed]] of this.perFolder) out.set(f, { images, done, failed })
     return out
+  }
+
+  /** What the panel draws on the folder tiles (scanRollup.ts): copies, so a
+   *  drawn snapshot does not change under the panel. */
+  folders(): ScanFolders {
+    return {
+      counts: this.folderProgress(),
+      listed: new Set(this.listedFolders),
+      unlisted: this.listing.unlisted.map((u) => u.path),
+    }
   }
 
   /** The index as it stands: every device's records plus this scan's. */
@@ -770,7 +783,8 @@ export class FolderScan {
           if (planner.knows(path)) c[1]++
           this.perFolder.set(f, c)
         },
-        onFolder: async (_folder, images) => {
+        onFolder: async (folder, images) => {
+          this.listedFolders.add(folder)
           this.queue(planner.folder(images))
           this.p.adopted = planner.adopted
           if (!this.started && !this.calibrated && this.toRead.length - this.cursor >= Math.max(1, this.o.calibrate)) {

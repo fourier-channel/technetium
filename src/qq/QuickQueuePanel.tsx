@@ -10,7 +10,7 @@ import {
 } from './qqGrid'
 import { thumbFor, cachedThumb } from './thumbs'
 import { FolderScan, INDEX_DIR, STALL_MS, stalled, storedDeviceId, type ScanPhase, type ScanProgress } from './scan'
-import { calendarTotals, scanCalendar, type CalendarRow } from './scanCalendar'
+import { childTiles, subtreeOf, tileWords, type ScanFolders, type TileProgress } from './scanRollup'
 
 // ---------------------------------------------------------------------------
 // QuickQueue's panel (tc.152 step 1): the folders this device has been given,
@@ -63,7 +63,8 @@ interface ScanRun {
   handle: QqDirHandle
   engine: FolderScan
   progress: ScanProgress
-  rows: CalendarRow[]
+  /** What the folder tiles draw (scanRollup.ts), refreshed with the words. */
+  folders: ScanFolders
   /** Said before the user says go: write access refused, device id not kept. */
   notes: string[]
 }
@@ -80,7 +81,6 @@ export default function QuickQueuePanel() {
   const [listedSoFar, setListedSoFar] = useState(0)
   const [problem, setProblem] = useState<string | null>(null)
   const [scanRun, setScanRun] = useState<ScanRun | null>(null)
-  const [showScan, setShowScan] = useState(true)
   const engineRef = useRef<FolderScan | null>(null)
   const scanActive = !!scanRun && !FINISHED.has(scanRun.progress.phase)
   // The stall watch: time since the engine last reported a step.
@@ -97,6 +97,16 @@ export default function QuickQueuePanel() {
   const dir: QqDirHandle | null = trail.length > 0 ? trail[trail.length - 1] : (root?.handle ?? null)
   const dirKey = root ? `${root.id}/${trail.map((d) => d.name).join('/')}` : ''
   const view = folderView(supported, roots !== null, !!root, permission)
+  // A Scan of the folder being browsed is drawn on it: each folder tile
+  // carries the state of everything below it, and the crumbs carry the
+  // folder open now. A Scan of another folder draws on nothing here.
+  const scanHere = scanRun && scanRun.rootId === rootId ? scanRun.folders : null
+  const herePath = trail.map((d) => d.name).join('/')
+  const tiles = useMemo(() => (scanHere ? childTiles(scanHere, herePath) : null), [scanHere, herePath])
+  const hereTile = useMemo(
+    () => (scanHere && herePath ? subtreeOf(scanHere, herePath) : undefined),
+    [scanHere, herePath],
+  )
 
   // The folders remembered on this device, and which was open last.
   useEffect(() => {
@@ -206,7 +216,7 @@ export default function QuickQueuePanel() {
       )
     }
     const target = { id: root.id, name: root.name, handle: root.handle }
-    let rowsAt = 0
+    let foldersAt = 0
     const engine: FolderScan = new FolderScan({
       root: target.handle,
       deviceId: device.id,
@@ -215,13 +225,15 @@ export default function QuickQueuePanel() {
       onProgress: (p) => {
         lastStepRef.current = performance.now()
         setIdleMs(0)
-        // The engine reports at most every 200 ms; the calendar is rebuilt at
-        // most once a second while reading, and on every change of phase.
+        // The engine reports at most every 200 ms; the tiles' snapshot is
+        // taken at most once a second while listing or reading, and on every
+        // other change of phase.
         const now = performance.now()
-        const rebuild = p.phase !== 'reading' || now - rowsAt > 1000
-        if (rebuild) rowsAt = now
+        const busy = p.phase === 'reading' || p.phase === 'listing'
+        const rebuild = !busy || now - foldersAt > 1000
+        if (rebuild) foldersAt = now
         setScanRun((r) => (r && r.engine === engine
-          ? { ...r, progress: p, rows: rebuild ? scanCalendar(engine.folderProgress(), target.name) : r.rows }
+          ? { ...r, progress: p, folders: rebuild ? engine.folders() : r.folders }
           : r))
       },
     })
@@ -229,8 +241,9 @@ export default function QuickQueuePanel() {
     engineRef.current = engine
     lastStepRef.current = performance.now()
     setIdleMs(0)
-    setShowScan(true)
-    setScanRun({ rootId: target.id, rootName: target.name, handle: target.handle, engine, progress: engine.progress(), rows: [], notes })
+    setScanRun({
+      rootId: target.id, rootName: target.name, handle: target.handle, engine, progress: engine.progress(), folders: engine.folders(), notes,
+    })
     void engine.prepare()
   }
 
@@ -365,7 +378,8 @@ export default function QuickQueuePanel() {
                 // folders and other files only when there are some.
                 counted(shown.images.length, 'picture') +
                 (shown.dirs.length ? `, ${counted(shown.dirs.length, 'folder')}` : '') +
-                (shown.otherFiles ? `, ${counted(shown.otherFiles, 'other file')} not shown` : '')
+                (shown.otherFiles ? `, ${counted(shown.otherFiles, 'other file')} not shown` : '') +
+                (hereTile ? `; scan: ${tileWords(hereTile)}` : '')
               : ''}
           </span>
         </div>
@@ -375,9 +389,6 @@ export default function QuickQueuePanel() {
         <ScanStrip
           run={scanRun}
           stalledMs={stalled(scanRun.progress.phase, idleMs) ? idleMs : null}
-          viewing={scanRun.rootId === rootId}
-          showing={showScan}
-          onToggle={() => setShowScan(!showScan)}
           onGo={() => void goScan()}
           onPause={() => scanRun.engine.pause()}
           onStop={() => scanRun.engine.stop()}
@@ -419,23 +430,18 @@ export default function QuickQueuePanel() {
             <button type="button" className="tc-pill" onClick={() => void pick()}>Pick a folder</button>
           </div>
         )}
-        {view === 'ready' && scanRun && scanRun.rootId === rootId && showScan ? (
-          <ScanCalendar rows={scanRun.rows} rootName={scanRun.rootName} />
-        ) : (
-          <>
-            {view === 'ready' && !shown && !problem && (
-              <p className="tc-qq-note">Listing "{dir?.name}": {listedSoFar.toLocaleString()} so far.</p>
-            )}
-            {view === 'ready' && shown && (
-              <FolderGrid
-                key={dirKey}
-                arranged={shown}
-                thumbKey={(name) => `${dirKey}/${name}`}
-                onOpenDir={(d) => setTrail([...trail, d])}
-                onOpenPicture={openPicture}
-              />
-            )}
-          </>
+        {view === 'ready' && !shown && !problem && (
+          <p className="tc-qq-note">Listing "{dir?.name}": {listedSoFar.toLocaleString()} so far.</p>
+        )}
+        {view === 'ready' && shown && (
+          <FolderGrid
+            key={dirKey}
+            arranged={shown}
+            tiles={tiles}
+            thumbKey={(name) => `${dirKey}/${name}`}
+            onOpenDir={(d) => setTrail([...trail, d])}
+            onOpenPicture={openPicture}
+          />
         )}
       </div>
     </div>
@@ -502,14 +508,11 @@ function stallWords(phase: ScanPhase, ms: number): string {
 }
 
 function ScanStrip({
-  run, stalledMs, viewing, showing, onToggle, onGo, onPause, onStop, onClose,
+  run, stalledMs, onGo, onPause, onStop, onClose,
 }: {
   run: ScanRun
   /** Set when the stall watch fires: how long nothing has moved. */
   stalledMs: number | null
-  viewing: boolean
-  showing: boolean
-  onToggle: () => void
   onGo: () => void
   onPause: () => void
   onStop: () => void
@@ -554,62 +557,21 @@ function ScanStrip({
             <ul>{p.problems.map((x, i) => <li key={i}>{x}</li>)}</ul>
           </details>
         )}
-        {viewing && (
-          <button type="button" className="tc-pill tc-qq-scan-toggle" onClick={onToggle}>
-            {showing ? 'Show pictures' : 'Show scan'}
-          </button>
-        )}
       </div>
     </section>
   )
 }
 
-function ScanCalendar({ rows, rootName }: { rows: CalendarRow[]; rootName: string }) {
-  const t = calendarTotals(rows)
-  return (
-    <div className="tc-qq-cal">
-      <p className="tc-qq-cal-legend">
-        <span><i className="tc-qq-cal-cell" data-state="done" aria-hidden="true" /> {t.done.toLocaleString()} done</span>
-        <span><i className="tc-qq-cal-cell" data-state="reading" aria-hidden="true" style={{ '--tc-fill': '50%' } as React.CSSProperties} /> {t.reading.toLocaleString()} reading</span>
-        <span><i className="tc-qq-cal-cell" data-state="listed" aria-hidden="true" /> {t.listed.toLocaleString()} listed</span>
-        <span><i className="tc-qq-cal-cell" data-state="short" aria-hidden="true" /> {t.short.toLocaleString()} with unreadable files</span>
-      </p>
-      <div className="tc-qq-cal-scroll" role="list" aria-label="Folders by scan state">
-        {rows.length === 0 && <p className="tc-qq-note">A cell for each folder appears once the folder is listed.</p>}
-        {rows.map((r) => (
-          <div key={r.parent} className="tc-qq-cal-row" role="listitem">
-            <span className="tc-qq-cal-label" title={r.label}>{r.label}</span>
-            <span className="tc-qq-cal-cells">
-              {r.cells.map((c) => {
-                const what = `${c.folder || rootName}: ${c.done.toLocaleString()} of ${c.images.toLocaleString()} indexed` +
-                  (c.failed ? `, ${c.failed.toLocaleString()} unreadable` : '')
-                return (
-                  <i
-                    key={c.folder}
-                    className="tc-qq-cal-cell"
-                    data-state={c.state}
-                    role="img"
-                    aria-label={what}
-                    title={what}
-                    style={{ '--tc-fill': `${Math.floor((100 * c.done) / c.images)}%` } as React.CSSProperties}
-                  />
-                )
-              })}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 function FolderGrid({
   arranged,
+  tiles,
   thumbKey,
   onOpenDir,
   onOpenPicture,
 }: {
   arranged: Arranged<Handle>
+  /** A Scan of this folder: what each folder tile shows of it, by name. */
+  tiles: ReadonlyMap<string, TileProgress> | null
   thumbKey: (name: string) => string
   onOpenDir: (d: QqDirHandle) => void
   onOpenPicture: (imageIndex: number) => void
@@ -656,7 +618,7 @@ function FolderGrid({
     )
   }
 
-  const tiles = []
+  const cells = []
   for (let i = win.first; i < win.last; i++) {
     const row = Math.floor(i / win.cols)
     const col = i % win.cols
@@ -668,17 +630,27 @@ function FolderGrid({
     }
     if (i < dirCount) {
       const d = arranged.dirs[i]
-      tiles.push(
-        <button key={`d:${d.name}`} type="button" className="tc-qq-cell" data-kind="dir" style={style} title={d.name}
-          onClick={() => onOpenDir(d.handle as QqDirHandle)}>
+      const t = tiles?.get(d.name)
+      const label = t ? `${d.name}: ${tileWords(t)}` : d.name
+      cells.push(
+        <button key={`d:${d.name}`} type="button" className="tc-qq-cell" data-kind="dir" style={style} title={label}
+          aria-label={label} onClick={() => onOpenDir(d.handle as QqDirHandle)}>
           <span className="tc-qq-folder" aria-hidden="true" />
           <span className="tc-qq-name">{d.name}</span>
+          {t && (
+            <span className="tc-qq-tile-scan" data-state={t.state} aria-hidden="true">
+              <span className="tc-qq-tile-bar" style={{ width: `${t.images ? Math.floor((100 * t.done) / t.images) : 0}%` }} />
+              <span className="tc-qq-tile-n">
+                {t.done.toLocaleString()}/{t.images.toLocaleString()}{t.listing ? '+' : ''}
+              </span>
+            </span>
+          )}
         </button>,
       )
     } else {
       const e = arranged.images[i - dirCount]
       const imageIndex = i - dirCount
-      tiles.push(
+      cells.push(
         <ImageTile key={`f:${e.name}`} name={e.name} handle={e.handle as QqFileHandle} cacheKey={thumbKey(e.name)}
           style={style} onOpen={() => onOpenPicture(imageIndex)} />,
       )
@@ -687,7 +659,7 @@ function FolderGrid({
 
   return (
     <div className="tc-qq-grid" ref={scroller}>
-      <div className="tc-qq-canvas" style={{ height: win.totalHeight }}>{tiles}</div>
+      <div className="tc-qq-canvas" style={{ height: win.totalHeight }}>{cells}</div>
     </div>
   )
 }

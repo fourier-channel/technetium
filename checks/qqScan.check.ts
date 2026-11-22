@@ -23,6 +23,7 @@ import {
   ONE_SCAN_AT_A_TIME, PlanAsListed, STALL_MS, stalled, type Merged,
 } from '../src/qq/scan.ts'
 import type { Keeper, QqDirHandle, QqFileHandle, QqWritable } from '../src/qq/folderStore.ts'
+import { childTiles, subtreeOf } from '../src/qq/scanRollup.ts'
 
 let failures = 0
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -744,7 +745,8 @@ console.log('== Stop answers while a listing is wedged')
   resetCounts()
   const s = scan(root, { keeper: k, calibrate: 0, onProgress: (p) => { last = p.phase } })
   const done = s.prepare()
-  await new Promise((r) => setTimeout(r, 20))
+  // Polled to a deadline, not slept on; a timeout falls to the named check.
+  await until(() => last === 'listing', 'listing').catch(() => {})
   check('the listing is wedged', last === 'listing', last)
   s.stop()
   check('Stop ends it at once', s.progress().phase === 'stopped' && last === 'stopped', s.progress().phase)
@@ -757,7 +759,8 @@ console.log('== Stop answers while a listing is wedged')
   const g2 = new Promise<void>((_, rej) => { release = (e) => rej(e) })
   wedged.values = async function* () { await g2; yield* [] as never[] }
   const done2 = s2.prepare()
-  await new Promise((r) => setTimeout(r, 20))
+  await until(() => s2.progress().phase === 'listing', 'listing').catch(() => {})
+  check('the second scan is wedged in its listing', s2.progress().phase === 'listing', s2.progress().phase)
   s2.stop()
   release(domError('NotAllowedError'))
   const p2 = await done2
@@ -775,7 +778,7 @@ console.log('== Stop answers while the kept index is being read')
   let stoppedAt = -1
   const s = scan(root, { keeper: k, calibrate: 0, onProgress: (p) => { phases.push(p.phase) } })
   const done = s.prepare()
-  await new Promise((r) => setTimeout(r, 20))
+  await until(() => phases[phases.length - 1] === 'indexing', 'indexing').catch(() => {})
   check('the scan waits on the keeper', phases[phases.length - 1] === 'indexing', phases)
   s.stop()
   stoppedAt = phases.length
@@ -945,7 +948,10 @@ await guarded('Start while the listing goes on', async () => {
   const ran = s.run().then((x) => { settled = true; return x })
   ran.catch(() => {}) // a rejection surfaces at the await below, inside guarded()
   await until(() => s.progress().read === N, 'the listed files read')
-  await new Promise((r) => setTimeout(r, 20))
+  // The wedge still holds the listing open: a save seen now is a save made
+  // before the listing ends. Polled, not slept on: a sleep raced the write
+  // under load (one FAIL in a mutant round, 2026-11-22).
+  await until(() => s.progress().saved === N, 'the listed files saved while the listing is held')
   const mid = s.progress()
   check('what is listed is read and saved before the listing ends', mid.phase === 'reading' && !mid.listingDone && !settled && mid.saved === N, mid)
   w.release()
@@ -1028,6 +1034,73 @@ await guarded('a listing that fails after Start', async () => {
   await prepared
   check('failed, what was read saved, the failure said', d.phase === 'failed' && d.saved === 1 && d.problems.length > 0, d)
   check('nothing recorded gone without the whole listing', d.gone === 0 && (await indexOf(root)).has('2026-11-10/img_4.png'))
+})
+
+console.log('== the folder tiles while the listing goes on')
+await guarded('the folder tiles while the listing goes on', async () => {
+  const root = library()
+  const w = wedge(root, '0000')
+  const s = scan(root)
+  const prepared = s.prepare()
+  await until(() => s.progress().startable, 'startable')
+  const mid = s.folders()
+  const days = ['2026-11-13', '2026-11-12', '2026-11-11', '2026-11-10']
+  check('a folder walked to its end is listed', days.every((d) => mid.listed.has(d)), [...mid.listed])
+  check('the root and the wedged folder are not', !mid.listed.has('') && !mid.listed.has('0000'), [...mid.listed])
+  const t = childTiles(mid, '')
+  check('a tile per walked folder, none for the one not yet listed', t.size === 4 && !t.has('0000'), [...t.keys()])
+  check('walked tiles are whole, not still listing', [...t.values()].every((x) => !x.listing && x.images === N / 4), [...t.values()])
+  const top = subtreeOf(mid, '')
+  check('the root is still listing, so never done', !!top && top.listing && top.state !== 'done' && top.images === N, top)
+  const ran = s.run()
+  ran.catch(() => {})
+  await until(() => s.progress().read === N, 'the listed files read')
+  const read = subtreeOf(s.folders(), '')
+  check('all listed read, the root still not done while listing', !!read && read.done === N && read.state === 'reading' && read.listing, read)
+  w.release()
+  await ran
+  await prepared
+  const end = s.folders()
+  const te = childTiles(end, '')
+  check('at the end every tile is done and whole', te.size === 5 && [...te.values()].every((x) => x.state === 'done' && !x.listing), [...te])
+  const all = subtreeOf(end, '')
+  check('and so is the root', !!all && all.state === 'done' && !all.listing && all.images === N + 1, all)
+})
+
+console.log('== Stop mid-listing leaves the root unfinished')
+await guarded('Stop mid-listing leaves the root unfinished', async () => {
+  const root = library()
+  const w = wedge(root, '0000')
+  const s = scan(root)
+  const prepared = s.prepare()
+  await until(() => s.progress().startable, 'startable')
+  s.stop()
+  w.release()
+  await prepared
+  const f = s.folders()
+  const top = subtreeOf(f, '')
+  check('stopped, the root never claims done', !f.listed.has('') && !!top && top.listing && top.state !== 'done', top)
+})
+
+console.log('== a folder that cannot be listed marks its parents short')
+await guarded('a folder that cannot be listed marks its parents short', async () => {
+  const root = library()
+  put(root, 'x/a.png', pngWith('a'))
+  const x = root.children.get('x') as FakeDir
+  const broken = new FakeDir('broken')
+  broken.values = async function* () { throw domError('NotFoundError') }
+  x.children.set('broken', broken)
+  const s = scan(root)
+  await s.prepare()
+  await s.run()
+  const f = s.folders()
+  check('the unlisted folder is reported', f.unlisted.includes('x/broken'), f.unlisted)
+  const tx = childTiles(f, '').get('x')
+  check('its parent is short, though all it listed is read', !!tx && tx.state === 'short' && tx.broken && tx.done === 1 && tx.images === 1, tx)
+  const day = childTiles(f, '').get('2026-11-10')
+  check('a sibling is untouched', !!day && day.state === 'done' && !day.broken, day)
+  const inner = childTiles(f, 'x').get('broken')
+  check('inside, the folder itself is short with nothing found', !!inner && inner.state === 'short' && inner.images === 0, inner)
 })
 
 console.log('== the stall watch')
