@@ -3677,6 +3677,8 @@ code {
 .tc-qq-crumbs button:disabled { cursor: default; text-decoration: none; font-weight: 700; }
 .tc-qq-sep { color: var(--mod-ink-dim); padding: 0 2px; }
 .tc-qq-count { margin-left: auto; color: var(--mod-ink-dim); }
+.tc-qq-listed { margin-left: 8px; color: var(--mod-ink-dim); }
+.tc-qq-listed button { margin-left: 6px; }
 .tc-qq-note { margin: 8px 10px; font-size: 12px; color: var(--mod-ink-dim); }
 .tc-qq-ask { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding-left: 0; }
 .tc-qq-ask > .tc-pill { margin-left: 10px; }

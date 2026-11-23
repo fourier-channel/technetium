@@ -57,6 +57,12 @@ function size(bytes: number): string {
 const FINISHED: ReadonlySet<ScanPhase> = new Set(['done', 'stopped', 'failed'])
 
 /** One Scan and what the panel shows of it. */
+/** One folder's listing and when it finished (Date.now()). */
+interface Listing {
+  arranged: Arranged<Handle>
+  at: number
+}
+
 interface ScanRun {
   rootId: number
   rootName: string
@@ -77,8 +83,14 @@ export default function QuickQueuePanel() {
   const [permission, setPermission] = useState<Permission | null>(null)
   // The subfolders opened below the root, outermost first.
   const [trail, setTrail] = useState<QqDirHandle[]>([])
-  const [listing, setListing] = useState<{ key: string; arranged: Arranged<Handle> } | null>(null)
+  // Every folder listed this visit, by dirKey, and when. Going back to one
+  // shows it at once: the browser gives a folder no modified date, so listing
+  // it again is the only check, and a 25,000-name folder on the tablet takes
+  // minutes (operator 2026-11-23: a wait over about 10 s per load is not an
+  // acceptable cost). "List again" drops the folder's entry and lists it anew.
+  const [listings, setListings] = useState<ReadonlyMap<string, Listing>>(new Map())
   const [listedSoFar, setListedSoFar] = useState(0)
+  const [listSeconds, setListSeconds] = useState(0)
   const [problem, setProblem] = useState<string | null>(null)
   const [scanRun, setScanRun] = useState<ScanRun | null>(null)
   const engineRef = useRef<FolderScan | null>(null)
@@ -138,17 +150,23 @@ export default function QuickQueuePanel() {
     return () => { cancelled = true }
   }, [root])
 
-  // List the open folder to the end, then show it whole (qqGrid.ts says why).
+  // List the open folder to the end, then show it whole (qqGrid.ts says why),
+  // unless it was listed already this visit.
+  const hasListing = listings.has(dirKey)
   useEffect(() => {
-    if (!dir || permission !== 'granted') return
+    if (!dir || permission !== 'granted' || hasListing) return
     let cancelled = false
     const entries: ListedEntry<Handle>[] = []
     let lastTick = 0
+    const started = performance.now()
     queueMicrotask(() => {
       if (cancelled) return
       setListedSoFar(0)
+      setListSeconds(0)
       setProblem(null)
     })
+    // The clock runs even when no name arrives, so a stall shows as one.
+    const clock = setInterval(() => setListSeconds(Math.floor((performance.now() - started) / 1000)), 1000)
     void (async () => {
       try {
         for await (const h of dir.values()) {
@@ -161,7 +179,8 @@ export default function QuickQueuePanel() {
           }
         }
         if (cancelled) return
-        setListing({ key: dirKey, arranged: arrangeListing(entries) })
+        const done: Listing = { arranged: arrangeListing(entries), at: Date.now() }
+        setListings((m) => new Map(m).set(dirKey, done))
       } catch (e) {
         if (cancelled) return
         const name = errorName(e)
@@ -174,10 +193,15 @@ export default function QuickQueuePanel() {
               : `"${dir.name}" could not be listed (${name || 'unknown error'}). Pick it again; if that fails too, the folder is not readable from this browser.`,
           )
         }
+      } finally {
+        clearInterval(clock)
       }
     })()
-    return () => { cancelled = true }
-  }, [dir, dirKey, permission])
+    return () => {
+      cancelled = true
+      clearInterval(clock)
+    }
+  }, [dir, dirKey, permission, hasListing])
 
   // A panel taken down mid-scan stops it; what was read after Start is saved.
   useEffect(() => {
@@ -185,7 +209,15 @@ export default function QuickQueuePanel() {
     return () => ref.current?.stop()
   }, [])
 
-  const shown = listing && listing.key === dirKey ? listing.arranged : null
+  const here = listings.get(dirKey) ?? null
+  const shown = here?.arranged ?? null
+  const listAgain = () => {
+    setListings((m) => {
+      const n = new Map(m)
+      n.delete(dirKey)
+      return n
+    })
+  }
 
   const startScan = async () => {
     if (!root || scanActive) return
@@ -304,6 +336,7 @@ export default function QuickQueuePanel() {
       closeScan()
     }
     await forgetRoot(id)
+    setListings((m) => new Map([...m].filter(([k]) => !k.startsWith(`${id}/`))))
     const rs = await listRoots()
     setRoots(rs)
     if (id === rootId) choose(rs[0]?.id ?? -1)
@@ -382,6 +415,14 @@ export default function QuickQueuePanel() {
                 (hereTile ? `; scan: ${tileWords(hereTile)}` : '')
               : ''}
           </span>
+          {here && (
+            <span className="tc-qq-listed">
+              listed {new Date(here.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              <button type="button" onClick={listAgain} title="List this folder again, to see files added or removed since">
+                List again
+              </button>
+            </span>
+          )}
         </div>
       )}
 
@@ -431,7 +472,9 @@ export default function QuickQueuePanel() {
           </div>
         )}
         {view === 'ready' && !shown && !problem && (
-          <p className="tc-qq-note">Listing "{dir?.name}": {listedSoFar.toLocaleString()} so far.</p>
+          <p className="tc-qq-note">
+            Listing "{dir?.name}": {listedSoFar.toLocaleString()} so far, {duration(listSeconds)}.
+          </p>
         )}
         {view === 'ready' && shown && (
           <FolderGrid
