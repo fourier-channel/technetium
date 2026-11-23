@@ -32,7 +32,22 @@ import { useCallback, useSyncExternalStore } from 'react'
 // pop in reverse, then no phase at all, so a later withholding pops it again.
 // ---------------------------------------------------------------------------
 
-export type PopPhase = 'popping' | 'gone' | 'returning'
+// JAILED IS A PLACEHOLDER, NOT A POP (operator, 2026-11-23): "Instead of
+// Sample's entire post being rendered invisible on Tc, have her essentially
+// replace the post's image contents with a placeholder of [This post has been
+// deemed irrelevant.]" The booru says which withheld post is jailed
+// (fetchBooruPool answers JAILED); that picture is 'jailed' rather than
+// popping: its message stays in the room and its thread with the words
+// intact, and every view that would draw the picture draws JAILED_TEXT in its
+// place instead -- nothing of the picture is mounted or fetched, so it is
+// replaced, never covered. Not in goneMedia(), so no view drops its row. It is
+// rechecked on the same schedule as a gone picture, and release() brings it
+// back when the jail panel lets it out. Purely Technetium's drawing: the room
+// event and what any other client sees are untouched.
+export type PopPhase = 'popping' | 'gone' | 'returning' | 'jailed'
+
+/** What a jailed picture is drawn as, in every view, word for word. */
+export const JAILED_TEXT = '[This post has been deemed irrelevant.]'
 
 // Matches the animation in index.css (.tc-pop): the row is dropped when it
 // has finished, by this timer and never by animationend, which a reduced
@@ -52,10 +67,17 @@ type Schedule = (run: () => void, ms: number) => unknown
 
 /** The booru withheld this image's post from the reader: pop it, then drop it. */
 export function withhold(mediaId: string, schedule: Schedule = setTimeout, now: () => number = Date.now): void {
-  if (phases.has(mediaId)) return
+  // A jailed picture withheld for another reason now (let out of jail but
+  // still sensitive to this reader) pops like any other.
+  const was = phases.get(mediaId)
+  if (was !== undefined && was !== 'jailed') return
+  rechecks.delete(mediaId)
   phases.set(mediaId, 'popping')
   changed()
   schedule(() => {
+    // Only if nothing has happened to it since: a picture jailed while it
+    // popped is a placeholder now, not this timer's to make gone.
+    if (phases.get(mediaId) !== 'popping') return
     phases.set(mediaId, 'gone')
     gone = new Set([...gone, mediaId])
     rechecks.set(mediaId, { attempt: 0, due: now() + recheckDelay(0) })
@@ -64,13 +86,35 @@ export function withhold(mediaId: string, schedule: Schedule = setTimeout, now: 
   }, POP_MS)
 }
 
+/**
+ * The booru says this image's post is jailed: keep its message, draw
+ * JAILED_TEXT where the picture was. From any phase, a gone picture included
+ * (it comes back into the room as the placeholder).
+ */
+export function jail(mediaId: string, now: () => number = Date.now): void {
+  const was = phases.get(mediaId)
+  if (was === 'jailed') return
+  if (was === 'gone') {
+    const next = new Set(gone)
+    next.delete(mediaId)
+    gone = next
+  }
+  phases.set(mediaId, 'jailed')
+  if (!rechecks.has(mediaId)) rechecks.set(mediaId, { attempt: 0, due: now() + recheckDelay(0) })
+  changed()
+  armTicker()
+}
+
 /** The booru shows this image's post to the reader again: pop it back in. */
 export function release(mediaId: string, schedule: Schedule = setTimeout): void {
-  if (phases.get(mediaId) !== 'gone') return
+  const was = phases.get(mediaId)
+  if (was !== 'gone' && was !== 'jailed') return
   rechecks.delete(mediaId)
-  const next = new Set(gone)
-  next.delete(mediaId)
-  gone = next
+  if (was === 'gone') {
+    const next = new Set(gone)
+    next.delete(mediaId)
+    gone = next
+  }
   phases.set(mediaId, 'returning')
   changed()
   schedule(() => {
@@ -173,6 +217,11 @@ function armTicker(): void {
 
 export function popPhase(mediaId: string | undefined): PopPhase | undefined {
   return mediaId ? phases.get(mediaId) : undefined
+}
+
+/** This picture is jailed: draw JAILED_TEXT in its place, and fetch nothing of it. */
+export function isJailed(mediaId: string | undefined): boolean {
+  return popPhase(mediaId) === 'jailed'
 }
 
 /** Every image whose pop has finished: the rooms no longer show it. */

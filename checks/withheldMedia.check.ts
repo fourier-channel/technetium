@@ -14,9 +14,9 @@
 // release plays the pop in reverse and then clears, so it can pop again; a
 // release touches only a gone picture.
 import { readFileSync } from 'node:fs'
-const { fetchBooruPool, WITHHELD } = await import('../src/client/booruTags.ts')
+const { fetchBooruPool, WITHHELD, JAILED } = await import('../src/client/booruTags.ts')
 const {
-  withhold, release, popPhase, goneMedia, onWithheld, POP_MS,
+  withhold, release, popPhase, goneMedia, onWithheld, POP_MS, jail, isJailed, JAILED_TEXT,
   recheckDelay, dueForRecheck, recheckSoon, recheckDue,
   RECHECK_FIRST_MS, RECHECK_MAX_MS, RECHECK_SOON_MS,
 } = await import('../src/client/withheldMedia.ts')
@@ -36,6 +36,14 @@ console.log('\n-- only a withheld 404 pops --')
     (await fetchBooruPool(7, answer(404, async () => ({ success: false, withheld: true })))) === WITHHELD)
   check('a plain 404 is no post, not a pop',
     (await fetchBooruPool(7, answer(404, async () => ({ success: false, message: 'not found' })))) === null)
+  check('withheld and jailed is JAILED',
+    (await fetchBooruPool(7, answer(404, async () => ({ success: false, withheld: true, jailed: true })))) === JAILED)
+  check('jailed false is plain WITHHELD',
+    (await fetchBooruPool(7, answer(404, async () => ({ withheld: true, jailed: false })))) === WITHHELD)
+  check('jailed must be true, not truthy',
+    (await fetchBooruPool(7, answer(404, async () => ({ withheld: true, jailed: 'yes' })))) === WITHHELD)
+  check('jailed without withheld is no post',
+    (await fetchBooruPool(7, answer(404, async () => ({ jailed: true })))) === null)
   check('withheld must be true, not truthy',
     (await fetchBooruPool(7, answer(404, async () => ({ withheld: 'yes' })))) === null)
   check('an HTML 404 is no post, not a fault',
@@ -148,6 +156,76 @@ console.log('\n-- shown again, it pops back in --')
   check('gone again, with a fresh first recheck', goneMedia().has('back') && recheckDue('back') !== undefined)
 
   off()
+}
+
+console.log('\n-- a jailed picture stays, drawn as the placeholder --')
+{
+  check('the placeholder, word for word (operator 2026-11-23)',
+    JAILED_TEXT === '[This post has been deemed irrelevant.]', JAILED_TEXT)
+  const timers: { run: () => void; ms: number }[] = []
+  const schedule = (run: () => void, ms: number) => timers.push({ run, ms })
+  let heard = 0
+  const off = onWithheld(() => heard++)
+  const t = 2_000_000_000_000
+  const now = () => t
+
+  jail('j1', now)
+  check('jailed at once, with no pop', popPhase('j1') === 'jailed' && isJailed('j1') && timers.length === 0)
+  check('never gone, so no view drops its row', !goneMedia().has('j1'))
+  check('rechecked like a gone picture, a minute on', recheckDue('j1') === t + 60_000, recheckDue('j1'))
+  check('listeners heard it', heard === 1, heard)
+  jail('j1', now)
+  check('a second jail changes nothing', heard === 1, heard)
+
+  withhold('j2', schedule)
+  jail('j2', now)
+  check('jailed while it popped: the placeholder', popPhase('j2') === 'jailed')
+  timers.shift()!.run()
+  check('the pop timer does not make a jailed picture gone', popPhase('j2') === 'jailed' && !goneMedia().has('j2'))
+
+  withhold('j3', schedule)
+  timers.shift()!.run()
+  check('gone first', goneMedia().has('j3'))
+  jail('j3', now)
+  check('gone, then jailed: back in the room as the placeholder',
+    popPhase('j3') === 'jailed' && !goneMedia().has('j3'))
+
+  withhold('j1', schedule)
+  check('jailed, then withheld for another reason: it pops', popPhase('j1') === 'popping' && timers.length === 1)
+  timers.shift()!.run()
+  check('and goes', goneMedia().has('j1'))
+
+  release('j2', schedule)
+  check('let out of jail: returning, rechecks stopped',
+    popPhase('j2') === 'returning' && recheckDue('j2') === undefined && timers.length === 1)
+  timers.shift()!.run()
+  check('then shown as before', popPhase('j2') === undefined && !isJailed('j2'))
+  check('no phase is not jailed', !isJailed(undefined) && !isJailed('never'))
+
+  off()
+}
+
+console.log('\n-- every view that draws a picture draws the placeholder --')
+{
+  // Source shape: a render path that skips the jailed phase would fetch and
+  // show the picture. These are the paths a picture is drawn by.
+  const timeline = readFileSync(new URL('../src/ui/Timeline.tsx', import.meta.url), 'utf8')
+  const lightbox = readFileSync(new URL('../src/ui/Lightbox.tsx', import.meta.url), 'utf8')
+  const fnBody = (src: string, name: string) => {
+    const at = src.indexOf('function ' + name + '(')
+    return at < 0 ? '' : src.slice(at, src.indexOf('\n}\n', at))
+  }
+  check('the row picture and the booru picture are both Jailable',
+    (timeline.match(/<Jailable /g) ?? []).length === 2, (timeline.match(/<Jailable /g) ?? []).length)
+  check('Jailable mounts nothing of the picture while jailed',
+    /!== 'jailed'\) return <>\{children\}<\/>/.test(fnBody(timeline, 'Jailable')))
+  const cell = fnBody(timeline, 'GalleryCell')
+  check('a gallery cell asks, and mounts no picture while jailed',
+    /phase === 'jailed'/.test(cell) && /&& !jailed/.test(cell) && cell.includes('JAILED_TEXT'))
+  const irc = fnBody(timeline, 'IrcPicture')
+  check('the IRC line asks, and shows the words', /=== 'jailed'/.test(irc) && irc.includes('JAILED_TEXT'))
+  check('the lightbox asks, fetches nothing while jailed, and shows the words',
+    /=== 'jailed'/.test(lightbox) && /!cur \|\| jailed \|\|/.test(lightbox) && lightbox.includes('JAILED_TEXT'))
 }
 
 console.log('\n-- a gone picture leaves the room --')

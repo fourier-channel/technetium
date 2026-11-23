@@ -24,10 +24,11 @@ import {
 import {
   fetchBooruPool,
   writeBooruTags,
+  JAILED,
   WITHHELD,
   type TagEdit,
 } from './booruTags'
-import { popPhase, recheckSoon, release, setRechecker, withhold } from './withheldMedia'
+import { jail, popPhase, recheckSoon, release, setRechecker, withhold } from './withheldMedia'
 import { mediaOnScreen } from './onScreenMedia'
 import { mayRead, mergeBooruIntoSet, newBooruReadState, optimisticSet } from './booruLive'
 import { askKey, beginAsk, heardOf, isAbsent, newTagAsks, retry, settle, tagLineView, takeDeferred, type TagLineView } from './tagAsks'
@@ -233,7 +234,10 @@ function ingestEvent(ev: MatrixEvent): void {
   // And for a picture that popped out of the room (withheldMedia.ts): it has
   // no listener, because its row is gone, and a push for it -- a quarantine
   // let go, a replaced file -- is the soonest word that it may come back.
-  if (listeners.has(mediaId) || popPhase(mediaId) === 'gone') refreshBooruTags(mediaId, true)
+  // A jailed picture's placeholder mounts no tag panel either, so it is asked
+  // on the same terms: the push is how a release reaches an open room.
+  const phase = popPhase(mediaId)
+  if (listeners.has(mediaId) || phase === 'gone' || phase === 'jailed') refreshBooruTags(mediaId, true)
 }
 
 // The full mxc of each image the store has heard of, for bringing a popped
@@ -458,9 +462,16 @@ export function refreshBooruTags(mediaId: string, force = false): void {
         withhold(mediaId)
         return
       }
+      // Hidden because it is jailed: the message stays, the picture is
+      // replaced by the placeholder (withheldMedia.ts, operator 2026-11-23).
+      if (live === JAILED) {
+        jail(mediaId)
+        return
+      }
       // Shown again (a sensitive tag removed, a post let out of jail): the
       // picture pops back into the room. A plain 404 above leaves it gone.
-      if (popPhase(mediaId) === 'gone') void bringBack(mediaId)
+      const phase = popPhase(mediaId)
+      if (phase === 'gone' || phase === 'jailed') void bringBack(mediaId)
       // Re-read the store rather than closing over the earlier set: the read
       // took a round trip, and a state push may have replaced it meanwhile.
       const current = sets.get(mediaId)
@@ -568,8 +579,9 @@ export async function editBooruTags(mediaId: string, edit: TagEdit): Promise<voi
   let seen = before.tagString
   if (seen === undefined) {
     const live = await booruLimiter.run(() => withBooruSession(() => fetchBooruPool(postId)))
-    if (live === WITHHELD) {
-      withhold(mediaId)
+    if (live === WITHHELD || live === JAILED) {
+      if (live === JAILED) jail(mediaId)
+      else withhold(mediaId)
       throw new Error(
         `booru post ${postId} is hidden from you (a sensitive, deleted or jailed post), ` +
           'so there is nothing here for you to tag. Fix: none; its picture leaves the room.',

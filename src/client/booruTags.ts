@@ -293,6 +293,13 @@ export function parseLiveRead(json: unknown): BooruTagSet | null {
 export const WITHHELD = 'withheld'
 
 /**
+ * The same answer for a post that is withheld because it is JAILED
+ * (chanbooru FourierTagSourcesController#show adds `jailed: true`): its
+ * picture is replaced by a placeholder rather than popped (withheldMedia.ts).
+ */
+export const JAILED = 'jailed'
+
+/**
  * Current tags, categories, rating and provenance for one post, live, in ONE
  * credentialed request. Replaces a pair of reads that asked the booru two
  * questions per image on screen to draw one panel.
@@ -303,7 +310,7 @@ export const WITHHELD = 'withheld'
 export async function fetchBooruPool(
   postId: number,
   fetchImpl: typeof fetch = fetch,
-): Promise<BooruTagSet | typeof WITHHELD | null> {
+): Promise<BooruTagSet | typeof WITHHELD | typeof JAILED | null> {
   const res = await fetchImpl(`${BOORU_ORIGIN}/posts/${postId}/tag_sources.json`, {
     credentials: 'include',
     headers: { Accept: 'application/json' },
@@ -315,9 +322,14 @@ export async function fetchBooruPool(
   // Only that 404 says so -- one hidden by the rooms alone does not, since a
   // new Matrix post is closed to every room until its own are known, and its
   // image must not pop for the people it was posted to.
+  // A withheld answer that also says `jailed: true` is JAILED; only true
+  // counts for either, never a truthy string.
   if (res.status === 404) {
     const body: unknown = await res.json().catch(() => null)
-    return body !== null && typeof body === 'object' && (body as { withheld?: unknown }).withheld === true ? WITHHELD : null
+    if (body === null || typeof body !== 'object') return null
+    const b = body as { withheld?: unknown; jailed?: unknown }
+    if (b.withheld !== true) return null
+    return b.jailed === true ? JAILED : WITHHELD
   }
   // Anything else is a FAULT and must not be returned as absence. Returning
   // null for a 403 is what made the CORS breakage invisible for days -- a

@@ -31,7 +31,7 @@ import { useInterfacePrefs } from '../client/interfaceStore'
 import { shownTone, type InterfacePrefs } from '../client/interfacePrefs'
 import { seedBooruRef, useMediaTagLine } from '../client/useMediaTags'
 import { parseBooruRef, pictureMxcOf, type BooruRef } from '../client/booruRef'
-import { usePopPhase, type PopPhase } from '../client/withheldMedia'
+import { JAILED_TEXT, usePopPhase, type PopPhase } from '../client/withheldMedia'
 import { booruPostUrl } from '../client/booruUrl'
 import { linkify } from './linkify'
 import { useChatBackground } from './chatBackground'
@@ -735,21 +735,23 @@ function BubbleRow({
         // than the picture, so the reactions beside it stay on the picture's
         // edge (launch-polish L5, L6). The full list unfurls as a popup over
         // the page, which no scroller here can clip.
-        <div className="mtags-stack">
-          <div className="mtags-media">
-            <AuthedImage
-              mxc={mxc}
-              width={320}
-              roomId={roomId}
-              lazy
-              reserve={reserveBox(content)}
-              alt={typeof content.body === 'string' ? content.body : undefined}
-              onClick={() => open([{ mxc, roomId, ...imageMeta(event) }], 0, thread)}
-            />
-            {isGif(imageMeta(event)) && <GifBadge />}
+        <Jailable mxc={mxc} box={reserveBox(content)}>
+          <div className="mtags-stack">
+            <div className="mtags-media">
+              <AuthedImage
+                mxc={mxc}
+                width={320}
+                roomId={roomId}
+                lazy
+                reserve={reserveBox(content)}
+                alt={typeof content.body === 'string' ? content.body : undefined}
+                onClick={() => open([{ mxc, roomId, ...imageMeta(event) }], 0, thread)}
+              />
+              {isGif(imageMeta(event)) && <GifBadge />}
+            </div>
+            <MediaTags mxc={mxc} roomId={event.getRoomId()} />
           </div>
-          <MediaTags mxc={mxc} roomId={event.getRoomId()} />
-        </div>
+        </Jailable>
       )
     },
   booru: (ref, content) =>
@@ -764,21 +766,23 @@ function BubbleRow({
           </div>
         </div>
       ) : (
-        <div className="mtags-stack">
-          <div className="mtags-media">
-            <AuthedImage
-              mxc={ref.mxc}
-              width={320}
-              roomId={roomId}
-              lazy
-              reserve={booruBox(ref)}
-              alt={typeof content.body === 'string' ? content.body : undefined}
-              onClick={() => open([{ mxc: ref.mxc, roomId, name: `${ref.md5}.${ref.ext}` }], 0, thread)}
-            />
-            {ref.ext === 'gif' && <GifBadge />}
+        <Jailable mxc={ref.mxc} box={booruBox(ref)}>
+          <div className="mtags-stack">
+            <div className="mtags-media">
+              <AuthedImage
+                mxc={ref.mxc}
+                width={320}
+                roomId={roomId}
+                lazy
+                reserve={booruBox(ref)}
+                alt={typeof content.body === 'string' ? content.body : undefined}
+                onClick={() => open([{ mxc: ref.mxc, roomId, name: `${ref.md5}.${ref.ext}` }], 0, thread)}
+              />
+              {ref.ext === 'gif' && <GifBadge />}
+            </div>
+            <MediaTags mxc={ref.mxc} roomId={event.getRoomId()} />
           </div>
-          <MediaTags mxc={ref.mxc} roomId={event.getRoomId()} />
-        </div>
+        </Jailable>
       ),
   })
 
@@ -978,6 +982,34 @@ function popClass(phase: PopPhase | undefined): string {
   return phase === 'popping' ? ' tc-pop' : phase === 'returning' ? ' tc-unpop' : ''
 }
 
+// A picture whose booru post is JAILED keeps its row and is drawn as
+// JAILED_TEXT in the picture's own box (withheldMedia.ts, operator
+// 2026-11-23), so nothing around it moves. The picture, its tag line and its
+// lightbox are never mounted while it is jailed: the placeholder replaces the
+// image, it does not cover it, so nothing of the image is fetched.
+function Jailable({
+  mxc,
+  box,
+  children,
+}: {
+  mxc: string
+  box: { width: number; height: number } | undefined
+  children: ReactNode
+}) {
+  if (usePopPhase(parseMxc(mxc)?.mediaId) !== 'jailed') return <>{children}</>
+  return (
+    <div className="mtags-stack">
+      <div
+        className="mtags-media tc-booru-tagging tc-jailed"
+        style={{ ...(box ?? { width: INLINE_IMAGE_MAX_W, height: INLINE_IMAGE_MAX_H }), maxWidth: '100%' }}
+        data-testid="jailed-picture"
+      >
+        {JAILED_TEXT}
+      </div>
+    </div>
+  )
+}
+
 function IrcRow({
   item,
   onOpenThread,
@@ -1132,6 +1164,9 @@ function IrcRow({
 // or when it never will, the line says which, and opens the picture itself.
 function IrcPicture({ mxc, roomId, onOpen }: { mxc: string; roomId: string; onOpen: () => void }) {
   const line = useMediaTagLine(mxc, roomId)
+  const jailed = usePopPhase(parseMxc(mxc)?.mediaId) === 'jailed'
+  // Jailed: the words, and nothing that opens the picture or its post.
+  if (jailed) return <span className="tc-irc-link tc-jailed" data-testid="jailed-picture">{JAILED_TEXT}</span>
   const postId = line.set?.postId
   if (typeof postId === 'number' && Number.isInteger(postId) && postId > 0) {
     return (
@@ -1364,10 +1399,13 @@ function GalleryCell({ ev, onOpen }: { ev: MatrixEvent | null; onOpen?: () => vo
   const encFile = c ? encryptedFileOf(c) : null
   const thumb = encFile ? encryptedThumbnailOf(c) : null
   const mxc = encFile ? ((thumb ? thumb.file.url : encFile.url) ?? '') : c && typeof c.url === 'string' ? c.url : ''
-  const showImg = !!ev && !!parseMxc(mxc)
   // Popped out of its gallery when its booru post is withheld, and back in
-  // when it is shown again (withheldMedia.ts).
-  const popping = popClass(usePopPhase(encFile ? undefined : parseMxc(mxc)?.mediaId)).trim()
+  // when it is shown again (withheldMedia.ts). Jailed, it keeps its cell and
+  // shows JAILED_TEXT there instead of the picture, which is never mounted.
+  const phase = usePopPhase(encFile ? undefined : parseMxc(mxc)?.mediaId)
+  const jailed = phase === 'jailed'
+  const showImg = !!ev && !!parseMxc(mxc) && !jailed
+  const popping = popClass(phase).trim()
   return (
     <div
       className={popping || undefined}
@@ -1379,6 +1417,11 @@ function GalleryCell({ ev, onOpen }: { ev: MatrixEvent | null; onOpen?: () => vo
         background: 'var(--cpd-color-bg-subtle-secondary)',
       }}
     >
+      {jailed ? (
+        <div className="tc-jailed-cell" data-testid="jailed-picture">
+          {JAILED_TEXT}
+        </div>
+      ) : (
       <div
         style={{
           position: 'absolute',
@@ -1406,6 +1449,7 @@ function GalleryCell({ ev, onOpen }: { ev: MatrixEvent | null; onOpen?: () => vo
           <path d="M21 15l-5-5L5 21" />
         </svg>
       </div>
+      )}
       {showImg && (
         <div style={{ position: 'absolute', inset: 0 }}>
           <AuthedImage

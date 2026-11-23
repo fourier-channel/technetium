@@ -4,6 +4,7 @@ import { useClient } from '../client/clientContextValue'
 import { fetchEncryptedMediaSrc, fetchMediaSrc, parseMxc } from '../client/media'
 import { useFileVersion } from './useFileVersion'
 import { MediaTags } from './MediaTags'
+import { JAILED_TEXT, usePopPhase } from '../client/withheldMedia'
 import { axisFromKey, isTypingTarget, BOTH } from './axisKeys'
 import { flatIndex, stepImage, totalImages } from './mediaSequence'
 
@@ -153,11 +154,14 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
   // An encrypted one is never replaced in place, as AuthedImage has it.
   const curMxc = items && index >= 0 && index < items.length && !items[index].file ? items[index].mxc : null
   const version = useFileVersion(curMxc)
+  // A jailed picture (withheldMedia.ts) is never fetched here either: stepping
+  // through a set onto one shows JAILED_TEXT in its place.
+  const jailed = usePopPhase(curMxc ? parseMxc(curMxc)?.mediaId : undefined) === 'jailed'
 
   // Fetch the current image full-res whenever it changes; revoke the prior blob.
   useEffect(() => {
     const cur = items && index >= 0 && index < items.length ? items[index] : null
-    if (!cur || (!client && !cur.local)) {
+    if (!cur || jailed || (!client && !cur.local)) {
       // Not a synchronous setState in the effect body (G-tc01).
       queueMicrotask(() => {
         setSrc(null)
@@ -207,7 +211,7 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
         revokeRef.current = null
       }
     }
-  }, [client, items, index, version])
+  }, [client, items, index, version, jailed])
 
   // Keyboard, per the formant axis grammar: Escape leaves the innermost open
   // thing, left/right walk the set you opened, up/down walk the conversation
@@ -336,7 +340,11 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
               gap: 8,
             }}
           >
-            {error ? (
+            {jailed ? (
+              <span style={{ color: 'var(--cpd-color-text-secondary)', fontStyle: 'italic' }} data-testid="jailed-picture">
+                {JAILED_TEXT}
+              </span>
+            ) : error ? (
               <span style={{ color: 'var(--cpd-color-text-secondary)', fontStyle: 'italic' }}>
                 [image unavailable]
               </span>

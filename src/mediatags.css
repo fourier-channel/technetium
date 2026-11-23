@@ -605,3 +605,26 @@ button.mtags-note--failed:hover { text-decoration: underline; }
   border-radius: 6px;
   box-sizing: border-box;
 }
+
+/* A jailed picture (withheldMedia.ts, operator 2026-11-23): the words in the
+   picture's own box, so the row keeps its height. Same frame as the "being
+   tagged" slot; the text wraps inside it and is centred. */
+.mtags-stack > .mtags-media.tc-jailed {
+  padding: 8px;
+  text-align: center;
+  font-style: italic;
+}
+.tc-jailed-cell {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  box-sizing: border-box;
+  text-align: center;
+  font-size: 11px;
+  font-style: italic;
+  line-height: 1.25;
+  color: var(--cpd-color-text-secondary);
+}
