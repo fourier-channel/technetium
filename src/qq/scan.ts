@@ -1,4 +1,5 @@
 import type { Keeper, QqDirHandle, QqFileHandle } from './folderStore'
+import { lazyDir, lazyFile, savedFolder, type SavedFolder } from './listingStore'
 import { embeddedChunks, promptSource, promptToTags } from './promptTags'
 import { imageType, isHidden, naturalCompare } from './qqGrid'
 import type { ScanFolders } from './scanRollup'
@@ -14,9 +15,12 @@ import {
 // 1. Read `.quickqueue/`: every device's segment, merged (qqi.ts). First, so
 //    the listing can say what is already indexed as it goes.
 // 2. List the whole tree, names only, newest folders first. On the tablet a
-//    name is nearly free and a getFile() costs about 107 ms (master reference
-//    sec 22.13), so listing touches no file. Every scan lists again: a folder
-//    has no modified time to say nothing in it changed.
+//    getFile() costs about 107 ms (master reference sec 22.13), so listing
+//    touches no file; but names arrive about 100 at a time, so a big tree
+//    takes many minutes. A folder with a saved listing (listingStore.ts) is
+//    taken from it and not listed again; one without is listed and saved. A
+//    folder has no modified time, so only the user's "List again" sees what
+//    changed in a saved one.
 // 3. Plan each folder once it and the folders below it are listed. A listed
 //    path the index knows is ADOPTED and never read; one whose record an older
 //    parser wrote is read again; an unknown name nothing in the index shares
@@ -97,6 +101,12 @@ export interface ListOptions {
   halted?: () => boolean
   /** Filled as the listing goes, so a caller can draw it before it ends. */
   out?: Listed
+  /** A folder's saved listing, used instead of listing it. */
+  saved?: (folder: string) => SavedFolder | undefined
+  /** Called with each folder listed whole (not one taken from `saved`). */
+  onListed?: (folder: string, listing: SavedFolder) => void
+  /** Called with each folder taken from `saved`. */
+  onSaved?: (folder: string, listing: SavedFolder) => void
 }
 
 /** Lists the tree under `root`, newest folders first: each folder's own
@@ -111,23 +121,37 @@ export async function listTree(root: QqDirHandle, opts: ListOptions = {}): Promi
     const below: QqDirHandle[] = []
     const images: string[] = []
     let n = 0
-    try {
-      for await (const h of dir.values()) {
-        if (halted()) return
-        if (isHidden(h.name)) continue
-        const rel = path ? `${path}/${h.name}` : h.name
-        if (h.kind === 'directory') below.push(h)
-        else if (imageType(h.name)) {
-          out.files.set(rel, h)
-          out.folders.set(path, ++n)
-          images.push(rel)
-          opts.onImage?.(rel)
-        }
-        opts.onProgress?.(out.files.size, out.folders.size, path)
+    const add = (h: QqDirHandle | QqFileHandle) => {
+      const rel = path ? `${path}/${h.name}` : h.name
+      if (h.kind === 'directory') below.push(h)
+      else if (imageType(h.name)) {
+        out.files.set(rel, h)
+        out.folders.set(path, ++n)
+        images.push(rel)
+        opts.onImage?.(rel)
       }
-    } catch (e) {
-      if (errorName(e) === 'NotAllowedError') throw e
-      out.unlisted.push({ path, reason: errorName(e) || 'unknown error' })
+      opts.onProgress?.(out.files.size, out.folders.size, path)
+    }
+    const saved = opts.saved?.(path)
+    if (saved) {
+      opts.onSaved?.(path, saved)
+      for (const name of saved.dirs) add(lazyDir(dir, name))
+      for (const name of saved.files) add(lazyFile(dir, name))
+      if (halted()) return
+    } else {
+      const seen: (QqDirHandle | QqFileHandle)[] = []
+      try {
+        for await (const h of dir.values()) {
+          if (halted()) return
+          if (isHidden(h.name)) continue
+          seen.push(h)
+          add(h)
+        }
+        opts.onListed?.(path, savedFolder(seen, Date.now()))
+      } catch (e) {
+        if (errorName(e) === 'NotAllowedError') throw e
+        out.unlisted.push({ path, reason: errorName(e) || 'unknown error' })
+      }
     }
     out.folders.set(path, n)
     opts.onProgress?.(out.files.size, out.folders.size, path)
@@ -316,14 +340,26 @@ export class PlanAsListed {
   /**
    * Once the whole tree is listed. `lost` names folders that could not be
    * listed: nothing under one is recorded gone, since it may still be there.
-   * Returns the moves, the gones and the waiting paths to read; `adopted` and
-   * `reparse` are the whole listing's.
+   * `listedAt` gives, for a folder taken from a saved listing, when it was
+   * listed (ms): an entry the index wrote after the listing of its folder (or
+   * of the nearest folder above it that was walked) may be a file that
+   * arrived since, so it is not recorded gone either. Returns the moves, the
+   * gones and the waiting paths to read; `adopted` and `reparse` are the
+   * whole listing's.
    */
-  end(lost: string[]): ScanPlan {
+  end(lost: string[], listedAt?: (folder: string) => number | undefined): ScanPlan {
     const lostKeys = lost.map(pathKey)
     const under = (k: string) => lostKeys.some((l) => l === '' || k.startsWith(l + '/'))
+    const newer = (e: Placed & { record: QqiFile }) => {
+      if (!listedAt) return false
+      for (let f = folderOf(e.record.path); ; f = folderOf(f)) {
+        const at = listedAt(f)
+        if (at !== undefined) return e.writtenAt * 1000 > at
+        if (f === '') return false
+      }
+    }
     const vanished: Merged = new Map()
-    for (const [k, e] of this.merged) if (!this.listed.has(k) && !under(k)) vanished.set(k, e)
+    for (const [k, e] of this.merged) if (!this.listed.has(k) && !under(k) && !newer(e)) vanished.set(k, e)
     const plan = planScan(this.deferred, vanished)
     this.deferred = []
     return { ...plan, adopted: this.adopted, reparse: this.reparse }
@@ -592,8 +628,19 @@ export interface ScanProgress {
   indexBytes: number
   /** About what the reads still to do will add. */
   addBytes: number
+  /** Folders taken from a saved listing rather than listed, and when the
+   *  oldest of them was listed (ms; null when none). */
+  savedFolders: number
+  savedSince: number | null
   /** Everything that went wrong, in words for the user. Never dropped. */
   problems: string[]
+}
+
+/** Where a scan finds saved listings and saves the ones it makes
+ *  (listingStore.ts ListingKeeper). */
+export interface ListingSource {
+  get(folder: string): SavedFolder | undefined
+  put(folder: string, listing: SavedFolder): void
 }
 
 export interface FolderCount { images: number; done: number; failed: number }
@@ -625,6 +672,9 @@ export interface ScanOptions {
   /** Where this scan saves: 'browser' when the user did not allow writing
    *  into the folder (it needs a keeper). Default 'folder'. */
   saveTo?: 'folder' | 'browser'
+  /** Saved listings: a folder found here is not listed again, and a folder
+   *  listed is saved here. */
+  listings?: ListingSource | null
 }
 
 /**
@@ -646,11 +696,14 @@ export const ONE_SCAN_AT_A_TIME =
   'Another tab of this browser is scanning. One scan runs at a time, so two tabs never write the same index file; close that scan first.'
 
 export class FolderScan {
-  private readonly o: Required<Omit<ScanOptions, 'onProgress' | 'locks' | 'keeper' | 'saveTo'>> & Pick<ScanOptions, 'onProgress' | 'locks' | 'keeper'>
+  private readonly o: Required<Omit<ScanOptions, 'onProgress' | 'locks' | 'keeper' | 'saveTo' | 'listings'>> & Pick<ScanOptions, 'onProgress' | 'locks' | 'keeper' | 'listings'>
   private p: ScanProgress = {
     phase: 'idle', listed: 0, folders: 0, listingIn: '', listingDone: false, startable: false, indexed: 0, adopted: 0, moved: 0, gone: 0, toRead: 0, read: 0,
-    secondReads: 0, unreadable: 0, saved: 0, unsaved: 0, etaSeconds: null, indexBytes: 0, addBytes: 0, problems: [],
+    secondReads: 0, unreadable: 0, saved: 0, unsaved: 0, etaSeconds: null, indexBytes: 0, addBytes: 0,
+    savedFolders: 0, savedSince: null, problems: [],
   }
+  /** Folders taken from a saved listing, and when each was listed. */
+  private savedAt = new Map<string, number>()
   private merged: Merged = new Map()
   /** run() has been called: from here prepare() lists and plans, and only
    *  run() and stop() end the scan. */
@@ -767,9 +820,17 @@ export class FolderScan {
       const planner = new PlanAsListed(this.merged)
 
       this.set('listing')
+      const listings = this.o.listings
       await listTree(this.o.root, {
         out: this.listing,
         halted: () => this.stopping(),
+        saved: listings ? (f) => listings.get(f) : undefined,
+        onListed: listings ? (f, l) => listings.put(f, l) : undefined,
+        onSaved: (f, l) => {
+          this.savedAt.set(f, l.at)
+          this.p.savedFolders = this.savedAt.size
+          this.p.savedSince = Math.min(this.p.savedSince ?? Infinity, l.at)
+        },
         onProgress: (listed, folders, inFolder) => {
           this.p.listed = listed
           this.p.folders = folders
@@ -798,7 +859,11 @@ export class FolderScan {
         this.p.problems.push(`The folder "${u.path || '(the picked folder)'}" could not be listed (${u.reason}); its images are not in this scan, and none of them is dropped from the index.`)
       }
 
-      const plan = planner.end(this.listing.unlisted.map((u) => u.path))
+      // A folder walked live was listed just now; one from a saved listing,
+      // when it was listed.
+      const now = this.o.now()
+      const plan = planner.end(this.listing.unlisted.map((u) => u.path),
+        (f) => this.savedAt.get(f) ?? (this.listing.folders.has(f) ? now : undefined))
       this.pending.push(...plan.records)
       for (const r of plan.records) this.apply(r)
       for (const m of plan.moves) {

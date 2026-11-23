@@ -1,3 +1,5 @@
+import type { BrowserCopy } from './listingStore'
+
 // ---------------------------------------------------------------------------
 // The folders QuickQueue has been given, remembered on this device.
 //
@@ -68,16 +70,21 @@ const STORE = 'roots'
 /** A folder's index kept in this browser, for a folder QuickQueue may not
  *  write (QQ_FOLDER_INDEX.md sec 4). Keyed by the root's id. */
 const KEPT = 'kept'
+/** Each folder's saved listing in this browser (listingStore.ts), keyed by
+ *  the root's id. */
+const LISTINGS = 'listings'
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    // v2 adds the kept store. Every connection here closes after its one
-    // transaction, so an upgrade is never blocked by another tab for long.
-    const req = indexedDB.open(DB_NAME, 2)
+    // v2 adds the kept store, v3 the listings. Every connection here closes
+    // after its one transaction, so an upgrade is never blocked by another tab
+    // for long.
+    const req = indexedDB.open(DB_NAME, 3)
     req.onupgradeneeded = () => {
       const db = req.result
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: 'id', autoIncrement: true })
       if (!db.objectStoreNames.contains(KEPT)) db.createObjectStore(KEPT, { keyPath: 'rootId' })
+      if (!db.objectStoreNames.contains(LISTINGS)) db.createObjectStore(LISTINGS, { keyPath: 'rootId' })
     }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error ?? new Error('IndexedDB refused to open'))
@@ -127,11 +134,12 @@ export async function addRoot(handle: QqDirHandle): Promise<StoredRoot> {
   return { id: Number(id), name: handle.name, handle }
 }
 
-/** Forgets a folder, and the index this browser kept for it. */
+/** Forgets a folder, and the index and listing this browser kept for it. */
 export async function forgetRoot(id: number): Promise<void> {
-  await withTx([STORE, KEPT], 'readwrite', (tx) => {
+  await withTx([STORE, KEPT, LISTINGS], 'readwrite', (tx) => {
     tx.objectStore(STORE).delete(id)
     tx.objectStore(KEPT).delete(id)
+    tx.objectStore(LISTINGS).delete(id)
     return () => undefined
   })
 }
@@ -174,6 +182,19 @@ export function browserKeeper(rootId: number): Keeper {
       return () => undefined
     }),
     drop: () => withStore<undefined>(KEPT, 'readwrite', (s) => s.delete(rootId) as IDBRequest<undefined>),
+  }
+}
+
+// --- The listing kept in this browser ------------------------------------------
+
+interface ListingRow { rootId: number; bytes: Uint8Array }
+
+/** This browser's copy of a folder's saved listing (listingStore.ts). */
+export function browserListing(rootId: number): BrowserCopy {
+  return {
+    read: () => withStore<ListingRow | undefined>(LISTINGS, 'readonly', (s) => s.get(rootId) as IDBRequest<ListingRow | undefined>)
+      .then((row) => (row ? row.bytes : null)),
+    write: (bytes) => withStore<IDBValidKey>(LISTINGS, 'readwrite', (s) => s.put({ rootId, bytes } satisfies ListingRow)).then(() => undefined),
   }
 }
 

@@ -99,6 +99,10 @@ async function picture(dir: FileSystemDirectoryHandle, name: string, hue: number
 async function buildFolder(): Promise<FileSystemDirectoryHandle> {
   stage = 'building: opfs root'
   const opfs = await navigator.storage.getDirectory()
+  // ?keep=1: the folder from the last load, as a reload finds it.
+  if (params.get('keep') === '1') {
+    try { return await opfs.getDirectoryHandle('qq-harness') } catch { /* first run: build it */ }
+  }
   try { await opfs.removeEntry('qq-harness', { recursive: true }) } catch { /* first run */ }
   const dir = await opfs.getDirectoryHandle('qq-harness', { create: true })
   // Created out of order on purpose: the grid must show 1, 2, ... 40.

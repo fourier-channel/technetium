@@ -24,6 +24,9 @@ import {
 } from '../src/qq/scan.ts'
 import type { Keeper, QqDirHandle, QqFileHandle, QqWritable } from '../src/qq/folderStore.ts'
 import { childTiles, subtreeOf } from '../src/qq/scanRollup.ts'
+import {
+  decodeListing, encodeListing, ListingKeeper, loadListing, mergeListings, type BrowserCopy, type SavedListing,
+} from '../src/qq/listingStore.ts'
 
 let failures = 0
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -1102,6 +1105,119 @@ await guarded('a folder that cannot be listed marks its parents short', async ()
   const inner = childTiles(f, 'x').get('broken')
   check('inside, the folder itself is short with nothing found', !!inner && inner.state === 'short' && inner.images === 0, inner)
 })
+
+// --- saved listings (listingStore.ts) ---------------------------------------------------------
+// Operator 2026-11-23: a folder is listed once and kept; a reload, a return
+// and a Scan never list it again unasked.
+
+/** values() calls on folders other than the index's own. */
+function countListings(root: FakeDir): { n: number } {
+  const c = { n: 0 }
+  const wrap = (d: FakeDir) => {
+    const real = d.values.bind(d)
+    d.values = function () { if (d.name !== INDEX_DIR) c.n++; return real() }
+    for (const ch of d.children.values()) if (ch.kind === 'directory') wrap(ch)
+  }
+  wrap(root)
+  return c
+}
+function memoryBrowser(): BrowserCopy & { bytes: Uint8Array | null; writes: number } {
+  const b = {
+    bytes: null as Uint8Array | null, writes: 0,
+    async read() { return b.bytes },
+    async write(x: Uint8Array) { b.bytes = x; b.writes++ },
+  }
+  return b
+}
+
+console.log('== a saved listing reads back')
+{
+  const l: SavedListing = new Map([['', { at: 5, dirs: ['a'], files: ['x.png', 'n\u00e9.png'] }], ['a', { at: 6, dirs: [], files: [] }]])
+  const back = await decodeListing(await encodeListing(l))
+  check('every folder, name and time comes back', back.ok && J([...back.listing]) === J([...l]), back)
+  const junk = await decodeListing(new Uint8Array([1, 2, 3]))
+  check('bytes that are not a listing are refused with a reason', !junk.ok && junk.reason.length > 0, junk)
+  const m = mergeListings(new Map([['', { at: 5, dirs: [], files: ['old'] }], ['b', { at: 9, dirs: [], files: [] }]]),
+    new Map([['', { at: 7, dirs: [], files: ['new'] }], ['b', { at: 1, dirs: [], files: ['stale'] }]]))
+  check('folder by folder, the newest listing wins', J(m.get('')!.files) === J(['new']) && J(m.get('b')!.files) === J([]), [...m])
+}
+
+console.log('== a listing is kept in this browser always, in the folder when allowed')
+{
+  const root = new FakeDir('root')
+  root.queryPermission = async () => 'prompt'
+  const browser = memoryBrowser()
+  const k = new ListingKeeper({ root: asRoot(root), indexDir: INDEX_DIR, deviceId: DEV, browser, delayMs: 10_000 })
+  k.put('', { at: 1, dirs: [], files: ['a.png'] })
+  await k.flush()
+  check('browsing (read only): kept in this browser', browser.writes === 1)
+  check('...and nothing written into the folder', !root.children.has(INDEX_DIR))
+  root.queryPermission = async () => 'granted'
+  k.put('', { at: 2, dirs: [], files: ['a.png', 'b.png'] })
+  await k.flush()
+  const file = (root.children.get(INDEX_DIR) as FakeDir | undefined)?.children.get(`${DEV}.qql`)
+  check('allowed to write: saved into the folder too', !!file && browser.writes === 2)
+  await k.flush()
+  check('nothing changed, nothing written', browser.writes === 2)
+
+  const other = await encodeListing(new Map([['', { at: 3, dirs: ['new'], files: [] }], ['old', { at: 1, dirs: [], files: [] }]]))
+  put(root, `${INDEX_DIR}/${'cd'.repeat(16)}.qql`, other)
+  put(root, `${INDEX_DIR}/broken.qql`, new Uint8Array([9]))
+  const loaded = await loadListing(asRoot(root), INDEX_DIR, browser)
+  check('another device\'s newer listing wins', J(loaded.listing.get('')!.dirs) === J(['new']), [...loaded.listing])
+  check('folders only one source has are kept', loaded.listing.has('old'))
+  check('an unreadable file is named, not fatal', loaded.problems.length === 1 && loaded.problems[0].includes('broken.qql'), loaded.problems)
+
+  const failing = new FakeDir('root')
+  failing.queryPermission = async () => 'prompt'
+  const told: string[] = []
+  const bad: BrowserCopy = { read: async () => null, write: async () => { throw domError('QuotaExceededError') } }
+  const k2 = new ListingKeeper({ root: asRoot(failing), indexDir: INDEX_DIR, deviceId: DEV, browser: bad, onProblem: (p) => told.push(p) })
+  k2.put('', { at: 1, dirs: [], files: [] })
+  await k2.flush()
+  check('a save that fails is told, with the reason', told.length === 1 && told[0].includes('QuotaExceededError'), told)
+}
+
+console.log('== a Scan lists only folders never listed')
+{
+  const root = library()
+  const browser = memoryBrowser()
+  const keeper = new ListingKeeper({ root: asRoot(root), indexDir: INDEX_DIR, deviceId: DEV, browser, delayMs: 10_000 })
+  const lists = countListings(root)
+  const first = scan(root, { listings: keeper })
+  await first.prepare()
+  await first.run()
+  check('the first scan lists every folder', lists.n === 5, lists.n)
+  check('...and keeps each listing', keeper.listing.size === 5 && keeper.get('2026-11-10')!.files.length === N / 4, [...keeper.listing.keys()])
+
+  // Another device indexes a file that arrived after this listing was made.
+  put(root, '2026-11-10/later.png', pngWith('later'))
+  const elsewhere = scan(root, { deviceId: 'ef'.repeat(16), now: () => Date.now() + 60_000 })
+  await elsewhere.prepare()
+  if (elsewhere.progress().phase === 'planned') await elsewhere.run()
+  check('the other device indexed it', (await indexOf(root)).get('2026-11-10/later.png')?.record.kind === 'file')
+
+  lists.n = 0
+  resetCounts()
+  const again = scan(root, { listings: keeper })
+  const p = await again.prepare()
+  if (again.progress().phase === 'planned') await again.run()
+  check('a scan with saved listings lists nothing', lists.n === 0, lists.n)
+  check('...says how many folders it took from them', p.savedFolders === 5 && typeof p.savedSince === 'number', p)
+  check('...and reads nothing it already knows', counts.reads === 0, counts)
+  const later = (await indexOf(root)).get('2026-11-10/later.png')
+  check('a file indexed after the saved listing is not recorded gone', p.gone === 0 && later?.record.kind === 'file', [p.gone, later])
+
+  put(root, '2026-11-11/fresh/one.png', pngWith('fresh'))
+  keeper.put('2026-11-11', { ...keeper.get('2026-11-11')!, dirs: ['fresh'] })
+  lists.n = 0
+  const fresh = countListings((root.children.get('2026-11-11') as FakeDir).children.get('fresh') as FakeDir)
+  const grown = scan(root, { listings: keeper })
+  await grown.prepare()
+  if (grown.progress().phase === 'planned') await grown.run()
+  check('a folder no listing has is listed, and only it', fresh.n === 1 && lists.n === 0 && keeper.listing.has('2026-11-11/fresh'), [fresh.n, lists.n])
+  check('...and what it holds is read through names alone', (await indexOf(root)).get('2026-11-11/fresh/one.png')?.record.kind === 'file')
+}
 
 console.log('== the stall watch')
 check('a minute with no step while listing is a stall', stalled('listing', STALL_MS) && !stalled('listing', STALL_MS - 1))

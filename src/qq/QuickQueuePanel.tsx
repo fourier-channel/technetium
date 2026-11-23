@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLightbox, type LightboxItem } from '../ui/lightboxContext'
 import {
-  addRoot, browserKeeper, folderAccessSupported, forgetRoot, listRoots, pickFolder, storeLastRoot, storedLastRoot,
+  addRoot, browserKeeper, browserListing, folderAccessSupported, forgetRoot, listRoots, pickFolder, storeLastRoot, storedLastRoot,
   type QqDirHandle, type QqFileHandle, type StoredRoot,
 } from './folderStore'
+import { lazyDir, lazyFile, ListingKeeper, loadListing, savedFolder, type SavedFolder } from './listingStore'
 import {
   arrangeListing, folderView, gridWindow, imageType,
   type Arranged, type ListedEntry, type Permission,
@@ -56,13 +57,36 @@ function size(bytes: number): string {
 
 const FINISHED: ReadonlySet<ScanPhase> = new Set(['done', 'stopped', 'failed'])
 
-/** One Scan and what the panel shows of it. */
-/** One folder's listing and when it finished (Date.now()). */
-interface Listing {
-  arranged: Arranged<Handle>
-  at: number
+/** A saved listing as the grid draws it. A folder this visit listed keeps
+ *  the browser's own handles; one from a reload gets handles looked up by
+ *  name on first use (listingStore.ts lazyFile), so nothing is listed. */
+const arrangedFor = new WeakMap<SavedFolder, Arranged<Handle>>()
+function arrangeSaved(dir: QqDirHandle, saved: SavedFolder): Arranged<Handle> {
+  let a = arrangedFor.get(saved)
+  if (!a) {
+    a = arrangeListing<Handle>([
+      ...saved.dirs.map((name) => ({ name, kind: 'directory' as const, handle: lazyDir(dir, name) })),
+      ...saved.files.map((name) => ({ name, kind: 'file' as const, handle: lazyFile(dir, name) })),
+    ])
+    arrangedFor.set(saved, a)
+  }
+  return a
 }
 
+/** When a listing was made: the time today, the date and time before. */
+function listedWhen(at: number): string {
+  const d = new Date(at)
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return d.toDateString() === new Date().toDateString() ? time : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`
+}
+
+/** One root's saved listings, once read. */
+interface Saved {
+  rootId: number
+  keeper: ListingKeeper
+}
+
+/** One Scan and what the panel shows of it. */
 interface ScanRun {
   rootId: number
   rootName: string
@@ -83,12 +107,15 @@ export default function QuickQueuePanel() {
   const [permission, setPermission] = useState<Permission | null>(null)
   // The subfolders opened below the root, outermost first.
   const [trail, setTrail] = useState<QqDirHandle[]>([])
-  // Every folder listed this visit, by dirKey, and when. Going back to one
-  // shows it at once: the browser gives a folder no modified date, so listing
-  // it again is the only check, and a 25,000-name folder on the tablet takes
-  // minutes (operator 2026-11-23: a wait over about 10 s per load is not an
-  // acceptable cost). "List again" drops the folder's entry and lists it anew.
-  const [listings, setListings] = useState<ReadonlyMap<string, Listing>>(new Map())
+  // Every folder's saved listing (listingStore.ts), read once per root. A
+  // folder with one is shown from it at once, after a reload too: the browser
+  // gives a folder no modified date, so listing it again is the only check,
+  // and a 25,000-name folder on the tablet takes minutes (operator
+  // 2026-11-23: a wait over about 10 s per load is not an acceptable cost).
+  // "List again" lists it anew while the saved one stays on screen.
+  const [saved, setSaved] = useState<Saved | null>(null)
+  const [, setSavedTick] = useState(0)
+  const [relisting, setRelisting] = useState<string | null>(null)
   const [listedSoFar, setListedSoFar] = useState(0)
   const [listSeconds, setListSeconds] = useState(0)
   const [problem, setProblem] = useState<string | null>(null)
@@ -107,13 +134,15 @@ export default function QuickQueuePanel() {
 
   const root = roots?.find((r) => r.id === rootId) ?? null
   const dir: QqDirHandle | null = trail.length > 0 ? trail[trail.length - 1] : (root?.handle ?? null)
-  const dirKey = root ? `${root.id}/${trail.map((d) => d.name).join('/')}` : ''
+  const herePath = trail.map((d) => d.name).join('/')
+  const dirKey = root ? `${root.id}/${herePath}` : ''
+  const keeper = saved && saved.rootId === root?.id ? saved.keeper : null
+  const savedHere = keeper?.get(herePath) ?? null
   const view = folderView(supported, roots !== null, !!root, permission)
   // A Scan of the folder being browsed is drawn on it: each folder tile
   // carries the state of everything below it, and the crumbs carry the
   // folder open now. A Scan of another folder draws on nothing here.
   const scanHere = scanRun && scanRun.rootId === rootId ? scanRun.folders : null
-  const herePath = trail.map((d) => d.name).join('/')
   const tiles = useMemo(() => (scanHere ? childTiles(scanHere, herePath) : null), [scanHere, herePath])
   const hereTile = useMemo(
     () => (scanHere && herePath ? subtreeOf(scanHere, herePath) : undefined),
@@ -150,11 +179,35 @@ export default function QuickQueuePanel() {
     return () => { cancelled = true }
   }, [root])
 
-  // List the open folder to the end, then show it whole (qqGrid.ts says why),
-  // unless it was listed already this visit.
-  const hasListing = listings.has(dirKey)
+  // The root's saved listings: this browser's copy and every device's file in
+  // .quickqueue/, newest per folder. Read once per root and per grant.
   useEffect(() => {
-    if (!dir || permission !== 'granted' || hasListing) return
+    if (!root || permission !== 'granted') return
+    let cancelled = false
+    const browser = browserListing(root.id)
+    void (async () => {
+      let listing
+      try {
+        const loaded = await loadListing(root.handle, INDEX_DIR, browser)
+        if (loaded.problems.length && !cancelled) setProblem(loaded.problems.join(' '))
+        listing = loaded.listing
+      } catch (e) {
+        if (!cancelled) setProblem(`The saved listings of "${root.name}" could not be read (${errorName(e) || 'unknown error'}), so its folders are listed again.`)
+      }
+      if (cancelled) return
+      const k = new ListingKeeper({
+        root: root.handle, indexDir: INDEX_DIR, deviceId: storedDeviceId().id, browser, listing, onProblem: setProblem,
+      })
+      setSaved({ rootId: root.id, keeper: k })
+    })()
+    return () => { cancelled = true }
+  }, [root, permission])
+
+  // List the open folder to the end, then show it whole (qqGrid.ts says why),
+  // unless it has a saved listing and "List again" was not asked.
+  const needsListing = !!keeper && (!savedHere || relisting === dirKey)
+  useEffect(() => {
+    if (!dir || permission !== 'granted' || !keeper || !needsListing) return
     let cancelled = false
     const entries: ListedEntry<Handle>[] = []
     let lastTick = 0
@@ -179,10 +232,16 @@ export default function QuickQueuePanel() {
           }
         }
         if (cancelled) return
-        const done: Listing = { arranged: arrangeListing(entries), at: Date.now() }
-        setListings((m) => new Map(m).set(dirKey, done))
+        const done = savedFolder(entries, Date.now())
+        arrangedFor.set(done, arrangeListing(entries))
+        keeper.put(herePath, done)
+        setRelisting((r) => (r === dirKey ? null : r))
+        setSavedTick((t) => t + 1)
+        // Saved now, not a moment later: a reload right after must find it.
+        void keeper.flush()
       } catch (e) {
         if (cancelled) return
+        setRelisting((r) => (r === dirKey ? null : r))
         const name = errorName(e)
         if (name === 'NotAllowedError') {
           setPermission('prompt')
@@ -201,7 +260,7 @@ export default function QuickQueuePanel() {
       cancelled = true
       clearInterval(clock)
     }
-  }, [dir, dirKey, permission, hasListing])
+  }, [dir, dirKey, herePath, permission, keeper, needsListing])
 
   // A panel taken down mid-scan stops it; what was read after Start is saved.
   useEffect(() => {
@@ -209,15 +268,8 @@ export default function QuickQueuePanel() {
     return () => ref.current?.stop()
   }, [])
 
-  const here = listings.get(dirKey) ?? null
-  const shown = here?.arranged ?? null
-  const listAgain = () => {
-    setListings((m) => {
-      const n = new Map(m)
-      n.delete(dirKey)
-      return n
-    })
-  }
+  const shown = useMemo(() => (dir && savedHere ? arrangeSaved(dir, savedHere) : null), [dir, savedHere])
+  const listAgain = () => setRelisting(dirKey)
 
   const startScan = async () => {
     if (!root || scanActive) return
@@ -254,6 +306,7 @@ export default function QuickQueuePanel() {
       deviceId: device.id,
       keeper: browserKeeper(target.id),
       saveTo: write === 'granted' ? 'folder' : 'browser',
+      listings: keeper,
       onProgress: (p) => {
         lastStepRef.current = performance.now()
         setIdleMs(0)
@@ -336,7 +389,7 @@ export default function QuickQueuePanel() {
       closeScan()
     }
     await forgetRoot(id)
-    setListings((m) => new Map([...m].filter(([k]) => !k.startsWith(`${id}/`))))
+    if (saved?.rootId === id) setSaved(null)
     const rs = await listRoots()
     setRoots(rs)
     if (id === rootId) choose(rs[0]?.id ?? -1)
@@ -415,9 +468,14 @@ export default function QuickQueuePanel() {
                 (hereTile ? `; scan: ${tileWords(hereTile)}` : '')
               : ''}
           </span>
-          {here && (
+          {savedHere && relisting === dirKey && (
             <span className="tc-qq-listed">
-              listed {new Date(here.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              listing again: {listedSoFar.toLocaleString()} so far, {duration(listSeconds)}
+            </span>
+          )}
+          {savedHere && relisting !== dirKey && (
+            <span className="tc-qq-listed">
+              listed {listedWhen(savedHere.at)}
               <button type="button" onClick={listAgain} title="List this folder again, to see files added or removed since">
                 List again
               </button>
@@ -471,9 +529,13 @@ export default function QuickQueuePanel() {
             <button type="button" className="tc-pill" onClick={() => void pick()}>Pick a folder</button>
           </div>
         )}
-        {view === 'ready' && !shown && !problem && (
+        {view === 'ready' && !keeper && !problem && (
+          <p className="tc-qq-note">Opening the saved listing of "{root?.name}"...</p>
+        )}
+        {view === 'ready' && keeper && !shown && !problem && (
           <p className="tc-qq-note">
-            Listing "{dir?.name}": {listedSoFar.toLocaleString()} so far, {duration(listSeconds)}.
+            Listing "{dir?.name}": {listedSoFar.toLocaleString()} so far, {duration(listSeconds)}. Saved once done, so
+            it is not listed again.
           </p>
         )}
         {view === 'ready' && shown && (
@@ -489,6 +551,13 @@ export default function QuickQueuePanel() {
       </div>
     </div>
   )
+}
+
+/** What a scan took from saved listings, so a missing new file has a why. */
+function savedWords(p: ScanProgress): string {
+  if (!p.savedFolders || p.savedSince === null) return ''
+  return ` ${counted(p.savedFolders, 'folder')} came from saved listings (the oldest ${listedWhen(p.savedSince)}), not listed again; ` +
+    'List again in a folder to see files added since.'
 }
 
 function scanWords(run: ScanRun): string {
@@ -512,11 +581,11 @@ function scanWords(run: ScanRun): string {
     case 'calibrating':
       return 'Timing a few reads on this device...'
     case 'planned':
-      if (!left) return `Everything is read. Start saves ${counted(p.unsaved, 'entry', 'entries')} into ${INDEX_DIR}.`
+      if (!left) return `Everything is read. Start saves ${counted(p.unsaved, 'entry', 'entries')} into ${INDEX_DIR}.${savedWords(p)}`
       return `${counted(left, 'picture')} to read in "${run.rootName}", ` +
         (eta ? `about ${eta} on this device` : 'for a time that could not be measured (the first reads failed)') +
         `. The index grows by about ${size(p.addBytes)}${p.indexBytes ? `; it is ${size(p.indexBytes)} now` : ''}. ` +
-        'Nothing is written until you press Start.'
+        'Nothing is written until you press Start.' + savedWords(p)
     case 'reading':
       if (!p.listingDone) {
         return `Reading "${run.rootName}", newest first, while the listing goes on ` +
@@ -533,7 +602,7 @@ function scanWords(run: ScanRun): string {
       return `Paused with ${counted(left, 'picture')} to read${p.listingDone ? '' : ' so far; the listing goes on'}. ` +
         'Resume carries on from there.'
     case 'done':
-      return `Scan of "${run.rootName}" finished: ${counted(p.read, 'picture')} read, ${counted(p.adopted, 'picture')} already indexed.`
+      return `Scan of "${run.rootName}" finished: ${counted(p.read, 'picture')} read, ${counted(p.adopted, 'picture')} already indexed.${savedWords(p)}`
     case 'stopped':
       return p.saved
         ? `Scan stopped. ${counted(p.saved, 'entry', 'entries')} saved; the next scan carries on from them.`
