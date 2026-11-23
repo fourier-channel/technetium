@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLightbox, type LightboxItem } from '../ui/lightboxContext'
 import {
-  addRoot, browserKeeper, browserListing, folderAccessSupported, forgetRoot, listRoots, pickFolder, storeLastRoot, storedLastRoot,
+  addRoot, browserKeeper, browserListing, browserThumbs, folderAccessSupported, forgetRoot, listRoots, pickFolder, storeLastRoot, storedLastRoot,
   type QqDirHandle, type QqFileHandle, type StoredRoot,
 } from './folderStore'
 import { lazyDir, lazyFile, ListingKeeper, loadListing, savedFolder, type SavedFolder } from './listingStore'
@@ -9,7 +9,7 @@ import {
   arrangeListing, folderView, gridWindow, imageType,
   type Arranged, type ListedEntry, type Permission,
 } from './qqGrid'
-import { thumbFor, cachedThumb } from './thumbs'
+import { createThumbs, renderThumb } from './thumbs'
 import { FolderScan, INDEX_DIR, STALL_MS, stalled, storedDeviceId, type ScanPhase, type ScanProgress } from './scan'
 import { childTiles, subtreeOf, tileWords, type ScanFolders, type TileProgress } from './scanRollup'
 
@@ -28,6 +28,11 @@ import { childTiles, subtreeOf, tileWords, type ScanFolders, type TileProgress }
 // ---------------------------------------------------------------------------
 
 type Handle = QqDirHandle | QqFileHandle
+
+// One per page: thumbnails outlive a folder switch, and are kept in this
+// browser across reloads (thumbs.ts).
+const thumbs = createThumbs({ store: folderAccessSupported() ? browserThumbs() : null, render: renderThumb })
+if (typeof window !== 'undefined') window.addEventListener('pagehide', () => { void thumbs.flush() })
 
 const MIN_TILE = 112
 const GAP = 6
@@ -119,6 +124,10 @@ export default function QuickQueuePanel() {
   const [listedSoFar, setListedSoFar] = useState(0)
   const [listSeconds, setListSeconds] = useState(0)
   const [problem, setProblem] = useState<string | null>(null)
+  useEffect(() => {
+    thumbs.onProblem = setProblem
+    return () => { thumbs.onProblem = null }
+  }, [])
   const [scanRun, setScanRun] = useState<ScanRun | null>(null)
   const engineRef = useRef<FolderScan | null>(null)
   const scanActive = !!scanRun && !FINISHED.has(scanRun.progress.phase)
@@ -397,11 +406,17 @@ export default function QuickQueuePanel() {
 
   const openPicture = (index: number) => {
     if (!shown) return
+    const here = dirKey
     const items: LightboxItem[] = shown.images.map((e) => ({
       mxc: '',
       name: e.name,
       mimetype: imageType(e.name) ?? undefined,
-      local: () => (e.handle as QqFileHandle).getFile(),
+      local: async () => {
+        const file = await (e.handle as QqFileHandle).getFile()
+        // A picture replaced under the same name gets a new thumbnail.
+        void thumbs.fileOpened(`${here}/${e.name}`, file)
+        return file
+      },
     }))
     lightbox.open(items, index)
   }
@@ -790,13 +805,13 @@ function ImageTile({
   onOpen: () => void
 }) {
   // A cached thumbnail is there on the first frame; only a new one waits.
-  const [src, setSrc] = useState<string | null>(() => cachedThumb(cacheKey))
+  const [src, setSrc] = useState<string | null>(() => thumbs.cachedThumb(cacheKey))
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
     if (src) return
     let alive = true
-    thumbFor(cacheKey, handle, () => alive)
+    thumbs.thumbFor(cacheKey, handle, () => alive)
       .then((url) => { if (alive) setSrc(url) })
       .catch((e) => { if (alive && (e as Error)?.message !== 'skipped') setFailed(true) })
     return () => { alive = false }

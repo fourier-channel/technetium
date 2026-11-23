@@ -1,4 +1,5 @@
 import type { BrowserCopy } from './listingStore'
+import type { StoredThumb, ThumbStore } from './thumbs'
 
 // ---------------------------------------------------------------------------
 // The folders QuickQueue has been given, remembered on this device.
@@ -73,18 +74,25 @@ const KEPT = 'kept'
 /** Each folder's saved listing in this browser (listingStore.ts), keyed by
  *  the root's id. */
 const LISTINGS = 'listings'
+/** Thumbnails made from the folders' pictures (thumbs.ts), keyed by
+ *  `<root id>/<folder path>/<file name>`, indexed by when each was last used. */
+const THUMBS = 'thumbs'
+const THUMBS_USED = 'at'
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    // v2 adds the kept store, v3 the listings. Every connection here closes
+    // v2 adds the kept store, v3 the listings, v4 the thumbnails. Every connection here closes
     // after its one transaction, so an upgrade is never blocked by another tab
     // for long.
-    const req = indexedDB.open(DB_NAME, 3)
+    const req = indexedDB.open(DB_NAME, 4)
     req.onupgradeneeded = () => {
       const db = req.result
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: 'id', autoIncrement: true })
       if (!db.objectStoreNames.contains(KEPT)) db.createObjectStore(KEPT, { keyPath: 'rootId' })
       if (!db.objectStoreNames.contains(LISTINGS)) db.createObjectStore(LISTINGS, { keyPath: 'rootId' })
+      if (!db.objectStoreNames.contains(THUMBS)) {
+        db.createObjectStore(THUMBS, { keyPath: 'key' }).createIndex(THUMBS_USED, 'at')
+      }
     }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error ?? new Error('IndexedDB refused to open'))
@@ -134,12 +142,18 @@ export async function addRoot(handle: QqDirHandle): Promise<StoredRoot> {
   return { id: Number(id), name: handle.name, handle }
 }
 
-/** Forgets a folder, and the index and listing this browser kept for it. */
+/** Every thumbnail key of one root: `<id>/` and anything after it. */
+function rootThumbs(id: number): IDBKeyRange {
+  return IDBKeyRange.bound(`${id}/`, `${id}/\uffff`)
+}
+
+/** Forgets a folder, and the index, listing and thumbnails this browser kept for it. */
 export async function forgetRoot(id: number): Promise<void> {
-  await withTx([STORE, KEPT, LISTINGS], 'readwrite', (tx) => {
+  await withTx([STORE, KEPT, LISTINGS, THUMBS], 'readwrite', (tx) => {
     tx.objectStore(STORE).delete(id)
     tx.objectStore(KEPT).delete(id)
     tx.objectStore(LISTINGS).delete(id)
+    tx.objectStore(THUMBS).delete(rootThumbs(id))
     return () => undefined
   })
 }
@@ -214,4 +228,43 @@ export function storedLastRoot(): number | null {
 
 export function storeLastRoot(id: number): void {
   try { localStorage.setItem(LAST_ROOT_KEY, String(id)) } catch { /* a convenience, not a record */ }
+}
+
+// --- Thumbnails kept in this browser -------------------------------------------
+
+/** Where thumbs.ts keeps thumbnails: this browser only (operator 2026-11-23). */
+export function browserThumbs(): ThumbStore {
+  return {
+    getMany: (keys) => withTx([THUMBS], 'readonly', (tx) => {
+      const s = tx.objectStore(THUMBS)
+      const out = new Map<string, StoredThumb>()
+      for (const k of keys) {
+        const req = s.get(k) as IDBRequest<StoredThumb | undefined>
+        req.onsuccess = () => { if (req.result) out.set(k, req.result) }
+      }
+      return () => out
+    }),
+    putMany: (rows) => withTx([THUMBS], 'readwrite', (tx) => {
+      const s = tx.objectStore(THUMBS)
+      for (const r of rows) s.put(r)
+      return () => undefined
+    }),
+    remove: (key) => withStore<undefined>(THUMBS, 'readwrite', (s) => s.delete(key) as IDBRequest<undefined>),
+    // Summed and trimmed in one transaction, least recently used first. The
+    // index hands the rows back oldest first; a Blob read from IndexedDB is a
+    // handle, so its size costs no read of its bytes.
+    trim: (maxBytes) => withTx([THUMBS], 'readwrite', (tx) => {
+      const s = tx.objectStore(THUMBS)
+      const all = s.index(THUMBS_USED).getAll() as IDBRequest<StoredThumb[]>
+      all.onsuccess = () => {
+        let over = all.result.reduce((sum, r) => sum + r.blob.size, 0) - maxBytes
+        for (const r of all.result) {
+          if (over <= 0) break
+          s.delete(r.key)
+          over -= r.blob.size
+        }
+      }
+      return () => undefined
+    }),
+  }
 }
