@@ -4559,3 +4559,25 @@ canvas.** `OffscreenCanvas.convertToBlob` to PNG never returned on the ninth
 picture, so the harness stalled before reaching anything it tests. A watchdog
 that reports the stage it was stuck at found it in one run. The harness now
 writes its PNGs by hand.
+
+## 2026-11-25 -- the notification sound (tc.91)
+
+The sound button and its slider now do something. With sound on, a room the
+user is not looking at plays a short chime when a mention arrives or when it
+goes from read to unread; muted and snoozed rooms stay silent, and the default
+stays off. The decision is a pure module; the sound is WebAudio, created only
+inside a gesture and suspended again once it has rung out. A chime the browser
+refuses is dropped and reported, never queued behind the next click.
+
+**Verified.** The gate; 18 broken versions of the rules each ran and answered
+wrongly. Firefox: resume refused before a gesture and allowed at and after a
+click (its own autoplay log), and an offline render that scales with the
+slider. Chromium: the context running and at rest. **Not verified.** A running
+context in Firefox (no audio server on the dev box), and live behaviour with
+two accounts: PENDING OPERATOR VERIFICATION.
+
+**draft-43 (gotcha) -- a headless box with no audio server proves nothing
+about autoplay.** Firefox left every AudioContext suspended, even with autoplay
+allowed, so "suspended before a click" passed for the wrong reason. The
+test page's evaluate call also counted as allowed. The autoplay log, read
+against page timers and a real click, was the control that told them apart.
