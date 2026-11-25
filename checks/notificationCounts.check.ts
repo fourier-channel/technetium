@@ -6,10 +6,13 @@
 import {
   COUNTS_FILTER,
   MIN_POLL_GAP_MS,
+  NO_COUNTS_YET,
   POLL_SETTLE_MS,
+  mayAskForCounts,
   nextPollDelay,
   parseNotificationCounts,
   sameCounts,
+  settleCounts,
   type NotifMap,
 } from '../src/client/notificationCounts.ts'
 
@@ -147,6 +150,27 @@ console.log('\n-- nextPollDelay: rate floor --')
     nextPollDelay(t, t - (MIN_POLL_GAP_MS - 100), false) === POLL_SETTLE_MS,
   )
   check('the gap floor is above the settle delay', MIN_POLL_GAP_MS > POLL_SETTLE_MS)
+}
+
+console.log('\n-- settleCounts: no answer is not an empty answer (tc.91) --')
+{
+  const empty: NotifMap = new Map()
+  const one: NotifMap = new Map([['!a', { total: 1, highlight: 0 }]])
+  check('the first answer replaces the placeholder even when empty', settleCounts(NO_COUNTS_YET, empty) === empty)
+  check('the first answer replaces the placeholder', settleCounts(NO_COUNTS_YET, one) === one)
+  check('an equal later answer keeps the held map', settleCounts(one, new Map(one)) === one)
+  check('an equal later empty answer keeps the held map', settleCounts(empty, new Map()) === empty)
+  check('a changed answer is taken', settleCounts(one, empty) === empty)
+}
+
+console.log('\n-- mayAskForCounts: a hidden tab asks only for a message, only with sound on --')
+for (const visible of [true, false]) {
+  for (const cause of ['message', 'other'] as const) {
+    for (const sound of [true, false]) {
+      const want = visible || (cause === 'message' && sound)
+      check(`visible ${visible}, ${cause}, sound ${sound} -> ${want}`, mayAskForCounts(visible, cause, sound) === want)
+    }
+  }
 }
 
 if (failures > 0) {

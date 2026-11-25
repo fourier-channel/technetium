@@ -25,6 +25,18 @@ export interface NotifCounts {
 }
 export type NotifMap = Map<string, NotifCounts>
 
+// What a reader holds before the first answer. Compared by IDENTITY: an empty
+// answer ("nothing is unread") is a different fact from no answer, and the
+// notification sound has to tell them apart (tc.91).
+export const NO_COUNTS_YET: NotifMap = new Map()
+
+// The map to hold after `next` arrives: the old one when nothing changed, so an
+// equal answer re-renders nothing -- except that the first answer always
+// replaces the placeholder, even when it too is empty.
+export function settleCounts(prev: NotifMap, next: NotifMap): NotifMap {
+  return prev !== NO_COUNTS_YET && sameCounts(prev, next) ? prev : next
+}
+
 // The filter PROVEN against the live homeserver on 2026-08-13.
 //
 // Not trimmed further on purpose. `timeline.limit: 0` and account_data
@@ -99,6 +111,15 @@ export function nextPollDelay(now: number, lastPollAt: number, scheduled: boolea
   if (scheduled) return null
   const since = now - lastPollAt
   return Math.max(POLL_SETTLE_MS, MIN_POLL_GAP_MS - since)
+}
+
+// May the counts be asked for now? A hidden tab would spend a full (if filtered)
+// sync on a list nobody can see, so it does not ask -- unless the notification
+// sound is on, when a MESSAGE arriving is worth asking about (tc.91). Never the
+// backstop tick and never a sync cycle: those repeat for as long as the tab is
+// open, and a background tab polling on them is traffic with nothing behind it.
+export function mayAskForCounts(tabVisible: boolean, cause: 'message' | 'other', soundOn: boolean): boolean {
+  return tabVisible || (cause === 'message' && soundOn)
 }
 
 // Value equality. The poll returns a fresh Map every time; swapping an equal

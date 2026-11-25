@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Room } from 'matrix-js-sdk'
+import { primeChime } from '../client/notificationChime'
 import { useClient } from '../client/clientContextValue'
 import { computeRevealOrder, type TreeNode } from '../client/spaces'
 import type { NavTree as NavTreeShape } from '../client/spaces'
@@ -330,11 +331,17 @@ export function NavTree({
               />
             </svg>
           </button>
-          {/* Sound pill: doesn't do anything yet -- a speaker; on drops a volume slider. */}
+          {/* Sound pill: the notification sound (NotificationChime) -- a speaker;
+              on drops a volume slider. */}
           <button
             type="button"
-            onClick={() => setSoundEnabled(!soundEnabled)}
-            title="This doesn't do anything yet, but it's pretty."
+            onClick={() => {
+              // This click is the gesture a browser wants before it lets a tab
+              // make a sound; taking it here means the first chime is heard.
+              if (!soundEnabled) void primeChime()
+              setSoundEnabled(!soundEnabled)
+            }}
+            title="Notification sound: a chime for new messages and mentions in rooms you are not looking at"
             className={soundEnabled ? 'tc-pill tc-pill-on' : 'tc-pill'}
           >
             <svg width="18" height="16" viewBox="0 0 18 16">

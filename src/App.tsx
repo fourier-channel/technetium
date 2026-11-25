@@ -43,6 +43,7 @@ import { useReadMarker } from './client/useReadMarker'
 import { useMediaTagSync } from './client/useMediaTags'
 import { useNavTree } from './client/useNavTree'
 import { useRoomNotifications } from './client/useRoomNotifications'
+import { NotificationChime } from './ui/NotificationChime'
 import { NavSharedContext, type NavShared } from './ui/navShared'
 import { MembersPullTab } from './ui/DmList'
 import { DomainView } from './ui/DomainView'
@@ -344,6 +345,13 @@ function App() {
     <LightboxProvider>
     <RoomListSettingsProvider>
     {client && <InterfaceVars client={client} />}
+    <NotificationChime
+      client={client}
+      notifs={notifs}
+      selectedRoomId={selectedRoomId}
+      dockRoomId={dockRoom?.roomId ?? null}
+      dockOpen={space.leaves.dock.open}
+    />
     {booting && (
       <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 3, zIndex: 2000, overflow: 'hidden' }}>
         <div

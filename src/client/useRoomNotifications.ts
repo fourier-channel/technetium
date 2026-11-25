@@ -9,9 +9,11 @@ import {
 } from 'matrix-js-sdk'
 import {
   COUNTS_FILTER,
+  NO_COUNTS_YET,
+  mayAskForCounts,
   nextPollDelay,
   parseNotificationCounts,
-  sameCounts,
+  settleCounts,
   type NotifCounts,
   type NotifMap,
 } from './notificationCounts'
@@ -41,7 +43,15 @@ import { reportAlways } from './report'
 
 export type { NotifCounts, NotifMap }
 
-const EMPTY_COUNTS: NotifMap = new Map()
+// Whether a hidden tab has a use for the counts: the notification sound is on
+// (ui/NotificationChime). A module value and not a parameter because the sound
+// setting lives in a provider below the one caller of this hook.
+let hiddenCounting = false
+export function countWhileHidden(on: boolean): void {
+  hiddenCounting = on
+}
+
+const tabVisible = () => typeof document === 'undefined' || document.visibilityState === 'visible'
 
 // Backstop cadence: catches anything the events did not announce. The
 // activity-driven timing lives in nextPollDelay (notificationCounts.ts).
@@ -82,7 +92,7 @@ async function fetchNotificationCounts(client: MatrixClient): Promise<NotifMap> 
 // Inert when `client` is null, so the caller can select between the two
 // sources without calling a hook conditionally.
 function useSdkNotifications(client: MatrixClient | null): NotifMap {
-  const [map, setMap] = useState<NotifMap>(EMPTY_COUNTS)
+  const [map, setMap] = useState<NotifMap>(NO_COUNTS_YET)
 
   useEffect(() => {
     if (!client) return
@@ -90,8 +100,12 @@ function useSdkNotifications(client: MatrixClient | null): NotifMap {
     const schedule = () => {
       if (timer) clearTimeout(timer)
       timer = setTimeout(() => {
+        // Before the initial sync there are no counts, and an empty map here
+        // would read as "nothing is unread" -- a baseline the real counts
+        // would then appear to rise from. ClientEvent.Sync asks again.
+        if (!client.isInitialSyncComplete()) return
         const next = computeFromSdk(client)
-        setMap((prev) => (sameCounts(prev, next) ? prev : next))
+        setMap((prev) => settleCounts(prev, next))
       }, 200)
     }
     // Deferred through the timer, so it is not a synchronous setState.
@@ -116,6 +130,7 @@ function useSdkNotifications(client: MatrixClient | null): NotifMap {
       client.off(RE_TIMELINE, schedule)
       client.off(RE_RECEIPT, schedule)
       client.off(RE_UNREAD, schedule)
+      setMap(NO_COUNTS_YET) // another client's counts are no baseline for this one's
     }
   }, [client])
 
@@ -124,7 +139,7 @@ function useSdkNotifications(client: MatrixClient | null): NotifMap {
 
 // Sliding-sync path (G-tp23). Inert when `client` is null.
 function usePolledNotifications(client: MatrixClient | null): NotifMap {
-  const [map, setMap] = useState<NotifMap>(EMPTY_COUNTS)
+  const [map, setMap] = useState<NotifMap>(NO_COUNTS_YET)
 
   useEffect(() => {
     if (!client) return
@@ -149,12 +164,13 @@ function usePolledNotifications(client: MatrixClient | null): NotifMap {
       // A hidden tab would spend a request on a room list nobody can see. NOT
       // re-armed: the visibilitychange listener below asks on the way back,
       // and a timer chain against a hidden tab would run until it returned.
-      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      // Every caller that is not a message has already been turned away.
+      if (!mayAskForCounts(tabVisible(), 'message', hiddenCounting)) return
       inFlight = true
       lastPollAt = Date.now()
       try {
         const next = await fetchNotificationCounts(mx)
-        if (!cancelled) setMap((prev) => (sameCounts(prev, next) ? prev : next))
+        if (!cancelled) setMap((prev) => settleCounts(prev, next))
       } catch (err) {
         // The room list silently showing no unread is precisely the state
         // this whole exercise was spent diagnosing. If it comes back, it says
@@ -186,15 +202,27 @@ function usePolledNotifications(client: MatrixClient | null): NotifMap {
     // First fetch is deferred (0ms) rather than awaited inline, keeping the
     // effect body free of a synchronous setState.
     const first = setTimeout(() => void refresh(), 0)
-    const interval = setInterval(() => void refresh(), POLL_INTERVAL_MS)
+    const interval = setInterval(() => {
+      if (mayAskForCounts(tabVisible(), 'other', hiddenCounting)) void refresh()
+    }, POLL_INTERVAL_MS)
+
+    // Decided when the timer is ARMED: a cycle that armed one in a hidden tab
+    // would also swallow the message behind it, whose own ask is then ignored
+    // as already scheduled.
+    const onActivity = () => {
+      if (mayAskForCounts(tabVisible(), 'other', hiddenCounting)) soon()
+    }
+    const onMessage = () => {
+      if (mayAskForCounts(tabVisible(), 'message', hiddenCounting)) soon()
+    }
 
     type ClientEv = Parameters<typeof client.on>[0]
     const RE_TIMELINE = RoomEvent.Timeline as unknown as ClientEv
     const RE_RECEIPT = RoomEvent.Receipt as unknown as ClientEv
 
-    client.on(ClientEvent.Sync, soon)
-    client.on(RE_TIMELINE, soon)
-    client.on(RE_RECEIPT, soon)
+    client.on(ClientEvent.Sync, onActivity)
+    client.on(RE_TIMELINE, onMessage)
+    client.on(RE_RECEIPT, onActivity)
 
     const onVisibility = () => {
       if (document.visibilityState === 'visible') void refresh()
@@ -206,10 +234,11 @@ function usePolledNotifications(client: MatrixClient | null): NotifMap {
       clearTimeout(first)
       clearInterval(interval)
       if (settle) clearTimeout(settle)
-      client.off(ClientEvent.Sync, soon)
-      client.off(RE_TIMELINE, soon)
-      client.off(RE_RECEIPT, soon)
+      client.off(ClientEvent.Sync, onActivity)
+      client.off(RE_TIMELINE, onMessage)
+      client.off(RE_RECEIPT, onActivity)
       document.removeEventListener('visibilitychange', onVisibility)
+      setMap(NO_COUNTS_YET) // another client's counts are no baseline for this one's
     }
   }, [client])
 
