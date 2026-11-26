@@ -14,9 +14,10 @@ import { BUG_REPORT } from '../client/bugReport'
 // once from the release this page was served from, so a bug report can name
 // its version.
 //
-// Where to report is client/bugReport.ts: the room Fourier-chan's !bugreport
-// intake listens in, by the name the room list shows, and a DM with her.
-// Until tc.149 it named #botsbotsbots, where nobody collects reports.
+// Where to report is client/bugReport.ts: the horizon page's Talk to Fourier
+// section (operator 2026-11-02), linked, opening in a new tab so the client
+// stays where it was. Before tc.149 it named #botsbotsbots, where nobody
+// collects reports, then !bugreport in a help room a fresh member is not in.
 //
 // The last sentence is the operator's, nearly verbatim, because the feedback it
 // invites ("I'm not sure what I should be clicking on") is the exact signal the
@@ -48,9 +49,8 @@ export function BetaBanner() {
       </button>
       {pin.open && (
         <AnchoredPopup key={pin.popupKey} anchorRef={title} label="About the beta" {...pin.popup}>
-          Things <strong>will</strong> be broken. Report a bug by sending <strong>{BUG_REPORT.command}</strong> and
-          what happened in <strong>{BUG_REPORT.room}</strong> (under {BUG_REPORT.space}), or in a DM
-          with {BUG_REPORT.guide}{' '}
+          Things <strong>will</strong> be broken. Report a bug to Fourier-chan under{' '}
+          <a className="tc-link" href={BUG_REPORT.url} target="_blank" rel="noopener noreferrer"><strong>{BUG_REPORT.section}</strong> on {BUG_REPORT.page}</a>{' '}
           &mdash; and <em>&ldquo;I&rsquo;m not sure what I should be clicking on&rdquo;</em> is not only
           a valid issue, it is the single most valuable piece of feedback you can send.
           <div className="tc-beta-build">{releaseLabel(build)}</div>

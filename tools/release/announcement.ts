@@ -16,10 +16,11 @@
 // note naming one is refused here rather than said in the room. ASCII here,
 // like all committed content; the room renders it as typed.
 //
-// Her sign-off says where a problem goes: !bugreport in the help room or a
-// DM with her (client/bugReport.ts, the beta notice's words too). It used to
-// say "right here in this room" -- #botsbotsbots, where the intake does not
-// listen (tc.149).
+// Her sign-off says where a problem goes: Talk to Fourier on the horizon page
+// (client/bugReport.ts, the beta notice's place too), in WORDS -- the address
+// would be refused below. It used to say "right here in this room" --
+// #botsbotsbots, where the intake does not listen -- and then !bugreport in a
+// help room (tc.149; operator 2026-11-02, reports go to /horizon/).
 //
 // Pure, so checks/releaseAnnouncement holds it.
 import { BUG_REPORT } from '../../src/client/bugReport.ts'
@@ -75,6 +76,6 @@ export function announcement(version: string, commit: string, notes: readonly st
   } else {
     lines.push("This one's tuning under the hood -- nothing new to learn, just a cleaner signal.")
   }
-  lines.push('', `Spot something off? Send ${BUG_REPORT.command} with what you did and what you saw, in ${BUG_REPORT.room} or in a DM with me.`, `(build ${commit})`)
+  lines.push('', `Spot something off? Tell me what you did and what you saw under ${BUG_REPORT.section} on ${BUG_REPORT.page}.`, `(build ${commit})`)
   return lines.join('\n')
 }

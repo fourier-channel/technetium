@@ -30,9 +30,11 @@ check('it names the build', text.includes('(build abc1234)'))
 check('with no notes it says so instead of an empty list',
   /tuning under the hood/.test(announcement('v', 'c', [])) && !/What's new/.test(announcement('v', 'c', [])))
 check('it is ASCII', /^[\x00-\x7f]*$/.test(text))
-check('a problem goes to the bug intake, not this room (tc.149)',
-  text.includes(`Send ${BUG_REPORT.command} `) && text.includes(` in ${BUG_REPORT.room} or in a DM with me.`) &&
-  !/this room/.test(text), text)
+check('a problem goes to Talk to Fourier on the horizon page, not this room (tc.149)',
+  text.includes(`under ${BUG_REPORT.section} on ${BUG_REPORT.page}.`) &&
+  !/this room|!bugreport/.test(text), text)
+check('the sign-off names the page in words, never its address',
+  !text.includes(BUG_REPORT.url) && !/41chan\.net|https?:/.test(text), text)
 
 // The stretch the promote warns about, in the shape `git log --format=LOG_FORMAT
 // --name-only` prints: a record separator, then sha, subject, body, then the files.
