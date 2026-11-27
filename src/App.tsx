@@ -371,6 +371,12 @@ function App() {
       <Sidebar
         selectedRoomId={selectedRoom?.roomId}
         onSelectRoom={selectRoom}
+        // The booru row marks what the MAIN pane holds, and with no room
+        // selected that is the booru, dock open or not: the DM window sits over
+        // the top of the column and the booru is still there below it. So an
+        // open DM does not unmark it, just as it does not unmark the room you
+        // were reading (tc.111; the open DM has its own mark, in the people
+        // list). checks/dmParity.check.ts holds this.
         booruActive={!selectedRoom}
         onSelectBooru={() => {
           setSelectedRoom(null)
