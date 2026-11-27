@@ -3,6 +3,7 @@ import type { Room } from 'matrix-js-sdk'
 import { useClient } from '../client/clientContextValue'
 import { Timeline } from './Timeline'
 import { Composer } from './Composer'
+import { TypingBar } from './TypingBar'
 import { ComposerModeProvider } from './ComposerModeProvider'
 import { ResizeHandle } from './ResizeHandle'
 import { dividerTone } from './dividerTone'
@@ -59,6 +60,11 @@ export function DmDock() {
                 headTrail={editMode ? <PanelChrome id="dock" inline /> : undefined}
               />
             </div>
+            {/* Who is typing, between the conversation and the composer, as
+                under the main timeline (tc.111): a DM is never selectedRoom, so
+                the main column's bar never spoke for it. Its fixed 18px comes
+                out of the timeline above, never out of the composer. */}
+            <TypingBar client={client} room={dockRoom as Room} />
             <Composer room={dockRoom as Room} />
           </ComposerModeProvider>
           {/* Bottom edge: drag to change the dock's height, unless locked. */}

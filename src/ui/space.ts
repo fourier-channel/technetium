@@ -96,7 +96,7 @@ export interface Space {
 export const MIN_PX: Record<PanelId, { x: number; y: number }> = {
   sidebar: { x: 180, y: 120 }, // room names have to be readable
   main:    { x: 320, y: 200 }, // a message column; the operator called 0.1 too small
-  dock:    { x: 320, y: 140 }, // a DM timeline plus its composer
+  dock:    { x: 320, y: 158 }, // a DM timeline plus its composer, and the 18px typing bar between (tc.111)
   threads: { x: 240, y: 90 },  // thread titles
   thread:  { x: 300, y: 200 }, // the reading pane
   members: { x: 150, y: 120 }, // avatar plus name

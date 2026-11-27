@@ -1,0 +1,63 @@
+<!doctype html>
+<!-- The DM window at its MINIMUM height (space.ts MIN_PX.dock.y), before
+     tc.111 (140, no bar) and after it (158, with the 18px typing bar), so the conversation left between
+     the title bar and the composer can be LOOKED AT rather than argued. The
+     script writes each conversation's measured height into its label.
+
+     Markup: the dock's own classes (DmDock.tsx), the DM title bar from
+     titlebars.html "DM -- after", the composer bar from composer.html. Proves
+     what this tree's stylesheets make of that markup at that height; does not
+     prove the React tree emits exactly it.
+       tools/visual/render.sh dmdock.html 760 260 -->
+<html>
+<head>
+<!--#head-->
+<link rel="stylesheet" href="../../src/composer.css">
+<style>
+  body { display: flex; gap: 24px; padding: 16px; align-items: flex-start; }
+  .col { width: 340px; }
+  .tc-dmdock { height: 158px; border: 1px solid #555; }
+  #d0 .tc-dmdock { height: 140px; }
+  .tc-dmdock-inner { transform: none; }
+  .bar { display:flex; align-items:center; gap:8px; border-top:1px solid rgba(128,128,128,0.25); padding:6px 10px; }
+  .tc-composer-input { flex:1; resize:none; padding:5px 10px; border-radius:8px;
+    border:1px solid #444; background:#11151c; color:#e6e9ef; font-family:inherit; font-size:14px; line-height:1.4; }
+  .tc-composer-send { padding:0 14px; border-radius:8px; font-weight:600; font-size:14px; cursor:pointer; }
+  .tc-composer-attach { border-radius:8px; border:1px solid #444; background:#1a2029; color:#e6e9ef; font-size:16px; padding:0; width:32px; height:32px; }
+  .msgs { flex: 1; min-height: 0; overflow: hidden; padding: 2px 16px; font-size: 13px; line-height: 18px; background: rgba(62,166,255,0.08); }
+</style>
+</head>
+<body>
+<template id="dock">
+  <div class="tc-dmdock" data-shown="true"><div class="tc-dmdock-inner">
+    <div class="tc-dmdock-body">
+      <header class="tc-panel-head tc-titlebar">
+        <span class="tc-dmdock-hint">Direct message</span>
+        <div class="tc-room-header-info"><span class="tc-room-header-name">nobu</span><span class="tc-room-header-count">2</span></div>
+      </header>
+      <div class="msgs">nobu: are you around?<br>you: yes<br>nobu: ok one sec</div>
+    </div>
+    <!--bar-->
+    <div class="tc-composer bar">
+      <button class="tc-composer-attach">&#128247;</button>
+      <textarea class="tc-composer-input" rows="1" placeholder="Message nobu"></textarea>
+      <button class="tc-composer-send">Send</button>
+    </div>
+    <div class="tc-dmdock-grip"></div>
+  </div></div>
+</template>
+<div class="col"><div class="h-label" id="l0">BEFORE -- no bar, minimum 140</div><div id="d0"></div></div>
+<div class="col"><div class="h-label" id="l1">AFTER (tc.111) -- bar, minimum 158</div><div id="d1"></div></div>
+<script>
+  const t = document.getElementById('dock').innerHTML
+  document.getElementById('d0').innerHTML = t
+  document.getElementById('d1').innerHTML = t.replace('<!--bar-->',
+    '<div class="tc-typing-bar" aria-live="polite">nobu is typing...</div>')
+  for (const i of [0, 1]) {
+    const m = document.querySelector(`#d${i} .msgs`).getBoundingClientRect().height
+    const h = document.querySelector(`#d${i} .tc-dmdock`).getBoundingClientRect().height
+    document.getElementById(`l${i}`).textContent += ` -- conversation ${Math.round(m)}px of ${Math.round(h)}`
+  }
+</script>
+</body>
+</html>
