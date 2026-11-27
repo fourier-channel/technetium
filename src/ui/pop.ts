@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
-import { prefersReducedMotion } from './flip'
+import { prefersReducedMotion } from './reducedMotion'
 
 // ---------------------------------------------------------------------------
 // Per-card "pop" -- a brief pulse when a thread updates (D1). Rate-limited to

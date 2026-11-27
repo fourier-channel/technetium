@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, RefObject } from 'react'
-import { prefersReducedMotion, type FlipControl } from './flip'
+import type { FlipControl } from './flip'
+import { prefersReducedMotion } from './reducedMotion'
 import { autoscrollStep, dropOrder, moveBy } from './dragMath'
 
 // ---------------------------------------------------------------------------

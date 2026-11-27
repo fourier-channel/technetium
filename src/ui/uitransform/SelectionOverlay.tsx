@@ -59,7 +59,12 @@ export function SelectionOverlay({
 
   return (
     <>
-      <style>{`@keyframes uitransform-ants { to { stroke-dashoffset: -${shift}px; } }`}</style>
+      {/* Under reduced motion the ants stand still: a dashed outline. The rule
+          is in this module's own style block (not the app's useReducedMotion)
+          because uitransform is portable; !important because the animation
+          is an inline style. */}
+      <style>{`@keyframes uitransform-ants { to { stroke-dashoffset: -${shift}px; } }
+@media (prefers-reduced-motion: reduce) { [data-uitransform-ants] { animation: none !important; } }`}</style>
       {/* Marching-ants border (SVG so the dash size is exact + animatable). */}
       <svg
         width={box.width}
@@ -82,6 +87,7 @@ export function SelectionOverlay({
           stroke={ma.color}
           strokeWidth={ma.thickness}
           strokeDasharray={`${ma.dash} ${ma.gap}`}
+          data-uitransform-ants
           style={{ animation: `uitransform-ants ${ma.periodMs}ms linear infinite` }}
         />
       </svg>

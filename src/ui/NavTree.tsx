@@ -321,6 +321,14 @@ export function NavTree({
           opacity: 0;
           animation: roomLetterPulse 1600ms linear infinite;
         }
+        /* Reduced motion stops both loops where they stand. The pulse is not
+           even rendered under reduce (RoomName draws it only when animate),
+           but a rule that only works because of a React decision elsewhere is
+           one refactor from being wrong (checks/reducedMotionAudit.check.ts). */
+        @media (prefers-reduced-motion: reduce) {
+          .tc-pill-on:hover .tc-wave,
+          .room-pulse-letter::after { animation: none; }
+        }
       `}</style>
       {/* Master animations toggle (seed for the future settings UI). */}
       <div style={{ padding: '2px 10px 8px' }}>

@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 
-// Shared prefers-reduced-motion helpers for the room list (and future UI). A
-// non-reactive check for imperative code, and a hook that re-renders on change.
+// The one reading of prefers-reduced-motion in script: a non-reactive check for
+// imperative code (flip, pop, drags) and a hook that re-renders on change (any
+// component that animates from script). CSS honours the same preference in its
+// own @media blocks; checks/reducedMotionAudit.check.ts proves that every
+// infinite animation is answered by one or the other.
 
 function query(): MediaQueryList | null {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return null

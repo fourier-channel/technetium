@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
+import { prefersReducedMotion } from './reducedMotion'
 
 // ---------------------------------------------------------------------------
 // FLIP (First, Last, Invert, Play) -- the ONE shared reorder-animation system
@@ -35,14 +36,6 @@ export interface PlayFlipOptions {
 const DEFAULT_DURATION = 200
 // ease-out; matches D2's "~200ms, ease-out".
 const DEFAULT_EASING = 'cubic-bezier(0.2, 0, 0, 1)'
-
-export function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  )
-}
 
 function contentPos(el: HTMLElement, container: HTMLElement): FlipPos {
   const r = el.getBoundingClientRect()

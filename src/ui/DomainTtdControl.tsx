@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { TTD_MAX, TTD_MIN } from '../client/useDomainMedia'
+import { useReducedMotion } from './reducedMotion'
 
 // ---------------------------------------------------------------------------
 // TTD (time-to-depop) control: sets how long media-objects a user posts stay on
@@ -16,6 +17,8 @@ function clampTtd(n: number): number {
 export function DomainTtdControl({ ttd, onChange }: { ttd: number; onChange: (n: number) => void }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
+  // Under reduced motion the `#` cursor holds still instead of blinking.
+  const reduced = useReducedMotion()
   const inputRef = useRef<HTMLInputElement>(null)
   const prevFocusRef = useRef<HTMLElement | null>(null)
 
@@ -102,7 +105,7 @@ export function DomainTtdControl({ ttd, onChange }: { ttd: number; onChange: (n:
                 pointerEvents: 'none',
                 fontWeight: 700,
                 color: 'var(--cpd-color-text-secondary)',
-                animation: 'domainTtdBlink 1s step-end infinite',
+                animation: reduced ? undefined : 'domainTtdBlink 1s step-end infinite',
               }}
             >
               #

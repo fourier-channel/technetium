@@ -18,6 +18,7 @@ import { ProfileActions } from './ProfileActions'
 import { isDomainAdmin } from './domainRoles'
 import { useLightbox } from './lightboxContext'
 import { transformToStyle, type Transform } from './uitransform/transform'
+import { prefersReducedMotion } from './reducedMotion'
 
 const PRESET_AVATARS = ['😀', '😎', '🤖', '👾', '🐱', '🦊', '🐸', '👻', '🎧', '🕹️', '🌟', '🔥']
 
@@ -32,14 +33,6 @@ const PRESET_AVATARS = ['😀', '😎', '🤖', '👾', '🐱', '🦊', '🐸', 
 
 const AVATAR_SIZE = 44
 const CARD_SIZE = 92
-
-function reduceMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  )
-}
 
 // Deterministic puck color from a user id (fallback when no avatar image).
 function colorFor(userId: string): string {
@@ -617,7 +610,7 @@ function DomainAvatar({
   const member = room.getMember(userId)
   const name = member?.name || userId
   const avatarMxc = member?.getMxcAvatarUrl() ?? null
-  const travel = reduceMotion() ? undefined : 'left 380ms cubic-bezier(0.2,0.8,0.2,1), top 380ms cubic-bezier(0.2,0.8,0.2,1)'
+  const travel = prefersReducedMotion() ? undefined : 'left 380ms cubic-bezier(0.2,0.8,0.2,1), top 380ms cubic-bezier(0.2,0.8,0.2,1)'
 
   // Absent = the user collapsed the domain; we still show WHERE they were, but
   // desaturated and dimmed ("was here, not here now"). The spot is saved.
@@ -765,7 +758,7 @@ function DomainMediaCard({
   onContext: (e: React.MouseEvent) => void
 }) {
   const off = 26 + index * 16
-  const rm = reduceMotion()
+  const rm = prefersReducedMotion()
   return (
     <div
       style={{
@@ -828,7 +821,7 @@ function DomainObjectCard({
   onOpen: () => void
   onContext: (e: React.MouseEvent) => void
 }) {
-  const rm = reduceMotion()
+  const rm = prefersReducedMotion()
   const dragRef = useRef<{ startX: number; startY: number; moved: boolean; pointerId: number } | null>(null)
   const movedRef = useRef(false)
 
@@ -922,7 +915,7 @@ function DomainObjectCard({
 // and shrinks away over the action's duration. POC = 'square' (a black-square
 // glyph). Reduced motion -> a fade instead of a scale pop.
 function SelfActionEffect({ action, pos }: { action: ActiveAction; pos: { x: number; y: number } }) {
-  const rm = reduceMotion()
+  const rm = prefersReducedMotion()
   return (
     <div
       style={{
@@ -967,7 +960,7 @@ function ThrownProjectile({
   useEffect(() => {
     const el = elRef.current
     if (!el) return
-    if (reduceMotion()) {
+    if (prefersReducedMotion()) {
       el.style.left = `${to.x * 100}%`
       el.style.top = `${to.y * 100}%`
       return

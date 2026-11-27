@@ -18,14 +18,9 @@
 // so nobody measures it, and a census of what is animating on a good day finds
 // nothing. Reading the stylesheet finds it whether or not it is on screen.
 //
-// The parsing here is deliberately crude -- regex over the sources rather than
-// a CSS parser -- and it is crude in the SAFE direction: it collects every
-// @keyframes block it can see and every declaration mentioning `infinite`, and
-// anything it cannot resolve is reported rather than skipped. A rule that
-// silently covers less than it appears to is rule 1 of the doctrine violated by
-// the tool meant to enforce it.
-import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+// The scanner -- which sources, which keyframes, which lines run forever -- is
+// checks/_cssAnim.ts, shared with reducedMotionAudit.check.ts.
+import { readSources, scanInfinite, scanKeyframes } from './_cssAnim.ts'
 
 let failures = 0
 const check = (name: string, cond: boolean, extra?: unknown) => {
@@ -52,87 +47,27 @@ const EXEMPT: Record<string, string> = {
     + 'which is what the rule is about. One small SVG rect.',
 }
 
-// Declarations that are not animated properties: they steer the animation
-// itself, or they are the custom properties a keyframe reads.
-const IGNORED = (prop: string) => prop.startsWith('--') || prop === 'animation-timing-function'
+const text = readSources('src')
+const files = [...text.keys()]
+const { frames, dupes } = scanKeyframes(text)
+const { infinite, unresolved } = scanInfinite(text, frames)
 
-function sources(dir: string, out: string[] = []): string[] {
-  for (const name of readdirSync(dir)) {
-    const p = join(dir, name)
-    if (statSync(p).isDirectory()) sources(p, out)
-    else if (/\.(css|tsx|ts)$/.test(name)) out.push(p)
-  }
-  return out
-}
-
-const files = sources('src')
-const text = new Map<string, string>()
-for (const f of files) {
-  // `${...}` inside a CSS-in-JS template puts braces in the middle of a
-  // declaration, which no brace-counting matcher can nest through -- it is
-  // what made @keyframes uitransform-ants invisible on the first run. The
-  // value is never a property name, so blanking it loses nothing.
-  text.set(f, readFileSync(f, 'utf8').replace(/\$\{[^{}]*\}/g, '0'))
-}
-
-// --- every @keyframes block anywhere in the tree --------------------------
-interface Frames { name: string; file: string; props: Set<string> }
-const frames = new Map<string, Frames>()
-const dupes: string[] = []
-
-for (const [file, src] of text) {
-  // Non-greedy to the matching close of the LAST inner block. Keyframes are
-  // one level deep (percent selectors), so counting one nesting level is
-  // enough and is what keeps this from needing a parser.
-  const re = /@keyframes\s+([A-Za-z0-9_-]+)\s*\{((?:[^{}]|\{[^{}]*\})*)\}/g
-  let m: RegExpExecArray | null
-  while ((m = re.exec(src)) !== null) {
-    const name = m[1]
-    // Comments are not declarations here either. Found by a keyframes block
-    // whose comment read "Rotation only: the gradient ..." -- the colon made
-    // `only` a property and the swirl was reported as animating it.
-    const body = uncomment(m[2])
-    const props = new Set<string>()
-    const pre = /(^|[{;\s])([a-zA-Z-]+)\s*:/g
-    let p: RegExpExecArray | null
-    while ((p = pre.exec(body)) !== null) {
-      const prop = p[2].toLowerCase()
-      if (!IGNORED(prop)) props.add(prop)
-    }
-    if (frames.has(name)) dupes.push(name)
-    frames.set(name, { name, file, props })
-  }
-}
-
-// --- every place something is asked to run forever ------------------------
-interface Use { name: string; file: string; line: number; snippet: string }
-const infinite: Use[] = []
-const unresolved: { file: string; line: number; snippet: string }[] = []
-
-// Comments talk ABOUT the rule, at length, and a line of prose is not a
-// declaration. Block comments are blanked ACROSS lines (newlines kept, so the
-// reported line numbers still point at the source) rather than per line, which
-// was the first version and read the middle of every paragraph as code.
-function uncomment(src: string): string {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
-    .replace(/(^|[^:])\/\/[^\n]*/g, (m, p1) => p1 + ' '.repeat(m.length - p1.length))
-}
-
-for (const [file, src] of text) {
-  const lines = uncomment(src).split('\n')
-  lines.forEach((line, i) => {
-    const stripped = line
-    if (!/\binfinite\b/.test(stripped)) return
-    // Which keyframes does this line name? Cross-file, because a component's
-    // <style> block can drive a class defined in index.css and the reverse.
-    const named = [...frames.keys()].filter((n) => new RegExp(`\\b${n}\\b`).test(stripped))
-    if (named.length === 0) {
-      unresolved.push({ file, line: i + 1, snippet: stripped.trim().slice(0, 100) })
-      return
-    }
-    for (const n of named) infinite.push({ name: n, file, line: i + 1, snippet: stripped.trim().slice(0, 100) })
-  })
+// The scanner on sources made for it: on a clean tree its failure paths never
+// run, so a scanner that stopped reporting dupes or unresolved lines would
+// still pass every check below (found by mutation, tc.113).
+console.log('\n-- the scanner, on made-up sources --')
+{
+  const t = new Map([
+    ['a.css', '@keyframes k { to { transform: none; } }\n@keyframes k { to { opacity: 0; } }\n.x { animation: nosuch 1s infinite; }'],
+    ['b.tsx', '// animation: k 1s infinite\nconst u = { animation: `k 0ms infinite` }'],
+  ])
+  const sk = scanKeyframes(t)
+  check('a name defined twice is reported', sk.dupes.join() === 'k', sk.dupes)
+  const si = scanInfinite(t, sk.frames)
+  check('an infinite naming no keyframes is unresolved, not skipped',
+    si.unresolved.length === 1 && si.unresolved[0].file === 'a.css', si.unresolved)
+  check('a commented-out infinite is not a use; a template one is',
+    si.infinite.length === 1 && si.infinite[0].file === 'b.tsx' && si.infinite[0].line === 2, si.infinite)
 }
 
 console.log('\n-- the sources parsed at all --')
