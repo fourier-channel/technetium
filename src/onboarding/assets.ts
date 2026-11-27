@@ -6,10 +6,11 @@
 // no separate "placeholder string" to drift from the eventual caption. `src` is
 // the "Image TBD" drop-in: fill it when the real art (or an mxc) arrives.
 //
-// Resolution follows the go-fish rule (CD-10): a slot is usable if it has a
-// non-empty `src` (one cheap boolean check); otherwise the `text` stands in.
-// A slot never throws and never blocks a render -- worst case it degrades to
-// its own caption text.
+// Resolution follows the go-fish rule (CD-10, src/client/goFish.ts): a slot is
+// usable if it has a non-empty `src` (one cheap boolean check); otherwise the
+// `text` stands in. A slot never throws and never blocks a render -- worst case
+// it degrades to its own caption text. hasImage stays here, not in goFish.ts:
+// it is a type guard over this slot shape, and its fallback is the slot's own.
 // ---------------------------------------------------------------------------
 
 export interface Asset {

@@ -130,8 +130,9 @@ export async function observeServerAdmin(
 }
 
 // Split out so the shape of the answer is checkable without a server. A body
-// that does not say `admin: true` is NOT an admin -- go-fish, and the safe
-// reading of a malformed answer is the narrower one.
+// that does not say `admin: true` is NOT an admin -- go-fish (goFish.ts), and
+// the safe reading of a malformed answer is the narrower one. Kept here rather
+// than in goFish.ts: three verdicts with a reason each are this probe's fact.
 export function readAdminBody(body: unknown): AdminFacts {
   if (!body || typeof body !== 'object') {
     return { verdict: 'unknown', because: 'The homeserver answered with something that was not an answer.' }

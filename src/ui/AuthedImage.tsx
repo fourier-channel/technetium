@@ -4,11 +4,12 @@ import { fetchEncryptedMediaSrc, fetchMediaSrc, type ThumbSize } from '../client
 import { useFileVersion } from './useFileVersion'
 import type { EncryptedFileInfo } from '../client/encryptedFile'
 import { reportIgnored } from '../client/report'
+import { withRetry, type RetryPolicy } from '../client/goFish'
 
 // Retry transient media failures (heavy sync starves fetches) before showing the
-// unavailable state: ~0.8s, 1.6s, 3.2s, 6.4s -> gives up after ~12s.
-const MEDIA_MAX_RETRIES = 4
-const MEDIA_RETRY_BASE_MS = 800
+// unavailable state: five attempts, waits of 0.8s, 1.6s, 3.2s, 6.4s -> gives up
+// after ~12s.
+const MEDIA_RETRY: RetryPolicy = { maxAttempts: 5, baseDelayMs: 800 }
 
 // Fallback box width for a lazy image whose event carried no dimensions.
 const PLACEHOLDER_W = 320
@@ -74,13 +75,9 @@ export function AuthedImage({
   const { client } = useClient()
   const [src, setSrc] = useState<string | null>(null)
   const [error, setError] = useState(false)
-  const [retryTick, setRetryTick] = useState(0)
   // Track the current object URL across renders so cleanup always revokes the
   // exact blob this instance created, even if mxc changes mid-flight.
   const revokeRef = useRef<(() => void) | null>(null)
-  // Retry bookkeeping. Ref writes happen in the EFFECT (allowed), never render.
-  const attemptsRef = useRef(0)
-  const sourceKeyRef = useRef('')
   // A lazy image starts un-requested and becomes requested once it is near the
   // viewport; an eager one is requested from the start.
   const [near, setNear] = useState(!lazy)
@@ -119,20 +116,13 @@ export function AuthedImage({
   useEffect(() => {
     if (!client || !near) return
     let cancelled = false
-    let retryTimer: ReturnType<typeof setTimeout> | undefined
 
-    // Reset the attempt counter only when the SOURCE changes, not on a retry.
-    const sourceKey = `${mxc}|${width ?? ''}|${roomId ?? ''}`
     // Names WHICH request shape failed. "An image did not load" does not say
     // whether the gateway's sized path broke or the whole media route did, and
     // those are very different faults. The width is in the scope because the
     // gateway snaps to a fixed size list, so one misconfigured size fails alone
     // -- invisible when every failure logs the same line.
     const failureScope = width ? `media: thumbnail w=${width}` : 'media: original'
-    if (sourceKeyRef.current !== sourceKey) {
-      sourceKeyRef.current = sourceKey
-      attemptsRef.current = 0
-    }
 
     // Reset for the new mxc off the effect body (a microtask -- not a synchronous
     // setState-in-effect) so the previous image clears before the new one loads.
@@ -150,44 +140,41 @@ export function AuthedImage({
     // otherwise. Both return the same {src, revoke}, so everything below is
     // shared -- including the retry, which an encrypted image needs just as
     // much because it is a full-size download every time.
-    ;(file
-      ? fetchEncryptedMediaSrc(client, file, mimetype ?? undefined, roomId)
-      : fetchMediaSrc(client, mxc, width, roomId))
-      .then(({ src: resolved, revoke }) => {
-        if (cancelled) {
-          // Component moved on before the fetch resolved -- clean up immediately.
-          revoke()
-          return
-        }
-        revokeRef.current = revoke
-        setSrc(resolved)
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return
-        // A heavy initial sync starves media fetches, so a failure here is
-        // usually transient. Retry with backoff before giving up, so images
-        // self-heal instead of sticking at "[image unavailable]" until the user
-        // navigates away and back (CD-10 go-fish; no dead states).
-        if (attemptsRef.current < MEDIA_MAX_RETRIES) {
-          const delay = MEDIA_RETRY_BASE_MS * 2 ** attemptsRef.current
-          attemptsRef.current += 1
-          retryTimer = setTimeout(() => {
-            if (!cancelled) setRetryTick((t) => t + 1)
-          }, delay)
-        } else {
-          // Only once the retries are spent. Reporting each attempt would turn
-          // an expected sync-starvation blip into four console lines per image,
-          // which is how a log stops being read. fetchMediaSrc keeps the
-          // response status and body in this error precisely so this line can
-          // carry them (D-tp16).
-          reportIgnored(failureScope, err)
-          setError(true)
-        }
-      })
+    //
+    // A heavy initial sync starves media fetches, so a failure here is usually
+    // transient: retry with backoff before giving up, so images self-heal
+    // instead of sticking at "[image unavailable]" until the user navigates
+    // away and back (goFish.ts; no dead states). The budget belongs to this
+    // effect run: a new source, a new version or a newly near image starts
+    // with a fresh one.
+    const run = withRetry(
+      () =>
+        file
+          ? fetchEncryptedMediaSrc(client, file, mimetype ?? undefined, roomId)
+          : fetchMediaSrc(client, mxc, width, roomId),
+      MEDIA_RETRY,
+      // Only once the retries are spent. Reporting each attempt would turn an
+      // expected sync-starvation blip into four console lines per image, which
+      // is how a log stops being read. fetchMediaSrc keeps the response status
+      // and body in this error precisely so this line can carry them (D-tp16).
+      (err) => {
+        reportIgnored(failureScope, err)
+        setError(true)
+      },
+    )
+    void run.value.then(({ src: resolved, revoke }) => {
+      if (cancelled) {
+        // Component moved on before the fetch resolved -- clean up immediately.
+        revoke()
+        return
+      }
+      revokeRef.current = revoke
+      setSrc(resolved)
+    })
 
     return () => {
       cancelled = true
-      if (retryTimer) clearTimeout(retryTimer)
+      run.cancel()
       if (revokeRef.current) {
         revokeRef.current()
         revokeRef.current = null
@@ -195,7 +182,7 @@ export function AuthedImage({
     }
     // file.url identifies the ciphertext; the key travels with it, so a changed
     // file object means different bytes and must refetch.
-  }, [client, mxc, file, mimetype, width, roomId, retryTick, near, version])
+  }, [client, mxc, file, mimetype, width, roomId, near, version])
 
   // The box this image occupies, and the single authority for it: the
   // placeholder and the loaded picture must agree exactly or the row resizes

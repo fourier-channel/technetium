@@ -38,6 +38,8 @@ import { ThreadList } from './ui/ThreadList'
 import { useReveal } from './ui/useReveal'
 import { TTD_DEFAULT } from './client/useDomainMedia'
 import { LightboxProvider } from './ui/Lightbox'
+import { withRetry, type RetryPolicy } from './client/goFish'
+import { reportIgnored } from './client/report'
 import { RoomListSettingsProvider } from './ui/RoomListSettingsProvider'
 import { useReadMarker } from './client/useReadMarker'
 import { useMediaTagSync } from './client/useMediaTags'
@@ -68,6 +70,10 @@ import { InterfaceVars } from './ui/InterfaceVars'
 // Thin shell: render purely by client lifecycle status. All auth/client logic
 // lives in ClientProvider; App reflects the current phase and, when ready,
 // mounts the three-pane layout (nav tree | timeline+composer | member list).
+// A just-created room reaches the store by sync: ask for it every half second,
+// 13 times in all (about six seconds), then report it once.
+const OPEN_ROOM_RETRY: RetryPolicy = { maxAttempts: 13, baseDelayMs: 500, factor: 1 }
+
 function App() {
   const { client, status, error, userId, login, logout } = useClient()
   const { space, editMode, setEditMode, showInDock, openThreadPane, closeThreadPane, openThreadList, closeThreadList, openDomain, closeDomain, dockRoom, closeDock, openSidebar, closeSidebar, openMembers, closeMembers } = useSpace()
@@ -122,16 +128,18 @@ function App() {
   // "create then open" lands in that gap; retry briefly rather than dropping
   // the navigation. Seen live 2026-09-05: "Direct message created." with the
   // pane still saying select-a-room and nothing clickable.
+  //
+  // Every half second for about six seconds (goFish.ts). It used to give up in
+  // silence; a room that never arrives is now reported once (G-tc05).
   const openRoomById = (roomId: string) => {
-    const attempt = (triesLeft: number) => {
-      const room = client?.getRoom(roomId)
-      if (room) {
-        selectRoom(room)
-        return
-      }
-      if (triesLeft > 0) setTimeout(() => attempt(triesLeft - 1), 500)
-    }
-    attempt(12)
+    void withRetry(
+      () => {
+        const room = client?.getRoom(roomId)
+        return room ? Promise.resolve(room) : Promise.reject(new Error(`room ${roomId} not in the store yet`))
+      },
+      OPEN_ROOM_RETRY,
+      (err) => reportIgnored('open room by id', err),
+    ).value.then(selectRoom)
   }
   // The thread list is a tile in the main column (under the dock, above the
   // chat); its open state IS the space's.

@@ -1,5 +1,6 @@
 import type { NavTree, TreeNode } from './spaces'
 import { reportIgnored } from './report'
+import { asBool, asString } from './goFish'
 
 // ---------------------------------------------------------------------------
 // "Last known server shape" (CD-11 stale-then-live). We persist the nav tree's
@@ -40,8 +41,8 @@ function toShape(n: TreeNode): ShapeNode {
   }
 }
 
-// Reconstruct a TreeNode from cache. Defensive (go-fish, CD-10): anything that
-// isn't a well-formed node is dropped, never thrown over.
+// Reconstruct a TreeNode from cache. Defensive (go-fish, goFish.ts): anything
+// that isn't a well-formed node is dropped, never thrown over.
 function fromShape(s: unknown): TreeNode | null {
   if (!s || typeof s !== 'object') return null
   const o = s as Record<string, unknown>
@@ -51,10 +52,10 @@ function fromShape(s: unknown): TreeNode | null {
     : []
   return {
     roomId: o.roomId,
-    name: typeof o.name === 'string' ? o.name : o.roomId,
-    isSpace: o.isSpace === true,
-    membership: typeof o.membership === 'string' ? o.membership : null,
-    joinRule: typeof o.joinRule === 'string' ? o.joinRule : null,
+    name: asString(o.name, o.roomId),
+    isSpace: asBool(o.isSpace),
+    membership: asString(o.membership, null),
+    joinRule: asString(o.joinRule, null),
     room: null,
     children: kids,
   }
