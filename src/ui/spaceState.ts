@@ -1,12 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
-import { ClientEvent, type MatrixClient, type MatrixEvent } from 'matrix-js-sdk'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import type { MatrixClient } from 'matrix-js-sdk'
+import { accountDataEcho } from '../client/accountDataEcho'
 import { DEFAULT_VIEWPORT, damagedByPhone, defaultSpace, deserialize, isMomentary, reflow, serialize, setViewport, type Space, type Viewport } from './space'
-import { isMobileBrowser, readStore, startingCode, writeStore, type LayoutStore } from './presets'
+import { isMobileBrowser, startingCode, type LayoutStore } from './presets'
+import { LAYOUT_ECHO } from './layoutEcho'
 
 // The space, held in ACCOUNT DATA as its number, so it follows the user
-// across devices and sessions and can be pasted into another client. Same
-// pattern as the ticker's collapse state.
-const TYPE = 'net.41chan.tc.layout'
+// across devices and sessions and can be pasted into another client. Written
+// through echoSync like the ticker's collapse state (tc.110); what is stored
+// and what a failure means are in layoutEcho.ts.
 
 declare module 'matrix-js-sdk' {
   interface AccountDataEvents {
@@ -25,8 +27,10 @@ export function deviceIsMobile(): boolean {
   return isMobileBrowser({ ua: navigator?.userAgent, coarsePointer: coarse, width: window.innerWidth })
 }
 
+// The store as this tab holds it: what the server said, or what this tab has
+// asked it to say and is waiting to hear back.
 export function readLayoutStore(client: MatrixClient | null): LayoutStore {
-  return readStore(client?.getAccountData(TYPE)?.getContent())
+  return client ? accountDataEcho(client, LAYOUT_ECHO).sync.snapshot() : LAYOUT_ECHO.empty
 }
 
 // The screen this tab is actually on. Minimums are pixels (space.ts), so a
@@ -37,10 +41,10 @@ export function currentViewport(): Viewport {
 }
 
 // The layout as the user designed it, untouched by this screen.
-export function readStored(client: MatrixClient | null, vp: Viewport = currentViewport()): Space {
+export function readStored(store: LayoutStore, vp: Viewport = currentViewport()): Space {
   // Which layout this device opens on: its own preset if one is pointed at it,
   // then the default preset, then the last live layout.
-  const code = startingCode(readLayoutStore(client), deviceIsMobile())
+  const code = startingCode(store, deviceIsMobile())
   // A number that does not parse is treated as absent, never as a partial
   // layout: the default is a known-good screen and a corrupt code is not.
   // A v1 number (the earlier one-axis model) is refused by deserialize and
@@ -55,8 +59,8 @@ export function readStored(client: MatrixClient | null, vp: Viewport = currentVi
 
 // What THIS screen can show of it. A layout designed on a desktop routinely
 // arrives on a phone; the stored number is never rewritten to match.
-export function readSpace(client: MatrixClient | null, vp: Viewport = currentViewport()): Space {
-  return reflow(readStored(client, vp))
+export function readSpace(store: LayoutStore, vp: Viewport = currentViewport()): Space {
+  return reflow(readStored(store, vp))
 }
 
 export type SpaceUpdate = Space | ((prev: Space) => Space)
@@ -78,8 +82,20 @@ export interface StoredSpace {
   setStore: (next: LayoutStore) => void
 }
 
+const noSubscribe = () => () => {}
+const noStore = () => LAYOUT_ECHO.empty
+
 export function useStoredSpace(client: MatrixClient | null): StoredSpace {
-  const [layout, setLayoutState] = useState<Space>(() => readSpace(client))
+  const echo = client ? accountDataEcho(client, LAYOUT_ECHO) : null
+  // The store -- presets, device defaults, overflow, the live number -- is
+  // echoSync's: what the server holds, or what this tab asked for and has not
+  // yet heard back.
+  const store = useSyncExternalStore(
+    echo ? echo.subscribe : noSubscribe,
+    echo ? echo.sync.snapshot : noStore,
+    echo ? echo.sync.snapshot : noStore,
+  )
+  const [layout, setLayoutState] = useState<Space>(() => readSpace(store))
   // The latest layout, for updaters: a drag fires many deltas between renders,
   // and each must apply to the result of the last, not to a stale closure.
   const latest = useRef(layout)
@@ -87,13 +103,15 @@ export function useStoredSpace(client: MatrixClient | null): StoredSpace {
     latest.current = layout
   }, [layout])
 
-  // What this client last wrote, so its own echo is not mistaken for news.
-  // Without this, a drag -- many changes, each saved -- had earlier saves'
-  // echoes landing mid-drag and overwriting local state with a stale,
-  // quantised value; the next step then applied to that base, and the drag
-  // lost ground at random (measured: the same 120 px drag moved 69 px in one
-  // run and 20 px in the next).
-  const lastWritten = useRef<string | null>(null)
+  // The live number this tab last asked the server for, or last took from it.
+  // A stored number equal to it is not news. Without this, a drag -- many
+  // changes, each saved -- had earlier saves' echoes landing mid-drag and
+  // overwriting local state with a stale, quantised value; the next step then
+  // applied to that base, and the drag lost ground at random (measured: the
+  // same 120 px drag moved 69 px in one run and 20 px in the next). Any other
+  // number is news: another device, or this tab's own failed save, which
+  // echoSync has undone and reported, so the layout goes back with it.
+  const known = useRef<string | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // What the USER chose, as distinct from what this screen can show of it.
@@ -103,34 +121,26 @@ export function useStoredSpace(client: MatrixClient | null): StoredSpace {
   // every device. (Per-form-factor presets are the next piece of work; until
   // they land, a user EDIT made on a small screen does still save, because
   // that is a choice rather than an adaptation.)
-  const chosen = useRef<Space>(readStored(client))
-  const [store, setStoreState] = useState<LayoutStore>(() => readLayoutStore(client))
-  const storeRef = useRef(store)
-  useEffect(() => { storeRef.current = store }, [store])
+  const chosen = useRef<Space>(readStored(store))
 
   useEffect(() => {
     if (!client) return
-    const onAccountData = (ev: MatrixEvent) => {
-      if (ev.getType() !== TYPE) return
-      const code = (ev.getContent() as { code?: unknown })?.code
-      if (typeof code === 'string' && code === lastWritten.current) return // our own
-      const next = readLayoutStore(client)
-      storeRef.current = next
-      setStoreState(next)
-      chosen.current = readStored(client)
-      setLayoutState(reflow(chosen.current))
+    const live = accountDataEcho(client, LAYOUT_ECHO)
+    const take = (always: boolean) => {
+      const s = live.sync.snapshot()
+      if (!always && s.code === known.current) return
+      known.current = s.code
+      chosen.current = readStored(s)
+      const l = reflow(chosen.current)
+      latest.current = l
+      setLayoutState(l)
     }
-    client.on(ClientEvent.AccountData, onAccountData)
-    queueMicrotask(() => {
-      const next = readLayoutStore(client)
-      storeRef.current = next
-      setStoreState(next)
-      chosen.current = readStored(client)
-      setLayoutState(reflow(chosen.current))
-    })
-    return () => {
-      client.removeListener(ClientEvent.AccountData, onAccountData)
-    }
+    const off = live.subscribe(() => take(false))
+    // Re-seed once mounted: the first render may have run before the client
+    // (or its first sync) existed. Deferred, per the no-sync-setState-in-effect
+    // rule.
+    queueMicrotask(() => take(true))
+    return off
   }, [client])
 
   const setLayout = (u: SpaceUpdate) => {
@@ -152,19 +162,16 @@ export function useStoredSpace(client: MatrixClient | null): StoredSpace {
     save()
   }
   const save = () => {
-    if (!client) return
+    if (!echo) return
     // Saved once the changes stop, not on every step of a drag: a drag is
-    // dozens of changes a second and one number at the end. Optimistic; the
-    // echo of our own write is ignored above, so it cannot fight the drag.
+    // dozens of changes a second and one number at the end. echoSync then
+    // keeps one write in flight and sends the latest number when it can.
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
       saveTimer.current = null
       const code = serialize(chosen.current)
-      lastWritten.current = code
-      const content = writeStore({ ...storeRef.current, code })
-      client.setAccountData(TYPE, content).catch((err: unknown) => {
-        console.warn('[layout] could not save', err)
-      })
+      known.current = code
+      echo.sync.update((cur) => ({ ...cur, code }))
     }, 400)
   }
   // Adapt to this screen WITHOUT writing back: the viewport changed, or a
@@ -199,18 +206,14 @@ export function useStoredSpace(client: MatrixClient | null): StoredSpace {
     }
   }, [])
 
-  // Presets and settings save immediately: they are deliberate acts, not the
+  // Presets and settings save at once: they are deliberate acts, not the
   // dozens-per-second stream a drag produces, and losing one to a debounce
-  // that never fired would be silent.
+  // that never fired would be silent. They carry the live number with them.
   const setStore = (next: LayoutStore) => {
-    storeRef.current = next
-    setStoreState(next)
-    if (!client) return
+    if (!echo) return
     const code = serialize(chosen.current)
-    lastWritten.current = code
-    client.setAccountData(TYPE, writeStore({ ...next, code })).catch((err: unknown) => {
-      console.warn('[layout] could not save presets', err)
-    })
+    known.current = code
+    echo.sync.update(() => ({ ...next, code }))
   }
 
   return { space: layout, setSpace: setLayout, adaptSpace: adaptLayout, chooseSpace: chooseLayout, store, setStore }
