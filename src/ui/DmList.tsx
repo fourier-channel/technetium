@@ -48,7 +48,13 @@ export function MembersPullTab(props: Omit<ComponentProps<typeof PullTab>, 'wait
 // Stable empty set for the no-client case, so the identity does not churn.
 const EMPTY_ROOM_IDS: ReadonlySet<string> = new Set()
 
-export function DmList({ onSelectRoom }: { onSelectRoom: (room: Room) => void }) {
+// `openRoomId` is the conversation the DM window holds, or null when it is
+// closed (tc.111). A prop, not a read of the layout here, so the L30 harness
+// can mount the list without a SpaceProvider.
+export function DmList({ onSelectRoom, openRoomId = null }: {
+  onSelectRoom: (room: Room) => void
+  openRoomId?: string | null
+}) {
   const { client } = useClient()
   const { nav, notifs } = useNavShared()
   const { animationsEnabled, isMutedNow, isFavorite, dmFilter, setDmFilter } = useRoomListSettings()
@@ -226,7 +232,8 @@ export function DmList({ onSelectRoom }: { onSelectRoom: (room: Room) => void })
                     }}
                     onContextMenu={(e) => onContext(node, e, true)}
                     title={dmTitle(node, isDm, counts)}
-                    style={dmFaceStyle({ ping, unread })}
+                    style={dmFaceStyle({ ping, unread, open: node.roomId === openRoomId })}
+                    aria-current={node.roomId === openRoomId ? 'true' : undefined}
                     className={ping ? 'tc-dm-waiting tc-dm-waiting--ping' : unread ? 'tc-dm-waiting' : undefined}
                   >
                     <EpicycleReveal seed={node.roomId} size={DM_AVATAR} play={animate}>

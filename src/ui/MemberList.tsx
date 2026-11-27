@@ -64,7 +64,7 @@ export function MemberList({
 }) {
   // The scale lives on Space, so it rides the UI-export number: a layout sent
   // to someone else arrives at the size it was set to.
-  const { space, setMemberScale } = useSpace()
+  const { space, setMemberScale, dockRoom } = useSpace()
   const memberScale = space.memberScale
 
   const { client } = useClient()
@@ -237,7 +237,14 @@ export function MemberList({
       {/* Your conversations, under the button that starts one (L30): they
           moved here from the room list, because every one of them is with a
           person on this server. */}
-      {onSelectRoom && <DmList onSelectRoom={onSelectRoom} />}
+      {onSelectRoom && (
+        <DmList
+          onSelectRoom={onSelectRoom}
+          // Marked only while the window is open: a closed dock still remembers
+          // its room, and a face lit for a hidden window would be a lie.
+          openRoomId={space.leaves.dock.open ? dockRoom?.roomId ?? null : null}
+        />
+      )}
 
       {room && canApprove && knockers.length > 0 && (
         <div style={{ padding: '0 6px 6px' }}>

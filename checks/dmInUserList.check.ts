@@ -32,7 +32,7 @@ console.log('\n-- it left the room list --')
 console.log('\n-- it arrived in the user list, whole --')
 {
   check('the user list renders it, under the button that starts one',
-    /<DmList onSelectRoom=\{onSelectRoom\} \/>/.test(members) && members.indexOf('<DmList') > members.indexOf('+ DM'))
+    /<DmList\s+onSelectRoom=\{onSelectRoom\}[\s\S]*?\/>/.test(members) && members.indexOf('<DmList') > members.indexOf('+ DM'))
   check('App opens a chosen conversation through selectRoom (the dock), and a phone puts the list away',
     /onSelectRoom=\{\(room\) => \{\s*selectRoom\(room\)\s*if \(membersAlone\) closeMembers\(\)/.test(app))
   check('the stadium-to-rectangle shape came with it', /borderRadius: 'var\(--tc-dm-radius\)'/.test(dm))

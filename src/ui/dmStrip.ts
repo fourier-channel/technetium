@@ -49,7 +49,14 @@ export function dmFaceBox(): DmFaceBox {
 export interface DmFaceState {
   ping: boolean
   unread: boolean
+  // The conversation the DM window holds right now (tc.111). Optional so a
+  // caller that has no dock to ask about draws every face closed.
+  open?: boolean
 }
+
+// The open face's ring: the accent a selected row in the room list carries,
+// so "this is the one you are in" is one colour across the left of the screen.
+export const DM_OPEN_RING = 'var(--tc-link)'
 
 // The face's COMPLETE box, exported as data so it can be measured in a real
 // layout engine instead of argued about. The whole class of bug here was a box
@@ -71,20 +78,37 @@ export function dmFaceStyle(state: DmFaceState): CSSProperties {
     padding: 0,
     // Every face is ringed, avatar or bare initial alike, so the row reads as
     // one set rather than pictures floating beside letters.
-    border: `${DM_RING}px solid rgba(128,128,128,0.45)`,
+    // The open conversation recolours this ring at the same width, so the box
+    // stays the box and marking a face open moves no neighbour
+    // (no-forced-reflow); its halo is a shadow, below.
+    border: `${DM_RING}px solid ${state.open ? DM_OPEN_RING : 'rgba(128,128,128,0.45)'}`,
     background: 'transparent',
     cursor: 'pointer',
     lineHeight: 0,
     borderRadius: '50%',
-    // Glow, not a badge: at this size there is no room for a counter, and the
-    // ring reads at a glance across a wrapped grid of faces. The static ring is
-    // the reduced-motion base; .tc-dm-waiting pulses it.
-    boxShadow: state.ping
-      ? '0 0 0 2px var(--tc-unread), 0 0 12px 2px rgba(255,150,40,0.75)'
-      : state.unread
-        ? '0 0 0 2px var(--tc-unread-base), 0 0 9px rgba(255,150,40,0.45)'
-        : undefined,
+    boxShadow: [dmGlow(state), dmOpenHalo(state)].filter(Boolean).join(', ') || undefined,
   }
+}
+
+// Glow, not a badge: at this size there is no room for a counter, and the
+// ring reads at a glance across a wrapped grid of faces. The static ring is
+// the reduced-motion base; .tc-dm-waiting pulses it.
+function dmGlow(state: DmFaceState): string | undefined {
+  return state.ping
+    ? '0 0 0 2px var(--tc-unread), 0 0 12px 2px rgba(255,150,40,0.75)'
+    : state.unread
+      ? '0 0 0 2px var(--tc-unread-base), 0 0 9px rgba(255,150,40,0.45)'
+      : undefined
+}
+
+// The open conversation's halo (tc.111), drawn as a shadow so it takes no
+// room. It goes AFTER the glow, which paints on top: a waiting message still
+// reads first, and the accent shows as a band outside the glow's own 2px ring
+// rather than being covered by it. The recoloured 1px border alone was seen
+// in a render and was too faint to find, worse still on an avatar picture.
+function dmOpenHalo(state: DmFaceState): string | undefined {
+  if (!state.open) return undefined
+  return `0 0 0 ${dmGlow(state) ? 4 : 2}px ${DM_OPEN_RING}`
 }
 
 // True when a face's box can only ever render as a circle: equal sides plus a

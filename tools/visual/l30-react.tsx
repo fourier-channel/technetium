@@ -45,7 +45,12 @@ export function Harness() {
         <NavSharedContext.Provider value={{ nav, notifs }}>
           <div style={{ display: 'flex', gap: 24, padding: 16, alignItems: 'flex-start' }}>
             <div id="memberlist" style={{ width: 220, border: '1px solid #444', minHeight: 200, position: 'relative' }}>
-              <DmList onSelectRoom={(r) => { document.getElementById('result')!.textContent = 'opened ' + r.roomId }} />
+              {/* ?open=<roomId> marks that conversation open (tc.111); default
+                  the plain face, so the ring is seen without a glow over it. */}
+              <DmList
+                onSelectRoom={(r) => { document.getElementById('result')!.textContent = 'opened ' + r.roomId }}
+                openRoomId={new URLSearchParams(location.search).get('open') ?? '!c'}
+              />
             </div>
             <div style={{ position: 'relative', width: 320, height: 200 }}>
               <div id="picker" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 10 }}>
