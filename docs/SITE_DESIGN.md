@@ -430,13 +430,10 @@ Named for the resonances that make a vowel recognisable as that vowel regardless
 of pitch, speaker or instrument: identity carried across wildly different
 signals. Three stacks, one recognisable product.
 
-In the operator's words:
-
-> "This will hold all of the design elements referenced across the project to
-> produce one recognizable familiar interface. It's not just about the colors,
-> it's about the way the site feels to use. If you want to do action A, the
-> button is the same place as action A on another surface. If you want to change
-> option B, the menu is exactly where you expect it to be."
+It holds every design element the project uses, so that every surface reads
+as one recognisable, familiar interface. That is more than colour: it is how
+the site feels to use. Action A sits in the same place on every surface that
+offers it, and option B's menu is exactly where you expect it to be.
 
 So it holds three things: a token vocabulary -- colours, typefaces, radii,
 spacing -- a grammar of where things go and how they behave, and a few small
