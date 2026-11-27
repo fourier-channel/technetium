@@ -155,7 +155,7 @@ export function AuthedImage({
       : fetchMediaSrc(client, mxc, width, roomId))
       .then(({ src: resolved, revoke }) => {
         if (cancelled) {
-          // Component moved on before the fetch resolved — clean up immediately.
+          // Component moved on before the fetch resolved -- clean up immediately.
           revoke()
           return
         }

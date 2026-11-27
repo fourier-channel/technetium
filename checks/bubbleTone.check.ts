@@ -46,9 +46,9 @@ console.log('\n-- shouting --')
   // ASCII-only caps detection, on purpose: toUpperCase() is the identity for
   // scripts without case, so a naive check would call every CJK message a
   // shout. This asserts we do NOT do that.
-  check('a caseless script is not shouting', tone('こんにちは') === 'standard')
-  check('cyrillic is not shouting by default', tone('привет') === 'standard')
-  check('a caseless script can still ask', tone('こんにちは?') === 'questioning')
+  check('a caseless script is not shouting', tone('\u3053\u3093\u306B\u3061\u306F') === 'standard')
+  check('cyrillic is not shouting by default', tone('\u043F\u0440\u0438\u0432\u0435\u0442') === 'standard')
+  check('a caseless script can still ask', tone('\u3053\u3093\u306B\u3061\u306F?') === 'questioning')
   check('numbers and symbols alone do not shout', tone('1234 5678') === 'standard')
 }
 
@@ -57,7 +57,7 @@ console.log('\n-- thinking --')
   check('a wholly parenthesised line is a thought',
     tone('(if anyone is still reading this)') === 'thinking')
   check('trailing off is a thought', tone('i suppose so...') === 'thinking')
-  check('a real ellipsis counts too', tone('hm…') === 'thinking')
+  check('a real ellipsis counts too', tone('hm\u2026') === 'thinking')
   check('a leading ellipsis is a thought', tone('...testing') === 'thinking')
   check('a leading real ellipsis is a thought', tone('\u2026or maybe not') === 'thinking')
   check('a leading ellipsis beats a question mark', tone('...really?') === 'thinking')

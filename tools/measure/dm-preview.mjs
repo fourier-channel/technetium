@@ -27,7 +27,7 @@ const face = (f) => `<button style="${css(dmFaceStyle({ ping: !!f.ping, unread: 
 const pill = (open) => `
 <div style="margin:2px 4px 6px;border:1px solid rgba(128,128,128,0.3);border-radius:14px;background:${open ? 'rgba(255,255,255,0.055)' : 'transparent'}">
   <div style="display:flex;align-items:center;gap:6px;width:100%;padding:4px 10px;border-radius:0;border:none;background:transparent;color:#9aa3ad;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;font-family:Inter,system-ui,sans-serif;box-sizing:border-box">
-    <span style="font-size:9px;opacity:.7">${open ? '▾' : '▸'}</span>Direct Messages
+    <span style="font-size:9px;opacity:.7">${open ? '\u25BE' : '\u25B8'}</span>Direct Messages
     <span style="margin-left:auto;opacity:.7">16</span>
   </div>
   ${open ? `<div style="display:block;margin:4px 0 0 10px;padding:2px 9px;border-radius:999px;border:1px solid rgba(128,128,128,0.35);color:#9aa3ad;font-size:10px;letter-spacing:.4px;text-transform:uppercase;width:max-content;font-family:Inter,system-ui,sans-serif">Recent</div>

@@ -57,7 +57,7 @@ interface PendingAttachment {
 // inserts a newline. Markdown becomes sanitized HTML when it produces formatting,
 // else plain text.
 //
-// Images attach (button or drop) into a pending tray — attaching no longer sends.
+// Images attach (button or drop) into a pending tray -- attaching no longer sends.
 // On send: each image uploads to Synapse (which mints the mxc) and posts as its
 // own m.image (Matrix has no album event), so bmb picks each up for the booru.
 // The typed text, if any, rides along as a caption (MSC2530: filename = real name,
@@ -418,7 +418,7 @@ function ComposerBody({ room, threadId, domainTtd }: ComposerProps) {
     typing.stop()
     setMentionQuery(null)
 
-    // Case 1 — text only: plain message (unchanged behavior).
+    // Case 1 -- text only: plain message (unchanged behavior).
     if (atts.length === 0) {
       setText('') // optimistic clear; restore on failure
       try {
@@ -502,7 +502,7 @@ function ComposerBody({ room, threadId, domainTtd }: ComposerProps) {
       return
     }
 
-    // Case 2 — one or more images, with the text (if any) as the caption on the
+    // Case 2 -- one or more images, with the text (if any) as the caption on the
     // first. Sent sequentially; on failure we stop and keep the unsent images
     // (and the caption) so nothing is lost.
     const batchId = crypto.randomUUID()

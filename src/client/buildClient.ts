@@ -41,7 +41,7 @@ export function deleteSyncStore(userId: string): void {
 //
 // Uses IndexedDBStore so sync state survives reloads: the store keeps data
 // in-memory but periodically flushes to IndexedDB, and startup() reloads it on
-// next launch — so a refresh resumes from the saved sync token instead of doing
+// next launch -- so a refresh resumes from the saved sync token instead of doing
 // a full initial sync. (This is also where crypto key storage will hang later.)
 export async function buildClient(params: BuildClientParams): Promise<MatrixClient> {
   // The pre-fix shared db may still hold another account's world on machines
@@ -108,7 +108,7 @@ export function startAndWaitForSync(client: MatrixClient): Promise<void> {
       return
     }
     // threadSupport is a startClient option (read from clientOpts), NOT a
-    // createClient option — pass it here so the SDK routes m.thread
+    // createClient option -- pass it here so the SDK routes m.thread
     // replies into Thread timelines instead of the main timeline.
     client.startClient({ initialSyncLimit: 1, threadSupport: true })
   })

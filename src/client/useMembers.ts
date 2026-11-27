@@ -8,7 +8,7 @@ import {
 
 // Merge members from all sources by canonical identity. When two sources
 // describe the same person, their `sources` and `powerByRoom` combine into one
-// record — the seam the future Discord source slots into.
+// record -- the seam the future Discord source slots into.
 function mergeSources(sources: MemberSource[]): MergedMember[] {
   const byId = new Map<string, MergedMember>()
   for (const src of sources) {

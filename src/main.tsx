@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
-// Compound design tokens — CSS custom properties for color, spacing, typography,
+// Compound design tokens -- CSS custom properties for color, spacing, typography,
 // plus automatic light/dark theming via prefers-color-scheme. Imported once here
 // so every Compound component (and our own CSS using cpd-* vars) inherits them.
 import '@vector-im/compound-design-tokens/assets/web/css/compound-design-tokens.css'

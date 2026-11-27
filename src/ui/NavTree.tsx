@@ -944,7 +944,7 @@ function RoomName({
             style={{ animationDelay: `${i * 90}ms` }}
           >
             {/* confusable-ok: a literal space collapses in JSX; NBSP is the rendered glyph */}
-            {ch === ' ' ? ' ' : ch}
+            {ch === ' ' ? '\u00A0' : ch}
           </span>
         ))}
         {count}

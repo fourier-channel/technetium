@@ -56,7 +56,7 @@ setTimeout(() => {
     if (!row) { lines.push(`${name}: (no row)`); continue }
     // The icon is the first child that is not the chevron.
     const kids = [...row.children] as HTMLElement[]
-    const icon = kids.find((k) => !/^[▸▾]$/.test(k.textContent ?? ''))
+    const icon = kids.find((k) => !/^[\u25B8\u25BE]$/.test(k.textContent ?? ''))
     lines.push(`${name.padEnd(9)} icon at ${Math.round((icon?.getBoundingClientRect().left ?? NaN) - root)}px`)
   }
   document.getElementById('result')!.textContent = lines.join('\n')

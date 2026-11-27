@@ -7,7 +7,7 @@ import { scrubClasses } from './codeHighlight'
 
 // Same strict allowlist as the receive-side sanitizer (messageBody.ts). marked
 // passes raw HTML through by default, so we MUST sanitize its output before
-// sending — a user typing literal <script> in the composer would otherwise put
+// sending -- a user typing literal <script> in the composer would otherwise put
 // it on the wire.
 const ALLOWED_TAGS = [
   'b', 'strong', 'i', 'em', 'u', 's', 'del', 'strike',
@@ -40,7 +40,7 @@ const FENCE_RE = /^```|\n```/
 export interface FormattedMessage {
   // The plaintext body (always sent as `body`, the fallback for non-HTML clients).
   plain: string
-  // The sanitized HTML body — set ONLY when markdown actually produced formatting.
+  // The sanitized HTML body -- set ONLY when markdown actually produced formatting.
   // When undefined, send as plain text (no pointless formatted_body).
   html?: string
   // User ids actually mentioned in the final text, for m.mentions. Only ones

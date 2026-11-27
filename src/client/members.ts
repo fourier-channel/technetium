@@ -88,8 +88,8 @@ export function splitUserId(userId: string): { uname: string; server: string } {
 
 // A member, normalized across all sources. Identity is the canonical key (the
 // Matrix user id for now). powerByRoom carries the member's PL in each
-// SPACE-STRUCTURED room they're in (DMs/orphans are excluded from power — see
-// below — so a DM's default PL 100 doesn't masquerade as community standing).
+// SPACE-STRUCTURED room they're in (DMs/orphans are excluded from power -- see
+// below -- so a DM's default PL 100 doesn't masquerade as community standing).
 // `sources` records which providers vouch for this person, so a future Discord
 // source can merge into the same record.
 export interface MergedMember {
@@ -107,7 +107,7 @@ export interface MemberSource {
   subscribe(onChange: () => void): () => void
 }
 
-// Highest power level this member holds anywhere in the space — drives the
+// Highest power level this member holds anywhere in the space -- drives the
 // honorific IDENTITY. Visual strength is decided by comparing against their PL
 // in the specific room being viewed.
 export function maxPower(m: MergedMember): number {
@@ -116,8 +116,8 @@ export function maxPower(m: MergedMember): number {
   return max
 }
 
-// Split the nav tree into space-structured rooms (channels — these confer
-// authority) and orphan rooms (DMs / direct-joins — members appear but their PLs
+// Split the nav tree into space-structured rooms (channels -- these confer
+// authority) and orphan rooms (DMs / direct-joins -- members appear but their PLs
 // do NOT count, since being "admin" of your own DM isn't community standing).
 function partitionRooms(client: MatrixClient): { spaceRooms: Room[]; orphanRooms: Room[] } {
   const joined = client.getRooms().filter((r) => r.getMyMembership() === 'join')
@@ -196,7 +196,7 @@ export function createMatrixSpaceSource(client: MatrixClient): MemberSource {
       }
     }
 
-    // Orphan rooms (DMs/direct-joins): record membership ONLY — no power, so
+    // Orphan rooms (DMs/direct-joins): record membership ONLY -- no power, so
     // these never contribute to honorifics. The person still appears in 'all'.
     for (const room of orphanRooms) {
       for (const rm of room.getJoinedMembers()) {

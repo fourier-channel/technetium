@@ -415,13 +415,13 @@ function MemberRow({
   //                               everyone full strength regardless of room.
   const honorsRoom = mode === 'room' || mode === 'all-highlight'
 
-  // Two INDEPENDENT visual signals — kept decoupled on purpose:
+  // Two INDEPENDENT visual signals -- kept decoupled on purpose:
   //   presentHere   -> NAME strength: white when in the viewed room, grey when not.
   //   authorityHere -> BADGE color:   tier color when their rank is backed in THIS
   //                    room, grey when their rank lives in another room.
   // A member can be present here (white name) yet hold authority elsewhere (grey
   // badge). The prior single-flag version chained these together, so fixing the
-  // badge dragged the name grey too — that's the regression this undoes.
+  // badge dragged the name grey too -- that's the regression this undoes.
   //
   // WHICH glyph is members.ts shownHonorific, the same rule the timeline's
   // rows use: a rank held HERE wins and is backed; otherwise the highest rank

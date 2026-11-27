@@ -6,7 +6,7 @@ import { prepareSpoilers, SPOILER_ATTR } from './spoilers'
 
 // Strict allowlist matching the Matrix spec's permitted HTML subset for
 // m.room.message formatted_body (org.matrix.custom.html). Anything not listed
-// — scripts, event handlers, iframes, styles, forms, etc. — is stripped.
+// -- scripts, event handlers, iframes, styles, forms, etc. -- is stripped.
 const ALLOWED_TAGS = [
   'b', 'strong', 'i', 'em', 'u', 's', 'del', 'strike',
   'a', 'code', 'pre', 'blockquote',
