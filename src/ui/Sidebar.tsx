@@ -36,6 +36,9 @@ export function Sidebar({
   const { space, pushEdge, setPanelFlag, editMode } = useSpace()
   const [defaultWidth, setDefaultWidth] = useState<number | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
+  // The room list's scroll box: a room drag autoscrolls it near its edges
+  // (tc.36). The tree's groups never scroll; this does.
+  const navScrollRef = useRef<HTMLElement>(null)
   // The sidebar's share of the space, as pixels of the viewport.
   const leaf = space.leaves.sidebar
   const width = Math.round((leaf.x1 - leaf.x0) * window.innerWidth) || defaultWidth || FALLBACK_W
@@ -76,6 +79,7 @@ export function Sidebar({
           to Settings both scrolled away under a long room list. */}
       <div className="tc-panel-head">{header}</div>
       <aside
+        ref={navScrollRef}
         className="tc-scroll"
         style={{
           flex: 1,
@@ -94,7 +98,7 @@ export function Sidebar({
             ops/hetzner/synapse/modules/room_creation_policy.py: DMs and server
             admins only), so the one entry point is where only an admin
             reaches -- Settings, Server permissions, "+ New room or space". */}
-        <NavTree selectedRoomId={selectedRoomId} onSelectRoom={onSelectRoom} onDefaultWidth={onDefaultWidth} booruActive={booruActive} onSelectBooru={onSelectBooru} />
+        <NavTree selectedRoomId={selectedRoomId} onSelectRoom={onSelectRoom} onDefaultWidth={onDefaultWidth} booruActive={booruActive} onSelectBooru={onSelectBooru} scrollRef={navScrollRef} />
       </aside>
 
       {/* Right-edge strip (by the scrollbar): drag to resize, right-click for

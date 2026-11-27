@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, RefObject } from 'react'
 import { prefersReducedMotion, type FlipControl } from './flip'
+import { autoscrollStep, dropOrder, moveBy } from './dragMath'
 
 // ---------------------------------------------------------------------------
 // Hand-rolled pointer-capture drag-to-reorder for the thread list (D4 -- no
@@ -34,9 +35,7 @@ const CANCEL_MS = 220
 const SIBLING_MS = 180
 const LIFT_SHADOW = '0 8px 20px rgba(0,0,0,0.45)'
 const CLICK_SUPPRESS_MS = 400
-// Autoscroll when the pointer nears a list edge during a drag.
-const EDGE_PX = 44
-const MAX_SCROLL_SPEED = 14
+// Autoscroll near a list edge: dragMath.ts (EDGE_PX, MAX_SCROLL_SPEED).
 // Horizontal slack past the list edge before a release counts as "drop outside"
 // (spring back, no reorder).
 const OUTSIDE_SLACK_PX = 60
@@ -80,16 +79,25 @@ export interface ThreadDragOptions {
   // Commit a new order; the caller switches the list into custom mode (O1).
   onReorder: (finalIds: string[]) => void
   flipControlRef: RefObject<FlipControl | null>
+  // The element that actually scrolls, when it is not the container (tc.36).
+  // The room list measures each space's children in their own group, and a
+  // group never scrolls; the sidebar's scroll box does. Absent, the container
+  // scrolls itself, as the thread list's did.
+  scrollRef?: RefObject<HTMLElement | null>
 }
 
-// Measure the [data-flip-id] cards in container-content coordinates.
-function measureCards(container: HTMLElement): CardGeom[] {
+// Measure the [data-flip-id] cards in container-content coordinates. Only the
+// ids being ordered count: a space's group holds its sub-spaces' rows too, and
+// measuring those would let a drop land among another space's rooms.
+function measureCards(container: HTMLElement, ids?: readonly string[]): CardGeom[] {
   const c = container.getBoundingClientRect()
+  const members = ids ? new Set(ids) : null
   const out: CardGeom[] = []
   const nodes = container.querySelectorAll<HTMLElement>('[data-flip-id]')
   nodes.forEach((el) => {
     const id = el.dataset.flipId
     if (!id) return
+    if (members && !members.has(id)) return
     const r = el.getBoundingClientRect()
     const top = r.top - c.top + container.scrollTop
     out.push({ id, el, top, height: r.height, center: top + r.height / 2 })
@@ -114,8 +122,9 @@ export function useThreadDrag(opts: ThreadDragOptions): {
     onPointerCancel: (e: ReactPointerEvent) => void
   }
   consumeClickSuppressed: (id: string) => boolean
+  move: (id: string, delta: number) => string[] | null
 } {
-  const { containerRef, flipControlRef } = opts
+  const { containerRef, flipControlRef, scrollRef } = opts
 
   // Mirror the latest props into refs so event handlers (fired long after
   // render) read current values without being recreated.
@@ -162,27 +171,17 @@ export function useThreadDrag(opts: ThreadDragOptions): {
     function tickLoop() {
       const s = sessionRef.current
       if (!s || !s.engaged) return
-      const container = containerRef.current
+      // The element that scrolls: the sidebar's box for the room list, else
+      // the container itself.
+      const scroller = scrollRef?.current ?? containerRef.current
 
-      // Autoscroll when the pointer is near a list edge.
-      if (container) {
-        const rect = container.getBoundingClientRect()
-        let d = 0
-        if (s.pointerY < rect.top + EDGE_PX) {
-          d = -MAX_SCROLL_SPEED * Math.min(1, (rect.top + EDGE_PX - s.pointerY) / EDGE_PX)
-        } else if (s.pointerY > rect.bottom - EDGE_PX) {
-          d = MAX_SCROLL_SPEED * Math.min(1, (s.pointerY - (rect.bottom - EDGE_PX)) / EDGE_PX)
-        }
-        if (d !== 0) {
-          const maxScroll = container.scrollHeight - container.clientHeight
-          container.scrollTop = Math.max(0, Math.min(maxScroll, container.scrollTop + d))
-        }
-      }
+      // Autoscroll when the pointer is near the scroller's visible edge.
+      if (scroller) autoscrollStep(scroller, s.pointerY)
 
       // Follow target folds in the scroll delta so the projected index stays
       // consistent in content space as the list autoscrolls (content coords are
       // scroll-independent; the visual translate is dPointer + dScroll).
-      const scrollDelta = container ? container.scrollTop - s.startScrollTop : 0
+      const scrollDelta = scroller ? scroller.scrollTop - s.startScrollTop : 0
       const targetY = s.pointerY - s.pointerStartY + scrollDelta
       // Reduced motion: no weight lag (follow directly) and no tilt.
       s.followY += (targetY - s.followY) * (s.reduced ? 1 : LERP)
@@ -194,21 +193,21 @@ export function useThreadDrag(opts: ThreadDragOptions): {
       // the loop reschedules without a use-before-declaration.
       s.raf = requestAnimationFrame(tickLoop)
     },
-    [applySiblingShifts, containerRef],
+    [applySiblingShifts, containerRef, scrollRef],
   )
 
   const engage = useCallback(
     (s: DragSession) => {
       const container = containerRef.current
       if (!container) return
-      const cards = measureCards(container)
+      const cards = measureCards(container, orderedRef.current)
       const dragIndex = cards.findIndex((c) => c.id === s.id)
       if (dragIndex < 0) return
       s.cards = cards
       s.dragIndex = dragIndex
       s.draggedHeight = cards[dragIndex].height
       s.followY = 0
-      s.startScrollTop = container.scrollTop
+      s.startScrollTop = (scrollRef?.current ?? container).scrollTop
       s.reduced = prefersReducedMotion()
       s.engaged = true
 
@@ -239,7 +238,7 @@ export function useThreadDrag(opts: ThreadDragOptions): {
 
       s.raf = requestAnimationFrame(tick)
     },
-    [containerRef, flipControlRef, tick],
+    [containerRef, flipControlRef, scrollRef, tick],
   )
 
   const drop = useCallback(
@@ -247,14 +246,7 @@ export function useThreadDrag(opts: ThreadDragOptions): {
       cancelAnimationFrame(s.raf)
       const draggedCenter = s.cards[s.dragIndex].center + s.followY
 
-      const above: string[] = []
-      const below: string[] = []
-      for (let j = 0; j < s.cards.length; j++) {
-        if (j === s.dragIndex) continue
-        if (s.cards[j].center > draggedCenter) below.push(s.cards[j].id)
-        else above.push(s.cards[j].id)
-      }
-      const finalIds = [...above, s.id, ...below]
+      const finalIds = dropOrder(s.cards, s.dragIndex, draggedCenter)
 
       // Suppress the click that follows this pointerup (an engaged drag must not
       // also open the thread).
@@ -510,5 +502,17 @@ export function useThreadDrag(opts: ThreadDragOptions): {
 
   useEffect(() => endGesture, [endGesture])
 
-  return { getCardHandlers, consumeClickSuppressed }
+  // The keyboard's reorder (tc.36): one place up or down, decided by the same
+  // module as a drop and written through the same onReorder, so a key press
+  // has no write path a drag does not. Refused while a pointer drag is live.
+  // FLIP is left on, so the list animates the move as it would any reorder.
+  // Returns the new order, or null when nothing moved.
+  const move = useCallback((id: string, delta: number): string[] | null => {
+    if (sessionRef.current?.engaged) return null
+    const next = moveBy(orderedRef.current, id, delta)
+    if (next) onReorderRef.current(next)
+    return next
+  }, [])
+
+  return { getCardHandlers, consumeClickSuppressed, move }
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import type { Room } from 'matrix-js-sdk'
 import { primeChime } from '../client/notificationChime'
 import { useClient } from '../client/clientContextValue'
@@ -77,6 +77,7 @@ export function NavTree({
   onDefaultWidth,
   booruActive = false,
   onSelectBooru,
+  scrollRef,
 }: {
   selectedRoomId?: string
   onSelectRoom?: (room: Room) => void
@@ -86,8 +87,15 @@ export function NavTree({
   // no room is selected, which is when the main pane shows the booru.
   booruActive?: boolean
   onSelectBooru?: () => void
+  // The element the room list scrolls in (the sidebar's box). A room drag
+  // autoscrolls IT near its edges (tc.36); without it a drag cannot reach a
+  // slot that is scrolled out of view.
+  scrollRef?: RefObject<HTMLElement | null>
 }) {
   const { client } = useClient()
+  // What a keyboard move did, read out by the live region below (tc.36).
+  const [moveNotice, setMoveNotice] = useState('')
+  const navDrag = useMemo<NavDrag>(() => ({ scrollRef, announce: setMoveNotice }), [scrollRef])
   // The tree and the counts are held once, by App, and shared with the user
   // list's Direct Messages section (navShared.ts, L30).
   const { nav: { tree, loading, stale }, notifs } = useNavShared()
@@ -165,6 +173,7 @@ export function NavTree({
   }
 
   return (
+    <NavDragContext.Provider value={navDrag}>
     <nav
       style={{
         fontFamily: 'var(--tc-ui-font)',
@@ -454,7 +463,13 @@ export function NavTree({
           {inviteNotice}
         </div>
       )}
+      {/* Always mounted, so a screen reader is already listening when a
+          keyboard move speaks; visually hidden, so it takes no room. */}
+      <div aria-live="polite" role="status" style={VISUALLY_HIDDEN}>
+        {moveNotice}
+      </div>
     </nav>
+    </NavDragContext.Provider>
   )
 }
 
@@ -471,7 +486,6 @@ function TreeRow({
   appeared,
   introActive,
   onIntroInteract,
-  dragHandlers,
 }: {
   node: TreeNode
   depth: number
@@ -487,10 +501,12 @@ function TreeRow({
   appeared: Set<string>
   introActive: boolean
   onIntroInteract: () => void
-  // W3.4 -- pointer handlers from the parent SiblingGroup's drag layer.
-  // Absent for rows that are not part of a reorderable group.
-  dragHandlers?: Record<string, unknown>
 }) {
+  // W3.4 / tc.36 -- the reorderable group this row belongs to, if any. A row
+  // outside one (a top-level space, a favourite hoisted out of a collapsed
+  // space) gets no handlers and no keyboard move.
+  const group = useContext(SiblingDragContext)
+  const dragHandlers = group?.handlersFor(node.roomId)
   const { client } = useClient()
   const { isFavorite, isMutedNow, getRename, getRoomOrder } = useRoomListSettings()
   // W3.3 -- a local override wins over the server name, everywhere the name is
@@ -626,9 +642,33 @@ function TreeRow({
       >
         <div style={{ overflow: 'hidden', minHeight: 0 }}>
       <div
+        tabIndex={0}
+        role="button"
+        aria-expanded={node.isSpace ? !isCollapsed : undefined}
         onClick={() => {
+          // A drag that ended on this row is not a click on it.
+          if (group?.suppressed(node.roomId)) return
           onIntroInteract()
           onClick()
+        }}
+        onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return
+          if ((e.key === 'Enter' || e.key === ' ') && !e.altKey) {
+            e.preventDefault()
+            onIntroInteract()
+            onClick()
+            return
+          }
+          // tc.36 -- Alt+Up / Alt+Down moves the room one place among its
+          // siblings, through the same order and write as a drag.
+          if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && group?.has(node.roomId)) {
+            e.preventDefault()
+            const row = e.currentTarget
+            group.move(node.roomId, e.key === 'ArrowUp' ? -1 : 1, label)
+            // The row stays mounted (keyed by room id); keep focus on it as
+            // the list reorders around it.
+            requestAnimationFrame(() => row.focus())
+          }
         }}
         onContextMenu={(e) => {
           onIntroInteract()
@@ -961,15 +1001,20 @@ function RoomName({
   )
 }
 
-// W3.4 -- one reorderable sibling group (a space's children, or the root list).
+// W3.4 -- one reorderable sibling group (a space's children).
 //
 // The drag container is the GROUP, not the sidebar's scroll element. That is
-// deliberate: measureCards takes every [data-flip-id] under its container, so a
-// single container over the whole tree would let a room be dropped into another
-// space's slot and produce an order that means nothing. Scoping per parent
-// costs edge-autoscroll -- the group does not scroll, so the autoscroll writes
-// to a scrollTop that stays 0 -- but the geometry stays correct, which is the
-// half that matters.
+// deliberate: a single container over the whole tree would let a room be
+// dropped into another space's slot and produce an order that means nothing,
+// so each group measures only its own members (threadDrag measureCards).
+// Edge-autoscroll drives the SIDEBAR's scroll box instead, handed down as
+// scrollRef (tc.36): the group never scrolls, and autoscrolling the group --
+// as this did from W3.4 until tc.36 -- wrote to a scrollTop that stayed 0.
+//
+// Until tc.36 the group also never passed its pointer handlers to its rows,
+// so no room could be dragged at all. The rows now read them from
+// SiblingDragContext, with a keyboard move (Alt+Up / Alt+Down) beside them
+// that decides through dragMath.moveBy and writes through the same onReorder.
 //
 // Dragging is only offered while the space is EXPANDED. When collapsed, its
 // favourited descendants are hoisted OUTSIDE this container, so the dragged set
@@ -996,14 +1041,69 @@ function SiblingGroup({
     [settings, scope],
   )
 
-  useThreadDrag({ containerRef, orderedIds, onReorder, flipControlRef })
+  const nav = useContext(NavDragContext)
+  const { getCardHandlers, consumeClickSuppressed, move } = useThreadDrag({
+    containerRef,
+    orderedIds,
+    onReorder,
+    flipControlRef,
+    scrollRef: nav?.scrollRef,
+  })
+
+  const announce = nav?.announce
+  const value = useMemo<SiblingDrag>(() => {
+    const members = new Set(orderedIds)
+    return {
+      has: (id) => members.has(id),
+      handlersFor: (id) => (members.has(id) ? getCardHandlers(id) : undefined),
+      suppressed: (id) => consumeClickSuppressed(id),
+      move: (id, delta, label) => {
+        const next = move(id, delta)
+        if (!announce) return
+        if (next) announce(`Moved ${label} to position ${next.indexOf(id) + 1} of ${next.length}.`)
+        else announce(`${label} is already ${delta < 0 ? 'first' : 'last'}.`)
+      },
+    }
+  }, [orderedIds, getCardHandlers, consumeClickSuppressed, move, announce])
 
   return (
-    <div ref={containerRef} style={{ overflow: 'hidden', minHeight: 0 }}>
-      {children}
-    </div>
+    <SiblingDragContext.Provider value={value}>
+      <div ref={containerRef} style={{ overflow: 'hidden', minHeight: 0 }}>
+        {children}
+      </div>
+    </SiblingDragContext.Provider>
   )
 }
+
+// tc.36 -- what the whole tree shares with its groups: the element that
+// scrolls, and the live region a keyboard move speaks through.
+interface NavDrag {
+  scrollRef?: RefObject<HTMLElement | null>
+  announce: (text: string) => void
+}
+const NavDragContext = createContext<NavDrag | null>(null)
+
+// tc.36 -- what one group gives its rows. A nested group shadows its parent's,
+// so a row always reads the group it is ordered in.
+interface SiblingDrag {
+  has: (id: string) => boolean
+  handlersFor: (id: string) => ReturnType<ReturnType<typeof useThreadDrag>['getCardHandlers']> | undefined
+  suppressed: (id: string) => boolean
+  move: (id: string, delta: number, label: string) => void
+}
+const SiblingDragContext = createContext<SiblingDrag | null>(null)
+
+const VISUALLY_HIDDEN = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  margin: -1,
+  padding: 0,
+  overflow: 'hidden',
+  clip: 'rect(0 0 0 0)',
+  whiteSpace: 'nowrap',
+  border: 0,
+} as const
 
 
 // The booru's row in the tree. It is not a space and never will be, but it is

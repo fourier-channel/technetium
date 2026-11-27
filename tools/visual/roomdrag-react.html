@@ -1,0 +1,18 @@
+<!doctype html>
+<!-- tc.36: mounts the REAL NavTree inside a scroll box shaped like the
+     sidebar's (a fixed-height aside, overflow-y auto, its ref handed to the
+     tree as scrollRef), over a fake space of 30 rooms, so a room drag and the
+     keyboard move can be driven in a real engine. Served by a dev server;
+     tools/visual/roomdrag.mjs drives it in Playwright Firefox and Chromium.
+     Proves what NavTree does in that engine for this tree; nothing against a
+     live homeserver, and nothing about where the order is stored. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>html, body { margin: 0; background: var(--cpd-color-bg-canvas-default, #1b1a17); }</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="./roomdrag-react.tsx"></script>
+</body>
+</html>
