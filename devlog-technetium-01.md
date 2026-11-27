@@ -4581,3 +4581,24 @@ about autoplay.** Firefox left every AudioContext suspended, even with autoplay
 allowed, so "suspended before a click" passed for the wrong reason. The
 test page's evaluate call also counted as allowed. The autoplay log, read
 against page timers and a real click, was the control that told them apart.
+
+## 2026-11-27 -- room list drag polish (tc.36)
+
+The room-list drag had never been connected: the group built the gesture and
+threw it away, so no room could be dragged since the room-list rebuild. It is
+now wired through a context the rows read. The drag arithmetic moved into a
+pure module the checks prove (autoscroll, drop order, and a one-place move
+agreeing with a drag), and edge-autoscroll now drives the sidebar's own scroll
+box instead of the per-space group, which never scrolls. A keyboard reorder
+joins it: rows take focus, Alt+Up/Down moves a room among its siblings through
+the same write as a drag, and a polite live region says where it landed.
+Shipped v2026.11.27.5.
+
+**Verified.** The gate; 10 broken versions of the rules each ran and were
+caught. A harness of the real tree in Playwright Firefox and Chromium, 15 of
+15 each; the old wiring fails it. **Not verified.** A live drag against the
+homeserver: PENDING OPERATOR VERIFICATION.
+
+**draft-44 (gotcha) -- a hook whose return value is discarded compiles and
+lints clean.** Nothing in the type check or the lint noticed that the gesture
+was built and never attached; only a browser run showed that nothing moved.
