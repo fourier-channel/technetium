@@ -5,9 +5,12 @@
 #   ./deploy.sh             build the working tree, ship it to a new release dir,
 #                           point 'preview' at it (build.tc.41chan.net). Production
 #                           is untouched.
-#   ./deploy.sh --promote   give the preview's release a VERSION, point 'current'
+#   ./deploy.sh --promote [notes-file]
+#                           give the preview's release a VERSION, point 'current'
 #                           (tc.41chan.net) at it, and tag its commit; the release
-#                           it replaces becomes 'previous'.
+#                           it replaces becomes 'previous'. A notes file, as for
+#                           --announce, replaces the trailers in the announcement;
+#                           it is read, and the announcement built, before any flip.
 #   ./deploy.sh --rollback  swap 'current' and 'previous'. Run twice, it undoes
 #                           itself. No new version: each release keeps its own.
 #   ./deploy.sh --status    print where each link points and the release history.
@@ -202,6 +205,15 @@ case "${1:-}" in
     COMMIT="${P##*-}"
     SINCE="$(commit_of "$(remote target "$REMOTE_BASE" current)")"
     git rev-parse -q --verify "${COMMIT}^{commit}" > /dev/null || die "commit $COMMIT (from release $P) is not in this checkout. git fetch, then --promote."
+    # The announcement is built once here, before anything is stamped or
+    # flipped, so a missing or empty notes file, or a note naming an address,
+    # stops the promote instead of leaving a live version with no post.
+    NOTES="${2:-}"
+    if [ -n "$NOTES" ]; then
+      [ -f "$NOTES" ] || die "no notes file $NOTES. Nothing was promoted."
+      grep -q '[^[:space:]]' "$NOTES" || die "notes file $NOTES holds no notes; leave it off to announce the commits' trailers. Nothing was promoted."
+    fi
+    node tools/release/announce.ts 0000.00.00 "$COMMIT" "$SINCE" ${NOTES:+"$NOTES"} > /dev/null || die "the announcement for $COMMIT cannot be built (see above). Nothing was promoted."
     VERSION="$(remote release-json "$REMOTE_BASE" "$P" | version_of)"
     NEW_TAG=0
     if [ -z "$VERSION" ]; then
@@ -223,7 +235,7 @@ case "${1:-}" in
       git push -q origin "v$VERSION" || die "production is v$VERSION but the tag did not push: git push origin v$VERSION"
       echo ">> tagged v$VERSION at $COMMIT and pushed"
     fi
-    announce "$VERSION" "$COMMIT" "$SINCE" || die "v$VERSION is live but Fourier-chan's announcement did not go out (see above). Send it again: ./deploy.sh --announce"
+    announce "$VERSION" "$COMMIT" "$SINCE" ${NOTES:+"$NOTES"} || die "v$VERSION is live but Fourier-chan's announcement did not go out (see above). Send it again: ./deploy.sh --announce${NOTES:+ $NOTES}"
     ;;
   --announce)
     C="$(remote target "$REMOTE_BASE" current)"
@@ -244,7 +256,7 @@ case "${1:-}" in
     remote status "$REMOTE_BASE"
     ;;
   *)
-    echo "usage: ./deploy.sh [--promote | --rollback | --status | --announce [notes-file]]" >&2
+    echo "usage: ./deploy.sh [--promote [notes-file] | --rollback | --status | --announce [notes-file]]" >&2
     exit 2
     ;;
 esac
