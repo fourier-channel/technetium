@@ -52,6 +52,10 @@ set -euo pipefail
 
 REMOTE="41chan-origin"
 REMOTE_BASE="/srv/tc"
+# The box's source clone of this repo. Nothing else moves it, and coherence
+# reads it against canon, so a promote that left it behind turned its row RED
+# until someone pulled by hand. A promote fast-forwards it (source-ff below).
+REMOTE_SRC="/opt/fourier/technetium"
 PROD_URL="https://tc.41chan.net/"
 KEEP=5
 
@@ -106,6 +110,19 @@ case "$action" in
     ls -1dt -- */ | sed 's#/$##' | tail -n +"$((arg + 1))" | while read -r r; do
       printf '%s\n' "$keep" | grep -qxF -- "$r" || rm -rf -- "$r"
     done ;;
+  source-ff)
+    # Here $base is the source clone and $arg the commit just promoted. Only a
+    # fast-forward of a clean main to origin/main: anything else is refused, said
+    # with its remedy, and the clone is left exactly as it was.
+    [[ "$arg" =~ ^[0-9a-f]{7,40}$ ]] || { echo "refusing source-ff to '$arg': not a commit" >&2; exit 1; }
+    [ "$(git rev-parse --abbrev-ref HEAD)" = main ] || { echo "$base is not on main; check it out by hand, then git pull --ff-only" >&2; exit 1; }
+    [ -z "$(git status --porcelain --untracked-files=no)" ] || { echo "$base has local changes; nothing was moved. Inspect them (git -C $base status), then git pull --ff-only" >&2; exit 1; }
+    before="$(git rev-parse --short HEAD)"
+    git fetch -q origin main
+    git merge-base --is-ancestor "$arg" origin/main || { echo "$arg is not on origin/main; nothing was moved. Push it, then git -C $base pull --ff-only" >&2; exit 1; }
+    git merge -q --ff-only origin/main
+    echo ">> source clone $base: $before -> $(git rev-parse --short HEAD) (origin/main)"
+    exit 0 ;;
   status) ;;
   *) echo "unknown action $action" >&2; exit 2 ;;
 esac
@@ -235,7 +252,13 @@ case "${1:-}" in
       git push -q origin "v$VERSION" || die "production is v$VERSION but the tag did not push: git push origin v$VERSION"
       echo ">> tagged v$VERSION at $COMMIT and pushed"
     fi
-    announce "$VERSION" "$COMMIT" "$SINCE" ${NOTES:+"$NOTES"} || die "v$VERSION is live but Fourier-chan's announcement did not go out (see above). Send it again: ./deploy.sh --announce${NOTES:+ $NOTES}"
+    ANNOUNCED=1
+    announce "$VERSION" "$COMMIT" "$SINCE" ${NOTES:+"$NOTES"} || ANNOUNCED=0
+    # After the flip, whatever the announcement did: the clone tracks canon.
+    SRC_OK=1
+    remote source-ff "$REMOTE_SRC" "$COMMIT" || SRC_OK=0
+    [ "$ANNOUNCED" = 1 ] || die "v$VERSION is live but Fourier-chan's announcement did not go out (see above). Send it again: ./deploy.sh --announce${NOTES:+ $NOTES}"
+    [ "$SRC_OK" = 1 ] || die "v$VERSION is live and announced, but ${REMOTE_SRC} on ${REMOTE} did not fast-forward (the refusal above says why); coherence reads it RED until it does."
     ;;
   --announce)
     C="$(remote target "$REMOTE_BASE" current)"
