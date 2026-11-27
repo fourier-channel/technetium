@@ -4602,3 +4602,31 @@ homeserver: PENDING OPERATOR VERIFICATION.
 **draft-44 (gotcha) -- a hook whose return value is discarded compiles and
 lints clean.** Nothing in the type check or the lint noticed that the gesture
 was built and never attached; only a browser run showed that nothing moved.
+
+
+## 2026-11-27 -- go-fish as one module, and a reduced-motion audit (tc.113)
+
+Go-fish (CD-10) is now src/client/goFish.ts. Three sites that carried the
+pattern inline now use it: AuthedImage, App openRoomById and
+serverShape.fromShape. Five that rhyme with it were left alone on purpose,
+each with its reason in the module header.
+
+The stylesheet scanner is now shared by two checks. The new one,
+reducedMotionAudit, proves that every animation that loops forever stops when
+the system asks for reduced motion. Its first run found four animations that
+ignored the preference and two files reading the preference behind the shared
+module's back. All six are fixed. Live in v2026.11.27.7 (2a101a7, fbe23ce).
+
+**Verified.** Gate rc=0; mutation 9/9 on cssAnimations and 21/22 on the audit
+(the survivor is equivalent on a clean tree). The served bundle carries the
+new reduce blocks and one reader of the media query. **Not verified.** Live
+OS reduce-motion in Firefox: PENDING OPERATOR VERIFICATION.
+
+**draft-45 (gotcha) -- a scanner's failure paths never run on a clean tree.**
+A scanner that stopped reporting duplicate or unresolved keyframes still
+passed, because the tree had none. It now has fixtures that must fail.
+
+**draft-46 (gotcha) -- a fixture can pass for the wrong reason.** An audit
+fixture meant to test the pseudo-element rule passed because the cascade
+rejected the override first. It now uses !important, so only the rule under
+test can reject it.
