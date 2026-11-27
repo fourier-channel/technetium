@@ -2,7 +2,7 @@
      Edit canon and run `coherence hydrate`, never this delivered copy.
      An edit here is drift: hydration will refuse to overwrite it and the
      doc axis reports it edited-in-place until someone promotes or discards it. -->
-# matrix-client — Starter Dependency Manifest & Scoping
+# matrix-client -- Starter Dependency Manifest & Scoping
 
 > Planning document for the from-scratch Discord-shaped Matrix client.
 > Built on the existing scaffold at `/home/saber/matrix-client` (vesper).
@@ -23,9 +23,9 @@
 | Widgets (embeds) | `matrix-widget-api` | Optional / later. Only if you embed widgets. |
 
 The "hard middle" you DO author (ordering, unread counts, reply/edit/redaction
-rendering, your multi-image grouping, your Discord layout) is written by you —
+rendering, your multi-image grouping, your Discord layout) is written by you --
 but with element-web (AGPL-3.0) as a *reading reference*, not from first
-principles. See §6.
+principles. See sec. 6.
 
 ---
 
@@ -39,13 +39,13 @@ principles. See §6.
 | `@vector-im/compound-design-tokens` | `10.2.2` | Compound peer-needs `>=1.6.1 <11`; 10.2.2 satisfies. |
 | `@matrix-org/matrix-wysiwyg` | `2.37.9` | Phase 4+. |
 | `matrix-widget-api` | `1.17.0` | Optional / later. |
-| `dompurify` | `3.4.11` | Installed (Phase 3). Ships its own types since v3 — no `@types/dompurify`. |
+| `dompurify` | `3.4.11` | Installed (Phase 3). Ships its own types since v3 -- no `@types/dompurify`. |
 | `marked` | `18.0.5` | Installed. Markdown -> HTML for the composer; output always sanitized by `dompurify` before render. |
 
 Compound also pulls font packages (`@fontsource/inter`, `@fontsource/inconsolata`)
-as peers — install alongside Compound.
+as peers -- install alongside Compound.
 
-> **Fragile internal import — scan before any matrix-js-sdk upgrade.**
+> **Fragile internal import -- scan before any matrix-js-sdk upgrade.**
 > `src/client/slidingSync.ts` deep-imports the internal `SlidingSync` class
 > (`matrix-js-sdk/lib/sliding-sync`), which is NOT public in 41.6.0. Native
 > Simplified Sliding Sync (MSC4186), operator-approved 2026-07-18, flag-gated
@@ -60,17 +60,17 @@ Compound 9.4.1 supports React 18 **or** 19. The Vite scaffold was created
 recently, so it likely already uses React 19 (current latest is 19.2.x).
 **Action:** confirm the scaffold's React version first (`grep '"react"'
 package.json`). If 18 or 19, Compound is compatible as-is. Only if the scaffold
-were on something older would this need attention. No change expected — just verify.
+were on something older would this need attention. No change expected -- just verify.
 
 ---
 
-## 4. Dependency install plan (when we get there — not yet)
+## 4. Dependency install plan (when we get there -- not yet)
 
 Grouped by phase so you never install ahead of need (matches your "no stray
 deps" instinct). Each phase's install is one command, run on vesper in
 `~/matrix-client`.
 
-- **Phase 0 (now, already done):** `matrix-js-sdk` — present. Crypto-wasm rode in with it.
+- **Phase 0 (now, already done):** `matrix-js-sdk` -- present. Crypto-wasm rode in with it.
 - **Phase 1 (UI foundation):** `@vector-im/compound-web @vector-im/compound-design-tokens @fontsource/inter @fontsource/inconsolata`
 - **Phase 3 (timeline rendering):** `dompurify` (bundles its own types; no `@types`) + `marked` for markdown
 - **Phase 4 (rich composer, optional):** `@matrix-org/matrix-wysiwyg`
@@ -87,16 +87,16 @@ deps" instinct). Each phase's install is one command, run on vesper in
 - Edited via VS Code Remote SSH into vesper.
 
 ### 5.2 What the environment still needs
-1. **Persisted session** — token + clientId in storage so a refresh resumes
+1. **Persisted session** -- token + clientId in storage so a refresh resumes
    instead of bouncing to MAS. (IndexedDB via the SDK store, or a small wrapper.)
-2. **SDK store wired to IndexedDB** — so sync state and (later) crypto keys
+2. **SDK store wired to IndexedDB** -- so sync state and (later) crypto keys
    persist across reloads. Without this, every refresh re-syncs from scratch and
    crypto can't accumulate keys.
-3. **A real app structure** — the current single `App.tsx` becomes:
+3. **A real app structure** -- the current single `App.tsx` becomes:
    - a client/session provider (one living, continuously-syncing client),
    - a routing scheme (which room/thread is open),
    - view components (left tree, timeline, composer, member list).
-4. **Compound theming set up** — design tokens imported once at the root so all
+4. **Compound theming set up** -- design tokens imported once at the root so all
    UI atoms inherit consistent styling.
 
 ### 5.3 Proposed file structure (target, not built yet)
@@ -136,23 +136,23 @@ AGPL-3.0 (same as your Fourier code), so deriving is fine with AGPL obligations.
 ## 7. Build phases (sequence, with rough session counts)
 
 These assume crypto is split out as its own phase. Estimates carry the wide
-error bars discussed — boundary debugging dominates, not happy-path coding.
+error bars discussed -- boundary debugging dominates, not happy-path coding.
 
-1. **Spine** — persistent client, IndexedDB store, continuous sync, session
-   resume on refresh. *(1–2 sessions)*
-2. **Unified left nav** — spaces>subspaces>rooms tree, compact, stable ordering.
-   Your image-2 target. *(2–4)*
-3. **Read-only timeline** — render messages (text/image/reply/redaction),
-   sanitized HTML, pagination, scroll handling, **plus multi-image grouping**. *(3–6)*
-4. **Composer** — send text, then staged one-at-a-time multi-image gallery send
-   (generate group_id, stamp `net.41chan.gallery`, mark master, upload, send). *(2–4)*
-5. **Encryption** — `initRustCrypto`, key persistence, device verification,
+1. **Spine** -- persistent client, IndexedDB store, continuous sync, session
+   resume on refresh. *(1-2 sessions)*
+2. **Unified left nav** -- spaces>subspaces>rooms tree, compact, stable ordering.
+   Your image-2 target. *(2-4)*
+3. **Read-only timeline** -- render messages (text/image/reply/redaction),
+   sanitized HTML, pagination, scroll handling, **plus multi-image grouping**. *(3-6)*
+4. **Composer** -- send text, then staged one-at-a-time multi-image gallery send
+   (generate group_id, stamp `net.41chan.gallery`, mark master, upload, send). *(2-4)*
+5. **Encryption** -- `initRustCrypto`, key persistence, device verification,
    key backup/recovery, graceful "unable to decrypt" handling. Widest error
-   bars. *(3–6)*
-6. **Layout polish** — always-open member list, thread/channel swap, typing
+   bars. *(3-6)*
+6. **Layout polish** -- always-open member list, thread/channel swap, typing
    indicator relocated out of timeline flow. *(several, per item)*
 
-**Realistic to a daily-driver incl. encryption + galleries: ~15–30 focused
+**Realistic to a daily-driver incl. encryption + galleries: ~15-30 focused
 sessions, bet on the higher half.** Dropping/deferring encryption cuts the
 single biggest chunk.
 
@@ -161,24 +161,24 @@ single biggest chunk.
 ## 8. Immediate next step (when building resumes)
 
 Phase 1 of the spine: convert the one-shot login into a persistent,
-IndexedDB-backed, continuously-syncing session that survives a refresh — built
+IndexedDB-backed, continuously-syncing session that survives a refresh -- built
 on the working OIDC flow already in `App.tsx`. Everything else stacks on that.
 
 ---
 
 ## STATUS UPDATE (2026-06-20)
 
-**Phase 1 COMPLETE** — spine: OIDC login via MAS, persistent session, IndexedDB
+**Phase 1 COMPLETE** -- spine: OIDC login via MAS, persistent session, IndexedDB
 sync store, silent token refresh. Committed to GitHub (`sabertrtr/technetium`,
 root commit `352e50b`). Project renamed `matrix-client` -> `technetium`.
 
-**Phase 2 IN PROGRESS** — Discord-shaped UI.
+**Phase 2 IN PROGRESS** -- Discord-shaped UI.
 - 2.1 done: Compound installed + wired (tokens + fonts in `main.tsx`).
 - 2.2 done: `ClientProvider` (React context) holds the live client; `useClient()`
   hook; `App.tsx` thinned to a status-driven shell.
 - 2.3 next: unified spaces>subspaces>rooms nav tree.
 
-**Dependencies now INSTALLED** (were planned in §4):
+**Dependencies now INSTALLED** (were planned in sec. 4):
 - `@vector-im/compound-web@^9.4.1`
 - `@vector-im/compound-design-tokens@^10.2.2`
 - `@fontsource/inter@^5.2.8`, `@fontsource/inconsolata@^5.2.8`
@@ -193,7 +193,7 @@ root commit `352e50b`). Project renamed `matrix-client` -> `technetium`.
 
 **FOURIER EXTRACTION FLAG:** `session.ts` + `tokenRefresher.ts` + the login flow
 form a reusable browser-side "auth against MAS + hold a Matrix session + silent
-refresh" library — the client-side counterpart to planned **fourier-signature**.
+refresh" library -- the client-side counterpart to planned **fourier-signature**.
 Kept inside Technetium for now; modules deliberately free of client-specific deps
 so a later lift is a move, not a rewrite.
 

@@ -1,7 +1,7 @@
 {
   "build_stamp": null,
-  "hydrated_at": null,
-  "hydrated_hash": "sha256c:2bb17ca177f8a21dbe90441f2256f75d220d667adda5ec14b0ff4bff134474e7",
+  "hydrated_at": "2026-11-27T06:42:10Z",
+  "hydrated_hash": "sha256c:3a8d85f6aecf51f78d5c56bf1220f4f0ca545422ea328b0057c556baaab04f64",
   "pinned": null,
   "source": "coherence://brain/TESTING-chatbox-domain-v1.md"
 }

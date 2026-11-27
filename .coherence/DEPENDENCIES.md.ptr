@@ -1,7 +1,7 @@
 {
   "build_stamp": null,
-  "hydrated_at": "2026-10-29T07:07:02Z",
-  "hydrated_hash": "sha256c:a913453c923dcc4b41f2078c5843c2301155dd964b65e1ab1ecbc4211b05afc9",
+  "hydrated_at": "2026-11-27T06:42:10Z",
+  "hydrated_hash": "sha256c:a026f1e99c5fb014a8a37c6954b1aad604162edad048731c68925d2d61d51f6a",
   "pinned": null,
   "source": "coherence://brain/DEPENDENCIES.md"
 }

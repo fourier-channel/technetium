@@ -1,7 +1,7 @@
 {
   "build_stamp": null,
-  "hydrated_at": "2026-10-01T04:53:20Z",
-  "hydrated_hash": "sha256c:74934531ded5a3f3b39192e2b24b54ffbd0364755a19515fda3d64ba996e5c66",
+  "hydrated_at": "2026-11-27T06:42:10Z",
+  "hydrated_hash": "sha256c:e2a61be82add7b42e467a3a43855f97d9a5d1aed7621bc2b12f68e1ec382268f",
   "pinned": null,
   "source": "coherence://brain/INTERACTIONS_PLAN.md"
 }

@@ -1,7 +1,7 @@
 {
   "build_stamp": null,
-  "hydrated_at": null,
-  "hydrated_hash": "sha256c:7306956783a3f1138c4f0bab457ea4955f768797b7a23ee81b6ab77bd973e780",
+  "hydrated_at": "2026-11-27T06:42:10Z",
+  "hydrated_hash": "sha256c:f4418d5891362498caec1de7510f8a28e9cbb957f82486e3f6cafea23dc09c60",
   "pinned": null,
   "source": "coherence://brain/CLIENT_MANIFEST.md"
 }

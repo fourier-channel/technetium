@@ -2,21 +2,21 @@
      Edit canon and run `coherence hydrate`, never this delivered copy.
      An edit here is drift: hydration will refuse to overwrite it and the
      doc axis reports it edited-in-place until someone promotes or discards it. -->
-# Test pass — branch `chatbox-domain-v1`
+# Test pass -- branch `chatbox-domain-v1`
 
 Unattended auto run of 2026-07-20. 6 feature commits, 2272 insertions / 15 files.
 Never merged, never deployed, never human-verified. tsc clean, vite running on 5173.
 
 **How to use:** tick `[x]` when done, write anything you noticed in the NOTES line
 (leave it blank if it was fine). Hand the whole file back in one shot when finished.
-Untracked scratch file — delete it after the pass, or I'll fold it into the devlog.
+Untracked scratch file -- delete it after the pass, or I'll fold it into the devlog.
 
 Legend: **(2nd)** needs a second identity in a Firefox container. **(PL50)** needs
 that identity at power level >= 50. Everything else is solo.
 
 ---
 
-## 1. Composer — emoji button (`😀`, right of the input)
+## 1. Composer -- emoji button (smiley-face glyph, right of the input)
 
 - [ ] Button opens the picker; clicking it again closes it
       NOTES:
@@ -24,7 +24,7 @@ that identity at power level >= 50. Everything else is solo.
       NOTES:
 - [ ] Search box filters by keyword
       NOTES:
-- [ ] Click mid-sentence in the input, then pick — emoji lands **at the caret**, not at the end
+- [ ] Click mid-sentence in the input, then pick -- emoji lands **at the caret**, not at the end
       NOTES:
 - [ ] Picker stays open across several picks in a row
       NOTES:
@@ -33,7 +33,7 @@ that identity at power level >= 50. Everything else is solo.
 - [ ] Caret is still usable after the picker closes (typing continues where expected)
       NOTES:
 
-## 2. Composer — send path (markdown)
+## 2. Composer -- send path (markdown)
 
 - [ ] `**bold**`, `*italic*`, `` `code` `` render as formatting, not literal characters
       NOTES:
@@ -46,7 +46,7 @@ that identity at power level >= 50. Everything else is solo.
 - [ ] A table renders (and does not blow out the column width)
       NOTES:
 
-## 3. Message row — rich text rendering
+## 3. Message row -- rich text rendering
 
 - [ ] A bare `https://` URL in a **plain** message is clickable, opens in a new tab
       NOTES:
@@ -61,7 +61,7 @@ that identity at power level >= 50. Everything else is solo.
 - [ ] Long unbroken URL or code line does not push the layout sideways
       NOTES:
 
-## 4. Message row — sender pillbox
+## 4. Message row -- sender pillbox
 
 - [ ] Every row leads with one rounded pill containing avatar + display name
       NOTES:
@@ -75,11 +75,11 @@ that identity at power level >= 50. Everything else is solo.
       NOTES:
 - [ ] Pill also appears in the **domain mode chat panel**
       NOTES:
-- [ ] Consecutive messages from one sender each get their own pill — confirm this is
+- [ ] Consecutive messages from one sender each get their own pill -- confirm this is
       acceptable for now (sender grouping was deliberately not built)
       NOTES:
 
-## 5. Timeline header — chat background button (`🖼`, "Chat background")
+## 5. Timeline header -- chat background button (framed-picture glyph, "Chat background")
 
 - [ ] Button opens the panel
       NOTES:
@@ -102,7 +102,7 @@ that identity at power level >= 50. Everything else is solo.
 - [ ] Same wallpaper shows under the domain mode chat panel (shared Timeline)
       NOTES:
 
-## 6. Domain view — resize bar (between canvas and chat)
+## 6. Domain view -- resize bar (between canvas and chat)
 
 - [ ] Bar is visible and grabbable; cursor changes over it
       NOTES:
@@ -114,10 +114,10 @@ that identity at power level >= 50. Everything else is solo.
       puck near the bottom is off-screen until you shrink the chat. Acceptable, or switch
       to fit-to-default + letterbox?
       NOTES:
-- [ ] Size persists across a reload (or note if it does not — persistence was not claimed)
+- [ ] Size persists across a reload (or note if it does not -- persistence was not claimed)
       NOTES:
 
-## 7. Domain canvas — media card right-click
+## 7. Domain canvas -- media card right-click
 
 - [ ] Right-click a media card -> menu with **Detach to canvas**
       NOTES:
@@ -128,29 +128,29 @@ that identity at power level >= 50. Everything else is solo.
 - [ ] Non-poster / non-admin does **not** get the Detach option
       NOTES:
 
-## 8. Domain canvas — detached object (drag)
+## 8. Domain canvas -- detached object (drag)
 
 - [ ] Drag moves it; **(2nd)** the other client sees it move
       NOTES:
-- [ ] A plain click (no drag) still opens the lightbox — 5px threshold holds
+- [ ] A plain click (no drag) still opens the lightbox -- 5px threshold holds
       NOTES:
 - [ ] No text selection or ghost-image drag artifacts while dragging
       NOTES:
 - [ ] Object survives a page reload
       NOTES:
 
-## 9. Domain canvas — detached object right-click (owner/admin only)
+## 9. Domain canvas -- detached object right-click (owner/admin only)
 
 - [ ] **Open image** works from the menu
       NOTES:
-- [ ] Current permission is marked with the `•` bullet
+- [ ] Current permission is marked with a round bullet
       NOTES:
 - [ ] **Anyone** -> **(2nd)** other user can drag it
       NOTES:
 - [ ] **Only me** -> **(2nd)** a normal user cannot drag it
       NOTES:
 - [ ] **Only me** -> **(PL50)** a mod-level user *can still* drag it. This is a known code
-      gap (`useDomainObjects.ts:63-71` — admin short-circuits the perm check), which makes
+      gap (`useDomainObjects.ts:63-71` -- admin short-circuits the perm check), which makes
       "Only me" behave identically to "Mods & me". Confirm whether that needs fixing.
       NOTES:
 - [ ] **Mods & me** -> **(PL50)** can drag, **(2nd)** normal user cannot
@@ -163,32 +163,32 @@ that identity at power level >= 50. Everything else is solo.
 - [ ] A non-owner, non-admin gets no permission/remove items at all
       NOTES:
 
-## 10. Domain canvas — own puck menu, Actions row
+## 10. Domain canvas -- own puck menu, Actions row
 
 - [ ] Right-click own puck -> **Actions** row is present under Reset
       NOTES:
-- [ ] **⬛ Square** pops a square beside you and it shrinks away after ~2s
+- [ ] **Square** (black-square glyph) pops a square beside you and it shrinks away after ~2s
       NOTES:
 - [ ] **(2nd)** the other client sees the square
       NOTES:
 - [ ] Reload -> the square does **not** replay from history (8s freshness gate)
       NOTES:
 
-## 11. Domain canvas — other-user right-click menu
+## 11. Domain canvas -- other-user right-click menu
 
-- [ ] Right-click another user -> **Throw ⭐** present
+- [ ] Right-click another user -> **Throw star** present
       NOTES:
-- [ ] ⭐ arcs from you to them, spinning, and lands
+- [ ] star arcs from you to them, spinning, and lands
       NOTES:
 - [ ] **(2nd)** the target's client sees the same arc
       NOTES:
 - [ ] **(2nd)** fire a Throw from a client that has *just* joined the room, while it is still
-      syncing — does it animate, or get eaten by the 8s freshness gate?
+      syncing -- does it animate, or get eaten by the 8s freshness gate?
       NOTES:
 - [ ] Inspect / Force-collapse still work (not new, but same menu was touched)
       NOTES:
 
-## 12. Accessibility — `prefers-reduced-motion`
+## 12. Accessibility -- `prefers-reduced-motion`
 
 Devtools -> Rendering -> Emulate CSS `prefers-reduced-motion: reduce`.
 
@@ -199,12 +199,12 @@ Devtools -> Rendering -> Emulate CSS `prefers-reduced-motion: reduce`.
 - [ ] Object dragging still fully works
       NOTES:
 
-## 13. Login screen — alpha notice
+## 13. Login screen -- alpha notice
 
 - [ ] The alpha-client / report-anything-that-feels-off copy is present and reads correctly
       NOTES:
 
-## 14. Passive — background self-heal (leave running all session)
+## 14. Passive -- background self-heal (leave running all session)
 
 Cannot be forced quickly. Check at the end of the pass.
 
@@ -220,6 +220,6 @@ Cannot be forced quickly. Check at the end of the pass.
 
 ## Free-form
 
-Anything that felt wrong, ugly, or off — UI satisfaction is the #1 goal, so
+Anything that felt wrong, ugly, or off -- UI satisfaction is the #1 goal, so
 "I don't like how this looks" is a valid and wanted finding:
 

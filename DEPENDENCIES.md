@@ -2,7 +2,7 @@
      Edit canon and run `coherence hydrate`, never this delivered copy.
      An edit here is drift: hydration will refuse to overwrite it and the
      doc axis reports it edited-in-place until someone promotes or discards it. -->
-# Technetium — Dependency Chart & Manifest
+# Technetium -- Dependency Chart & Manifest
 
 Deliberate version choices and the dependency structure of the Technetium client.
 Companion to the Fourier `DEPENDENCIES.md`; same "record decisions, not the whole
@@ -21,7 +21,7 @@ graph TD
     react["react 19.2.6"]
     reactdom["react-dom 19.2.6"]
     sdk["matrix-js-sdk 41.6.0<br/>(protocol engine)"]
-    crypto["@matrix-org/matrix-sdk-crypto-wasm 18.x<br/>(E2EE engine — transitive)"]
+    crypto["@matrix-org/matrix-sdk-crypto-wasm 18.x<br/>(E2EE engine -- transitive)"]
     cw["@vector-im/compound-web 9.4.1<br/>(UI primitives)"]
     cdt["@vector-im/compound-design-tokens 10.2.2<br/>(CSS theme vars)"]
     inter["@fontsource/inter 5.x"]
@@ -62,7 +62,7 @@ graph TD
     refresh --> sdk
     refresh --> sess
 
-    subgraph fourier_candidate["⚑ Fourier-passport extraction candidate"]
+    subgraph fourier_candidate["flag Fourier-passport extraction candidate"]
         sess
         refresh
     end
@@ -74,7 +74,7 @@ graph TD
 ```
 
 The flagged modules (`session.ts`, `tokenRefresher.ts`) plus the login flow are a
-reusable browser-side MAS-auth library — the client-side counterpart to the planned
+reusable browser-side MAS-auth library -- the client-side counterpart to the planned
 **fourier-signature**. Kept inside Technetium for now; deliberately free of
 client-specific deps so a later extraction is a move, not a rewrite.
 
@@ -87,7 +87,7 @@ client-specific deps so a later extraction is a move, not a rewrite.
 | `matrix-js-sdk` | `41.6.0` | Protocol engine + OIDC. Stay on stable (latest tag is an RC). Bundles crypto-wasm. |
 | `@matrix-org/matrix-sdk-crypto-wasm` | `18.x` | **Transitive** via js-sdk (`^18.2.0`). Never pinned directly. Powers E2EE when activated. |
 | `react` / `react-dom` | `19.2.6` | Satisfies Compound's `^18 \|\| ^19` peer range. |
-| `@vector-im/compound-web` | `^9.4.1` | Element's design system — UI primitives. |
+| `@vector-im/compound-web` | `^9.4.1` | Element's design system -- UI primitives. |
 | `@vector-im/compound-design-tokens` | `^10.2.2` | Theme CSS vars (`--cpd-*`); light/dark via prefers-color-scheme. |
 | `dompurify` | `^3.4.17` | Mandatory HTML sanitizer before rendering any message HTML. Ships its OWN types since v3, so no `@types/dompurify` (that stub is deprecated for v3 and was removed 2026-07-18). Bumped 3.4.11 -> 3.4.13 on 2026-08-06 for GHSA-c2j3-45gr-mqc4 (`CUSTOM_ELEMENT_HANDLING` bypassing `afterSanitizeElements`); we use neither hook, so we were not exposed, but this is the security-critical component and the fix was a patch bump. Bumped 3.4.13 -> 3.4.17 on 2026-10-24 (d239dc0) for GHSA-cg2g-xh64-v4q7 (`SAFE_FOR_TEMPLATES` in shadow roots) and GHSA-mrv2-3pqr-j5jr (`IN_PLACE` hook leaving handlers armed); `src/` uses neither option. **3.4.17 is a floor**: `checks/sanitizer.check.ts` fails if the LOADED copy is older, and reproduces both advisories (all four cases fail on 3.4.13). |
 | `marked` | `^18.0.5` | Markdown -> HTML for the composer (`messageFormat.ts`); its output is ALWAYS piped through `dompurify` before render. Chosen for its small, sync, zero-dep core. |
@@ -96,18 +96,18 @@ client-specific deps so a later extraction is a move, not a rewrite.
 | `@fontsource/inconsolata` | `^5.2.8` | Mono font. Weight 400 imported. |
 | `@fontsource/space-grotesk` | `^5.2.10` | Techy-but-readable room-list face. Weights 400/500/600/700 imported; surfaced as CSS var `--tc-ui-font` (user-swappable via settings UI). OFL. |
 | `vite` | `8.0.14` | Dev server + build. |
-| `typescript` | (scaffold) | — |
+| `typescript` | (scaffold) | -- |
 
 ### Dev-only
 
 | Package | Version | Constraint / reason |
 |---|---|---|
-| `jsdom` + `@types/jsdom` | `^30.0.1` | **DEV ONLY — never bundled.** Added 2026-08-06 (parity-v1, O-tp11). DOMPurify cannot run without a DOM, so the sanitizer's security tests (`checks/sanitizer.check.ts`) had nowhere to run, and the standing law requires a negative test proving script/style/on*/`javascript:` still die before ANY allowlist widening. Chosen over the lighter `happy-dom` deliberately: these are security tests, and spec-completeness beats speed. DOMPurify's own suite runs against jsdom, and the parser edge cases the tests exist to catch (mXSS, namespace confusion) are exactly where a lighter DOM diverges from a real browser -- a less complete DOM could pass a test that a browser would fail. Added zero new advisories (`npm audit` reported the same 3 pre-existing findings before and after; all since resolved). |
+| `jsdom` + `@types/jsdom` | `^30.0.1` | **DEV ONLY -- never bundled.** Added 2026-08-06 (parity-v1, O-tp11). DOMPurify cannot run without a DOM, so the sanitizer's security tests (`checks/sanitizer.check.ts`) had nowhere to run, and the standing law requires a negative test proving script/style/on*/`javascript:` still die before ANY allowlist widening. Chosen over the lighter `happy-dom` deliberately: these are security tests, and spec-completeness beats speed. DOMPurify's own suite runs against jsdom, and the parser edge cases the tests exist to catch (mXSS, namespace confusion) are exactly where a lighter DOM diverges from a real browser -- a less complete DOM could pass a test that a browser would fail. Added zero new advisories (`npm audit` reported the same 3 pre-existing findings before and after; all since resolved). |
 
 ### Deferred (install when the phase needs them)
-- `@matrix-org/matrix-wysiwyg` — rich composer (Phase: composer). Still deferred;
+- `@matrix-org/matrix-wysiwyg` -- rich composer (Phase: composer). Still deferred;
   the current composer uses `marked` + `dompurify` (both now installed, above).
-- `matrix-widget-api` — only if widgets are embedded (later/maybe).
+- `matrix-widget-api` -- only if widgets are embedded (later/maybe).
 
 ---
 
@@ -129,7 +129,7 @@ regression originally), so drift surfaces as a test failure.
 
 ## Fragile internal imports (SCAN BEFORE ANY matrix-js-sdk UPGRADE)
 
-- **`matrix-js-sdk/lib/sliding-sync`** — `src/client/slidingSync.ts` deep-imports
+- **`matrix-js-sdk/lib/sliding-sync`** -- `src/client/slidingSync.ts` deep-imports
   the INTERNAL `SlidingSync` class. It is NOT public in 41.6.0 (only
   `SlidingSyncEvent` is exported from the package root), so this reaches into
   unsupported surface. Operator-approved deviation (2026-07-18) to use native
@@ -137,8 +137,8 @@ regression originally), so drift surfaces as a test failure.
   (`org.matrix.simplified_msc3575`) with no proxy. Kept behind `VITE_SLIDING_SYNC`
   (default off); all the fragile surface lives in that ONE module.
   - **RULE:** before recommending ANY matrix-js-sdk bump, scan the target version
-    for sliding-sync changes — is `SlidingSync` public yet? did the class
-    signature / list-config shape / endpoint move? — and re-verify
+    for sliding-sync changes -- is `SlidingSync` public yet? did the class
+    signature / list-config shape / endpoint move? -- and re-verify
     `slidingSync.ts` against it. **Never bump the SDK blind.**
 
 ---
