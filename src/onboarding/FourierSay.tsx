@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { prefersReducedMotion } from '../ui/reducedMotion'
 import { FIRST_BUBBLE_MS, bubbleWait } from './fourierRun'
+import { reportIgnored } from '../client/report'
 import './fourierSay.css'
 
 // ---------------------------------------------------------------------------
@@ -17,6 +18,13 @@ import './fourierSay.css'
 // she ends.
 // ---------------------------------------------------------------------------
 
+// Her portrait is the ONE hosted copy the MAS sign-in pages also show
+// (every-image-exists-once), so she has the same face on both sides of the
+// sign-in. Tc's CSP restricts frames only, so img-src admits it. Should it
+// fail to load she keeps her monogram, as the MAS page does with no portrait,
+// and the failure is reported (G-tc05).
+const FOURIER_PORTRAIT = 'https://41chan.net/fourier-chan/avatar.png'
+
 export function FourierSay({ lines }: { lines: readonly string[] }) {
   // Read once: the run plays once, so a preference changed mid-run need not
   // restart it.
@@ -25,6 +33,7 @@ export function FourierSay({ lines }: { lines: readonly string[] }) {
   const speaker = Math.max(0, said - 1)
   const avRef = useRef<HTMLSpanElement>(null)
   const lastTop = useRef<number | null>(null)
+  const [portraitFailed, setPortraitFailed] = useState(false)
 
   useEffect(() => {
     if (said >= lines.length) return
@@ -58,7 +67,20 @@ export function FourierSay({ lines }: { lines: readonly string[] }) {
         >
           {i === speaker && (
             <span ref={avRef} className="fc-av" aria-hidden data-fc-pending={said === 0 ? '' : undefined}>
-              <span className="fc-mono">{'\u223F'}</span>
+              {portraitFailed ? (
+                <span className="fc-mono">{'\u223F'}</span>
+              ) : (
+                <img
+                  className="fc-portrait"
+                  src={FOURIER_PORTRAIT}
+                  alt=""
+                  decoding="async"
+                  onError={() => {
+                    reportIgnored('fourier portrait', new Error('portrait did not load'))
+                    setPortraitFailed(true)
+                  }}
+                />
+              )}
             </span>
           )}
           <p className="fc-bubble">{text}</p>

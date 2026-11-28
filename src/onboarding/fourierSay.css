@@ -30,6 +30,7 @@
   background: var(--mod-surface-2);
   box-shadow: 0 0 0 2px var(--mod-accent);
 }
+.fc-portrait { width: 100%; height: 100%; object-fit: cover; display: block; }
 .fc-mono { color: var(--mod-auto-fg); font-size: 28px; font-weight: 700; line-height: 1; }
 .fc-bubble {
   position: relative;
