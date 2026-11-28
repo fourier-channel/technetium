@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import {
-  REPORT_REASON_MAX, REPORT_SCORE, mayReport, reportFailureText, reportReason, sendReport,
+  REPORT_OPT_IN_KEY, REPORT_REASON_MAX, REPORT_SCORE, mayReport, reportEnabledFrom, reportFailureText, reportReason, sendReport,
 } from '../src/client/contentReport.ts'
 
 let failures = 0
@@ -114,6 +114,34 @@ console.log('\n-- the action bar offers it; the dialog shows only those words --
     /reportIgnored\('report a message', err\)\s*setStage\(\{ s: 'failed', text: reportFailureText\(err\) \}\)/.test(rd))
   check('the dialog never renders the error object itself', !/\{\s*String\(err|\{err\b|err\.message/.test(rd))
   check('the reason box is capped at the same number', /maxLength=\{REPORT_REASON_MAX\}/.test(rd))
+}
+
+console.log('\n-- HELD: off for members until the hub relays reports (Developer, 2026-11-28) --')
+{
+  const store = (v: string | null, broken = false) => ({
+    read: () => { if (broken) throw new Error('storage off'); return v },
+    write: () => {}, remove: () => {},
+  })
+  check('nothing set: off', reportEnabledFrom({}, store(null)) === false)
+  check('no store at all: off', reportEnabledFrom({}, null) === false)
+  check('storage throws: off', reportEnabledFrom({}, store('1', true)) === false)
+  for (const v of ['0', 'true', 'yes', ' 1', '']) check(`opt-in value ${JSON.stringify(v)}: off`, reportEnabledFrom({}, store(v)) === false)
+  for (const f of [1, true, 'true', '0', ' 1']) check(`build flag ${JSON.stringify(f)}: off`, reportEnabledFrom({ flag: f }, store(null)) === false)
+  check('dev "true" string is not a dev server: off', reportEnabledFrom({ dev: 'true' }, store(null)) === false)
+  check('the opt-in exactly "1": on', reportEnabledFrom({}, store('1')) === true)
+  check('the build flag exactly "1": on', reportEnabledFrom({ flag: '1' }, store(null)) === true)
+  check('a dev server: on', reportEnabledFrom({ dev: true }, store(null)) === true)
+  check('the key is its own', REPORT_OPT_IN_KEY === 'net.41chan.report_opt_in')
+  const mv = code('src/ui/MessageVerbs.tsx')
+  check('MessageVerbs reads the switch once', /const \[reportOn\] = useState\(\(\) => reportEnabled\(\)\)/.test(mv))
+  check('and the report verb returns nothing while it is off, before anything else',
+    /if \(!reportOn\) return null\s*if \(!mayReport\(/.test(mv))
+  check('ReportDialog is opened from nowhere else', (mv.match(/setReporting\(item\.event\)/g) ?? []).length === 1)
+  const sd = code('src/ui/SettingsDialog.tsx')
+  check('Settings -> Unfinished features has the switch', /reportOptInStore\.write\('1'\)/.test(sd) && /reportOptInStore\.remove\(\)/.test(sd))
+  let envProd = ''
+  try { envProd = readFileSync(join(root, '.env.production'), 'utf8') } catch { /* absent on a clean clone: the flag is then unset */ }
+  check('the production build does not turn it on', !/^\s*VITE_REPORT\s*=\s*['"]?1/m.test(envProd))
 }
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`)

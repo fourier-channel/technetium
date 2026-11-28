@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useClient } from '../client/clientContextValue'
 import { applyDomainOptIn, domainOptInStore, domainEnabled } from '../client/domainMode'
 import { replaceEnabled, replaceOptInStore } from '../client/pictureReplace'
+import { reportEnabled, reportOptInStore } from '../client/contentReport'
 import { applyQqOptIn, qqEnabled, qqOptInStore } from '../client/qqMode'
 import { clientTokenSource } from '../client/masSessions'
 import { loadSession } from '../client/session'
@@ -29,6 +30,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [domainOn, setDomainOn] = useState(() => domainEnabled())
   const [replaceOn, setReplaceOn] = useState(() => replaceEnabled())
   const [replaceNote, setReplaceNote] = useState<string | null>(null)
+  const [reportOn, setReportOn] = useState(() => reportEnabled())
+  const [reportNote, setReportNote] = useState<string | null>(null)
   const [domainPass, setDomainPass] = useState('')
   const [domainNote, setDomainNote] = useState<string | null>(null)
   const [qqOn, setQqOn] = useState(() => qqEnabled())
@@ -194,6 +197,29 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               {replaceOn ? 'Turn Replace picture off' : 'Turn Replace picture on'}
             </button>
             {replaceNote && <p className="tc-settings-note tc-tone-warn">{replaceNote}</p>}
+          </div>
+          <div className="tc-settings-optin">
+            <p className="tc-settings-note">
+              Report a message is not finished: a report reaches the server, and nothing brings it to the moderators'
+              room yet. Turning it on here affects this browser only.
+            </p>
+            <button
+              className="tc-pill"
+              type="button"
+              onClick={() => {
+                try {
+                  if (reportOn) reportOptInStore.remove()
+                  else reportOptInStore.write('1')
+                  setReportOn(!reportOn)
+                  setReportNote(reportOn ? 'Off after a reload.' : 'On after a reload.')
+                } catch {
+                  setReportNote('This browser refused to store the setting, so nothing changed.')
+                }
+              }}
+            >
+              {reportOn ? 'Turn Report a message off' : 'Turn Report a message on'}
+            </button>
+            {reportNote && <p className="tc-settings-note tc-tone-warn">{reportNote}</p>}
           </div>
           <div className="tc-settings-optin">
             <p className="tc-settings-note">

@@ -9,7 +9,7 @@ import { buildForwardContent, isForwardable } from '../client/forwardContent'
 import { RoomPicker } from './RoomPicker'
 import { ReplacePicture } from './ReplacePicture'
 import { ReportDialog } from './ReportDialog'
-import { mayReport } from '../client/contentReport'
+import { mayReport, reportEnabled } from '../client/contentReport'
 import { canReplacePicture, replaceEnabled } from '../client/pictureReplace'
 import { canStartThreads, mayOfferStartThread } from '../client/threadStart'
 import { MessageActionsProvider } from './MessageActionBar'
@@ -57,6 +57,8 @@ export function MessageVerbsProvider({ room, children, onStartThread }: { room: 
   // Held until the booru takes creator replacements (client/pictureReplace.ts).
   // Read once per mount, like domain mode: the switch says a reload is needed.
   const [replaceOn] = useState(() => replaceEnabled())
+  // HELD until the hub relays reports to the moderators (contentReport.ts).
+  const [reportOn] = useState(() => reportEnabled())
   const roomEncrypted = room?.hasEncryptionStateEvent() ?? false
 
   // May the local user redact OTHER people's messages here? Own messages are
@@ -162,6 +164,7 @@ export function MessageVerbsProvider({ room, children, onStartThread }: { room: 
       },
       (item) => {
         // Someone else's message, to the moderators (ing.67; client/contentReport.ts).
+        if (!reportOn) return null
         if (!mayReport({ kind: item.kind, eventId: item.id, sender: item.event.getSender() ?? null, me: myUserId })) return null
         return {
           id: 'report',
@@ -185,7 +188,7 @@ export function MessageVerbsProvider({ room, children, onStartThread }: { room: 
         }
       },
     ],
-    [reply, edit, myUserId, canRedactOthers, canPin, pinned, togglePin, replaceOn, roomEncrypted, onStartThread, room],
+    [reply, edit, myUserId, canRedactOthers, canPin, pinned, togglePin, replaceOn, reportOn, roomEncrypted, onStartThread, room],
   )
 
   const confirmDelete = async () => {

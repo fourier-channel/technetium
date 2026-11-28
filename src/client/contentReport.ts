@@ -12,7 +12,43 @@
 //
 // Named contentReport, not report: client/report.ts is the reporter for
 // failures we continue past (reportIgnored), a different fact.
+//
+// HELD (CLAUDE.md "Where it is going" 1; Developer, 2026-11-28): nothing
+// carries a report to the moderators' room until the hub's encrypted relay
+// exists, and a member who presses Report and sees it accepted expects a
+// person to read it. So the verb is off in production builds, on in dev, and
+// opt-in per browser under Settings -> Unfinished features, the way Replace
+// picture is. Only the exact string '1' turns the build flag on.
 // ---------------------------------------------------------------------------
+
+import { type OptInStore, readFlag } from './e2eeOptIn'
+
+export const REPORT_OPT_IN_KEY = 'net.41chan.report_opt_in'
+
+export const reportOptInStore: OptInStore = {
+  read: () => (typeof localStorage === 'undefined' ? null : localStorage.getItem(REPORT_OPT_IN_KEY)),
+  write: (v) => { if (typeof localStorage !== 'undefined') localStorage.setItem(REPORT_OPT_IN_KEY, v) },
+  remove: () => { if (typeof localStorage !== 'undefined') localStorage.removeItem(REPORT_OPT_IN_KEY) },
+}
+
+export interface ReportEnv {
+  /** import.meta.env.VITE_REPORT */
+  flag?: unknown
+  /** import.meta.env.DEV */
+  dev?: unknown
+}
+
+/** Fail closed: unset, unreadable or unrecognised is OFF. */
+export function reportEnabledFrom(env: ReportEnv, store: OptInStore | null): boolean {
+  if (env.flag === '1') return true
+  if (env.dev === true) return true
+  if (!store) return false
+  return readFlag(store)
+}
+
+export function reportEnabled(): boolean {
+  return reportEnabledFrom({ flag: import.meta.env.VITE_REPORT, dev: import.meta.env.DEV }, reportOptInStore)
+}
 
 /** The longest reason sent. Synapse stores the text as given; a cap keeps a
  * pasted wall of text from becoming the moderators' problem. */
