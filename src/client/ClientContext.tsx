@@ -9,6 +9,7 @@ import type { MatrixClient } from 'matrix-js-sdk'
 import { saveSession, loadSession, clearSession } from './session'
 import { buildClient, deleteSyncStore, startAndWaitForSync } from './buildClient'
 import { watchRoomEncryptionConfig } from './roomEncryptionConfig'
+import { watchAutoJoinSpaces } from './autoJoinSpacesWatch'
 import { createTokenRefreshFunction } from './tokenRefresher'
 import { ClientContext, type ClientContextValue, type ClientStatus } from './clientContextValue'
 import { planSessionEnd, type SessionEndReason } from './sessionEnd'
@@ -184,6 +185,9 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     }
 
     if (!stillOurs()) { c.stopClient(); clientRef.current = null; return }
+    // Every member is in the same sub-spaces (tc.84); listens for the first
+    // sync, so it goes on before the client starts.
+    watchAutoJoinSpaces(c)
     setClient(c)
     await startAndWaitForSync(c)
     if (!stillOurs()) return
