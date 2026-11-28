@@ -175,6 +175,7 @@ export function NavTree({
   return (
     <NavDragContext.Provider value={navDrag}>
     <nav
+      data-prov="room-list"
       style={{
         fontFamily: 'var(--tc-ui-font)',
         fontSize: 13,
@@ -745,9 +746,13 @@ function TreeRow({
             </FourierReveal>
           </span>
         ) : (
-          <FourierReveal seed={node.roomId} play={animate && shown}>
-            <RoomName label={label} counts={notifs.get(node.roomId)} roomId={node.roomId} animate={animate} />
-          </FourierReveal>
+          <RoomName
+            label={label}
+            counts={notifs.get(node.roomId)}
+            roomId={node.roomId}
+            animate={animate}
+            reveal={animate && shown}
+          />
         )}
         <span
           style={{
@@ -940,16 +945,42 @@ function FourierReveal({ children, seed, play }: { children: React.ReactNode; se
 }
 
 // shows the static @ + glow with no travelling pulse.
+//
+// The count is OUTSIDE the name's ellipsis (bug-20261127-dd94e140, Developer
+// 2026-11-28). It used to sit inside the one clipped span, so a long name at
+// phone width cut it off: the reporter saw "roomname" where "roomname (N)"
+// was due. Now the row is [@][name, shrinks, ellipsis][count, never shrinks]:
+// the name gives up its letters, the count keeps all of its own. The intro's
+// FourierReveal wraps the NAME only, for the same reason.
+const ROOM_NAME_ROW: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'baseline',
+  flex: '0 1 auto',
+  minWidth: 0,
+  overflow: 'hidden',
+  whiteSpace: 'nowrap',
+}
+const ROOM_NAME_TEXT: React.CSSProperties = {
+  flex: '0 1 auto',
+  minWidth: 0,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+}
+const ROOM_NAME_COUNT: React.CSSProperties = { flex: '0 0 auto', opacity: 0.85, marginLeft: 4 }
+
 function RoomName({
   label,
   counts,
   roomId,
   animate,
+  reveal,
 }: {
   label: string
   counts: NotifCounts | undefined
   roomId: string
   animate: boolean
+  reveal: boolean
 }) {
   const { isMutedNow } = useRoomListSettings()
   const muted = isMutedNow(roomId)
@@ -958,10 +989,14 @@ function RoomName({
   const unread = total > 0
   const ping = highlight > 0
 
-  const ell = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as const
-
   if (!unread && !ping) {
-    return <span style={ell}>{label}</span>
+    return (
+      <span style={ROOM_NAME_ROW}>
+        <FourierReveal seed={roomId} play={reveal}>
+          <span style={ROOM_NAME_TEXT}>{label}</span>
+        </FourierReveal>
+      </span>
+    )
   }
 
   const glow: React.CSSProperties = {
@@ -970,40 +1005,50 @@ function RoomName({
     fontWeight: 600,
   }
   const at = ping ? (
-    <span style={{ color: 'var(--tc-unread)', fontWeight: 700, marginRight: 2 }}>@</span>
+    <span style={{ flex: '0 0 auto', color: 'var(--tc-unread)', fontWeight: 700, marginRight: 2 }}>@</span>
   ) : null
-  const count = <span style={{ opacity: 0.85, marginLeft: 4 }}>({total})</span>
+  const count = (
+    <span className="tc-room-count" style={ROOM_NAME_COUNT}>
+      ({total})
+    </span>
+  )
 
   if (ping && animate) {
     // Letter-by-letter traveling pulse: each glyph shares one keyframe, staggered
     // by its index so a bright band walks across the name at a moderate pace.
     const chars = [...label]
     return (
-      <span style={{ ...ell, fontWeight: 600 }}>
+      <span style={{ ...ROOM_NAME_ROW, fontWeight: 600 }}>
         {at}
-        {chars.map((ch, i) => (
-          <span
-            key={i}
-            className="room-pulse-letter"
-            // The bright copy is drawn by a pseudo-element reading this
-            // attribute, so the travelling band can be an opacity animation
-            // rather than an infinite repaint of colour and text-shadow.
-            data-ch={ch === ' ' ? '\u00a0' : ch}
-            style={{ animationDelay: `${i * 90}ms` }}
-          >
-            {/* confusable-ok: a literal space collapses in JSX; NBSP is the rendered glyph */}
-            {ch === ' ' ? '\u00A0' : ch}
+        <FourierReveal seed={roomId} play={reveal}>
+          <span style={ROOM_NAME_TEXT}>
+            {chars.map((ch, i) => (
+              <span
+                key={i}
+                className="room-pulse-letter"
+                // The bright copy is drawn by a pseudo-element reading this
+                // attribute, so the travelling band can be an opacity animation
+                // rather than an infinite repaint of colour and text-shadow.
+                data-ch={ch === ' ' ? '\u00a0' : ch}
+                style={{ animationDelay: `${i * 90}ms` }}
+              >
+                {/* confusable-ok: a literal space collapses in JSX; NBSP is the rendered glyph */}
+                {ch === ' ' ? '\u00A0' : ch}
+              </span>
+            ))}
           </span>
-        ))}
+        </FourierReveal>
         {count}
       </span>
     )
   }
 
   return (
-    <span style={{ ...ell, ...glow }}>
+    <span style={{ ...ROOM_NAME_ROW, ...glow }}>
       {at}
-      {label}
+      <FourierReveal seed={roomId} play={reveal}>
+        <span style={ROOM_NAME_TEXT}>{label}</span>
+      </FourierReveal>
       {count}
     </span>
   )

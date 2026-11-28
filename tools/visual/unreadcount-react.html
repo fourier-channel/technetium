@@ -1,0 +1,21 @@
+<!doctype html>
+<!-- bug-20261127-dd94e140: mounts the REAL NavTree and DmList over a fake tree
+     at phone width (390px) -- a room with a long name and an unread count,
+     another with a ping, and loose rooms drawn as faces with counts. Served by
+     the dev server: /tools/visual/unreadcount-react.html
+     Reports, measured in the engine that loads it, whether each count is
+     inside its row and not clipped, and where each face's badge sits. Proves
+     what these components draw for this tree; nothing against a live
+     homeserver. -->
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>html, body { margin: 0; background: var(--cpd-color-bg-canvas-default, #1b1a17); }</style>
+</head>
+<body>
+<div id="root" style="width: 390px"></div>
+<pre id="result" style="color:#ccc; padding: 0 12px; white-space: pre-wrap">running</pre>
+<script type="module" src="./unreadcount-react.tsx"></script>
+</body>
+</html>

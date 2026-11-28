@@ -63,9 +63,31 @@ function sortChildren(children: TreeNode[]): TreeNode[] {
 // Many child rooms DON'T set this (the canonical link is m.space.child on the
 // parent), so it's only a weak signal -- the strong one is `heldIds` below.
 function hasParentSpace(room: Room): boolean {
+  return declaredParentIds(room).length > 0
+}
+
+// The parent spaces a room DECLARES (state keys of valid m.space.parent).
+function declaredParentIds(room: Room): string[] {
   return room.currentState
     .getStateEvents('m.space.parent')
-    .some((e) => Object.keys(e.getContent()).length > 0)
+    .filter((e) => Object.keys(e.getContent()).length > 0)
+    .map((e) => e.getStateKey() ?? '')
+    .filter(Boolean)
+}
+
+// Hold a room that declares a parent out of the loose rooms only while that
+// parent could still place it (bug-20261127-dd94e140, Developer 2026-11-28).
+// Before anything is fetched, every parent might: hold. Once a hierarchy is
+// fetched, a declared parent present in it will place the room on the next
+// refetch (a room just created under a space you can see): hold. A room none
+// of whose declared parents is in the fetched hierarchy -- invited into a
+// room without its space, or a space hanging off a root you are not in -- has
+// no row it could ever reach, and holding it is what made it vanish: no row,
+// no count, in any browser. It is placed with the loose rooms instead.
+function parentCanPlace(room: Room, fetched: Map<string, HierarchyRoom>): boolean {
+  if (!hasParentSpace(room)) return false
+  if (fetched.size === 0) return true
+  return declaredParentIds(room).some((id) => fetched.has(id))
 }
 
 // Every room id nested UNDER a space in a tree (descendants of top-level spaces).
@@ -163,14 +185,15 @@ export function buildNavTree(
     .map((h) => buildNode(h, new Set()))
 
   // Orphans: joined non-space rooms absent from every hierarchy (DMs,
-  // directly-joined rooms). Surfaced from sync, not the hierarchy.
+  // directly-joined rooms, rooms whose parent space you cannot reach).
+  // Surfaced from sync, not the hierarchy.
   const orphanRooms: TreeNode[] = client
     .getRooms()
     .filter(
       (r) =>
         !r.isSpaceRoom() &&
         !byId.has(r.roomId) &&
-        !hasParentSpace(r) &&
+        !parentCanPlace(r, byId) &&
         !heldIds.has(r.roomId), // known to live under a space -> hold, don't orphan
     )
     .map((r) => ({

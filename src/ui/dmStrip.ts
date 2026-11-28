@@ -76,6 +76,9 @@ export function dmFaceStyle(state: DmFaceState): CSSProperties {
     display: 'grid',
     placeItems: 'center',
     padding: 0,
+    // The count badge (dmFaceBadgeStyle) is placed against this box, so it
+    // rides the face's corner and takes no room of its own.
+    position: 'relative',
     // Every face is ringed, avatar or bare initial alike, so the row reads as
     // one set rather than pictures floating beside letters.
     // The open conversation recolours this ring at the same width, so the box
@@ -90,9 +93,9 @@ export function dmFaceStyle(state: DmFaceState): CSSProperties {
   }
 }
 
-// Glow, not a badge: at this size there is no room for a counter, and the
-// ring reads at a glance across a wrapped grid of faces. The static ring is
-// the reduced-motion base; .tc-dm-waiting pulses it.
+// The glow says "something is waiting" at a glance across a wrapped grid of
+// faces; the count badge (below) says how much. The static ring is the
+// reduced-motion base; .tc-dm-waiting pulses it.
 function dmGlow(state: DmFaceState): string | undefined {
   return state.ping
     ? '0 0 0 2px var(--tc-unread), 0 0 12px 2px rgba(255,150,40,0.75)'
@@ -109,6 +112,47 @@ function dmGlow(state: DmFaceState): string | undefined {
 function dmOpenHalo(state: DmFaceState): string | undefined {
   if (!state.open) return undefined
   return `0 0 0 ${dmGlow(state) ? 4 : 2}px ${DM_OPEN_RING}`
+}
+
+// The count a face wears on its corner (bug-20261127-dd94e140, Developer
+// 2026-11-28). It was a tooltip only, and a phone has no hover: a room shown
+// as a face had no visible count at all. Null draws no badge: nothing waiting,
+// a muted room (its counts are withheld by the caller, the same rule the glow
+// follows), or an invite, which the server keeps no count for -- the ping
+// glow is its whole signal. Capped so the badge never outgrows the face.
+export const DM_BADGE_CAP = 99
+export function dmFaceBadge(counts: NotifCounts | undefined, membership: string | null): string | null {
+  if (membership === 'invite' || !counts) return null
+  const n = Math.floor(counts.total)
+  if (!(n > 0)) return null
+  return n > DM_BADGE_CAP ? `${DM_BADGE_CAP}+` : String(n)
+}
+
+// The badge's box. Absolutely placed against the face (position: relative in
+// dmFaceStyle), so drawing or removing it moves no face (no-forced-reflow).
+// It reaches DM_BADGE_REACH px past the face on the top and right, inside
+// the strip's 10px / 12px padding, so the strip's overflow clip never cuts it.
+export const DM_BADGE_REACH = 6
+export function dmFaceBadgeStyle(ping: boolean): CSSProperties {
+  return {
+    position: 'absolute',
+    top: -DM_BADGE_REACH,
+    right: -DM_BADGE_REACH,
+    minWidth: 15,
+    height: 15,
+    boxSizing: 'border-box',
+    padding: '0 4px',
+    borderRadius: 8,
+    background: ping ? 'var(--tc-unread)' : 'var(--tc-unread-base)',
+    color: '#1a1200',
+    fontSize: 10,
+    fontWeight: 700,
+    lineHeight: '15px',
+    textAlign: 'center',
+    whiteSpace: 'nowrap',
+    fontVariantNumeric: 'tabular-nums',
+    pointerEvents: 'none',
+  }
 }
 
 // True when a face's box can only ever render as a circle: equal sides plus a

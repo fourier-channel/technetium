@@ -10,7 +10,12 @@
 // The one that matters most is the last: the reveal wrapper and the icon it
 // wraps MUST be given the same size. They were 20 and 30, written eight hundred
 // lines apart, and nothing could see it.
-import { dmFaceBox, isCircular, DM_AVATAR, DM_RING, DM_TILE } from '../src/ui/dmStrip.ts'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
+import {
+  dmFaceBox, dmFaceBadge, dmFaceBadgeStyle, dmFaceStyle, isCircular, DM_AVATAR, DM_BADGE_CAP, DM_BADGE_REACH, DM_RING, DM_TILE,
+} from '../src/ui/dmStrip.ts'
 
 let failures = 0
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -48,6 +53,47 @@ check(
   derived(DM_AVATAR, DM_RING) === DM_TILE && derived(64, DM_RING) !== DM_TILE,
   { DM_TILE },
 )
+
+
+// The count badge (bug-20261127-dd94e140, Developer 2026-11-28): a face's
+// count was a tooltip only, and a phone has no hover.
+console.log('\n-- the count a face wears --')
+{
+  const c = (total: number, highlight = 0) => ({ total, highlight })
+  check('nothing waiting: no badge', dmFaceBadge(c(0), 'join') === null)
+  check('no counts (muted: the caller withholds them): no badge', dmFaceBadge(undefined, 'join') === null)
+  check('an invite carries no count: no badge', dmFaceBadge(c(3), 'invite') === null)
+  check('one waiting: "1"', dmFaceBadge(c(1), 'join') === '1')
+  check('a ping counts too', dmFaceBadge(c(2, 2), 'join') === '2')
+  check('at the cap: the number', dmFaceBadge(c(DM_BADGE_CAP), 'join') === String(DM_BADGE_CAP))
+  check('past the cap: "99+"', dmFaceBadge(c(12345), 'join') === '99+')
+  check('nonsense counts draw nothing', dmFaceBadge(c(NaN), 'join') === null && dmFaceBadge(c(-4), 'join') === null)
+  const b = dmFaceBadgeStyle(false)
+  check('the badge is placed, not laid out (moves no face)', b.position === 'absolute' && b.pointerEvents === 'none')
+  check('the face is its containing block', dmFaceStyle({ ping: false, unread: true }).position === 'relative')
+  check('the badge stays inside the strip padding the overflow clip allows (10px top, 12px sides)',
+    b.top === -DM_BADGE_REACH && b.right === -DM_BADGE_REACH && DM_BADGE_REACH < 10)
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+  const dl = readFileSync(join(root, 'src/ui/DmList.tsx'), 'utf8')
+  check('DmList draws it from the same counts the glow reads',
+    /const badge = dmFaceBadge\(counts, node\.membership\)/.test(dl) && /\{badge && \(\s*<span aria-hidden="true" className="tc-dm-badge" style=\{dmFaceBadgeStyle\(ping\)\}>/.test(dl))
+  check('and the strip still pads by at least the badge reach',
+    /gap: 13, padding: '10px 12px 12px'/.test(dl))
+}
+
+// The tree's count sits OUTSIDE the name's ellipsis (same bug, the reporter's
+// "roomname" where "roomname (N)" was due).
+console.log('\n-- the count beside a long room name --')
+{
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+  const nt = readFileSync(join(root, 'src/ui/NavTree.tsx'), 'utf8')
+  const fn = nt.slice(nt.indexOf('function RoomName('), nt.indexOf('// W3.4 -- one reorderable sibling group'))
+  check('the count never shrinks', /const ROOM_NAME_COUNT: React\.CSSProperties = \{ flex: '0 0 auto'/.test(nt))
+  check('the name shrinks and ellipsizes', /const ROOM_NAME_TEXT[\s\S]{0,120}minWidth: 0,\s*overflow: 'hidden',\s*textOverflow: 'ellipsis'/.test(nt))
+  check('the count is a sibling of the name, after it, in every unread branch',
+    (fn.match(/<\/FourierReveal>\s*\{count\}/g) ?? []).length === 2)
+  check('no ellipsis span holds the count', !/ROOM_NAME_TEXT\}>[^<]*\{count\}/.test(fn) && !/\.\.\.ell/.test(fn))
+}
 
 if (failures) { console.log(`\n${failures} FAILED`); process.exit(1) }
 console.log('\nall ok')

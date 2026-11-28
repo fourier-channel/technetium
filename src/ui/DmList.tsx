@@ -10,7 +10,7 @@ import type { TreeNode } from '../client/spaces'
 import { useRoomListSettings, nextDmFilter } from './roomListSettings'
 import { useReducedMotion } from './reducedMotion'
 import { useNavShared } from './navShared'
-import { DM_AVATAR, dmFaceStyle, dmStripRooms, dmTitle, dmWaitingRooms } from './dmStrip'
+import { DM_AVATAR, dmFaceBadge, dmFaceBadgeStyle, dmFaceStyle, dmStripRooms, dmTitle, dmWaitingRooms } from './dmStrip'
 import { EpicycleReveal, RoomIcon } from './RoomIcon'
 import { RoomContextMenu } from './RoomContextMenu'
 import { UserPicker } from './UserPicker'
@@ -86,6 +86,7 @@ export function DmList({ onSelectRoom, openRoomId = null }: {
         horizontally, and pushing the member rows down (intended reflow). */}
     {rooms.length > 0 && (
       <div
+        data-prov="dm-strip"
         style={{
           margin: '2px 4px 6px',
           // The whole section is ONE container that grows downwards. Its
@@ -195,6 +196,8 @@ export function DmList({ onSelectRoom, openRoomId = null }: {
                 // the whole signal.
                 const unread = invited || (counts?.total ?? 0) > 0
                 const ping = invited || (counts?.highlight ?? 0) > 0
+                // The count, drawn: the title alone never reached a phone.
+                const badge = dmFaceBadge(counts, node.membership)
                 return (
                   <button
                     key={`${node.roomId}:${dmRevealKey}`}
@@ -239,6 +242,11 @@ export function DmList({ onSelectRoom, openRoomId = null }: {
                     <EpicycleReveal seed={node.roomId} size={DM_AVATAR} play={animate}>
                       <RoomIcon node={node} size={DM_AVATAR} isDm={isDm} />
                     </EpicycleReveal>
+                    {badge && (
+                      <span aria-hidden="true" className="tc-dm-badge" style={dmFaceBadgeStyle(ping)}>
+                        {badge}
+                      </span>
+                    )}
                   </button>
                 )
               })}
