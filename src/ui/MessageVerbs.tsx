@@ -8,6 +8,8 @@ import { usePinnedEvents } from '../client/usePinnedEvents'
 import { buildForwardContent, isForwardable } from '../client/forwardContent'
 import { RoomPicker } from './RoomPicker'
 import { ReplacePicture } from './ReplacePicture'
+import { ReportDialog } from './ReportDialog'
+import { mayReport } from '../client/contentReport'
 import { canReplacePicture, replaceEnabled } from '../client/pictureReplace'
 import { canStartThreads, mayOfferStartThread } from '../client/threadStart'
 import { MessageActionsProvider } from './MessageActionBar'
@@ -41,6 +43,8 @@ export function MessageVerbsProvider({ room, children, onStartThread }: { room: 
   // Redaction is destructive and irreversible, so it is two-step: the action
   // bar arms it, this dialog confirms it.
   const [pendingDelete, setPendingDelete] = useState<MatrixEvent | null>(null)
+  // The message being reported, while its dialog is open.
+  const [reporting, setReporting] = useState<MatrixEvent | null>(null)
   // Which message has the emoji picker open. Owned here so the action bar's
   // React verb and each strip's "+" cannot both open one.
   const [reactTarget, setReactTarget] = useState<string | null>(null)
@@ -157,6 +161,16 @@ export function MessageVerbsProvider({ room, children, onStartThread }: { room: 
         }
       },
       (item) => {
+        // Someone else's message, to the moderators (ing.67; client/contentReport.ts).
+        if (!mayReport({ kind: item.kind, eventId: item.id, sender: item.event.getSender() ?? null, me: myUserId })) return null
+        return {
+          id: 'report',
+          label: 'Report',
+          icon: '\u2691', // black flag
+          onSelect: () => setReporting(item.event),
+        }
+      },
+      (item) => {
         if (!isActionable(item.kind)) return null
         const isMine = !!myUserId && item.event.getSender() === myUserId
         // Hidden rather than shown-and-failing: a Delete that always 403s
@@ -226,6 +240,9 @@ export function MessageVerbsProvider({ room, children, onStartThread }: { room: 
           current={replacing.content}
           onClose={() => setReplacing(null)}
         />
+      )}
+      {reporting && client && (
+        <ReportDialog client={client} target={reporting} onClose={() => setReporting(null)} />
       )}
       {pendingDelete && (
         <ConfirmDelete
