@@ -1,7 +1,7 @@
 {
   "build_stamp": null,
-  "hydrated_at": "2026-11-27T05:57:05Z",
-  "hydrated_hash": "sha256c:85be56ccdb00e78399b94d7bc704c951240875d9e8219c84e2d6590054402323",
+  "hydrated_at": "2026-11-28T01:37:47Z",
+  "hydrated_hash": "sha256c:09e60786b63064763422696fb0bb14aad39d795fdd79f4a9f40c9f2f3e99128e",
   "pinned": null,
   "source": "coherence://brain/SITE_DESIGN.md"
 }

@@ -494,7 +494,7 @@ drifting quietly.
 ---
 
 ## fourier-coherence -- keeping the copies honest
-<!-- traced: 2026-11-27 repo=fourier-coherence@0be59e9 -->
+<!-- traced: 2026-11-28 repo=fourier-coherence@d75c30b -->
 
 **Purpose:** the same thing existing in several places is the failure mode this
 whole project is most exposed to, and this is the component that reports on it.
