@@ -59,6 +59,50 @@ console.log('\n-- the wiring --')
     /useEffect\(\(\) => \(\) => \{[^}]*rereadOnScreen\(\)[^}]*\}, \[\]\)/.test(frame))
 }
 
+// A jailed picture is drawn as JAILED_TEXT and mounts no tag line, so it
+// counts itself through usePopPhase (Developer, 2026-11-28: a release from
+// troll jail must reach the open page with no refresh). Rendered for real in
+// jsdom: the hook every placeholder reads its phase through.
+console.log('\n-- a jailed placeholder is asked about again --')
+{
+  const { JSDOM } = await import('jsdom')
+  const dom = new JSDOM('<!doctype html><div id="r"></div>')
+  const g = globalThis as Record<string, unknown>
+  g.window = dom.window
+  g.document = dom.window.document
+  g.IS_REACT_ACT_ENVIRONMENT = true
+  const React = await import('react')
+  const { createRoot } = await import('react-dom/client')
+  const { jail, release, usePopPhase } = await import('../src/client/withheldMedia.ts')
+  const Placeholder = ({ id }: { id: string }) => {
+    usePopPhase(id)
+    return null
+  }
+  const root = createRoot(dom.window.document.getElementById('r')!)
+  const show = (ids: string[]) =>
+    React.act(() => root.render(React.createElement(React.Fragment, null,
+      ...ids.map((id, i) => React.createElement(Placeholder, { id, key: id + i })))))
+  const before = listed()
+  await show(['j1', 'free'])
+  check('a picture that is not jailed is not counted by its phase', listed() === before, listed())
+  await React.act(() => { jail('j1') })
+  check('a jailed picture on the page is counted on screen', mediaOnScreen().includes('j1'), listed())
+  check('a picture that is not jailed is still not counted', !mediaOnScreen().includes('free'), listed())
+  await show(['j1', 'j1'])
+  await show(['j1'])
+  check('the same jailed picture twice, one leaving, stays counted', mediaOnScreen().includes('j1'), listed())
+  await React.act(() => { release('j1', () => 0 as unknown as ReturnType<typeof setTimeout>) })
+  check('released, it is no longer counted by its phase', !mediaOnScreen().includes('j1'), listed())
+  await React.act(() => { jail('j1') })
+  await show([])
+  check('unmounted while jailed, it leaves the count', !mediaOnScreen().includes('j1'), listed())
+  // Released, so withheldMedia's recheck ticker (armed because jsdom gave it
+  // a document) finds nothing left and stops, and the check can exit.
+  release('j1', () => 0 as unknown as ReturnType<typeof setTimeout>)
+  await React.act(() => root.unmount())
+  dom.window.close()
+}
+
 if (failures > 0) {
   console.log(`\n${failures} check(s) FAILED`)
   process.exit(1)

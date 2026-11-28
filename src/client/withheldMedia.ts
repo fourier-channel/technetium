@@ -1,4 +1,5 @@
-import { useCallback, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useSyncExternalStore } from 'react'
+import { lineOnScreen } from './onScreenMedia'
 
 // ---------------------------------------------------------------------------
 // A MATRIX IMAGE FOLLOWS ITS POST, IN ITS ROOMS TOO (operator, 2026-11-11):
@@ -239,5 +240,21 @@ export function onWithheld(cb: () => void): () => void {
 /** This image's phase, re-rendering only when some image's phase changes. */
 export function usePopPhase(mediaId: string | undefined): PopPhase | undefined {
   const get = useCallback(() => popPhase(mediaId), [mediaId])
-  return useSyncExternalStore(onWithheld, get, get)
+  const phase = useSyncExternalStore(onWithheld, get, get)
+  // A JAILED picture drawn as JAILED_TEXT counts itself on screen, so the
+  // minute's reread of what is on screen (useMediaTags rereadOnScreen) asks
+  // about it and a release brings it back in place (Developer, 2026-11-28).
+  // Its tag line, which is what counts a picture otherwise, is never mounted
+  // while it is jailed, so without this a release reached the reader only on
+  // the doubling recheck above -- up to fifteen minutes -- or on a refresh.
+  // Every placeholder (row, IRC line, gallery cell, lightbox) reads its phase
+  // here, so this is the one place it is counted. Counted while MOUNTED, not
+  // only while scrolled into view: jailed pictures are few, and each read is
+  // the same ~157-byte request a picture on screen costs.
+  const jailed = phase === 'jailed'
+  useEffect(() => {
+    if (!jailed || !mediaId) return
+    return lineOnScreen(mediaId)
+  }, [jailed, mediaId])
+  return phase
 }
