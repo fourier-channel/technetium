@@ -7,6 +7,9 @@ import { MediaTags } from './MediaTags'
 import { JAILED_TEXT, usePopPhase } from '../client/withheldMedia'
 import { axisFromKey, isTypingTarget, BOTH } from './axisKeys'
 import { flatIndex, stepImage, totalImages } from './mediaSequence'
+import { MediaErrorCard } from './MediaErrorCard'
+import { mediaErrorStatus } from '../client/mediaError'
+import { reportIgnored } from '../client/report'
 
 // Full-screen image viewer, mounted once at App root as a provider so any
 // descendant (timeline, thread panel) opens it via useLightbox() with no
@@ -93,7 +96,9 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
   const [index, setIndex] = useState(0)
   const [thread, setThread] = useState<LightboxThread | null>(null)
   const [src, setSrc] = useState<string | null>(null)
-  const [error, setError] = useState(false)
+  // The failure, with its HTTP status or null (boo.52); "Try again" bumps attempt.
+  const [error, setError] = useState<{ status: number | null } | null>(null)
+  const [attempt, setAttempt] = useState(0)
   // The fetched full-res object URL, retained so Save reuses the exact blob the
   // viewer already downloaded. Revoked on close / item change.
   const revokeRef = useRef<(() => void) | null>(null)
@@ -165,7 +170,7 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
       // Not a synchronous setState in the effect body (G-tc01).
       queueMicrotask(() => {
         setSrc(null)
-        setError(false)
+        setError(null)
       })
       return
     }
@@ -175,7 +180,7 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
     queueMicrotask(() => {
       if (cancelled) return
       setSrc(null)
-      setError(false)
+      setError(null)
     })
 
     // An encrypted picture (a direct message) is fetched and decrypted whole;
@@ -200,8 +205,10 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
         revokeRef.current = revoke
         setSrc(resolved)
       })
-      .catch(() => {
-        if (!cancelled) setError(true)
+      .catch((err: unknown) => {
+        if (cancelled) return
+        reportIgnored('lightbox: full-size picture', err)
+        setError({ status: mediaErrorStatus(err) })
       })
 
     return () => {
@@ -211,7 +218,7 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
         revokeRef.current = null
       }
     }
-  }, [client, items, index, version, jailed])
+  }, [client, items, index, version, jailed, attempt])
 
   // Keyboard, per the formant axis grammar: Escape leaves the innermost open
   // thing, left/right walk the set you opened, up/down walk the conversation
@@ -345,9 +352,7 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
                 {JAILED_TEXT}
               </span>
             ) : error ? (
-              <span style={{ color: 'var(--cpd-color-text-secondary)', fontStyle: 'italic' }}>
-                [image unavailable]
-              </span>
+              <MediaErrorCard status={error.status} onRetry={() => setAttempt((n) => n + 1)} />
             ) : src ? (
               // The picture and the line of tags under it are one column, so
               // the line's top-left sits on the picture's bottom-left and is

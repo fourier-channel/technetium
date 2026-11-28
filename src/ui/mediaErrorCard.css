@@ -1,0 +1,64 @@
+/* A picture that could not be shown (MediaErrorCard.tsx, boo.52). Formant by
+   NAME only; the tone says whose move it is: refused (you may not), later
+   (wait), missing (nothing there), ours (our fault), unknown (no answer). */
+.tc-media-error {
+  --tc-me-accent: var(--mod-ink-dim);
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 4px;
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 120px;
+  min-height: 72px;
+  padding: 10px 12px;
+  overflow: hidden;
+  vertical-align: top;
+  border: 1px solid var(--mod-line-strong);
+  border-left: 3px solid var(--tc-me-accent);
+  border-radius: var(--mod-radius);
+  background: var(--mod-surface);
+  color: var(--mod-ink);
+  text-align: left;
+}
+.tc-media-error[data-tone='refused'] { --tc-me-accent: var(--mod-alarm-fg); }
+.tc-media-error[data-tone='later'] { --tc-me-accent: var(--mod-warn-fg); }
+.tc-media-error[data-tone='ours'] { --tc-me-accent: var(--mod-warn-fg); }
+.tc-media-error[data-tone='missing'] { --tc-me-accent: var(--mod-ink-dim); }
+.tc-media-error[data-tone='unknown'] { --tc-me-accent: var(--mod-ink-faint); }
+.tc-media-error-code {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-family: var(--mod-mono);
+  font-size: 11px;
+  color: var(--tc-me-accent);
+}
+.tc-media-error-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--tc-me-accent);
+  padding-right: 28px;
+}
+.tc-media-error-body {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--mod-ink-dim);
+  overflow-wrap: anywhere;
+}
+.tc-media-error[data-compact] { padding: 8px 10px; }
+.tc-media-error[data-compact] .tc-media-error-title { font-size: 13px; }
+.tc-media-error-retry {
+  margin-top: 2px;
+  padding: 2px 10px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--mod-ink);
+  background: transparent;
+  border: 1px solid var(--mod-line-strong);
+  border-radius: var(--mod-radius-control);
+  cursor: pointer;
+}
+.tc-media-error-retry:hover { border-color: var(--tc-me-accent); }

@@ -5,6 +5,8 @@ import { useFileVersion } from './useFileVersion'
 import type { EncryptedFileInfo } from '../client/encryptedFile'
 import { reportIgnored } from '../client/report'
 import { withRetry, type RetryPolicy } from '../client/goFish'
+import { mediaErrorStatus } from '../client/mediaError'
+import { MediaErrorCard } from './MediaErrorCard'
 
 // Retry transient media failures (heavy sync starves fetches) before showing the
 // unavailable state: five attempts, waits of 0.8s, 1.6s, 3.2s, 6.4s -> gives up
@@ -49,7 +51,7 @@ export function AuthedImage({
   onClick?: () => void
   fill?: boolean
   transparentLoading?: boolean
-  // Rendered instead of the "[image unavailable]" text when the fetch fails
+  // Rendered instead of the error card (MediaErrorCard) when the fetch fails
   // (e.g. a room avatar the media gateway can't serve -> fall back to an initial).
   fallback?: ReactNode
   // Fetch via the homeserver's authenticated-media endpoint instead of the
@@ -74,7 +76,12 @@ export function AuthedImage({
 }) {
   const { client } = useClient()
   const [src, setSrc] = useState<string | null>(null)
-  const [error, setError] = useState(false)
+  // The failure, once the retries are spent: its HTTP status, or null when the
+  // request got no answer. Drawn as a MediaErrorCard (boo.52).
+  const [error, setError] = useState<{ status: number | null } | null>(null)
+  // "Try again" on the card: a new attempt is a new effect run with a fresh
+  // retry budget.
+  const [attempt, setAttempt] = useState(0)
   // Track the current object URL across renders so cleanup always revokes the
   // exact blob this instance created, even if mxc changes mid-flight.
   const revokeRef = useRef<(() => void) | null>(null)
@@ -129,7 +136,7 @@ export function AuthedImage({
     queueMicrotask(() => {
       if (!cancelled) {
         setSrc(null)
-        setError(false)
+        setError(null)
       }
     })
 
@@ -143,7 +150,7 @@ export function AuthedImage({
     //
     // A heavy initial sync starves media fetches, so a failure here is usually
     // transient: retry with backoff before giving up, so images self-heal
-    // instead of sticking at "[image unavailable]" until the user navigates
+    // instead of sticking at an error card until the user navigates
     // away and back (goFish.ts; no dead states). The budget belongs to this
     // effect run: a new source, a new version or a newly near image starts
     // with a fresh one.
@@ -159,7 +166,7 @@ export function AuthedImage({
       // and body in this error precisely so this line can carry them (D-tp16).
       (err) => {
         reportIgnored(failureScope, err)
-        setError(true)
+        setError({ status: mediaErrorStatus(err) })
       },
     )
     void run.value.then(({ src: resolved, revoke }) => {
@@ -182,7 +189,7 @@ export function AuthedImage({
     }
     // file.url identifies the ciphertext; the key travels with it, so a changed
     // file object means different bytes and must refetch.
-  }, [client, mxc, file, mimetype, width, roomId, near, version])
+  }, [client, mxc, file, mimetype, width, roomId, near, version, attempt])
 
   // The box this image occupies, and the single authority for it: the
   // placeholder and the loaded picture must agree exactly or the row resizes
@@ -203,11 +210,7 @@ export function AuthedImage({
 
   if (error) {
     if (fallback !== undefined) return <>{fallback}</>
-    return (
-      <span style={{ fontSize: 13, fontStyle: 'italic', color: 'var(--cpd-color-text-secondary)' }}>
-        [image unavailable]
-      </span>
-    )
+    return <MediaErrorCard status={error.status} box={box} onRetry={() => setAttempt((n) => n + 1)} />
   }
 
   if (!src) {

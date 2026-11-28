@@ -3,6 +3,7 @@ import { fileVersionOf } from './fileVersions'
 import { decryptAttachment, type EncryptedFileInfo } from './encryptedFile'
 import { createLimiter } from './concurrency'
 import { BOORU_MEDIA_SERVER, booruMediaUrl } from './booruRef'
+import { MediaFetchError } from './mediaError'
 
 // ---------------------------------------------------------------------------
 // Media. ONE path, for every mxc, every size, every caller.
@@ -250,7 +251,10 @@ export async function fetchMediaSrc(
         // Keep the body. Discarding it is why a media failure could only ever
         // be diagnosed from the browser's network tab.
         const detail = await resp.text().catch(() => '')
-        throw new Error(
+        // The status travels as a number (boo.52): the card that replaces the
+        // picture reads it, and never parses it back out of this text.
+        throw new MediaFetchError(
+          resp.status,
           `media fetch failed (${resp.status}) ${url} :: ${detail.slice(0, 200)}`,
         )
       }
@@ -315,7 +319,7 @@ export async function fetchEncryptedMediaSrc(
     const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
     if (!resp.ok) {
       const detail = await resp.text().catch(() => '')
-      throw new Error(`encrypted media fetch failed (${resp.status}) :: ${detail.slice(0, 200)}`)
+      throw new MediaFetchError(resp.status, `encrypted media fetch failed (${resp.status}) :: ${detail.slice(0, 200)}`)
     }
     // decryptAttachment verifies the sha256 BEFORE decrypting and throws on a
     // mismatch. Do not catch that into a placeholder image: bytes that fail the

@@ -164,8 +164,9 @@ console.log('\n-- the inline sites now go through goFish.ts --')
   const ai = code('src/ui/AuthedImage.tsx')
   check('AuthedImage imports withRetry', /import \{[^}]*\bwithRetry\b[^}]*\} from '\.\.\/client\/goFish'/.test(ai))
   check('AuthedImage has no inline backoff left', !/\*\* attemptsRef|retryTick|attemptsRef|MEDIA_MAX_RETRIES/.test(ai))
-  check('AuthedImage gives up by reporting once and showing the fallback',
-    /\(err\) => \{\s*reportIgnored\(failureScope, err\)\s*setError\(true\)\s*\}/.test(ai))
+  // boo.52: the fallback is now the error card, which reads the status.
+  check('AuthedImage gives up by reporting once and showing the error card',
+    /\(err\) => \{\s*reportIgnored\(failureScope, err\)\s*setError\(\{ status: mediaErrorStatus\(err\) \}\)\s*\}/.test(ai))
   check('AuthedImage cancels the run in its cleanup', /run\.cancel\(\)/.test(ai))
   const app = code('src/App.tsx')
   check('openRoomById goes through withRetry', /const openRoomById[\s\S]{0,400}withRetry\(/.test(app))
