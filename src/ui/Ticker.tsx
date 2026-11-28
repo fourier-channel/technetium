@@ -37,7 +37,7 @@ export function Ticker({
 
   if (collapsed) {
     return (
-      <div className="tc-ticker tc-ticker--collapsed">
+      <div className="tc-ticker tc-ticker--collapsed" data-prov="ticker">
         {onToggle && (
           <button type="button" className="tc-ticker-toggle" onClick={onToggle} aria-label="Expand ticker" title="Expand ticker">
             &#9662;
@@ -60,7 +60,7 @@ export function Ticker({
   )
 
   return (
-    <div className="tc-ticker" aria-label="ticker">
+    <div className="tc-ticker" aria-label="ticker" data-prov="ticker">
       <div className="tc-ticker-track" ref={trackRef}>
         {run('', false)}
         {run(':loop', true)}

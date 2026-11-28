@@ -1,7 +1,15 @@
 // The ticker strip's data contract. The strip itself (Ticker.tsx) knows only
 // this shape; WHAT crawls across it is whoever built the source's business.
-// MVP ships the mechanism with a placeholder source -- point a real one at a
-// data endpoint by swapping the source handed to <Ticker /> in App.tsx.
+// App.tsx hands <Ticker /> the one source the app uses: horizon's milestones.
+
+import { reportIgnored } from '../client/report'
+import {
+  HORIZON_POLL_MS,
+  HORIZON_STATUS_URL,
+  horizonFailureItems,
+  horizonFailureReason,
+  horizonTickerItems,
+} from '../client/horizonFeed'
 
 export type TickerItem = {
   /** Stable identity within one delivery; keys the rendered run. */
@@ -69,12 +77,41 @@ export function pollingTickerSource(
   }
 }
 
-/** The MVP's stand-in: obviously placeholder, exercising the mechanism. */
-export const placeholderTickerSource: TickerSource = staticTickerSource([
-  { id: 'p0', text: 'TICKER ONLINE -- awaiting a data source' },
-  { id: 'p1', text: 'top tags of the last hour will crawl here' },
-  { id: 'p2', text: '#1 placeholder' },
-  { id: 'p3', text: '#2 sample_tag' },
-  { id: 'p4', text: '#3 mechanism_test' },
-  { id: 'p5', text: 'swap placeholderTickerSource for pollingTickerSource when the endpoint exists' },
-])
+/**
+ * Horizon's milestones, read live (tc.155; client/horizonFeed.ts decides the
+ * words). Unlike pollingTickerSource this one FAILS LOUDLY (operator,
+ * 2026-11-28, P4): a failed read is reported and put on the strip itself,
+ * ahead of the last good items, which are marked as possibly out of date.
+ * Nothing is sent but the request: no cookie (credentials omitted), no
+ * identity, and the file is public.
+ */
+export function horizonTickerSource(): TickerSource {
+  return {
+    subscribe(onItems) {
+      let alive = true
+      let lastGood: TickerItem[] = []
+      const pull = async () => {
+        try {
+          const res = await fetch(HORIZON_STATUS_URL, {
+            headers: { Accept: 'application/json' },
+            cache: 'no-store',
+            credentials: 'omit',
+          })
+          if (!res.ok) throw Object.assign(new Error(`horizon status.json answered ${res.status}`), { status: res.status })
+          const items = horizonTickerItems(await res.json())
+          lastGood = items
+          if (alive) onItems(items)
+        } catch (err) {
+          reportIgnored('ticker: horizon', err)
+          if (alive) onItems(horizonFailureItems(horizonFailureReason(err), lastGood, Math.round(HORIZON_POLL_MS / 60_000)))
+        }
+      }
+      void pull()
+      const timer = setInterval(() => { void pull() }, HORIZON_POLL_MS)
+      return () => {
+        alive = false
+        clearInterval(timer)
+      }
+    },
+  }
+}

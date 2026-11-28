@@ -9,6 +9,7 @@ import { loadSession } from '../client/session'
 import { observeServerAdmin, type AdminFacts } from '../client/serverAdmin'
 import { ServerPermissions } from './ServerPermissions'
 import { InterfaceOptions } from './InterfaceOptions'
+import { ProvenanceSettings } from './ProvenanceSettings'
 
 // Settings: how the conversation is drawn (Interface Options, first and open
 // by default, for everyone -- INTERFACE_OPTIONS IO6), then what this account
@@ -86,6 +87,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       </div>
       <div className="tc-settings-body">
       {tab === 'interface' && client && <InterfaceOptions client={client} />}
+      {tab === 'interface' && <ProvenanceSettings />}
       {tab === 'interface' && (
         <>
           {/* Where encryption went. Said here because this is where people

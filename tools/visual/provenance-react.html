@@ -1,0 +1,36 @@
+<!doctype html>
+<!-- tc.154/155: mounts the REAL ProvenanceLayer (switched on in this browser
+     before it loads) over keyed elements, the REAL ProvenanceBox against a
+     fixture map, the REAL Ticker fed by horizonTickerItems from a fixture
+     shaped like horizon's status.json, and the sheen on done, in-progress and
+     preview elements. Served by a dev server:
+     /tools/visual/provenance-react.html
+     The driver hovers, waits out the dwell, widens with Alt and closes with
+     Escape. Proves what the layer and box do in the engine that loads it;
+     nothing against the live preview site. -->
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+  try {
+    localStorage.setItem('net.41chan.provenance_mode', '1')
+    localStorage.removeItem('net.41chan.provenance_dwell_ms')
+  } catch (e) { /* the result line will say the layer never mounted */ }
+</script>
+<style>
+  html, body { margin: 0; background: var(--mod-page, #12110f); color: var(--mod-ink, #ddd); font: 13px system-ui, sans-serif; }
+  #root { padding: 12px; display: flex; flex-direction: column; gap: 14px; }
+  .h-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+  .h-box { border: 1px solid var(--mod-line, #444); padding: 10px; min-width: 140px; }
+  .h-static { position: relative; width: 340px; }
+  .h-static .tc-prov-box { position: static; }
+  .h-label { color: var(--mod-ink-dim, #999); font-size: 11px; margin: 0 0 4px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<pre id="result" style="color:#ccc; padding: 0 12px; white-space: pre-wrap">running</pre>
+<script type="module" src="./provenance-react.tsx"></script>
+</body>
+</html>

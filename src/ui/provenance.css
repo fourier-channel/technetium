@@ -1,0 +1,71 @@
+/* Provenance mode (tc.154): the badge, the dwell box, and the goal sheen.
+ * Every piece overlays; nothing here moves anything on the page
+ * (no-forced-reflow law). */
+
+.tc-prov-badge {
+  position: fixed;
+  left: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: 60;
+  font: 600 12px/1 var(--mod-mono, monospace);
+  color: var(--mod-ink);
+  background: var(--mod-surface);
+  border: 1px solid var(--mod-active-fg);
+  border-radius: var(--mod-pill-radius, 999px);
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.tc-prov-badge:hover { background: var(--mod-active-bg); }
+
+.tc-prov-box {
+  max-width: min(380px, calc(100vw - 24px));
+  max-height: min(60vh, 420px);
+  max-height: min(60dvh, 420px);
+  overflow: auto;
+  background: var(--mod-surface);
+  color: var(--mod-ink);
+  border: 1px solid var(--mod-line-strong);
+  border-radius: var(--mod-radius, 6px);
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  box-shadow: 0 6px 24px rgb(0 0 0 / 45%);
+}
+.tc-prov-key { font: 600 11px/1.2 var(--mod-mono, monospace); color: var(--mod-ink-dim); margin: 0 0 6px; }
+.tc-prov-head { font-weight: 600; margin: 8px 0 2px; color: var(--mod-ink-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+.tc-prov-list { list-style: none; margin: 0; padding: 0; }
+.tc-prov-list li { margin: 2px 0; }
+.tc-prov-date, .tc-prov-bug { font-family: var(--mod-mono, monospace); color: var(--mod-ink-faint); font-size: 11px; margin-right: 6px; }
+.tc-prov-note { margin: 0; color: var(--mod-ink-dim); }
+.tc-prov-inferred { margin: 6px 0 0; padding-left: 8px; border-left: 2px dashed var(--mod-line-strong); }
+.tc-prov-inferred mark { background: var(--mod-active-bg); color: var(--mod-ink); outline: 1px solid var(--mod-active-line); }
+.tc-prov-hint { margin: 8px 0 0; color: var(--mod-ink-faint); font-size: 11px; }
+
+/* The goal sheen (spec sec 6.3; P5: built to be looked at). A static ring
+ * drawn with OUTLINE, which paints over the element and takes no space, plus
+ * ONE settling sweep when it first appears: an animation with an end, never
+ * an infinite one (memory infinite-animations-cost-a-core). Colour follows
+ * formant's activity rule (2026-10-29): orange is full completion, green is
+ * getting there. Amber means a problem there, so it is not used for "in
+ * progress" here, whatever the spec's first draft said. */
+[data-prov-goal="done"],
+:root[data-prov-sheen="preview"] [data-prov] {
+  outline: 2px solid var(--mod-active-fg);
+  outline-offset: -2px;
+  animation: tc-prov-sheen 900ms ease-out 1;
+}
+[data-prov-goal="active"] {
+  outline: 2px solid var(--mod-ok-fg);
+  outline-offset: -2px;
+  animation: tc-prov-sheen 900ms ease-out 1;
+}
+@keyframes tc-prov-sheen {
+  from { outline-offset: -14px; outline-color: transparent; }
+  to   { outline-offset: -2px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-prov-goal], :root[data-prov-sheen="preview"] [data-prov] { animation: none; }
+}
+
+/* The settings block (Settings -> Interface Options), preview host and dev only. */
+.tc-prov-settings { border: 0; margin: 16px 0 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 8px; }

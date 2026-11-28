@@ -690,6 +690,7 @@ function ComposerBody({ room, threadId, domainTtd }: ComposerProps) {
       onKeyDown={onPanelKeyDown}
       onPaste={onPaste}
       className="tc-composer"
+      data-prov="composer"
       style={{
         position: 'relative',
         borderTop: '1px solid rgba(128,128,128,0.25)',

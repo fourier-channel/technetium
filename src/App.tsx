@@ -5,7 +5,8 @@ import { Sidebar } from './ui/Sidebar'
 import { Timeline } from './ui/Timeline'
 import { Composer } from './ui/Composer'
 import { Ticker } from './ui/Ticker'
-import { placeholderTickerSource } from './ui/tickerSource'
+import { horizonTickerSource } from './ui/tickerSource'
+import { ProvenanceLayer } from './ui/ProvenanceLayer'
 import { useTickerCollapsed } from './ui/tickerCollapse'
 import { directRoomIds } from './client/dm'
 import { ComposerModeProvider } from './ui/ComposerModeProvider'
@@ -72,6 +73,13 @@ import { InterfaceVars } from './ui/InterfaceVars'
 // mounts the three-pane layout (nav tree | timeline+composer | member list).
 // A just-created room reaches the store by sync: ask for it every half second,
 // 13 times in all (about six seconds), then report it once.
+// The ticker's feed: horizon's live milestones, for every signed-in member
+// (tc.155, operator 2026-11-28 P3/P4). Horizon serves its status file to
+// this origin only; anywhere else (the preview site, dev) the read is refused
+// and the strip says so in its failure line rather than going quiet. One
+// source for the whole app, so its poll runs once.
+const TICKER_SOURCE = horizonTickerSource()
+
 const OPEN_ROOM_RETRY: RetryPolicy = { maxAttempts: 13, baseDelayMs: 500, factor: 1 }
 
 function App() {
@@ -556,7 +564,7 @@ function App() {
                     elsewhere, the state riding account data. */}
                 {!(client && selectedRoom && directRoomIds(client).has(selectedRoom.roomId)) && (
                   <Ticker
-                    source={placeholderTickerSource}
+                    source={TICKER_SOURCE}
                     collapsed={tickerCollapsed}
                     onToggle={() => setTickerCollapsed(!tickerCollapsed)}
                   />
@@ -739,6 +747,9 @@ function App() {
       {/* Global: a verification request arrives when the OTHER device sends
           it, not when a panel happens to be open. */}
       <IncomingVerification />
+      {/* Provenance mode (tc.154): nothing at all unless the host offers it
+          and this browser turned it on. */}
+      <ProvenanceLayer />
     </RoomListSettingsProvider>
     </LightboxProvider>
     </ProfilePanelContext.Provider>
